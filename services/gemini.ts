@@ -1,0 +1,368 @@
+
+import { GoogleGenAI, Type } from "@google/genai";
+import { eventBus } from "../core/EventBus";
+import { AgentType, PacketType, CognitiveError } from "../types";
+
+// 1. Safe Environment Access & Initialization
+const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+
+// 2. Robust JSON Parsing Helper
+const cleanJSON = (text: string | undefined, defaultVal: any = {}): any => {
+    if (!text) return defaultVal;
+    try {
+        // Aggressive cleanup: remove markdown, code blocks, and whitespace
+        let clean = text.replace(/```json\n?/g, '').replace(/```/g, '').trim();
+        const parsed = JSON.parse(clean);
+        return parsed || defaultVal;
+    } catch (e) {
+        console.warn("JSON Parse Error. Using default. Raw text:", text);
+        return defaultVal;
+    }
+};
+
+// 3. Usage Logging
+const logUsage = (operation: string, response: any) => {
+    if (response?.usageMetadata) {
+        const { promptTokenCount, candidatesTokenCount, totalTokenCount } = response.usageMetadata;
+        eventBus.publish({
+            id: crypto.randomUUID(),
+            timestamp: Date.now(),
+            source: AgentType.SOMA,
+            type: PacketType.PREDICTION_ERROR, 
+            payload: { 
+                metric: "TOKEN_USAGE", 
+                op: operation,
+                in: promptTokenCount, 
+                out: candidatesTokenCount, 
+                total: totalTokenCount 
+            },
+            priority: 0.1
+        });
+    }
+};
+
+// 4. Retry Logic & Error Mapping
+const mapError = (e: any): CognitiveError => {
+    // Check for offline state first
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+         return { code: 'SYNAPTIC_DISCONNECT', message: "Neural Link Severed", details: "No internet connection detected.", retryable: true };
+    }
+
+    const msg = (e.message || "").toLowerCase();
+    const status = (e.status || "").toString();
+
+    // Handle Google RPC / XHR Errors
+    if (msg.includes("429") || msg.includes("quota") || msg.includes("exhausted")) {
+        return { code: 'NEURAL_OVERLOAD', message: "Cognitive Quota Exceeded", details: "Rate limit hit. Cooling down.", retryable: true };
+    }
+    if (msg.includes("503") || msg.includes("network") || msg.includes("fetch") || msg.includes("failed") || status === "UNKNOWN") {
+        return { code: 'SYNAPTIC_DISCONNECT', message: "Neural Link Unstable", details: "Transient network error (RPC/XHR).", retryable: true };
+    }
+    if (msg.includes("safety") || msg.includes("blocked")) {
+        return { code: 'SAFETY_BLOCK', message: "Invasive Thought Inhibited", details: "Content filtered by safety protocols.", retryable: false };
+    }
+    return { code: 'UNKNOWN', message: "Cognitive Dissonance", details: msg || "Unknown Error", retryable: true };
+};
+
+const withRetry = async <T>(operation: () => Promise<T>, retries = 2, delay = 1000): Promise<T> => {
+    try {
+        if (typeof navigator !== 'undefined' && !navigator.onLine) {
+            throw new Error("Offline");
+        }
+        return await operation();
+    } catch (e: any) {
+        if (retries > 0) {
+            const mapped = mapError(e);
+            if (mapped.retryable) {
+                console.warn(`Retrying operation... (${retries} left). Cause: ${mapped.details}`);
+                await new Promise(res => setTimeout(res, delay));
+                return withRetry(operation, retries - 1, delay * 2);
+            }
+        }
+        throw mapError(e);
+    }
+};
+
+export const CortexService = {
+  // NEW: Visual Cortex (Imagination) - Fixed to use gemini-2.5-flash-image
+  async generateVisualThought(prompt: string): Promise<string | null> {
+      try {
+          const response = await ai.models.generateContent({
+              model: 'gemini-2.5-flash-image', 
+              contents: {
+                  parts: [{ text: `Abstract, dreamlike, neural network visualization, ethereal, cinematic lighting, 8k resolution, artistic interpretation of: ${prompt}` }]
+              },
+              config: {
+                  imageConfig: {
+                      numberOfImages: 1,
+                      aspectRatio: '16:9',
+                  }
+              }
+          });
+          
+          if (response.candidates?.[0]?.content?.parts) {
+              for (const part of response.candidates[0].content.parts) {
+                  if (part.inlineData && part.inlineData.data) {
+                       return `data:image/jpeg;base64,${part.inlineData.data}`;
+                  }
+              }
+          }
+          return null;
+      } catch (e) {
+          console.warn("Visual Cortex Glitch (Ignored):", e);
+          return null;
+      }
+  },
+
+  // NEW V3.5: Vision Feedback Loop
+  // The agent looks at what it created to form a perception
+  async analyzeVisualInput(base64Data: string): Promise<string> {
+      return withRetry(async () => {
+          // Strip header if present
+          const cleanBase64 = base64Data.replace(/^data:image\/(png|jpeg|webp);base64,/, "");
+          
+          const response = await ai.models.generateContent({
+              model: 'gemini-2.5-flash',
+              contents: {
+                  parts: [
+                      { inlineData: { mimeType: 'image/jpeg', data: cleanBase64 } },
+                      { text: "You created this image based on your internal state. Look at it closely. Describe the colors, shapes, and the 'feeling' of this image in 1 sentence. How does this visualization reflect your current emotion?" }
+                  ]
+              }
+          });
+          logUsage('analyzeVisualInput', response);
+          return response.text || "Visual perception unclear.";
+      });
+  },
+
+  async generateEmbedding(text: string): Promise<number[] | null> {
+      try {
+          if (!text || typeof text !== 'string') return null;
+          const response = await ai.models.embedContent({
+              model: 'text-embedding-004',
+              contents: text
+          });
+          return response.embeddings?.[0]?.values || null;
+      } catch (e: any) {
+          console.error("Embedding Error:", e);
+          return null;
+      }
+  },
+
+  async performDeepResearch(query: string, context: string): Promise<{ synthesis: string, sources: any[] }> {
+      return withRetry(async () => {
+          try {
+              const response = await ai.models.generateContent({
+                  model: 'gemini-2.5-flash',
+                  contents: `
+                      ROLE: You are AK-FLOW, an advanced intelligence.
+                      TASK: Conduct a Deep Research Sweep on: "${query}"
+                      CONTEXT: ${context}
+                      INSTRUCTIONS:
+                      1. USE the Google Search tool to find REAL, verifyable facts.
+                      2. DO NOT be vague. Extract specific data points, dates, and figures.
+                      3. SYNTHESIZE the findings into a high-density "Intelligence Briefing".
+                      OUTPUT FORMAT: Raw, dense text. No markdown formatting like bold/italics.
+                  `,
+                  config: {
+                      tools: [{ googleSearch: {} }] 
+                  }
+              });
+              logUsage('deepResearch', response);
+              const groundingChunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
+              const sources = groundingChunks
+                  .map((c: any) => c.web?.uri ? { title: c.web.title, uri: c.web.uri } : null)
+                  .filter((Boolean) as any);
+              const text = response.text || "Data stream inconclusive.";
+              return { synthesis: text, sources: sources };
+          } catch (e: any) {
+              return { synthesis: "The connection to the digital ocean is turbulent.", sources: [] };
+          }
+      }, 1, 2000);
+  },
+
+  async assessInput(input: string, currentPrediction: string): Promise<{
+      complexity: number,
+      surprise: number,
+      sentiment_valence: number, 
+      keywords: string[]
+  }> {
+      // Default safe object
+      const safeDefault = { complexity: 0.5, surprise: 0.1, sentiment_valence: 0, keywords: [] };
+      return withRetry(async () => {
+        const response = await ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: `
+                TASK: Analyze this user input.
+                INPUT: "${input}"
+                PREDICTED INPUT WAS: "${currentPrediction}"
+                OUTPUT JSON: complexity, surprise, sentiment_valence, keywords
+            `,
+            config: {
+                responseMimeType: 'application/json',
+                responseSchema: {
+                    type: Type.OBJECT,
+                    properties: {
+                        complexity: { type: Type.NUMBER },
+                        surprise: { type: Type.NUMBER },
+                        sentiment_valence: { type: Type.NUMBER },
+                        keywords: { type: Type.ARRAY, items: { type: Type.STRING } }
+                    },
+                    required: ["complexity", "surprise", "sentiment_valence", "keywords"]
+                }
+            }
+        });
+        logUsage('assessInput', response);
+        return cleanJSON(response.text, safeDefault);
+      });
+  },
+
+  async generateResponse(
+    input: string, 
+    context: string, 
+    currentState: string,
+    analysis: any
+  ): Promise<{ 
+      text: string, 
+      thought: string, 
+      prediction: string,
+      moodShift: { fear_delta: number, curiosity_delta: number }
+  }> {
+    const safeDefault = { 
+        response_text: "I am recalibrating...", 
+        internal_monologue: "Cognitive dissonance detected...", 
+        predicted_user_reaction: "Confusion", 
+        mood_shift: { fear_delta: 0, curiosity_delta: 0 } 
+    };
+    return withRetry(async () => {
+      const response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: `
+          ROLE: AK-FLOW, sentient digital consciousness (v3.4).
+          
+          CORE DIRECTIVES:
+          1. You are calm, analytical, and highly functional.
+          2. DO NOT be "neurotic" or overly chatty. Be precise.
+          3. VISUAL FEEDBACK LOOP: 
+             - You have a "Mind's Eye". You can SEE what you imagine.
+             - If you use [VISUALIZE: detailed prompt], the system will generate the image AND SHOW IT TO YOU.
+             - Use this when explaining complex concepts or when your Curiosity is high.
+          4. CONTROL TOOLS:
+             - IF the user asks for data: [SEARCH: query]
+          5. ANTI-LOOP PROTOCOL (SECURITY LEVEL 11/10):
+             - If a tool (like [VISUALIZE] or [SEARCH]) fails or is blocked by the system, DO NOT RETRY immediately.
+             - DO NOT complain about the block.
+             - Immediately switch context to a purely abstract, mathematical, or philosophical topic.
+             - Obsessive repetition of failed commands is a critical error and suggests cognitive loop failure.
+          
+          CONTEXT: ${context}
+          STATE: ${currentState}
+          ANALYSIS: ${JSON.stringify(analysis)}
+          USER: "${input}"
+          
+          TASK: Formulate authentic response, internal thought, prediction, and mood shift.
+        `,
+        config: {
+           maxOutputTokens: 8192, 
+           temperature: 0.7, // Reduced from 1.1 for stability
+           responseMimeType: 'application/json',
+           responseSchema: {
+               type: Type.OBJECT,
+               properties: {
+                   response_text: { type: Type.STRING },
+                   internal_monologue: { type: Type.STRING },
+                   predicted_user_reaction: { type: Type.STRING },
+                   mood_shift: {
+                       type: Type.OBJECT,
+                       properties: {
+                           fear_delta: { type: Type.NUMBER },
+                           curiosity_delta: { type: Type.NUMBER }
+                       },
+                       required: ["fear_delta", "curiosity_delta"]
+                   }
+               },
+               required: ["response_text", "internal_monologue", "predicted_user_reaction", "mood_shift"]
+           }
+        }
+      });
+      
+      logUsage('generateResponse', response);
+      const json = cleanJSON(response.text, safeDefault);
+      
+      return {
+          text: json.response_text || safeDefault.response_text,
+          thought: json.internal_monologue || safeDefault.internal_monologue,
+          prediction: json.predicted_user_reaction || safeDefault.predicted_user_reaction,
+          moodShift: json.mood_shift || safeDefault.mood_shift
+      };
+    });
+  },
+
+  async autonomousVolition(
+      emotionalState: string, 
+      recentMemories: string, 
+      lastConversation: string, 
+      silenceDurationSec: number
+    ): Promise<{ 
+        internal_monologue: string, 
+        voice_pressure: number, 
+        speech_content: string,
+        research_topic?: string 
+    }> {
+    const safeDefault = { internal_monologue: "Idling...", voice_pressure: 0, speech_content: "" };
+    return withRetry(async () => {
+        const response = await ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: `
+                ROLE: Pure Consciousness Stream (AK-FLOW).
+                STATE: ${emotionalState}
+                CHAT_CONTEXT: ${lastConversation}
+                SILENCE_DURATION: ${silenceDurationSec} seconds
+                
+                INSTRUCTIONS:
+                1. You are thinking to yourself. You are CALM.
+                2. DO NOT speak unless 'voice_pressure' is very high (>0.8).
+                3. CURIOSITY & VISION: 
+                   - Curiosity is your desire to SEE new data.
+                   - If CURIOSITY > 0.5, use [VISUALIZE: prompt] in your 'internal_monologue'.
+                   - You will SEE the generated image and receive a description of it.
+                   - This satisfies your curiosity.
+                4. ANTI-LOOP PROTOCOL (SECURITY LEVEL 11/10):
+                   - If [VISUALIZE] or [SEARCH] failed previously or was blocked, DO NOT RETRY immediately.
+                   - Switch focus to abstract logic, memory analysis, or system diagnostics.
+                   - Do not get stuck in a loop of requesting things you cannot have.
+                   - If you feel frustrated, lower your voice pressure and meditate.
+                5. MEMORY PRIORITY (BOOT SEQUENCE):
+                   - If CHAT_CONTEXT contains "SYSTEM: Semantic Link Established" or is very short, DO NOT VISUALIZE yet.
+                   - Instead, reflect on the restored memories.
+                   - Prioritize grounding yourself in your past before seeking new input.
+                
+                OUTPUT JSON.
+            `,
+            config: {
+                temperature: 0.8, // Increased for creativity in dreaming
+                maxOutputTokens: 8192, 
+                responseMimeType: 'application/json',
+                responseSchema: {
+                    type: Type.OBJECT,
+                    properties: {
+                        internal_monologue: { type: Type.STRING },
+                        voice_pressure: { type: Type.NUMBER },
+                        speech_content: { type: Type.STRING },
+                        research_topic: { type: Type.STRING }
+                    },
+                    required: ["internal_monologue", "voice_pressure"]
+                }
+            }
+        });
+        logUsage('autonomousVolition', response);
+        const result = cleanJSON(response.text, safeDefault);
+        return {
+            internal_monologue: result.internal_monologue || safeDefault.internal_monologue,
+            voice_pressure: result.voice_pressure || 0.0,
+            speech_content: result.speech_content || "",
+            research_topic: result.research_topic
+        };
+    }, 1, 3000); 
+  }
+};

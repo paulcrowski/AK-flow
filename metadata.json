@@ -1,0 +1,7 @@
+{
+  "name": "3.4 Alberto AK-FLOW: Cognitive Brain Agent Search Dream Cemi",
+  "description": "An autonomous 11/10 cognitive agent based on biological brain architecture (Predictive Coding, Global Workspace Theory). Features an asynchronous cognitive loop, emotional modulation, Hebbian memory reinforcement, and a neuro-monitor interface.",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}
