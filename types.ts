@@ -35,7 +35,9 @@ export enum PacketType {
   SYSTEM_ALERT = 'SYSTEM_ALERT', // Critical System Failures
   VISUAL_THOUGHT = 'VISUAL_THOUGHT', // NEW: Generated Image
   VISUAL_PERCEPTION = 'VISUAL_PERCEPTION', // NEW: The agent's analysis of what it saw
-  FIELD_UPDATE = 'FIELD_UPDATE' // NEW: CEMI Field State
+  FIELD_UPDATE = 'FIELD_UPDATE', // NEW: CEMI Field State
+  COGNITIVE_METRIC = 'COGNITIVE_METRIC', // NEW: Input analysis (complexity, surprise)
+  STATE_UPDATE = 'STATE_UPDATE' // NEW: Limbic/Soma state changes
 }
 
 // 2. Internal State Definitions
