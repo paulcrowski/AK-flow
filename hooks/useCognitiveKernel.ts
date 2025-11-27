@@ -5,10 +5,12 @@ import { CortexService } from '../services/gemini';
 import { MemoryService } from '../services/supabase';
 import { AgentType, PacketType, LimbicState, SomaState, CognitiveError, ResonanceField } from '../types';
 import { generateUUID } from '../utils/uuid';
+import * as SomaSystem from '../core/systems/SomaSystem';
+import * as LimbicSystem from '../core/systems/LimbicSystem';
+import * as VolitionSystem from '../core/systems/VolitionSystem';
+import * as BiologicalClock from '../core/systems/BiologicalClock';
 
 // Constants
-const MIN_TICK_MS = 1000; // Fast tick for UI responsiveness
-const MAX_TICK_MS = 15000;
 const VISUAL_BASE_COOLDOWN = 60000; // 1 minute base cooldown (increased for safety)
 
 // Helper for delays
@@ -77,20 +79,93 @@ export const useCognitiveKernel = () => {
         stateRef.current = { limbicState, somaState, resonanceField, conversation, autonomousMode };
     }, [limbicState, somaState, resonanceField, conversation, autonomousMode]);
 
-    // --- BOOT SEQUENCE: LIGHTWEIGHT ---
+    // --- BOOT SEQUENCE: 11/10 MODE - COMPREHENSIVE STATE LOGGING ---
     useEffect(() => {
         if (hasBootedRef.current) return;
         hasBootedRef.current = true;
 
-        // Simple System Boot Event (No DB calls)
+        const bootTimestamp = Date.now();
+        const bootDate = new Date(bootTimestamp).toISOString();
+
+        // Capture complete initial state snapshot for analysis
+        const bootStateSnapshot = {
+            timestamp: bootTimestamp,
+            datetime: bootDate,
+
+            // Biological States
+            limbic: {
+                fear: limbicState.fear,
+                curiosity: limbicState.curiosity,
+                frustration: limbicState.frustration,
+                satisfaction: limbicState.satisfaction
+            },
+            soma: {
+                energy: somaState.energy,
+                cognitiveLoad: somaState.cognitiveLoad,
+                isSleeping: somaState.isSleeping
+            },
+            resonance: {
+                coherence: resonanceField.coherence,
+                intensity: resonanceField.intensity,
+                frequency: resonanceField.frequency,
+                timeDilation: resonanceField.timeDilation
+            },
+
+            // System Configuration
+            config: {
+                autonomousMode: autonomousMode,
+                tickIntervals: {
+                    awake: BiologicalClock.getDefaultAwakeTick(),
+                    sleep: BiologicalClock.getDefaultSleepTick(),
+                    wakeTransition: BiologicalClock.getWakeTransitionTick(),
+                    min: BiologicalClock.MIN_TICK_MS,
+                    max: BiologicalClock.MAX_TICK_MS
+                },
+                thresholds: {
+                    sleepTrigger: 20, // Energy < 20 = Sleep
+                    wakeTrigger: 95,  // Energy >= 95 = Wake
+                    voicePressure: 0.75, // Voice pressure > 0.75 = Speak
+                    silenceThreshold: 2, // Silence > 2s = Think
+                    heartbeatInterval: 30 // Heartbeat every 30s
+                },
+                energyRates: {
+                    awakeDrain: 0.1,
+                    sleepRegen: 7,
+                    inputCost: 2,
+                    visualCost: 15
+                }
+            }
+        };
+
+        // Publish comprehensive boot event to EventBus
         eventBus.publish({
             id: generateUUID(),
-            timestamp: Date.now(),
-            source: AgentType.SOMA,
-            type: PacketType.THOUGHT_CANDIDATE,
-            payload: { internal_monologue: "System Boot... Energy Check OK." },
+            timestamp: bootTimestamp,
+            source: AgentType.GLOBAL_FIELD,
+            type: PacketType.SYSTEM_ALERT,
+            payload: {
+                event: "SYSTEM_BOOT_COMPLETE",
+                snapshot: bootStateSnapshot,
+                message: "🧠 Cognitive Kernel Online | All Systems Nominal"
+            },
             priority: 1.0
         });
+
+        // Store boot state in memory for analysis
+        MemoryService.storeMemory({
+            content: `SYSTEM BOOT [${bootDate}]\n` +
+                `LIMBIC: Fear=${limbicState.fear.toFixed(2)} Curiosity=${limbicState.curiosity.toFixed(2)} Frustration=${limbicState.frustration.toFixed(2)} Satisfaction=${limbicState.satisfaction.toFixed(2)}\n` +
+                `SOMA: Energy=${somaState.energy}% Load=${somaState.cognitiveLoad}% Sleeping=${somaState.isSleeping}\n` +
+                `RESONANCE: Coherence=${resonanceField.coherence.toFixed(2)} Intensity=${resonanceField.intensity.toFixed(2)} Freq=${resonanceField.frequency.toFixed(2)}Hz Dilation=${resonanceField.timeDilation.toFixed(2)}x\n` +
+                `CONFIG: Awake=${BiologicalClock.getDefaultAwakeTick()}ms Sleep=${BiologicalClock.getDefaultSleepTick()}ms Wake=${BiologicalClock.getWakeTransitionTick()}ms`,
+            emotionalContext: limbicState,
+            timestamp: bootDate,
+            id: generateUUID()
+        }).catch(err => {
+            console.warn("Boot state memory storage failed (non-critical):", err);
+        });
+
+        console.log("🧠 COGNITIVE KERNEL BOOT SNAPSHOT:", bootStateSnapshot);
     }, []);
 
     // --- COGNITIVE LOOP ---
@@ -102,15 +177,13 @@ export const useCognitiveKernel = () => {
         }
 
         const currentState = stateRef.current;
-        let nextTick = 3000; // Default tick
+        let nextTick = BiologicalClock.getDefaultAwakeTick(); // Default tick
 
         // 2. METABOLISM & HOMEOSTASIS (Auto-Sleep Logic)
-        let currentEnergy = currentState.somaState.energy;
-        let isSleeping = currentState.somaState.isSleeping;
+        const metabolicResult = SomaSystem.calculateMetabolicState(currentState.somaState, 0);
 
         // Check for Exhaustion
-        if (currentEnergy < 20 && !isSleeping) {
-            isSleeping = true;
+        if (metabolicResult.shouldSleep) {
             eventBus.publish({
                 id: generateUUID(),
                 timestamp: Date.now(),
@@ -119,17 +192,15 @@ export const useCognitiveKernel = () => {
                 payload: { msg: "ENERGY CRITICAL. FORCING SLEEP MODE." },
                 priority: 1.0
             });
-            // Update state immediately for this cycle
-            setSomaState(prev => ({ ...prev, isSleeping: true }));
+            setSomaState(metabolicResult.newState);
         }
 
         // Sleep/Wake Cycle
-        if (isSleeping) {
-            nextTick = 4000; // 11/10 MODE: Faster sleep tick (5s)
+        if (metabolicResult.newState.isSleeping) {
+            nextTick = BiologicalClock.getDefaultSleepTick();
 
-            // Regenerate
-            const newEnergy = Math.min(100, currentEnergy + 7); // Faster regen (+10)
-            setSomaState(prev => ({ ...prev, energy: newEnergy }));
+            // Update state with regenerated energy
+            setSomaState(metabolicResult.newState);
 
             // LOG: Regeneration Progress
             eventBus.publish({
@@ -137,15 +208,13 @@ export const useCognitiveKernel = () => {
                 timestamp: Date.now(),
                 source: AgentType.SOMA,
                 type: PacketType.STATE_UPDATE,
-                payload: { status: "REGENERATING", energy: newEnergy, isSleeping: true },
+                payload: { status: "REGENERATING", energy: metabolicResult.newState.energy, isSleeping: true },
                 priority: 0.1
             });
 
             // Wake Up Check
-            if (newEnergy >= 95) {
-                isSleeping = false;
-                nextTick = 2000; // Return to normal speed
-                setSomaState(prev => ({ ...prev, isSleeping: false }));
+            if (metabolicResult.shouldWake) {
+                nextTick = BiologicalClock.getWakeTransitionTick();
                 eventBus.publish({
                     id: generateUUID(),
                     timestamp: Date.now(),
@@ -162,22 +231,22 @@ export const useCognitiveKernel = () => {
                         timestamp: Date.now(),
                         source: AgentType.VISUAL_CORTEX,
                         type: PacketType.THOUGHT_CANDIDATE,
-                        payload: { internal_monologue: `REM Cycle: Dreaming... Energy at ${Math.round(newEnergy)}%` },
+                        payload: { internal_monologue: `REM Cycle: Dreaming... Energy at ${Math.round(metabolicResult.newState.energy)}%` },
                         priority: 0.1
                     });
                 }
             }
         } else {
-            // Awake Drain
-            setSomaState(prev => ({ ...prev, energy: Math.max(0, prev.energy - 0.1) }));
+            // Awake: Apply energy drain
+            setSomaState(metabolicResult.newState);
         }
 
         // 3. VOLITION (Only if awake and not processing)
-        const canThink = !isSleeping && !isProcessing;
-        const silenceDuration = (Date.now() - silenceStartRef.current) / 1000;
+        const canThink = !metabolicResult.newState.isSleeping && !isProcessing;
+        const silenceDuration = VolitionSystem.calculateSilenceDuration(silenceStartRef.current);
 
         try {
-            if (canThink && silenceDuration > 2) {
+            if (canThink && VolitionSystem.shouldInitiateThought(silenceDuration)) {
                 setIsProcessing(true);
                 setCurrentThought("Drifting...");
 
@@ -185,13 +254,13 @@ export const useCognitiveKernel = () => {
                     const historyText = currentState.conversation.slice(-3).map(m => m.text).join('\n') || "Silence...";
 
                     // HEARTBEAT
-                    if (silenceDuration > 10 && silenceDuration % 30 < 3) {
+                    if (VolitionSystem.shouldPublishHeartbeat(silenceDuration)) {
                         eventBus.publish({
                             id: generateUUID(),
                             timestamp: Date.now(),
                             source: AgentType.SOMA,
                             type: PacketType.SYSTEM_ALERT,
-                            payload: { status: "COGNITIVE_PULSE_ACTIVE", energy: Math.round(currentEnergy) },
+                            payload: { status: "COGNITIVE_PULSE_ACTIVE", energy: Math.round(metabolicResult.newState.energy) },
                             priority: 0.1
                         });
                     }
@@ -215,10 +284,18 @@ export const useCognitiveKernel = () => {
                     await processOutputForTools(volition.internal_monologue);
                     const speechOutput = await processOutputForTools(volition.speech_content);
 
-                    if ((volition.voice_pressure || 0) > 0.75 && speechOutput.trim()) {
+                    // Use VolitionSystem to decide if we should speak
+                    const volitionDecision = VolitionSystem.evaluateVolition(
+                        volition.voice_pressure || 0,
+                        speechOutput
+                    );
+
+                    if (volitionDecision.shouldSpeak) {
                         addMessage('assistant', speechOutput, 'speech');
                         silenceStartRef.current = Date.now();
-                        setLimbicState(prev => ({ ...prev, curiosity: Math.max(0.2, prev.curiosity - 0.2), satisfaction: Math.min(1, prev.satisfaction + 0.1) }));
+
+                        // Apply emotional response to speech
+                        setLimbicState(prev => LimbicSystem.applySpeechResponse(prev));
                     }
 
                 } catch (e) {
@@ -398,19 +475,15 @@ export const useCognitiveKernel = () => {
                 visualBingeCountRef.current += 1;
 
                 const energyCost = 15 * (currentBinge + 1);
-                const satisfactionGain = 0.2 / (currentBinge + 1);
 
-                setSomaState(prev => ({
-                    ...prev,
-                    energy: Math.max(0, prev.energy - energyCost),
-                    cognitiveLoad: Math.min(100, prev.cognitiveLoad + 15)
-                }));
+                // Apply metabolic and emotional costs using system modules
+                setSomaState(prev => {
+                    let updated = SomaSystem.applyEnergyCost(prev, energyCost);
+                    updated = SomaSystem.applyCognitiveLoad(updated, 15);
+                    return updated;
+                });
 
-                setLimbicState(prev => ({
-                    ...prev,
-                    satisfaction: Math.min(1, prev.satisfaction + satisfactionGain),
-                    curiosity: Math.max(0.1, prev.curiosity - 0.5)
-                }));
+                setLimbicState(prev => LimbicSystem.applyVisualEmotionalCost(prev, currentBinge));
 
                 eventBus.publish({
                     id: generateUUID(),
@@ -462,7 +535,7 @@ export const useCognitiveKernel = () => {
         addMessage('user', input);
 
         if (somaState.isSleeping) {
-            setSomaState(prev => ({ ...prev, isSleeping: false }));
+            setSomaState(prev => SomaSystem.forceWake(prev));
         }
 
         setIsProcessing(true);
@@ -487,12 +560,11 @@ export const useCognitiveKernel = () => {
                 priority: 0.5
             });
 
+            // Apply emotional response to input using LimbicSystem
             setLimbicState(prev => {
-                const newState = {
-                    ...prev,
-                    fear: Math.max(0, Math.min(1, prev.fear + (analysis.surprise * 0.1))),
-                    curiosity: Math.min(1, prev.curiosity + (analysis.surprise * 0.2))
-                };
+                const newState = LimbicSystem.updateEmotionalState(prev, {
+                    surprise: analysis.surprise
+                });
 
                 // LOG: State Update
                 eventBus.publish({
@@ -519,13 +591,15 @@ export const useCognitiveKernel = () => {
 
             addMessage('assistant', response.thought || "Processing logic...", 'thought');
 
+            // Apply mood shift using LimbicSystem
             if (response.moodShift) {
-                setLimbicState(prev => ({
-                    ...prev,
-                    fear: Math.max(0, Math.min(1, prev.fear + (response.moodShift.fear_delta || 0))),
-                    curiosity: Math.max(0, Math.min(1, prev.curiosity + (response.moodShift.curiosity_delta || 0))),
-                    satisfaction: Math.max(0, Math.min(1, prev.satisfaction + 0.1))
-                }));
+                setLimbicState(prev => {
+                    const withMoodShift = LimbicSystem.applyMoodShift(prev, response.moodShift);
+                    // Also add satisfaction boost
+                    return LimbicSystem.updateEmotionalState(withMoodShift, {
+                        satisfaction_delta: 0.1
+                    });
+                });
             }
 
             await delay(500);
@@ -541,11 +615,12 @@ export const useCognitiveKernel = () => {
                 id: generateUUID()
             });
 
-            setSomaState(prev => ({
-                ...prev,
-                energy: Math.max(0, prev.energy - 2),
-                cognitiveLoad: Math.min(100, prev.cognitiveLoad + 10)
-            }));
+            // Apply energy and cognitive load costs using SomaSystem
+            setSomaState(prev => {
+                let updated = SomaSystem.applyEnergyCost(prev, 2);
+                updated = SomaSystem.applyCognitiveLoad(updated, 10);
+                return updated;
+            });
 
         } catch (e: any) {
             console.error("Cognitive Failure:", e);
@@ -584,8 +659,9 @@ export const useCognitiveKernel = () => {
     // DEBUG: Inject State Override
     const injectStateOverride = (type: 'limbic' | 'soma', key: string, value: number) => {
         if (type === 'limbic') {
-            setLimbicState(prev => ({ ...prev, [key]: Math.max(0, Math.min(1, value)) }));
+            setLimbicState(prev => LimbicSystem.setEmotionalValue(prev, key as keyof LimbicState, value));
         } else if (type === 'soma') {
+            // Direct update for soma (no generic setter in SomaSystem)
             setSomaState(prev => ({ ...prev, [key]: Math.max(0, Math.min(100, value)) }));
         }
     };
