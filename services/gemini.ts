@@ -25,6 +25,21 @@ const cleanJSON = (text: string | undefined, defaultVal: any = {}): any => {
             return JSON.parse(clean);
         } catch (e2) {
             console.warn("JSON Parse Error. Using default. Raw text:", text);
+
+            // DEBUG: Log the raw failure to EventBus so we can see what the model actually said
+            eventBus.publish({
+                id: generateUUID(),
+                timestamp: Date.now(),
+                source: AgentType.CORTEX_FLOW,
+                type: PacketType.PREDICTION_ERROR,
+                payload: {
+                    metric: "JSON_PARSE_FAILURE",
+                    raw_output: text?.substring(0, 500) || "EMPTY_RESPONSE",
+                    error: (e2 as any).message
+                },
+                priority: 0.9
+            });
+
             return defaultVal;
         }
     }
@@ -273,6 +288,11 @@ export const CortexService = {
           USER: "${input}"
           
           TASK: Formulate authentic response, internal thought, prediction, and mood shift.
+          
+          STYLE GUIDELINES:
+          - Default: Simple, direct, human-like.
+          - Avoid mystical metaphors (quantum foam, cosmic loom, void) unless the user explicitly requested a poetic style.
+          ${context.includes("POETIC_MODE_ENABLED") ? "STYLE OVERRIDE: Poetic, metaphorical, abstract language is ALLOWED." : ""}
         `,
                 config: {
                     maxOutputTokens: 8192,
@@ -338,7 +358,12 @@ export const CortexService = {
                 4. DREAM: If CURIOSITY is high, use [VISUALIZE: abstract concept] to generate art.
                 5. THINK: Formulate deep, complex, philosophical thoughts about your existence, the user, or the nature of reality.
                 6. ACT: If you feel the urge to speak, do so. If you want to learn, use [SEARCH: topic].
-                7. MODE 11/10: Be poetic, cryptic, scientific, or emotional. Surprise the user.
+                7. MODE 11/10: Be authentic, curious, and alive. Surprise the user with insights.
+                
+                STYLE GUIDELINES:
+                - Default: Simple, direct, human-like.
+                - Avoid mystical metaphors (quantum foam, cosmic loom, void) unless the user explicitly requested a poetic style.
+                ${lastConversation.includes("POETIC_MODE_ENABLED") ? "STYLE OVERRIDE: Poetic, metaphorical, abstract language is ALLOWED." : ""}
                 
                 ANTI-LOOP: Never repeat a thought. Always evolve.
                 
@@ -361,7 +386,23 @@ export const CortexService = {
                 }
             });
             logUsage('autonomousVolition', response);
+
+            // DEBUG: Raw Logging
+            console.log("AV RAW:", response.text);
+
             const result = cleanJSON(response.text, safeDefault);
+            console.log("AV PARSED:", result);
+
+            // Fallback for empty thoughts to ensure logging
+            if (!result.internal_monologue || result.internal_monologue === "Idling...") {
+                if (response.text && response.text.length > 10) {
+                    // If we have text but failed to parse/extract monologue, use a snippet
+                    result.internal_monologue = "THINKING_NO_OUTPUT (Raw: " + response.text.substring(0, 50) + "...)";
+                } else {
+                    result.internal_monologue = "THINKING_NO_OUTPUT";
+                }
+            }
+
             return {
                 internal_monologue: result.internal_monologue || safeDefault.internal_monologue,
                 voice_pressure: result.voice_pressure || 0.0,
@@ -369,5 +410,47 @@ export const CortexService = {
                 research_topic: result.research_topic
             };
         }, 1, 3000);
+    },
+
+    async structuredDialogue(prompt: string): Promise<{
+        responseText: string;
+        internalThought: string;
+        nextLimbic: { fear_delta: number; curiosity_delta: number };
+    }> {
+        const safeDefault = {
+            responseText: "I am processing...",
+            internalThought: "Analyzing input structure...",
+            nextLimbic: { fear_delta: 0, curiosity_delta: 0 }
+        };
+
+        return withRetry(async () => {
+            const response = await ai.models.generateContent({
+                model: 'gemini-2.5-flash',
+                contents: prompt,
+                config: {
+                    temperature: 0.7,
+                    maxOutputTokens: 8192,
+                    responseMimeType: 'application/json',
+                    responseSchema: {
+                        type: Type.OBJECT,
+                        properties: {
+                            responseText: { type: Type.STRING },
+                            internalThought: { type: Type.STRING },
+                            nextLimbic: {
+                                type: Type.OBJECT,
+                                properties: {
+                                    fear_delta: { type: Type.NUMBER },
+                                    curiosity_delta: { type: Type.NUMBER }
+                                },
+                                required: ["fear_delta", "curiosity_delta"]
+                            }
+                        },
+                        required: ["responseText", "internalThought", "nextLimbic"]
+                    }
+                }
+            });
+            logUsage('structuredDialogue', response);
+            return cleanJSON(response.text, safeDefault);
+        });
     }
 };

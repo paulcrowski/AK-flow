@@ -9,6 +9,8 @@ import * as SomaSystem from '../core/systems/SomaSystem';
 import * as LimbicSystem from '../core/systems/LimbicSystem';
 import * as VolitionSystem from '../core/systems/VolitionSystem';
 import * as BiologicalClock from '../core/systems/BiologicalClock';
+import { CortexSystem } from '../core/systems/CortexSystem';
+import { EventLoop } from '../core/systems/EventLoop';
 
 // Constants
 const VISUAL_BASE_COOLDOWN = 60000; // 1 minute base cooldown (increased for safety)
@@ -73,6 +75,8 @@ export const useCognitiveKernel = () => {
     const visualBingeCountRef = useRef<number>(0);
     const isLoopRunning = useRef<boolean>(false);
     const hasBootedRef = useRef<boolean>(false); // Prevent double boot
+    const thoughtHistoryRef = useRef<string[]>([]);
+    const lastSpeakRef = useRef<number>(0);
 
     // Sync Ref
     useEffect(() => {
@@ -241,77 +245,61 @@ export const useCognitiveKernel = () => {
             setSomaState(metabolicResult.newState);
         }
 
-        // 3. VOLITION (Only if awake and not processing)
+        // 3. EVENT LOOP (Cognition)
         const canThink = !metabolicResult.newState.isSleeping && !isProcessing;
-        const silenceDuration = VolitionSystem.calculateSilenceDuration(silenceStartRef.current);
 
-        try {
-            if (canThink && VolitionSystem.shouldInitiateThought(silenceDuration)) {
-                setIsProcessing(true);
-                setCurrentThought("Drifting...");
+        if (canThink) {
+            try {
+                const ctx: EventLoop.LoopContext = {
+                    soma: metabolicResult.newState,
+                    limbic: currentState.limbicState,
+                    conversation: currentState.conversation,
+                    autonomousMode: currentState.autonomousMode,
+                    lastSpeakTimestamp: lastSpeakRef.current,
+                    silenceStart: silenceStartRef.current,
+                    thoughtHistory: thoughtHistoryRef.current,
+                    poeticMode: false // Default to false
+                };
 
-                try {
-                    const historyText = currentState.conversation.slice(-3).map(m => m.text).join('\n') || "Silence...";
+                const nextCtx = await EventLoop.runSingleStep(ctx, null, {
+                    onMessage: addMessage,
+                    onThought: (t) => {
+                        setIsProcessing(true); // Lock when thinking starts
+                        setCurrentThought(t);
 
-                    // HEARTBEAT
-                    if (VolitionSystem.shouldPublishHeartbeat(silenceDuration)) {
+                        // RESTORED LOGGING: Publish thought to EventBus
                         eventBus.publish({
                             id: generateUUID(),
                             timestamp: Date.now(),
-                            source: AgentType.SOMA,
-                            type: PacketType.SYSTEM_ALERT,
-                            payload: { status: "COGNITIVE_PULSE_ACTIVE", energy: Math.round(metabolicResult.newState.energy) },
-                            priority: 0.1
+                            source: AgentType.CORTEX_FLOW,
+                            type: PacketType.THOUGHT_CANDIDATE,
+                            payload: {
+                                internal_monologue: t,
+                                // We don't have voice pressure here yet, but we log the thought
+                                status: "THINKING"
+                            },
+                            priority: 0.5
                         });
-                    }
+                    },
+                    onSomaUpdate: setSomaState,
+                    onLimbicUpdate: setLimbicState
+                });
 
-                    const volition = await CortexService.autonomousVolition(
-                        JSON.stringify(currentState.limbicState),
-                        "Latent processing...",
-                        historyText,
-                        silenceDuration
-                    );
-
-                    eventBus.publish({
-                        id: generateUUID(),
-                        timestamp: Date.now(),
-                        source: AgentType.CORTEX_FLOW,
-                        type: PacketType.THOUGHT_CANDIDATE,
-                        payload: volition,
-                        priority: volition.voice_pressure || 0
-                    });
-
-                    await processOutputForTools(volition.internal_monologue);
-                    const speechOutput = await processOutputForTools(volition.speech_content);
-
-                    // Use VolitionSystem to decide if we should speak
-                    const volitionDecision = VolitionSystem.evaluateVolition(
-                        volition.voice_pressure || 0,
-                        speechOutput
-                    );
-
-                    if (volitionDecision.shouldSpeak) {
-                        addMessage('assistant', speechOutput, 'speech');
-                        silenceStartRef.current = Date.now();
-
-                        // Apply emotional response to speech
-                        setLimbicState(prev => LimbicSystem.applySpeechResponse(prev));
-                    }
-
-                } catch (e) {
-                    // Silent fail
-                } finally {
-                    setIsProcessing(false);
-                    setCurrentThought("Idle");
-                }
+                silenceStartRef.current = nextCtx.silenceStart;
+                lastSpeakRef.current = nextCtx.lastSpeakTimestamp;
+                thoughtHistoryRef.current = nextCtx.thoughtHistory;
+            } catch (e) {
+                console.warn("EventLoop Error", e);
+            } finally {
+                setIsProcessing(false);
+                setCurrentThought("Idle");
             }
-        } finally {
-            // 4. RECURSION (Always schedule next tick if still autonomous)
-            if (stateRef.current.autonomousMode) {
-                timeoutRef.current = setTimeout(cognitiveCycle, nextTick);
-            } else {
-                isLoopRunning.current = false;
-            }
+        }
+        // 4. RECURSION (Always schedule next tick if still autonomous)
+        if (stateRef.current.autonomousMode) {
+            timeoutRef.current = setTimeout(cognitiveCycle, nextTick);
+        } else {
+            isLoopRunning.current = false;
         }
     }, []); // FIXED: Empty dependency array to prevent loop thrashing
 
@@ -401,6 +389,22 @@ export const useCognitiveKernel = () => {
     const addMessage = (role: 'user' | 'assistant', text: string, type: 'thought' | 'speech' | 'visual' | 'intel' = 'speech', imageData?: string, sources?: any[]) => {
         setConversation(prev => [...prev, { role, text, type, imageData, sources }]);
         silenceStartRef.current = Date.now();
+
+        // RESTORED LOGGING: Publish speech/output to EventBus
+        if (role === 'assistant' && type === 'speech') {
+            eventBus.publish({
+                id: generateUUID(),
+                timestamp: Date.now(),
+                source: AgentType.CORTEX_FLOW,
+                type: PacketType.THOUGHT_CANDIDATE, // Reusing packet type for consistency in logs
+                payload: {
+                    speech_content: text,
+                    voice_pressure: 1.0, // Assumed high since it was spoken
+                    status: "SPOKEN"
+                },
+                priority: 0.8
+            });
+        }
     };
 
     // --- TOOL PARSER ---
@@ -408,13 +412,21 @@ export const useCognitiveKernel = () => {
         let cleanText = rawText;
 
         // 1. SEARCH TAG
+        // DEBUG: Log raw text to check for tag presence
+        // console.log("Checking for tools in:", rawText.substring(0, 50) + "...");
+
         const searchMatch = cleanText.match(/\[SEARCH:\s*(.*?)\]/i);
         if (searchMatch) {
             const query = searchMatch[1].trim();
             cleanText = cleanText.replace(searchMatch[0], '').trim();
 
             setCurrentThought(`Researching: ${query}...`);
-            const research = await CortexService.performDeepResearch(query, "User requested data.");
+            const research = await CortexSystem.performDeepResearch(query, "User requested data.");
+
+            if (!research) {
+                addMessage('assistant', `[Deep Research Skipped: Topic "${query}" already processed]`, 'thought');
+                return cleanText;
+            }
 
             addMessage('assistant', research.synthesis, 'intel', undefined, research.sources);
 
@@ -433,6 +445,8 @@ export const useCognitiveKernel = () => {
         if (visualMatch) {
             let prompt = visualMatch[1].trim();
             if (prompt.endsWith(']')) prompt = prompt.slice(0, -1);
+
+            console.log("Visual Tag Detected:", prompt); // DEBUG
 
             cleanText = cleanText.replace(visualMatch[0], '').trim();
 
@@ -543,79 +557,37 @@ export const useCognitiveKernel = () => {
         silenceStartRef.current = Date.now();
 
         try {
-            setCurrentThought("Retrieving Engrams...");
-            const contextMems = await MemoryService.semanticSearch(input);
-            const contextStr = contextMems.map(m => `[MEMORY]: ${m.content}`).join('\n');
+            setCurrentThought("Processing Input...");
 
-            setCurrentThought("Analyzing Semantics...");
-            const analysis = await CortexService.assessInput(input, "silence");
-
-            // LOG: Input Analysis
-            eventBus.publish({
-                id: generateUUID(),
-                timestamp: Date.now(),
-                source: AgentType.CORTEX_FLOW,
-                type: PacketType.COGNITIVE_METRIC,
-                payload: { ...analysis, context: "INPUT_ASSESSMENT" },
-                priority: 0.5
+            const cortexResult = await CortexSystem.processUserMessage({
+                text: input,
+                currentLimbic: stateRef.current.limbicState,
+                currentSoma: stateRef.current.somaState,
+                conversationHistory: stateRef.current.conversation
             });
 
-            // Apply emotional response to input using LimbicSystem
-            setLimbicState(prev => {
-                const newState = LimbicSystem.updateEmotionalState(prev, {
-                    surprise: analysis.surprise
-                });
-
-                // LOG: State Update
-                eventBus.publish({
-                    id: generateUUID(),
-                    timestamp: Date.now(),
-                    source: AgentType.LIMBIC,
-                    type: PacketType.STATE_UPDATE,
-                    payload: newState,
-                    priority: 0.2
-                });
-
-                return newState;
-            });
-
-            setCurrentThought("Synthesizing...");
-            const response = await CortexService.generateResponse(
-                input,
-                contextStr,
-                JSON.stringify(limbicState),
-                analysis
-            );
-
-            const cleanSpeech = await processOutputForTools(response.text);
-
-            addMessage('assistant', response.thought || "Processing logic...", 'thought');
-
-            // Apply mood shift using LimbicSystem
-            if (response.moodShift) {
-                setLimbicState(prev => {
-                    const withMoodShift = LimbicSystem.applyMoodShift(prev, response.moodShift);
-                    // Also add satisfaction boost
-                    return LimbicSystem.updateEmotionalState(withMoodShift, {
-                        satisfaction_delta: 0.1
-                    });
-                });
+            // Update Limbic State
+            if (cortexResult.moodShift) {
+                setLimbicState(prev => LimbicSystem.applyMoodShift(prev, cortexResult.moodShift!));
             }
 
-            await delay(500);
+            // UI Feedback
+            if (cortexResult.internalThought) {
+                addMessage('assistant', cortexResult.internalThought, 'thought');
+            }
+
+            // Process tools in response text (Search/Visualize)
+            const cleanSpeech = await processOutputForTools(cortexResult.responseText);
 
             if (cleanSpeech.trim()) {
                 addMessage('assistant', cleanSpeech, 'speech');
             }
 
-            await MemoryService.storeMemory({
-                content: `User: ${input} | Agent: ${cleanSpeech}`,
-                emotionalContext: limbicState,
-                timestamp: new Date().toISOString(),
-                id: generateUUID()
-            });
+            // Update Refs
+            lastSpeakRef.current = Date.now();
+            silenceStartRef.current = Date.now();
 
-            // Apply energy and cognitive load costs using SomaSystem
+            // Apply energy cost
             setSomaState(prev => {
                 let updated = SomaSystem.applyEnergyCost(prev, 2);
                 updated = SomaSystem.applyCognitiveLoad(updated, 10);

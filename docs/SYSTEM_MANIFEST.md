@@ -1,6 +1,6 @@
 # AK-FLOW: Cognitive Agent Architecture Manifest
-**System Version:** 4.0 (Modular Architecture + Boot Logger)  
-**Last Updated:** 2025-11-27  
+**System Version:** 4.1 (Cognitive Tuning: Context Diet + Volition Dynamics)  
+**Last Updated:** 2025-12-01  
 **Architecture Type:** Active Inference (Friston) + Global Workspace Theory + Multi-Modal RAG  
 **Status:** Autonomous / Stateful / Modular / Self-Aware
 
@@ -99,7 +99,7 @@ AK-FLOW is a **biological simulation** of a cognitive agent that transcends stan
 
 **Exports:**
 - `evaluateVolition(voicePressure, speechContent)` → `VolitionDecision`
-  - **Threshold:** voicePressure > 0.75 = Speak
+  - **Threshold:** voicePressure > 0.5 = Speak (lowered from 0.75)
   - Returns: `{ shouldSpeak, reason }`
 - `calculateSilenceDuration(silenceStartTimestamp)` → Duration in seconds
 - `shouldInitiateThought(silenceDuration)` → Boolean (threshold: 2s)
@@ -107,7 +107,8 @@ AK-FLOW is a **biological simulation** of a cognitive agent that transcends stan
 
 **Decision Logic:**
 - No content → No speech
-- Voice pressure > 0.75 AND content exists → Speak
+- Voice pressure > 0.5 AND content exists → Speak
+- Refractory Period: 1800ms (reduced from 3000ms)
 - Silence > 2s → Initiate autonomous thought
 - Silence > 10s → Publish heartbeat every 30s
 
@@ -130,6 +131,16 @@ AK-FLOW is a **biological simulation** of a cognitive agent that transcends stan
 - Sleeping: 4000ms (slower for regeneration)
 - Wake transition: 2000ms (faster on wake)
 - Min/Max: 1000ms - 15000ms (safety bounds)
+
+---
+
+#### `core/systems/CortexSystem.ts` - The Executive Mind
+**Role:** Orchestrating thought, dialogue, and research.
+
+**Features:**
+- **Context Diet:** Slices conversation history to last 12 turns to prevent context overload (Working Memory simulation).
+- **RAG Integration:** Retrieves memories via MemoryService before generation.
+- **Structured Dialogue:** Uses Gemini for JSON-structured responses (thought + speech + mood).
 
 ---
 
@@ -559,6 +570,27 @@ CREATE TABLE memories (
 ---
 
 ## 📝 CHANGELOG
+
+### [4.1.0] - 2025-12-01 - Cognitive Tuning (AGI Steps)
+
+#### 🧠 Cognitive Dynamics
+- **Context Diet (Working Memory):**
+  - `CortexSystem` now limits conversation history to the last **12 turns**.
+  - Prevents context overload and forces reliance on RAG (Long-Term Memory) for older details.
+  - Simulates biological "Working Memory" constraints.
+
+#### 🗣️ Volition & Spontaneity
+- **Lowered Inhibition:**
+  - Speech threshold reduced from `0.6` to **`0.5`**.
+  - Agent is more spontaneous and willing to speak without "perfect" certainty.
+- **Faster Reflexes:**
+  - Speech refractory period reduced from `3000ms` to **`1800ms`**.
+  - Creates a more natural, conversational rhythm (breathing room vs. awkward silence).
+
+#### 🛡️ Architecture
+- **No Hacks:** Changes achieved purely by tuning biological parameters in `VolitionSystem`, preserving the integrity of the equation-based architecture.
+
+---
 
 ### [4.0.0] - 2025-11-27 - Modular Architecture Refactor
 
