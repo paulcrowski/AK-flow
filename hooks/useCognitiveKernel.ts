@@ -258,7 +258,8 @@ export const useCognitiveKernel = () => {
                     lastSpeakTimestamp: lastSpeakRef.current,
                     silenceStart: silenceStartRef.current,
                     thoughtHistory: thoughtHistoryRef.current,
-                    poeticMode: false // Default to false
+                    poeticMode: false, // Default to false
+                    autonomousLimitPerMinute: 3 // Budget limit for safety
                 };
 
                 const nextCtx = await EventLoop.runSingleStep(ctx, null, {

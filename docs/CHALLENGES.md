@@ -270,6 +270,36 @@ To był **psychologiczny problem**, nie techniczny. Wizualizacje dają instant g
 
 ---
 
+## 📝 Problem #8: Pułapka Edytora (The Editor Trap)
+
+**Data:** 2025-12-02  
+**Trudność:** 3/5  
+**Czas:** ~30 minut (stracone na naprawy)  
+**Status:** ✅ Rozwiązany (Lesson Learned)
+
+### Objawy
+Próba automatycznej edycji dużego pliku (`useCognitiveKernel.ts`, 600+ linii) za pomocą narzędzia `replace_file_content` zakończyła się ucięciem kodu i błędami składni. Narzędzie zgubiło kontekst przy dużej ilości zmian naraz.
+
+### Próby (co NIE zadziałało)
+1. ❌ **Edycja całego bloku funkcji** - zbyt duży chunk dla modelu
+2. ❌ **Zaufanie, że "narzędzie wie co robi"** - brak weryfikacji manualnej od razu
+
+### Rozwiązanie
+**Deep Quality Audit & Manual Fixes:**
+1. Ręczne (krok po kroku) przywrócenie kodu.
+2. Weryfikacja `view_file` po każdej zmianie.
+3. Podział dużych zmian na mniejsze, atomowe operacje.
+
+### Lekcje
+- **Small Commits** - przy pracy z agentem AI, mniejsze zmiany są bezpieczniejsze.
+- **Verify First** - zawsze sprawdzaj plik przed i po edycji, jeśli jest duży.
+- **Human in the Loop** - AI jest potężne, ale przy operacjach na plikach >500 linii wymaga nadzoru.
+
+### Meta-analiza
+To przypomnienie, że nawet "11/10 AGI Architect" musi przestrzegać podstawowych zasad higieny pracy z kodem. Pycha (próba zrobienia wszystkiego naraz) kroczy przed upadkiem (syntax error).
+
+---
+
 ## 🔬 Meta-Analiza: Wzorce Problemów
 
 ### Kategorie problemów

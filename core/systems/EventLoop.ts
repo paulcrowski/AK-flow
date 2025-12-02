@@ -21,20 +21,20 @@ export namespace EventLoop {
         silenceStart: number;
         thoughtHistory: string[];
         poeticMode: boolean; // NEW: Track if user requested poetic style
+        autonomousLimitPerMinute: number; // Budget limit for autonomous operations
     }
 
-    // Global Budget State
+    // Module-level Budget Tracking (counters only, limit is in context)
     let autonomousOpsThisMinute = 0;
-    const AUTONOMOUS_LIMIT_PER_MINUTE = 3;
     let lastBudgetReset = Date.now();
 
-    function checkBudget(): boolean {
+    function checkBudget(limit: number): boolean {
         const now = Date.now();
         if (now - lastBudgetReset > 60000) {
             autonomousOpsThisMinute = 0;
             lastBudgetReset = now;
         }
-        if (autonomousOpsThisMinute >= AUTONOMOUS_LIMIT_PER_MINUTE) {
+        if (autonomousOpsThisMinute >= limit) {
             console.warn("Autonomy budget exhausted for this minute, skipping.");
             return false;
         }
@@ -101,8 +101,8 @@ export namespace EventLoop {
             // Check if we should think
             if (VolitionSystem.shouldInitiateThought(silenceDuration)) {
 
-                // SAFETY: Check Global Budget
-                if (!checkBudget()) {
+                // SAFETY: Check Budget (limit from context)
+                if (!checkBudget(ctx.autonomousLimitPerMinute)) {
                     return ctx;
                 }
                 autonomousOpsThisMinute++;

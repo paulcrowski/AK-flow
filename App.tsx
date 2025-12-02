@@ -5,6 +5,7 @@ import { AgentType, PacketType } from './types';
 import { MemoryService } from './services/supabase';
 import { NeuroMonitor } from './components/NeuroMonitor';
 import { useCognitiveKernel } from './hooks/useCognitiveKernel';
+import { ComponentErrorBoundary } from './components/ComponentErrorBoundary';
 import { Brain, Send, Moon, Sun, Loader2, Zap, Power, AlertTriangle, RefreshCw, EyeOff, Image as ImageIcon, Sparkles, Globe, FileText } from 'lucide-react';
 
 function App() {
@@ -297,7 +298,9 @@ function App() {
 
             {/* RIGHT: NEURO-MONITOR */}
             <div className="w-[500px] h-full border-l border-gray-800 hidden lg:block">
-                <NeuroMonitor limbicState={limbicState} somaState={somaState} resonanceField={resonanceField} injectStateOverride={injectStateOverride} />
+                <ComponentErrorBoundary componentName="NeuroMonitor">
+                    <NeuroMonitor limbicState={limbicState} somaState={somaState} resonanceField={resonanceField} injectStateOverride={injectStateOverride} />
+                </ComponentErrorBoundary>
             </div>
         </div>
     );

@@ -8,40 +8,59 @@ import { generateUUID } from "../utils/uuid";
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 // 2. Robust JSON Parsing Helper
-const cleanJSON = (text: string | undefined, defaultVal: any = {}): any => {
+// 2. Robust JSON Parsing Helper
+// Generic Type Guard
+function isValidResponse<T>(data: any, validator?: (data: any) => boolean): data is T {
+    if (!data || typeof data !== 'object') return false;
+    if (validator) return validator(data);
+    return true; // Default: just checks if it's an object
+}
+
+const cleanJSON = <T>(text: string | undefined, defaultVal: T, validator?: (data: any) => boolean): T => {
     if (!text) return defaultVal;
     try {
+        let parsed: any;
         // 1. Try direct parse first
-        return JSON.parse(text);
-    } catch (e) {
         try {
+            parsed = JSON.parse(text);
+        } catch (e) {
             // 2. Extract JSON block using regex
             const match = text.match(/\{[\s\S]*\}/);
             if (match) {
-                return JSON.parse(match[0]);
+                parsed = JSON.parse(match[0]);
+            } else {
+                // 3. Last resort: aggressive cleanup
+                let clean = text.replace(/```json\n?/g, '').replace(/```/g, '').trim();
+                parsed = JSON.parse(clean);
             }
-            // 3. Last resort: aggressive cleanup
-            let clean = text.replace(/```json\n?/g, '').replace(/```/g, '').trim();
-            return JSON.parse(clean);
-        } catch (e2) {
-            console.warn("JSON Parse Error. Using default. Raw text:", text);
+        }
 
-            // DEBUG: Log the raw failure to EventBus so we can see what the model actually said
-            eventBus.publish({
-                id: generateUUID(),
-                timestamp: Date.now(),
-                source: AgentType.CORTEX_FLOW,
-                type: PacketType.PREDICTION_ERROR,
-                payload: {
-                    metric: "JSON_PARSE_FAILURE",
-                    raw_output: text?.substring(0, 500) || "EMPTY_RESPONSE",
-                    error: (e2 as any).message
-                },
-                priority: 0.9
-            });
-
+        // 4. Validate Type
+        if (isValidResponse<T>(parsed, validator)) {
+            return parsed;
+        } else {
+            console.warn("JSON Parsed but failed validation. Using default.");
             return defaultVal;
         }
+
+    } catch (e2) {
+        console.warn("JSON Parse Error. Using default. Raw text:", text);
+
+        // DEBUG: Log the raw failure to EventBus so we can see what the model actually said
+        eventBus.publish({
+            id: generateUUID(),
+            timestamp: Date.now(),
+            source: AgentType.CORTEX_FLOW,
+            type: PacketType.PREDICTION_ERROR,
+            payload: {
+                metric: "JSON_PARSE_FAILURE",
+                raw_output: text?.substring(0, 500) || "EMPTY_RESPONSE",
+                error: (e2 as any).message
+            },
+            priority: 0.9
+        });
+
+        return defaultVal;
     }
 };
 
