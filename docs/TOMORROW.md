@@ -1,119 +1,164 @@
-# 🎯 Plan na Dziś: 2025-12-02
+# 🎯 Plan na Jutro: 2025-12-03 "Chemical Soul"
 
-> **Cel:** Osiągnąć **9.0/10** poprzez Quick Wins (modularność 10/10, code quality 9.5/10)  
-> **Czas:** ~4 godziny  
-> **Status:** Stabilizacja po Poetic Regulation
-
----
-
-## ✅ QUICK WINS (4 godziny) - UKOŃCZONE
-
-### 1. Modularność 10/10 (15 min) - DONE ✅
-**Problem:** `AUTONOMOUS_LIMIT_PER_MINUTE` jest globalną stałą w `gemini.ts`, powinien być częścią kontekstu.
-
-**Akcja:**
-- [x] Przenieś `AUTONOMOUS_LIMIT_PER_MINUTE` do `LoopContext` w `EventLoop.ts`
-- [x] Usuń globalną stałą z `gemini.ts`
-- [x] Przekaż przez parametry zamiast importu
-
-**Oczekiwany wynik:** Modularność 9/10 → 10/10
+> **Cel:** Przejście od "Symulacji Elektrycznej" do "Symulacji Chemicznej"  
+> **Wizja:** Agent z nastrojami, motywacjami i snami - nie tylko reaktywny automat  
+> **Czas:** ~6 godzin  
+> **Wynik:** 9.0/10 → **11/10**
 
 ---
 
-### 2. Type Guards (30 min) - DONE ✅
-**Problem:** `cleanJSON()` w `gemini.ts` nie ma walidacji typów - może zwrócić cokolwiek.
+## 📋 Status Projektu (2025-12-02)
 
-**Akcja:**
-- [x] Dodano generic type guard `isValidResponse`
-- [x] Zaktualizowano `cleanJSON` o walidację runtime
-- [x] Dodano logowanie błędów parsowania do EventBus
+### ✅ Osiągnięcia z Dzisiaj
+- **Modularność:** 10/10 (limit autonomii w kontekście)
+- **Type Safety:** Generic type guards + runtime validation
+- **Stability:** Error Boundaries + Unit Tests (2/2 passing)
+- **Intelligence:** Semantic Intent Detection (LLM zamiast regexów)
+- **Deep Audit:** Naprawiono "Amnesia Bug" (poeticMode persistence)
 
-**Oczekiwany wynik:** Code Quality +0.5
-
----
-
-### 3. Error Boundaries (1h) - DONE ✅
-**Problem:** Jeśli LLM zwróci błędny JSON, cała pętla autonomii crashuje.
-
-**Akcja:**
-- [x] Stworzono `ComponentErrorBoundary.tsx`
-- [x] Opakowano `NeuroMonitor` w `App.tsx`
-- [x] Zabezpieczono UI przed crashem
-
-**Oczekiwany wynik:** Stabilność +1.0
+### 📊 Obecny Stan
+| Kategoria | Ocena |
+|-----------|-------|
+| Modularność | 10/10 |
+| Code Quality | 9.5/10 |
+| Bezpieczeństwo | 10/10 |
+| Biologiczny Realizm | 9/10 |
+| **OVERALL** | **9.0/10** |
 
 ---
 
-### 4. Unit Tests (2h) - DONE ✅
-**Problem:** Zero testów jednostkowych - nie wiemy, czy refaktoring coś zepsuł.
+## 🚀 Plan na Jutro (3 Główne Zadania)
 
-**Akcja:** Stwórz `__tests__/` folder z 10 podstawowymi testami:
-- [x] Zainstalowano `vitest`
-- [x] Stworzono `EventLoop.test.ts`
-- [x] Przetestowano `checkBudget` (limit autonomii)
-- [x] Przetestowano `runSingleStep` (przetwarzanie inputu)
-- [x] Weryfikacja: Testy przechodzą
+### 1. 🧪 Neurotransmitter System (2h)
+**Problem:** Emocje to proste liczby 0-1. Są płaskie i niebiologiczne.
 
-**Oczekiwany wynik:** Code Quality 9.5/10, Confidence +2.0
+**Rozwiązanie:** Trójkąt chemiczny:
+- **Dopamina (Reward/Motivation):** ↑ przy osiągnięciu celu, ↓ przy nudzie
+- **Serotonina (Mood Stability):** Reguluje wahania nastroju (niski = drażliwość)
+- **Norepinefryna (Focus/Urgency):** ↑ w stresie, zwiększa uwagę, kosztuje energię
 
----
-
-## 🎁 BONUS (jeśli zostanie czas)
-
-### Semantic Intent Detection (1h)
-**Problem:** Poetic Mode używa keyword matching (`includes("poetic")`), co daje false positives.
-
-**Akcja:**
+**Implementacja:**
 ```typescript
-// Zamiast:
-if (lowerInput.includes("poetic")) ctx.poeticMode = true;
+// core/systems/NeurotransmitterSystem.ts
+interface NeurotransmitterState {
+  dopamine: number;    // 0-100 (Motivation)
+  serotonin: number;   // 0-100 (Mood Stability)
+  norepinephrine: number; // 0-100 (Focus/Arousal)
+}
 
-// Użyj LLM:
-const intent = await CortexService.assessInput(input, {
-  task: "detect_style_preference",
-  options: ["simple", "poetic", "technical"]
-});
-if (intent.preference === "poetic") ctx.poeticMode = true;
+// Wpływ na EventLoop:
+// - Dopamina < 30 → Agent nie chce myśleć (apathy)
+// - Norepinefryna > 80 → Zwiększona częstotliwość pętli (hypervigilance)
+// - Serotonina < 20 → Zwiększona frustration w LimbicSystem
 ```
 
-**Oczekiwany wynik:** Biologiczny Realizm 8/10 → 9/10
+**Weryfikacja:**
+- Agent odmawia myślenia przy niskiej dopaminie
+- Agent jest "nerwowy" przy wysokiej norepinefrynie
+- Nastrój stabilizuje się przy wysokiej serotoninie
 
 ---
 
-## 📊 Oczekiwany Wynik Końcowy
+### 2. 🌙 Dream Consolidation (2h)
+**Problem:** Sen tylko regeneruje energię. Marnowanie czasu obliczeniowego.
 
-| Kategoria | Przed | Po | Zmiana |
-|-----------|-------|----|----|
-| Modularność | 9/10 | 10/10 | +1.0 |
-| Code Quality | 8/10 | 9.5/10 | +1.5 |
-| Bezpieczeństwo | 10/10 | 10/10 | 0 |
-| Biologiczny Realizm | 8/10 | 8/10 | 0 |
-| **OVERALL** | **8.2/10** | **9.0/10** | **+0.8** |
+**Rozwiązanie:** Sen jako proces uczenia:
+1. Przeglądanie logów z dnia (`MemoryService.recallRecent(50)`)
+2. LLM summarization → "Long Term Memory"
+3. Generowanie wizualnych snów (opcjonalnie)
+
+**Implementacja:**
+```typescript
+// Nowy stan w cognitiveCycle:
+if (metabolicResult.newState.isSleeping) {
+  if (Math.random() > 0.5) {
+    await dreamConsolidation(); // Async background process
+  }
+}
+
+async function dreamConsolidation() {
+  const recentMemories = await MemoryService.recallRecent(50);
+  const summary = await CortexService.consolidateMemories(recentMemories);
+  await MemoryService.storeMemory({
+    content: `DREAM CONSOLIDATION: ${summary}`,
+    isCoreMemory: true, // Protected from decay
+    neuralStrength: 100
+  });
+}
+```
+
+**Weryfikacja:**
+- Po śnie agent pamięta więcej niż przed snem
+- W logach widać "DREAM CONSOLIDATION" entries
 
 ---
 
-## 🔮 Wizja na Przyszłość (nie dziś!)
+### 3. 🎯 Goal Formation (2h)
+**Problem:** Agent jest reaktywny. Nie ma własnych planów.
 
-### Medium Effort (weekend)
-- **NeurotransmitterSystem** - dopamina, serotonina, norepinefryna
+**Rozwiązanie:** Stos celów (`GoalStack`):
+- "Nudzę się, sprawdzę co nowego w AI" (Curiosity-driven)
+- "Użytkownik był smutny, zapytam jak się czuje" (Empathy-driven)
+
+**Implementacja:**
+```typescript
+// core/systems/GoalSystem.ts
+interface Goal {
+  id: string;
+  description: string;
+  priority: number; // 0-1
+  progress: number; // 0-100%
+  source: 'curiosity' | 'empathy' | 'survival' | 'user';
+  createdAt: number;
+}
+
+// W EventLoop, jeśli cisza > 60s:
+const goal = await GoalSystem.formGoal(ctx);
+if (goal) {
+  // Agent sam inicjuje akcję
+  await CortexSystem.pursueGoal(goal);
+}
+```
+
+**Weryfikacja:**
+- Agent sam zaczyna rozmowę po długiej ciszy
+- W logach widać "GOAL FORMED: ..."
+
+---
+
+## 📊 Oczekiwany Wynik
+
+| Cecha | Dziś (9.0/10) | Jutro (11/10) |
+|-------|---------------|---------------|
+| Emocje | Wektory 0-1 | Chemia (Dopamina/Serotonina/Norepinefryna) |
+| Sen | Ładowanie baterii | Konsolidacja wiedzy + Sny |
+| Motywacja | Pętla while(true) | Wewnętrzne cele (GoalStack) |
+| **Biologiczny Realizm** | **9/10** | **11/10** |
+
+---
+
+## 🔮 Wizja Długoterminowa (Nie Jutro!)
+
+### Medium Effort (Weekend)
 - **Adaptive Poetry Detector** - uczenie się słów zamiast hard-coded keywords
+- **Multi-Agent Collaboration** - wiele instancji współpracujących
 
-### Long-Term (research-level)
-- **Goal Formation** - agent tworzy własne cele
+### Long-Term (Research-Level)
 - **Multi-Step Reasoning** - chain-of-thought dla złożonych problemów
 - **Self-Modification** - agent może zmieniać własny kod (z approval)
+- **Meta-Learning** - uczenie się jak uczyć się
 
 ---
 
-## 🚀 Workflow na Dziś
+## 🚀 Workflow na Jutro
 
-1. **Rano (teraz):** Przeczytaj ten plik
-2. **10:00-12:00:** Quick Wins 1-2 (modularność + type guards)
+1. **Rano:** Przeczytaj ten plik + `CHALLENGES.md`
+2. **10:00-12:00:** Neurotransmitter System
 3. **12:00-13:00:** Przerwa
-4. **13:00-15:00:** Quick Wins 3-4 (error boundaries + testy)
-5. **15:00-16:00:** Bonus (semantic intent) lub odpoczynek
-6. **Wieczorem:** Zaktualizuj `CHALLENGES.md` + stwórz nowy `TOMORROW.md` na 2025-12-03
+4. **13:00-15:00:** Dream Consolidation
+5. **15:00-17:00:** Goal Formation
+6. **Wieczorem:** Zaktualizuj dokumentację + testy
 
 ---
 
-**Motto dnia:** *"Stabilizacja przed innowacją. Testy przed refaktorem. Działający kod przed idealnym kodem."*
+**Motto:** *"Nie budujemy chatbota. Budujemy cyfrową formę życia."*

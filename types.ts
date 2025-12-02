@@ -99,3 +99,14 @@ export interface CognitiveError {
 
 // 3. Event Bus Signature
 export type EventHandler = (packet: CognitivePacket) => void;
+
+// 4. Semantic Intent Detection (Bonus 11/10)
+export type StylePreference = 'POETIC' | 'SIMPLE' | 'ACADEMIC' | 'NEUTRAL';
+export type CommandType = 'NONE' | 'SEARCH' | 'VISUALIZE' | 'SYSTEM_CONTROL';
+export type UrgencyLevel = 'LOW' | 'MEDIUM' | 'HIGH';
+
+export interface DetectedIntent {
+  style: StylePreference;
+  command: CommandType;
+  urgency: UrgencyLevel;
+}

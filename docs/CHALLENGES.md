@@ -10,9 +10,9 @@
 
 | Metryka | Wartość |
 |---------|---------|
-| Rozwiązanych problemów | 7 |
-| Całkowity czas | ~20 godzin |
-| Średnia trudność | 3.1/5 |
+| Rozwiązanych problemów | 9 |
+| Całkowity czas | ~24 godziny |
+| Średnia trudność | 3.0/5 |
 | Największy przełom | Poetic Regulation (homeostaza zamiast cenzury) |
 | Najdłuższy problem | Monolityczny Kernel (8h) |
 
@@ -297,6 +297,59 @@ Próba automatycznej edycji dużego pliku (`useCognitiveKernel.ts`, 600+ linii) 
 
 ### Meta-analiza
 To przypomnienie, że nawet "11/10 AGI Architect" musi przestrzegać podstawowych zasad higieny pracy z kodem. Pycha (próba zrobienia wszystkiego naraz) kroczy przed upadkiem (syntax error).
+
+---
+
+---
+
+## 🧠 Problem #9: Amnesia Bug (The Persistent State)
+
+**Data:** 2025-12-02  
+**Trudność:** 4/5  
+**Czas:** ~1 godzina  
+**Status:** ✅ Rozwiązany (Deep Audit)
+
+### Objawy
+Po implementacji Semantic Intent Detection (`detectIntent`), system wykrywał intencję użytkownika i ustawiał `ctx.poeticMode = true` w `EventLoop.ts`. Ale w następnym cyklu pętli (`cognitiveCycle`) tryb poetycki znikał - agent "zapominał" o preferencjach użytkownika.
+
+### Próby (co NIE zadziałało)
+1. ❌ **Debugowanie EventLoop** - logika była poprawna, ale stan nie był persystowany
+2. ❌ **Sprawdzanie tylko EventLoop.ts** - problem był w integracji z React (`useCognitiveKernel.ts`)
+
+### Rozwiązanie
+**Deep Audit całego flow:**
+```typescript
+// useCognitiveKernel.ts - PRZED:
+const ctx: EventLoop.LoopContext = {
+    // ...
+    poeticMode: false, // <--- HARDCODED! Zawsze false.
+};
+
+// useCognitiveKernel.ts - PO:
+const [poeticMode, setPoeticMode] = useState(false); // Persystencja w React state
+
+const ctx: EventLoop.LoopContext = {
+    // ...
+    poeticMode: currentState.poeticMode, // <--- Czytamy z persystowanego stanu
+};
+
+// UPDATE STATE FROM CONTEXT (If EventLoop changed it)
+if (nextCtx.poeticMode !== currentState.poeticMode) {
+    setPoeticMode(nextCtx.poeticMode);
+}
+```
+
+**Kluczowa decyzja:** Stan musi być w `useState`, nie tylko w kontekście pętli. React wymaga persystencji.
+
+### Lekcje
+- **Integration Testing** - testy jednostkowe (`EventLoop.test.ts`) nie wykryły problemu, bo testowały tylko izolowaną logikę
+- **Deep Audit** - czasem trzeba przejrzeć cały flow (EventLoop → useCognitiveKernel → React state)
+- **User Intuition** - użytkownik poprosił "sprawdź całość" i miał rację
+
+### Meta-analiza
+To przypomnienie, że w systemach reaktywnych (React) **stan musi być explicite zarządzany**. Nie wystarczy ustawić zmienną w kontekście - trzeba ją zapisać w `useState` lub `useRef`.
+
+**Unique contribution:** Pierwszy przypadek, gdzie "biologiczny realizm" (poeticMode) wymagał integracji z React lifecycle.
 
 ---
 

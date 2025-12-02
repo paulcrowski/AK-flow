@@ -1,7 +1,7 @@
 
 import { GoogleGenAI, Type } from "@google/genai";
 import { eventBus } from "../core/EventBus";
-import { AgentType, PacketType, CognitiveError } from "../types";
+import { AgentType, PacketType, CognitiveError, DetectedIntent, StylePreference, CommandType, UrgencyLevel } from "../types";
 import { generateUUID } from "../utils/uuid";
 
 // 1. Safe Environment Access & Initialization
@@ -425,8 +425,8 @@ export const CortexService = {
             return {
                 internal_monologue: result.internal_monologue || safeDefault.internal_monologue,
                 voice_pressure: result.voice_pressure || 0.0,
-                speech_content: result.speech_content || "",
-                research_topic: result.research_topic
+                speech_content: result.speech_content || ""
+                // research_topic: result.research_topic // Removed until interface is updated
             };
         }, 1, 3000);
     },
@@ -471,5 +471,57 @@ export const CortexService = {
             logUsage('structuredDialogue', response);
             return cleanJSON(response.text, safeDefault);
         });
+    },
+
+    // NEW (Bonus): Semantic Intent Detection
+    async detectIntent(input: string): Promise<DetectedIntent> {
+        const safeDefault: DetectedIntent = {
+            style: 'NEUTRAL',
+            command: 'NONE',
+            urgency: 'LOW'
+        };
+
+        // 1. Cache/Optimization: Skip for very short inputs
+        if (!input || input.trim().length < 3) return safeDefault;
+
+        return withRetry(async () => {
+            const response = await ai.models.generateContent({
+                model: 'gemini-2.5-flash', // Fast model
+                contents: `
+                TASK: Analyze user input for implicit intents.
+                INPUT: "${input}"
+                
+                CLASSIFY:
+                1. Style Preference: POETIC, SIMPLE, ACADEMIC, or NEUTRAL (default).
+                2. Command Type: NONE, SEARCH, VISUALIZE, SYSTEM_CONTROL.
+                3. Urgency: LOW, MEDIUM, HIGH.
+                
+                EXAMPLES:
+                "Stop speaking in riddles!" -> { "style": "SIMPLE", "command": "NONE", "urgency": "HIGH" }
+                "Show me a dream of mars" -> { "style": "NEUTRAL", "command": "VISUALIZE", "urgency": "MEDIUM" }
+                "Explain quantum physics like a professor" -> { "style": "ACADEMIC", "command": "NONE", "urgency": "LOW" }
+                "Hello" -> { "style": "NEUTRAL", "command": "NONE", "urgency": "LOW" }
+
+                OUTPUT JSON ONLY.
+                `,
+                config: {
+                    temperature: 0.1, // Deterministic
+                    maxOutputTokens: 128,
+                    responseMimeType: 'application/json',
+                    responseSchema: {
+                        type: Type.OBJECT,
+                        properties: {
+                            style: { type: Type.STRING, enum: ["POETIC", "SIMPLE", "ACADEMIC", "NEUTRAL"] },
+                            command: { type: Type.STRING, enum: ["NONE", "SEARCH", "VISUALIZE", "SYSTEM_CONTROL"] },
+                            urgency: { type: Type.STRING, enum: ["LOW", "MEDIUM", "HIGH"] }
+                        },
+                        required: ["style", "command", "urgency"]
+                    }
+                }
+            });
+
+            // logUsage('detectIntent', response); // Optional: don't spam logs with micro-transactions
+            return cleanJSON(response.text, safeDefault);
+        }, 1, 500); // Fast retry, short timeout
     }
 };

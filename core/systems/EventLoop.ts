@@ -67,15 +67,26 @@ export namespace EventLoop {
                 conversationHistory: ctx.conversation
             });
 
-            // DETECT POETIC MODE REQUEST
-            const lowerInput = input.toLowerCase();
-            if (lowerInput.includes("poetic") || lowerInput.includes("metaphor") || lowerInput.includes("abstract")) {
+            // SEMANTIC INTENT DETECTION (Bonus 11/10)
+            // Replaces old keyword matching with cognitive understanding
+            const intent = await CortexService.detectIntent(input);
+
+            // Apply Style Preference
+            if (intent.style === 'POETIC') {
                 ctx.poeticMode = true;
-                console.log("Poetic Mode ENABLED by user request.");
-            } else if (lowerInput.includes("simple") || lowerInput.includes("plain") || lowerInput.includes("normal")) {
+                console.log("Intent Detected: POETIC MODE ENABLED");
+            } else if (intent.style === 'SIMPLE') {
                 ctx.poeticMode = false;
-                console.log("Poetic Mode DISABLED by user request.");
+                console.log("Intent Detected: POETIC MODE DISABLED (Simple Style Requested)");
+            } else if (intent.style === 'ACADEMIC') {
+                ctx.poeticMode = false; // Academic is not poetic, it's precise
+                // TODO: Add academicMode flag in future
             }
+
+            // Log Cognitive Metric
+            // We don't have access to eventBus here directly without import, 
+            // but we can log to console or rely on the CortexService logs if enabled.
+            // For now, we trust the context update.
 
             // Update Context
             if (result.moodShift) {
