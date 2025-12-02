@@ -571,6 +571,55 @@ CREATE TABLE memories (
 
 ## 📝 CHANGELOG
 
+### [4.1.1] - 2025-12-02 - Neuro Repair: Tools & Debug
+
+#### 🔍 SEARCH / 🎨 VISUALIZE Integration (User + Autonomy)
+- **Unified Tool Parser in `useCognitiveKernel`:**
+  - All assistant speech (manual + autonomous) is now routed through `processOutputForTools` via `handleCortexMessage`.
+  - Supports multiple tag formats for tools:
+    - `[SEARCH: topic]`, `[SEARCH] for: topic ...`
+    - `[VISUALIZE: prompt]`, `[VISUALIZE] prompt ...`
+    - Autonomous phrasing: `[Visualize ...]`, `[Visualizing ...]`.
+- **Deep Research Flow:**
+  - `[SEARCH ...]` triggers `CortexSystem.performDeepResearch` → `CortexService.performDeepResearch` (Google Search tool).
+  - Emits `INTEL` message in chat plus `FIELD_UPDATE` packet with `DEEP_RESEARCH_COMPLETE` and `found_sources`.
+- **Visual Cortex Flow:**
+  - `[VISUALIZE ...]` triggers `CortexService.generateVisualThought` (image) → `analyzeVisualInput` (perception).
+  - Emits `VISUAL_THOUGHT` (`status="RENDERING"`) and `VISUAL_PERCEPTION` (`status="PERCEPTION_COMPLETE"`) packets.
+  - Adds `visual` card in chat and stores visual memories in Supabase with `isVisualDream: true`.
+
+#### 🧠 Event Loop Wiring (Autonomous Volition)
+- `EventLoop.runSingleStep` now receives `onMessage: handleCortexMessage` instead of raw `addMessage`.
+- Ensures that autonomous speech can self-trigger tools (SEARCH/VISUALIZE) using the same pathway as user responses.
+- Thought emissions still log as `THOUGHT_CANDIDATE`, but speech is pre-processed for tool tags before entering the conversation.
+
+#### 🧪 Neuro-Monitor DEBUG Controls (Restored)
+- **Limbic Control Panel (DEBUG tab):**
+  - Re-enabled manual emotional modulation via `injectStateOverride('limbic', key, value)`:
+    - Fear: ↑ / ↓
+    - Curiosity: ↑ / ↓
+    - Satisfaction: ↑ / ↓
+  - Values clamped to `[0, 1]`.
+- **Somatic Energy Control:**
+  - Reconnected energy controls to `injectStateOverride('soma', 'energy', value)`.
+  - Values clamped to `[0, 100]`.
+- **Kernel API Surface:**
+  - `useCognitiveKernel` now explicitly exports:
+    - `toggleSleep()` → wraps `SomaSystem.forceSleep/forceWake`.
+    - `injectStateOverride(type, key, value)` → debug overrides for limbic/soma.
+
+#### 🫀 Physiological Logging at 11/10 Detail
+- **Speech Logging (`addMessage`):**
+  - Every assistant `speech` publishes a `THOUGHT_CANDIDATE` packet with `speech_content`, `voice_pressure` and `status="SPOKEN"` from `AgentType.CORTEX_FLOW`.
+  - Immediately captures and publishes a paired physiological snapshot via `logPhysiologySnapshot('SPEECH')`:
+    - `AgentType.LIMBIC` → `STATE_UPDATE` with fear/curiosity/frustration/satisfaction.
+    - `AgentType.SOMA` → `STATE_UPDATE` with energy/cognitiveLoad/isSleeping.
+- **Thought Logging (Autonomy):**
+  - Autonomous thoughts emitted via `onThought` now also trigger `logPhysiologySnapshot('THOUGHT')`.
+  - Provides time-aligned traces of inner monologue and body/emotion state in the exported logs and Neuro-Monitor.
+
+---
+
 ### [4.1.0] - 2025-12-01 - Cognitive Tuning (AGI Steps)
 
 #### 🧠 Cognitive Dynamics

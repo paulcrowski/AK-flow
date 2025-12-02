@@ -80,6 +80,7 @@ export const useCognitiveKernel = () => {
     const hasBootedRef = useRef<boolean>(false); // Prevent double boot
     const thoughtHistoryRef = useRef<string[]>([]);
     const lastSpeakRef = useRef<number>(0);
+    const lastUserInputRef = useRef<string | null>(null);
 
     // Sync Ref
     useEffect(() => {
@@ -87,6 +88,41 @@ export const useCognitiveKernel = () => {
     }, [limbicState, somaState, resonanceField, conversation, autonomousMode, poeticMode]);
 
     // --- ACTIONS ---
+
+    const logPhysiologySnapshot = (context: string) => {
+        const snapshot = stateRef.current;
+
+        // Limbic snapshot
+        eventBus.publish({
+            id: generateUUID(),
+            timestamp: Date.now(),
+            source: AgentType.LIMBIC,
+            type: PacketType.STATE_UPDATE,
+            payload: {
+                context,
+                fear: snapshot.limbicState.fear,
+                curiosity: snapshot.limbicState.curiosity,
+                frustration: snapshot.limbicState.frustration,
+                satisfaction: snapshot.limbicState.satisfaction
+            },
+            priority: 0.2
+        });
+
+        // Soma snapshot
+        eventBus.publish({
+            id: generateUUID(),
+            timestamp: Date.now(),
+            source: AgentType.SOMA,
+            type: PacketType.STATE_UPDATE,
+            payload: {
+                context,
+                energy: snapshot.somaState.energy,
+                cognitiveLoad: snapshot.somaState.cognitiveLoad,
+                isSleeping: snapshot.somaState.isSleeping
+            },
+            priority: 0.2
+        });
+    };
 
     const addMessage = (role: 'user' | 'assistant', text: string, type: 'thought' | 'speech' | 'visual' | 'intel' = 'speech', imageData?: string, sources?: any[]) => {
         setConversation(prev => [...prev, { role, text, type, imageData, sources }]);
@@ -106,6 +142,39 @@ export const useCognitiveKernel = () => {
                 },
                 priority: 0.8
             });
+
+            // 11/10: Log physiological snapshot at the moment of speech
+            logPhysiologySnapshot('SPEECH');
+        }
+    };
+
+    const toggleAutonomy = () => {
+        setAutonomousMode(prev => !prev);
+        setSystemError(null);
+        silenceStartRef.current = Date.now();
+    };
+
+    const toggleSleep = () => {
+        setSomaState(prev => {
+            if (prev.isSleeping) {
+                return SomaSystem.forceWake(prev);
+            } else {
+                return SomaSystem.forceSleep(prev);
+            }
+        });
+    };
+
+    const injectStateOverride = (type: 'limbic' | 'soma', key: string, value: number) => {
+        if (type === 'limbic') {
+            setLimbicState(prev => ({
+                ...prev,
+                [key]: Math.max(0, Math.min(1, value))
+            }));
+        } else {
+            setSomaState(prev => ({
+                ...prev,
+                [key]: Math.max(0, Math.min(100, value))
+            }));
         }
     };
 
@@ -114,7 +183,16 @@ export const useCognitiveKernel = () => {
         let cleanText = rawText;
 
         // 1. SEARCH TAG
-        const searchMatch = cleanText.match(/\[SEARCH:\s*(.*?)\]/i);
+        let searchMatch = cleanText.match(/\[SEARCH:\s*(.*?)\]/i);
+        if (!searchMatch) {
+            // Fallback: handle legacy form like "[SEARCH] for: topic ..."
+            const legacySearch = cleanText.match(/\[SEARCH\]\s*(?:for\s*)?:?\s*(.+)$/i);
+            if (legacySearch) {
+                // Synthesize a pseudo-match compatible with the main handler
+                searchMatch = [legacySearch[0], legacySearch[1]] as any;
+            }
+        }
+
         if (searchMatch) {
             const query = searchMatch[1].trim();
             cleanText = cleanText.replace(searchMatch[0], '').trim();
@@ -140,7 +218,22 @@ export const useCognitiveKernel = () => {
         }
 
         // 2. VISUAL TAG
-        const visualMatch = cleanText.match(/\[VISUALIZE:\s*([\s\S]*?)\]/i);
+        let visualMatch = cleanText.match(/\[VISUALIZE:\s*([\s\S]*?)\]/i);
+        if (!visualMatch) {
+            // Fallback A: "[VISUALIZE] this framework ..."
+            const legacyVisual = cleanText.match(/\[VISUALIZE\]\s*(.+)$/is);
+            if (legacyVisual) {
+                visualMatch = [legacyVisual[0], legacyVisual[1]] as any;
+            }
+        }
+        if (!visualMatch) {
+            // Fallback B: autonomous phrasing like "[Visualizing the evolving conceptual framework ...]"
+            const progressiveVisual = cleanText.match(/\[(Visualize|visualize|Visualizing|visualizing)\s+(.+?)\]/is);
+            if (progressiveVisual) {
+                visualMatch = [progressiveVisual[0], progressiveVisual[2]] as any;
+            }
+        }
+
         if (visualMatch) {
             let prompt = visualMatch[1].trim();
             if (prompt.endsWith(']')) prompt = prompt.slice(0, -1);
@@ -244,6 +337,19 @@ export const useCognitiveKernel = () => {
         return cleanText;
     };
 
+    const handleCortexMessage = (role: 'user' | 'assistant', text: string, type: 'thought' | 'speech' | 'visual' | 'intel' = 'speech', imageData?: string, sources?: any[]) => {
+        if (role === 'assistant' && type === 'speech') {
+            (async () => {
+                const cleanSpeech = await processOutputForTools(text);
+                if (cleanSpeech.trim()) {
+                    addMessage(role, cleanSpeech, type, imageData, sources);
+                }
+            })();
+        } else {
+            addMessage(role, text, type, imageData, sources);
+        }
+    };
+
     // --- COGNITIVE LOOP ---
     const cognitiveCycle = useCallback(async () => {
         // 1. HARD KILL SWITCH
@@ -335,7 +441,7 @@ export const useCognitiveKernel = () => {
                 };
 
                 const nextCtx = await EventLoop.runSingleStep(ctx, null, {
-                    onMessage: addMessage,
+                    onMessage: handleCortexMessage,
                     onThought: (t) => {
                         setIsProcessing(true); // Lock when thinking starts
                         setCurrentThought(t);
@@ -353,6 +459,9 @@ export const useCognitiveKernel = () => {
                             },
                             priority: 0.5
                         });
+
+                        // 11/10: Log physiological snapshot at the moment of thought
+                        logPhysiologySnapshot('THOUGHT');
                     },
                     onSomaUpdate: setSomaState,
                     onLimbicUpdate: setLimbicState
@@ -462,7 +571,16 @@ export const useCognitiveKernel = () => {
         return () => clearTimeout(watchDog);
     }, [isProcessing]);
 
+    const retryLastAction = () => {
+        if (!systemError?.retryable) return;
+        if (lastUserInputRef.current) {
+            handleInput(lastUserInputRef.current);
+        }
+        setSystemError(null);
+    };
+
     const handleInput = async (input: string) => {
+        lastUserInputRef.current = input;
         addMessage('user', input);
 
         if (somaState.isSleeping) {
@@ -641,6 +759,10 @@ export const useCognitiveKernel = () => {
         systemError,
         autonomousMode,
         setAutonomousMode,
+        toggleAutonomy,
+        toggleSleep,
+        injectStateOverride,
+        retryLastAction,
         handleInput
     };
 };

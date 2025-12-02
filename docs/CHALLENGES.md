@@ -346,18 +346,11 @@ if (nextCtx.poeticMode !== currentState.poeticMode) {
 - **Deep Audit** - czasem trzeba przejrzeć cały flow (EventLoop → useCognitiveKernel → React state)
 - **User Intuition** - użytkownik poprosił "sprawdź całość" i miał rację
 
-### Meta-analiza
 To przypomnienie, że w systemach reaktywnych (React) **stan musi być explicite zarządzany**. Nie wystarczy ustawić zmienną w kontekście - trzeba ją zapisać w `useState` lub `useRef`.
 
 **Unique contribution:** Pierwszy przypadek, gdzie "biologiczny realizm" (poeticMode) wymagał integracji z React lifecycle.
 
----
 
-## 🔬 Meta-Analiza: Wzorce Problemów
-
-### Kategorie problemów
-1. **Architektoniczne** (4, 5, 6) - struktura kodu, modularność
-2. **Behawioralne** (1, 2, 3) - jak agent się zachowuje
 3. **Psychologiczne** (7) - jak my pracujemy
 
 ### Najczęstsze błędy
