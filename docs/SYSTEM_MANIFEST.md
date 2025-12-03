@@ -1,8 +1,8 @@
 # AK-FLOW: Cognitive Agent Architecture Manifest
-**System Version:** 4.1 (Cognitive Tuning: Context Diet + Volition Dynamics)  
-**Last Updated:** 2025-12-01  
+**System Version:** 4.3 (Chemical Soul + Goals + TraitVector + ExpressionPolicy)  
+**Last Updated:** 2025-12-03  
 **Architecture Type:** Active Inference (Friston) + Global Workspace Theory + Multi-Modal RAG  
-**Status:** Autonomous / Stateful / Modular / Self-Aware
+**Status:** Autonomous / Stateful / Modular / Self-Aware / Goal-Driven / Personality-Driven
 
 ---
 

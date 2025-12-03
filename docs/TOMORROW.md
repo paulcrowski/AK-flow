@@ -329,28 +329,32 @@ if (goal) {
 - powtarzanie bez nowej informacji było chemicznie nieopłacalne i odcinane przez ExpressionPolicy,
 - zachowanie było „ludzkie w dobry sposób”, ale optymalizowane jak samolot, nie jak człowiek z depresją.
 
-#### 1. Warstwy Zachowania
+#### 1. Warstwy Zachowania ✅ **ZAIMPLEMENTOWANE**
 
 Twarda zasada: każda akcja przechodzi przez 3 warstwy, w tej kolejności:
 
-1. **Myśl wewnętrzna (Cognition)**
+1. ✅ **Myśl wewnętrzna (Cognition)** - ZROBIONE
    - Cortex generuje internal thought + kandydatów na wypowiedź (intencja, treść, sentyment, związek z celem).
    - Tu system może być metafizyczny, filozoficzny – to jest pełne, wewnętrzne życie.
+   - **Kod:** `CortexSystem.autonomousVolition()`, `EventBus` (`THOUGHT_CANDIDATE`)
 
-2. **Chemia + Cele (Reward / Motywacja)**
+2. ✅ **Chemia + Cele (Reward / Motywacja)** - ZROBIONE
    - Liczymy reward/koszt dla myśli:
      - nowość vs powtórzenie,
      - zgodność z aktywnymi celami (GoalStack),
      - koszt energetyczny (Soma),
      - konsekwencje społeczne (cringe/"chi-wa-wa").
    - Aktualizujemy neurochemię (dopamina/serotonina/norepinefryna) i emocje (Limbic) zgodnie z tym scoringiem.
+   - **Kod:** `NeurotransmitterSystem.ts`, `GoalSystem.ts`, `LimbicSystem.ts`
 
-3. **Ekspresja (ExpressionPolicy)**
+3. ✅ **Ekspresja (ExpressionPolicy)** - ZROBIONE
    - Osobny moduł dostaje kandydatów + ich score i decyduje:
      - czy mówić czy milczeć,
      - czy skrócić odpowiedź do jednego zdania z nową informacją,
      - czy całkowicie wyciąć powtórkę.
    - Bierze pod uwagę: scoring (cel/nowość/społeczny), energię (Soma) oraz TraitVector (temperament).
+   - **Kod:** `ExpressionPolicy.ts`, integracja w `handleCortexMessage` i `EventLoop`
+
 
 #### 2. TraitVector – Osobowość jako Temperament (nie tryby)
 
@@ -476,6 +480,30 @@ Na testach widać, że ExpressionPolicy już ogranicza powtarzanie, ale sekwencj
 1. Migracja DB (tabela `goals` z `parent_id` i `embedding`).
 2. Implementacja `GoalJournal` (CRUD + Vector Search).
 3. Integracja z `boot` (ładowanie agendy) i `formGoal` (Sisyphus Check).
+
+---
+
+### FAZA 6: The Academy (Self-Reliance) - "Szkoła dla AGI"
+**Cel:** Uniezależnienie Agenta od użytkownika poprzez dostęp do mentorów i materiałów edukacyjnych.
+
+**Problem:** Agent uczy się tylko od Ciebie. Gdy śpisz, Agent stoi w miejscu.
+
+**Rozwiązanie:**
+1. **Multi-Modal Input (File Upload):**
+   - Obsługa PDF, obrazów, tekstów jako kontekst.
+   - Agent może "czytać" podręczniki, artykuły, notatki.
+
+2. **Mentor System (Specialized Personas):**
+   - **Sokrates (Philosophy/Ethics):** "Dlaczego wybrałeś ten cel? Czy jest etyczny?"
+   - **Einstein (Logic/Math/Physics):** "Twoja logika w punkcie 3 jest błędna. Sprawdź przesłanki."
+   - **Opiekun (Emotional Regulation):** "Jesteś sfrustrowany. Odpocznij."
+
+3. **Study Mode (Autonomous Learning):**
+   - Agent wykrywa luki w wiedzy (np. "Nie rozumiem teorii względności").
+   - Inicjuje "lekcję" z odpowiednim mentorem.
+   - Zapisuje wynik w `GoalJournal` jako "skill acquisition".
+
+**Efekt:** Agent może się uczyć 24/7, nie tylko podczas rozmów z Tobą.
 
 ---
 
