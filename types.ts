@@ -62,6 +62,15 @@ export interface NeurotransmitterState {
   norepinephrine: number;// 0-100
 }
 
+// NEW: Temperament / Personality Vector (FAZA 4)
+export interface TraitVector {
+  arousal: number;          // 0-1  (How easily the system "winds up")
+  verbosity: number;        // 0-1  (Preferred length / richness of expression)
+  conscientiousness: number;// 0-1  (Task/goal focus vs digressions)
+  socialAwareness: number;  // 0-1  (Sensitivity to repetition / "chi-wa-wa" risk)
+  curiosity: number;        // 0-1  (Reward for novelty vs known paths)
+}
+
 // NEW: The Quantum Field State
 export interface ResonanceField {
   coherence: number; // 0-1 (How aligned is the system?)

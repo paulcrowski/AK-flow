@@ -3,7 +3,8 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { eventBus } from '../core/EventBus';
 import { CortexService } from '../services/gemini';
 import { MemoryService } from '../services/supabase';
-import { AgentType, PacketType, LimbicState, SomaState, CognitiveError, ResonanceField, NeurotransmitterState, GoalState } from '../types';
+import { AgentType, PacketType, LimbicState, SomaState, CognitiveError, ResonanceField, NeurotransmitterState, GoalState, TraitVector } from '../types';
+import { decideExpression, computeNovelty, estimateSocialCost } from '../core/systems/ExpressionPolicy';
 import { generateUUID } from '../utils/uuid';
 import * as SomaSystem from '../core/systems/SomaSystem';
 import * as LimbicSystem from '../core/systems/LimbicSystem';
@@ -72,6 +73,15 @@ export const useCognitiveKernel = () => {
     });
     const [chemistryEnabled, setChemistryEnabled] = useState<boolean>(true);
 
+    // NEW: Temperament / Trait Vector (FAZA 4) - default preset: calm analyst
+    const [traitVector] = useState<TraitVector>({
+        arousal: 0.3,
+        verbosity: 0.4,
+        conscientiousness: 0.8,
+        socialAwareness: 0.8,
+        curiosity: 0.6
+    });
+
     const [conversation, setConversation] = useState<{ role: string, text: string, type?: 'thought' | 'speech' | 'visual' | 'intel', imageData?: string, sources?: any[] }[]>([]);
     const [isProcessing, setIsProcessing] = useState(false);
     const [currentThought, setCurrentThought] = useState<string>("Initializing Synapses...");
@@ -85,7 +95,7 @@ export const useCognitiveKernel = () => {
         goalsFormedTimestamps: []
     });
 
-    const stateRef = useRef({ limbicState, somaState, resonanceField, conversation, autonomousMode, poeticMode, neuroState, chemistryEnabled, goalState });
+    const stateRef = useRef({ limbicState, somaState, resonanceField, conversation, autonomousMode, poeticMode, neuroState, chemistryEnabled, goalState, traitVector });
     const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const silenceStartRef = useRef<number>(Date.now());
     const lastVisualTimestamp = useRef<number>(0);
@@ -98,8 +108,8 @@ export const useCognitiveKernel = () => {
 
     // Sync Ref
     useEffect(() => {
-        stateRef.current = { limbicState, somaState, resonanceField, conversation, autonomousMode, poeticMode, neuroState, chemistryEnabled, goalState };
-    }, [limbicState, somaState, resonanceField, conversation, autonomousMode, poeticMode, neuroState, chemistryEnabled, goalState]);
+        stateRef.current = { limbicState, somaState, resonanceField, conversation, autonomousMode, poeticMode, neuroState, chemistryEnabled, goalState, traitVector };
+    }, [limbicState, somaState, resonanceField, conversation, autonomousMode, poeticMode, neuroState, chemistryEnabled, goalState, traitVector]);
 
     // --- ACTIONS ---
 
@@ -266,7 +276,36 @@ export const useCognitiveKernel = () => {
     const handleCortexMessage = (role: 'user' | 'assistant', text: string, type: 'thought' | 'speech' | 'visual' | 'intel' = 'speech', imageData?: string, sources?: any[]) => {
         if (role === 'assistant' && type === 'speech') {
             (async () => {
-                const cleanSpeech = await processOutputForTools(text);
+                const current = stateRef.current;
+
+                // Build short history of recent assistant speech for novelty estimation
+                const assistantSpeechHistory = current.conversation
+                    .filter(m => m.role === 'assistant' && m.type === 'speech')
+                    .map(m => m.text)
+                    .slice(-3);
+
+                const novelty = computeNovelty(text, assistantSpeechHistory);
+                const socialCost = estimateSocialCost(text);
+
+                const decision = decideExpression(
+                    {
+                        internalThought: undefined,
+                        responseText: text,
+                        // Heuristic: if there is an active goal, be slightly more strict about relevance
+                        goalAlignment: current.goalState?.activeGoal ? 0.7 : 0.5,
+                        noveltyScore: novelty,
+                        socialCost
+                    },
+                    current.traitVector,
+                    current.somaState,
+                    current.neuroState
+                );
+
+                if (!decision.say) {
+                    return; // ExpressionPolicy chose silence
+                }
+
+                const cleanSpeech = await processOutputForTools(decision.text);
                 if (cleanSpeech.trim()) {
                     addMessage(role, cleanSpeech, type, imageData, sources);
                 }
@@ -373,7 +412,8 @@ export const useCognitiveKernel = () => {
                     poeticMode: currentState.poeticMode, // FIXED: Use persisted state
                     autonomousLimitPerMinute: 3, // Budget limit for safety
                     chemistryEnabled: currentState.chemistryEnabled,
-                    goalState: currentState.goalState
+                    goalState: currentState.goalState,
+                    traitVector: currentState.traitVector
                 };
 
                 const nextCtx = await EventLoop.runSingleStep(ctx, null, {
@@ -706,6 +746,7 @@ export const useCognitiveKernel = () => {
         somaState,
         resonanceField,
         neuroState,
+        traitVector,
         conversation,
         isProcessing,
         currentThought,

@@ -5,7 +5,7 @@
  * input processing, and autonomous behavior with safety limits.
  */
 
-import { LimbicState, SomaState, NeurotransmitterState, AgentType, PacketType, GoalState, Goal } from '../../types';
+import { LimbicState, SomaState, NeurotransmitterState, AgentType, PacketType, GoalState, Goal, TraitVector } from '../../types';
 import { LimbicSystem } from './LimbicSystem';
 import { CortexSystem, ConversationTurn } from './CortexSystem';
 import { VolitionSystem, calculatePoeticScore } from './VolitionSystem';
@@ -14,6 +14,7 @@ import { NeurotransmitterSystem, ActivityType } from './NeurotransmitterSystem';
 import { eventBus } from '../EventBus';
 import * as GoalSystem from './GoalSystem';
 import { GoalContext } from './GoalSystem';
+import { decideExpression, computeNovelty, estimateSocialCost } from './ExpressionPolicy';
 
 export namespace EventLoop {
     export interface LoopContext {
@@ -29,6 +30,7 @@ export namespace EventLoop {
         autonomousLimitPerMinute: number; // Budget limit for autonomous operations
         chemistryEnabled?: boolean; // Feature flag for Chemical Soul
         goalState: GoalState;
+        traitVector: TraitVector; // NEW: Temperament / personality vector (FAZA 4)
     }
 
     // Module-level Budget Tracking (counters only, limit is in context)
@@ -175,7 +177,32 @@ export namespace EventLoop {
                 if (result.internalThought) {
                     callbacks.onMessage('assistant', result.internalThought, 'thought');
                 }
-                callbacks.onMessage('assistant', result.responseText, 'speech');
+
+                // FAZA 4: ExpressionPolicy sandbox for GOAL_EXECUTED only
+                const assistantSpeechHistory = ctx.conversation
+                    .filter(turn => (turn as any).role === 'assistant' && (turn as any).type === 'speech')
+                    .map(turn => (turn as any).text)
+                    .slice(-3);
+
+                const novelty = computeNovelty(result.responseText, assistantSpeechHistory);
+                const socialCost = estimateSocialCost(result.responseText);
+
+                const decision = decideExpression(
+                    {
+                        internalThought: result.internalThought,
+                        responseText: result.responseText,
+                        goalAlignment: 1.0, // pursueGoal is, by design, goal-focused
+                        noveltyScore: novelty,
+                        socialCost
+                    },
+                    ctx.traitVector,
+                    ctx.soma,
+                    ctx.neuro
+                );
+
+                if (decision.say) {
+                    callbacks.onMessage('assistant', decision.text, 'speech');
+                }
 
                 const executedAt = Date.now();
 
@@ -243,7 +270,8 @@ export namespace EventLoop {
                     const prevDopamine = ctx.neuro.dopamine;
                     const updatedNeuro = NeurotransmitterSystem.updateNeuroState(ctx.neuro, {
                         soma: ctx.soma,
-                        activity
+                        activity,
+                        temperament: ctx.traitVector
                     });
 
                     const wasFlow = prevDopamine > 70;

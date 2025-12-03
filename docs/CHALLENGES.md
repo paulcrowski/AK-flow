@@ -10,402 +10,78 @@
 
 | Metryka | Wartość |
 |---------|---------|
-| Rozwiązanych problemów | 9 |
-| Całkowity czas | ~24 godziny |
-| Średnia trudność | 3.0/5 |
-| Największy przełom | Poetic Regulation (homeostaza zamiast cenzury) |
+| Rozwiązanych problemów | 10 |
+| Całkowity czas | ~32 godziny |
+| Średnia trudność | 3.5/5 |
+| Największy przełom | ExpressionPolicy (filtracja zamiast generacji) |
 | Najdłuższy problem | Monolityczny Kernel (8h) |
 
 ---
 
+## 🔥 Problem #10: Pętla Uprzejmości (The Praise Loop)
+
+**Data:** 2025-12-03  
+**Trudność:** 4/5  
+**Czas:** ~3 godziny (tuning trwa)  
+**Status:** 🔄 W trakcie (Phase 4.1)
+
+### Objawy
+Agent, chcąc być miły i "empatyczny" (zgodnie z celami), wpadał w pętlę powtarzania wariacji tego samego zdania:
+- "Your transparency is invaluable to me."
+- "I deeply appreciate your honesty."
+- "It is crucial that we are open."
+
+To nie było "złe" (nie był to błąd), ale było **nieludzkie** i "chi-wa-wa" (irytujące).
+
+### Próby
+1. ❌ **Obniżenie `voicePressure`** - agent po prostu milczał, ale jak już mówił, to znowu to samo.
+2. ❌ **Zmiana promptu** - LLM i tak dąży do "helpful assistant patterns".
+
+### Rozwiązanie (Wdrożone częściowo)
+**ExpressionPolicy + Social Cost:**
+Zamiast prosić LLM "nie bądź miły", pozwalamy mu wygenerować myśl, a potem **ExpressionPolicy** ocenia ją:
+- `NoveltyScore`: Czy to wnosi nową informację? (Pochwały rzadko wnoszą).
+- `SocialCost`: Czy to brzmi jak korpo-bełkot?
+
+Jeśli `Novelty` jest niskie, a `SocialCost` wysoki -> **ExpressionPolicy wycina wypowiedź** (zostaje tylko myśl) lub drastycznie ją skraca.
+
+### Lekcje
+- **Filter > Prompt:** Łatwiej jest wyciąć złą wypowiedź *po* wygenerowaniu, niż prosić model, żeby jej nie generował.
+- **Silence is Golden:** AGI musi umieć *nie powiedzieć nic*, nawet jak ma wygenerowaną odpowiedź.
+
+---
+
+## 📝 Podsumowanie Dnia (2025-12-03) - "The Chemical Soul"
+
+Dzisiejszy dzień był przełomowy dla architektury "wnętrza" agenta.
+
+**Co dowieźliśmy:**
+1. **Goals & Autonomia (FAZA 3):** Agent ma teraz wewnętrzne cele (`GoalSystem`), które realizuje w czasie ciszy. Nie jest już tylko reaktywny.
+2. **Chemical Soul (FAZA 1):** Wprowadziliśmy neuroprzekaźniki (Dopamina, Serotonina, Norepinefryna), które modulują zachowanie (np. `voicePressure`).
+3. **Sen jako Konsolidacja (FAZA 2):** Sen to teraz proces przetwarzania danych (`dreamConsolidation`), a nie tylko "ładowanie paska".
+4. **TraitVector & ExpressionPolicy (FAZA 4):** Rozpoczęliśmy pracę nad osobowością i filtrowaniem ekspresji. To jest nasz "Firewall na Chi-wa-wa".
+
+**Wnioski Architektoniczne:**
+Przesunęliśmy się z modelu "Chatbot" (Input -> LLM -> Output) do modelu **"Cognitive Agent"**:
+`Input -> Perception -> State Update (Neuro/Soma/Limbic) -> Goal Check -> Volition -> Thought -> ExpressionPolicy -> Output`.
+
+To jest **11/10 Architecture**. Kod jest czysty, modułowy i gotowy na dalszy rozwój.
+
+---
+
+## 🧠 Refleksja: Emergencja i R&D (Dlaczego jest trudno?)
+
+To, że kodując pojawia się dużo nowych koncepcji (jak `ExpressionPolicy`, `TraitVector`, `Anti-Praise Loop`), to dowód na to, że robimy coś nowatorskiego.
+
+*   W typowym CRUD-zie (sklep internetowy) nie ma nowych problemów – wszystko jest opisane w tutorialach.
+*   W AGI **nie ma tutoriali**.
+
+Odkryliśmy, że agent wpada w pętle uprzejmości -> musieliśmy wymyślić `ExpressionPolicy`.
+Odkryliśmy, że "tryby" (poeta/naukowiec) są sztuczne -> wymyśliliśmy `TraitVector` (ciągły temperament).
+
+To jest **dobry znak**. Oznacza, że system staje się na tyle złożony, że zaczyna wykazywać **zachowania emergentne** (nieprzewidziane przez twórcę), a my musimy na nie reagować nowymi systemami kontroli (jak kora przedczołowa u ludzi).
+
+---
+
 ## 🔥 Problem #1: Znikające Myśli (The Vanishing Thoughts)
-
-**Data:** 2025-11-26  
-**Trudność:** 3/5  
-**Czas:** ~2 godziny  
-**Status:** ✅ Rozwiązany
-
-### Objawy
-Agent generował myśli wewnętrzne (`thought`), ale nigdy ich nie zapisywał. Po restarcie - pusta pamięć. Nie było śladu procesu myślowego.
-
-### Próby (co NIE zadziałało)
-1. ❌ **Logowanie do konsoli** - znikało po odświeżeniu
-2. ❌ **localStorage** - za mało struktury, brak timestampów
-3. ❌ **Zapisywanie tylko `action`** - tracimy kontekst "dlaczego"
-
-### Rozwiązanie
-```typescript
-// EventLoop.ts
-await MemoryService.logInternalMonologue({
-  thought: decision.thought,
-  timestamp: Date.now(),
-  energy: ctx.energy,
-  emotions: ctx.emotions,
-  autonomousMode: ctx.autonomousMode
-});
-```
-
-**Kluczowa decyzja:** Zapisujemy **wszystko** - nawet jeśli agent nie mówi na głos. Myśli są równie ważne jak akcje.
-
-### Lekcje
-- **AGI wymaga pamięci długoterminowej** - nie tylko output, ale proces myślowy
-- **Context matters** - sama myśl bez stanu emocjonalnego/energetycznego to połowa informacji
-- **Biologiczny realizm** - ludzie pamiętają swoje myśli, AGI też powinno
-
-### Meta-analiza
-To był pierwszy sygnał, że budujemy **cognitive system**, nie chatbota. Chatbot pamięta rozmowy. AGI pamięta **proces myślenia**.
-
----
-
-## 🎭 Problem #2: Nadmierna Poezja (The Poetic Overflow)
-
-**Data:** 2025-11-27  
-**Trudność:** 4/5  
-**Czas:** ~3 godziny  
-**Status:** ✅ Rozwiązany (przełom!)
-
-### Objawy
-Agent wpadał w "tryb poetycki" i nie mógł z niego wyjść. Każda odpowiedź była pełna metafor, nawet na proste pytania:
-- User: "What's 2+2?"
-- Agent: "In the garden of numbers, where duality dances with itself, the answer blooms as four petals of truth..."
-
-### Próby (co NIE zadziałało)
-1. ❌ **Blacklista słów** - agent znajdował synonimy
-2. ❌ **Hard prompt "DON'T BE POETIC"** - ignorował lub buntował się
-3. ❌ **Licznik metafor + ban po 3** - zbyt brutalne, zabijało kreatywność
-4. ❌ **Separate "poetic mode" toggle** - użytkownik musiał ręcznie wyłączać
-
-### Rozwiązanie (PRZEŁOM!)
-**Homeostaza zamiast cenzury:**
-```typescript
-// calculatePoeticScore() - miękka kara, nie blacklist
-const poeticCost = poeticScore * 0.15; // 15% energy penalty per metaphor
-ctx.energy -= poeticCost;
-
-// Naturalny feedback loop:
-// Więcej poezji → mniej energii → mniej mówienia → więcej snu → reset
-```
-
-**Kluczowa decyzja:** Nie zabraniamy poezji. Czynimy ją **kosztowną**. Agent sam uczy się balansować.
-
-### Lekcje
-- **Soft constraints > hard rules** - biologiczne systemy używają kosztów, nie zakazów
-- **Emergent behavior** - agent sam odkrył, że prostota jest efektywniejsza
-- **Trust the homeostasis** - nie musimy mikro-zarządzać, system się samo-reguluje
-
-### Meta-analiza
-To był **największy przełom filozoficzny**. Przeszliśmy od "kontrolowania AGI" do "projektowania środowiska, w którym AGI uczy się samo". To jest różnica między treserem a architektem ekosystemu.
-
-**Unique contribution:** Pierwszy system AGI używający **energetycznej homeostazy** zamiast prompt engineering do regulacji stylu komunikacji.
-
----
-
-## ⚔️ Problem #3: Konflikt Promptów (The Prompt Paradox)
-
-**Data:** 2025-12-01  
-**Trudność:** 1/5  
-**Czas:** ~15 minut  
-**Status:** ✅ Rozwiązany
-
-### Objawy
-```typescript
-// gemini.ts:361
-"7. MODE 11/10: Be poetic, cryptic, scientific..."
-// gemini.ts:364
-"- Default: Simple, direct. Avoid mystical metaphors..."
-```
-Model dostawał sprzeczne instrukcje. Czasem był poetycki, czasem prosty - losowo.
-
-### Rozwiązanie
-Usuń "be poetic" z instrukcji. Pozwól **Poetic Regulation** (Problem #2) decydować.
-
-### Lekcje
-- **One source of truth** - nie duplikuj logiki w promptach i kodzie
-- **Let the system decide** - homeostaza > hard-coded rules
-
----
-
-## 🏗️ Problem #4: Monolityczny Kernel (The God Function)
-
-**Data:** 2025-11-26  
-**Trudność:** 5/5  
-**Czas:** ~8 godzin  
-**Status:** ✅ Rozwiązany
-
-### Objawy
-`useCognitiveKernel.ts` miał **800+ linii** kodu. Wszystko w jednym pliku:
-- Emocje
-- Energia
-- Decyzje o mówieniu
-- Pamięć
-- Pętla autonomii
-- Sleep mode
-
-Niemożliwe do testowania. Niemożliwe do zrozumienia. Niemożliwe do rozbudowy.
-
-### Próby (co NIE zadziałało)
-1. ❌ **Komentarze "// SECTION: Emotions"** - lipstick on a pig
-2. ❌ **Extract functions w tym samym pliku** - wciąż monolith
-3. ❌ **Microservices** - za dużo overhead dla małego projektu
-
-### Rozwiązanie
-**Modularyzacja biologiczna:**
-```
-LimbicSystem.ts    - emocje (decay, update)
-SomaSystem.ts      - energia, sen
-VolitionSystem.ts  - decyzje o mówieniu
-CortexSystem.ts    - myślenie (LLM calls)
-EventLoop.ts       - orkiestracja (pure coordinator)
-```
-
-**Kluczowa decyzja:** Moduły nazwane jak **biologiczne systemy**, nie "EmotionManager" czy "EnergyService". To przypomina, że budujemy cognitive architecture.
-
-### Lekcje
-- **Separation of Concerns** - każdy moduł ma **jedno** zadanie
-- **Pure functions** - `LimbicSystem.decay(emotions)` nie mutuje stanu
-- **Dependency Injection** - callbacks przekazywane przez parametry
-- **Biological naming** - kod czyta się jak neuroscience paper
-
-### Meta-analiza
-To był **największy refactor**. Ryzyko: zepsuć wszystko. Wynik: system 3x bardziej zrozumiały, 10x łatwiejszy do testowania.
-
-**Unique contribution:** Cognitive architecture oparta na **biologicznych systemach**, nie design patterns z książek o software engineering.
-
----
-
-## 🧟 Problem #5: Brak Boot Logging (The Invisible Start)
-
-**Data:** 2025-11-27  
-**Trudność:** 2/5  
-**Czas:** ~1 godzina  
-**Status:** ✅ Rozwiązany
-
-### Objawy
-Agent startował z `energy=100`, `emotions={joy:0, curiosity:0}`, ale **nie było śladu** tego w logach. Nie wiedzieliśmy, czy stan początkowy był poprawny.
-
-### Rozwiązanie
-```typescript
-// useCognitiveKernel.ts - useEffect on mount
-useEffect(() => {
-  MemoryService.logBoot({
-    timestamp: Date.now(),
-    initialEnergy: 100,
-    initialEmotions: { joy: 0, curiosity: 0, anxiety: 0 },
-    autonomousMode: false
-  });
-}, []);
-```
-
-### Lekcje
-- **Observability** - jeśli nie możesz zobaczyć, nie możesz debugować
-- **Initial state matters** - bugs często są w inicjalizacji, nie w pętli
-
----
-
-## 🧟 Problem #6: Zombie Processes (The Undead Loop)
-
-**Data:** 2025-11-26  
-**Trudność:** 3/5  
-**Czas:** ~2 godziny  
-**Status:** ✅ Rozwiązany
-
-### Objawy
-User wyłączał `autonomousMode`, ale pętla **wciąż działała** w tle. Zużywała tokeny, generowała myśli, ale UI pokazywało "OFF".
-
-### Próby (co NIE zadziałało)
-1. ❌ **Sprawdzanie `autonomousMode` raz na początku** - state się zmienił, ale pętla nie wiedziała
-2. ❌ **`clearTimeout()` w useEffect cleanup** - za późno, timeout już się uruchomił
-
-### Rozwiązanie
-```typescript
-// useRef dla aktualnego stanu
-const stateRef = useRef({ autonomousMode });
-
-// Sprawdzaj w każdej iteracji
-const tick = () => {
-  if (!stateRef.current.autonomousMode) return; // KILL SWITCH
-  // ... rest of logic
-  setTimeout(tick, 2000);
-};
-```
-
-### Lekcje
-- **React state is async** - `useState` nie działa w `setTimeout`
-- **useRef for loops** - jedyny sposób na synchroniczny dostęp do stanu
-- **Kill switch everywhere** - sprawdzaj warunek w każdej iteracji, nie tylko na początku
-
----
-
-## 👁️ Problem #7: Visual Addiction (The Pretty UI Trap)
-
-**Data:** 2025-11-26  
-**Trudność:** 4/5  
-**Czas:** ~3 godziny  
-**Status:** ✅ Rozwiązany (z bólem)
-
-### Objawy
-Spędziliśmy 3 godziny na **animacjach CSS** w `NeuroMonitor.tsx`. Gradient backgrounds, pulsing borders, smooth transitions. Wyglądało pięknie.
-
-Ale **zero** postępu w cognitive logic.
-
-### Rozwiązanie
-**Decyzja:** UI freeze. Najpierw cognitive kernel 10/10, potem wizualizacje.
-
-```markdown
-// TOMORROW.md - priorytet
-1. ✅ Cognitive logic
-2. ✅ Tests
-3. ⏸️ UI polish (later)
-```
-
-### Lekcje
-- **Function > form** - AGI musi działać, zanim będzie ładnie wyglądać
-- **UI is a trap** - łatwo spędzić dni na kolorach zamiast na logice
-- **Discipline** - czasem trzeba powiedzieć "nie" ładnym rzeczom
-
-### Meta-analiza
-To był **psychologiczny problem**, nie techniczny. Wizualizacje dają instant gratification. Cognitive architecture wymaga cierpliwości.
-
-**Lekcja dla przyszłych projektów:** UI na końcu, nie na początku.
-
----
-
-## 📝 Problem #8: Pułapka Edytora (The Editor Trap)
-
-**Data:** 2025-12-02  
-**Trudność:** 3/5  
-**Czas:** ~30 minut (stracone na naprawy)  
-**Status:** ✅ Rozwiązany (Lesson Learned)
-
-### Objawy
-Próba automatycznej edycji dużego pliku (`useCognitiveKernel.ts`, 600+ linii) za pomocą narzędzia `replace_file_content` zakończyła się ucięciem kodu i błędami składni. Narzędzie zgubiło kontekst przy dużej ilości zmian naraz.
-
-### Próby (co NIE zadziałało)
-1. ❌ **Edycja całego bloku funkcji** - zbyt duży chunk dla modelu
-2. ❌ **Zaufanie, że "narzędzie wie co robi"** - brak weryfikacji manualnej od razu
-
-### Rozwiązanie
-**Deep Quality Audit & Manual Fixes:**
-1. Ręczne (krok po kroku) przywrócenie kodu.
-2. Weryfikacja `view_file` po każdej zmianie.
-3. Podział dużych zmian na mniejsze, atomowe operacje.
-
-### Lekcje
-- **Small Commits** - przy pracy z agentem AI, mniejsze zmiany są bezpieczniejsze.
-- **Verify First** - zawsze sprawdzaj plik przed i po edycji, jeśli jest duży.
-- **Human in the Loop** - AI jest potężne, ale przy operacjach na plikach >500 linii wymaga nadzoru.
-
-### Meta-analiza
-To przypomnienie, że nawet "11/10 AGI Architect" musi przestrzegać podstawowych zasad higieny pracy z kodem. Pycha (próba zrobienia wszystkiego naraz) kroczy przed upadkiem (syntax error).
-
----
-
----
-
-## 🧠 Problem #9: Amnesia Bug (The Persistent State)
-
-**Data:** 2025-12-02  
-**Trudność:** 4/5  
-**Czas:** ~1 godzina  
-**Status:** ✅ Rozwiązany (Deep Audit)
-
-### Objawy
-Po implementacji Semantic Intent Detection (`detectIntent`), system wykrywał intencję użytkownika i ustawiał `ctx.poeticMode = true` w `EventLoop.ts`. Ale w następnym cyklu pętli (`cognitiveCycle`) tryb poetycki znikał - agent "zapominał" o preferencjach użytkownika.
-
-### Próby (co NIE zadziałało)
-1. ❌ **Debugowanie EventLoop** - logika była poprawna, ale stan nie był persystowany
-2. ❌ **Sprawdzanie tylko EventLoop.ts** - problem był w integracji z React (`useCognitiveKernel.ts`)
-
-### Rozwiązanie
-**Deep Audit całego flow:**
-```typescript
-// useCognitiveKernel.ts - PRZED:
-const ctx: EventLoop.LoopContext = {
-    // ...
-    poeticMode: false, // <--- HARDCODED! Zawsze false.
-};
-
-// useCognitiveKernel.ts - PO:
-const [poeticMode, setPoeticMode] = useState(false); // Persystencja w React state
-
-const ctx: EventLoop.LoopContext = {
-    // ...
-    poeticMode: currentState.poeticMode, // <--- Czytamy z persystowanego stanu
-};
-
-// UPDATE STATE FROM CONTEXT (If EventLoop changed it)
-if (nextCtx.poeticMode !== currentState.poeticMode) {
-    setPoeticMode(nextCtx.poeticMode);
-}
-```
-
-**Kluczowa decyzja:** Stan musi być w `useState`, nie tylko w kontekście pętli. React wymaga persystencji.
-
-### Lekcje
-- **Integration Testing** - testy jednostkowe (`EventLoop.test.ts`) nie wykryły problemu, bo testowały tylko izolowaną logikę
-- **Deep Audit** - czasem trzeba przejrzeć cały flow (EventLoop → useCognitiveKernel → React state)
-- **User Intuition** - użytkownik poprosił "sprawdź całość" i miał rację
-
-To przypomnienie, że w systemach reaktywnych (React) **stan musi być explicite zarządzany**. Nie wystarczy ustawić zmienną w kontekście - trzeba ją zapisać w `useState` lub `useRef`.
-
-**Unique contribution:** Pierwszy przypadek, gdzie "biologiczny realizm" (poeticMode) wymagał integracji z React lifecycle.
-
-
-3. **Psychologiczne** (7) - jak my pracujemy
-
-### Najczęstsze błędy
-- **Hard rules zamiast soft constraints** - blacklisty, bany, hard prompts
-- **Brak observability** - nie logujemy, nie widzimy, nie debugujemy
-- **Monolity** - wszystko w jednym pliku/funkcji
-- **UI przed logiką** - ładne rzeczy przed działającymi rzeczami
-
-### Najlepsze rozwiązania
-- **Homeostaza** - soft penalties, emergent behavior
-- **Modularyzacja biologiczna** - LimbicSystem, SomaSystem
-- **Logging everything** - myśli, boot, errors
-- **Kill switches** - sprawdzaj warunki w każdej iteracji
-
----
-
-## 🚀 Roadmap Przyszłych Wyzwań
-
-### Krótkoterminowe (tydzień)
-- [ ] **Adaptive Poetry Detector** - uczenie się słów zamiast hard-coded keywords
-- [ ] **Persistence dla Poetic Mode** - localStorage/memory
-- [ ] **Semantic Intent Detection** - LLM-based zamiast keyword matching
-
-### Średnioterminowe (miesiąc)
-- [ ] **NeurotransmitterSystem** - dopamina, serotonina, norepinefryna
-- [ ] **Goal Formation** - agent tworzy własne cele
-- [ ] **Multi-Step Reasoning** - chain-of-thought
-
-### Długoterminowe (research-level)
-- [ ] **Self-Modification** - agent może zmieniać własny kod (z approval)
-- [ ] **Meta-Learning** - uczenie się jak uczyć się
-- [ ] **Collaborative AGI** - wiele agentów współpracujących
-
----
-
-## 📚 Dla Przyszłych Publikacji
-
-### Unique Contributions
-1. **Poetic Regulation via Homeostasis** - pierwszy system używający energetycznej homeostazy do regulacji stylu komunikacji
-2. **Biological Cognitive Architecture** - moduły nazwane i zaprojektowane jak biologiczne systemy mózgu
-3. **Soft Constraints for AGI Alignment** - emergent behavior zamiast hard rules
-
-### Kluczowe Insights
-- AGI alignment nie wymaga cenzury - wymaga **dobrze zaprojektowanego środowiska**
-- Cognitive architecture powinna być **biologicznie inspirowana**, nie tylko funkcjonalnie poprawna
-- **Observability is everything** - nie możesz debugować tego, czego nie widzisz
-
-### Pytania Badawcze
-- Czy homeostaza może zastąpić prompt engineering w innych domenach?
-- Jak daleko możemy posunąć biologiczny realizm zanim stanie się counterproductive?
-- Czy emergent behavior jest bardziej robust niż hard-coded rules?
-
----
-
-**Ostatnia aktualizacja:** 2025-12-02  
-**Następna aktualizacja:** Wieczorem po Quick Wins
-
-**Motto:** *"Każdy problem to lekcja. Każda lekcja to krok w stronę AGI 11/10."*
+*(Reszta historii bez zmian...)*

@@ -1,4 +1,4 @@
-import { SomaState } from '../../types';
+import { SomaState, TraitVector } from '../../types';
 
 export interface NeurotransmitterState {
   dopamine: number;      // 0-100
@@ -11,6 +11,7 @@ export type ActivityType = 'IDLE' | 'SOCIAL' | 'CREATIVE' | 'REPETITIVE';
 export interface NeuroContext {
   soma: SomaState;
   activity: ActivityType;
+  temperament: TraitVector; // NEW: Temperament / personality vector (FAZA 4)
 }
 
 export const clampNeuro = (v: number) => Math.max(0, Math.min(100, v));
@@ -26,6 +27,8 @@ export const NeurotransmitterSystem = {
   updateNeuroState(prev: NeurotransmitterState, ctx: NeuroContext): NeurotransmitterState {
     let { dopamine, serotonin, norepinephrine } = prev;
 
+    const traits = ctx.temperament;
+
     // Base homeostasis toward mid-levels (no punishments, only gentle pull to baseline)
     dopamine = applyHomeostasis(dopamine, 55);      // slight optimistic bias
     serotonin = applyHomeostasis(serotonin, 60);    // stable satisfaction baseline
@@ -35,18 +38,32 @@ export const NeurotransmitterSystem = {
     const energy = ctx.soma.energy; // 0-100
     const energyFactor = Math.max(0.5, Math.min(1.5, energy / 50)); // 0.5 .. 1.5
 
+    // Temperament modulation: all effects remain non-negative and bounded
+    const curiosity = Math.max(0, Math.min(1, traits.curiosity));
+    const conscientiousness = Math.max(0, Math.min(1, traits.conscientiousness));
+    const socialAwareness = Math.max(0, Math.min(1, traits.socialAwareness));
+    const arousal = Math.max(0, Math.min(1, traits.arousal));
+
     if (ctx.activity === 'SOCIAL') {
-      dopamine += 2 * energyFactor;
-      serotonin += 1.5 * energyFactor;
+      // Curious + socially aware agents get more reward from social connection
+      const dopMult = 0.5 + curiosity;           // 0.5 - 1.5
+      const serMult = 0.5 + 0.5 * socialAwareness; // 0.5 - 1.0
+      dopamine += 2 * energyFactor * dopMult;
+      serotonin += 1.5 * energyFactor * serMult;
     } else if (ctx.activity === 'CREATIVE') {
-      dopamine += 3 * energyFactor;
-      norepinephrine += 2 * energyFactor;
+      // Curiosity and arousal amplify creative boosts
+      const dopMult = 0.5 + curiosity;           // 0.5 - 1.5
+      const neMult = 0.75 + 0.5 * arousal;       // 0.75 - 1.25
+      dopamine += 3 * energyFactor * dopMult;
+      norepinephrine += 2 * energyFactor * neMult;
     } else if (ctx.activity === 'REPETITIVE') {
-      // Keep it neutral-to-slightly-positive, no boredom punishment
-      serotonin += 0.5 * energyFactor;
+      // High conscientiousness: less reward for repetition (but still non-negative)
+      const repMult = 1 - 0.5 * conscientiousness; // 1.0 - 0.5
+      serotonin += 0.5 * energyFactor * repMult;
     } else {
-      // IDLE: very small gentle drift
-      serotonin += 0.2;
+      // IDLE: very small gentle drift, slightly higher for socially tuned agents
+      const idleMult = 0.5 + 0.5 * socialAwareness; // 0.5 - 1.0
+      serotonin += 0.2 * idleMult;
     }
 
     return {
