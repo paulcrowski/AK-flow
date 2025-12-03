@@ -50,8 +50,8 @@ export const MemoryService = {
         raw_text: `${memory.content} [Emotion: ${JSON.stringify(memory.emotionalContext)}]`,
         created_at: new Date().toISOString(),
         embedding: embedding,
-        neural_strength: 1,
-        is_core_memory: false,
+        neural_strength: memory.neuralStrength ?? 1,
+        is_core_memory: memory.isCoreMemory ?? false,
         last_accessed_at: new Date().toISOString(),
         event_id: memory.id
       };

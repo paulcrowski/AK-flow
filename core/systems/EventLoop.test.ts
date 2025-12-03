@@ -48,13 +48,15 @@ describe('EventLoop', () => {
         mockCtx = {
             soma: { energy: 100, cognitiveLoad: 0, isSleeping: false },
             limbic: { fear: 0, curiosity: 0, frustration: 0, satisfaction: 0 },
+            neuro: { dopamine: 55, serotonin: 60, norepinephrine: 50 },
             conversation: [],
             autonomousMode: true,
             lastSpeakTimestamp: 0,
             silenceStart: 0,
             thoughtHistory: [],
             poeticMode: false,
-            autonomousLimitPerMinute: 2
+            autonomousLimitPerMinute: 2,
+            chemistryEnabled: false
         };
 
         mockCallbacks = {
@@ -84,5 +86,12 @@ describe('EventLoop', () => {
         mockCallbacks.onThought.mockClear();
         await EventLoop.runSingleStep(mockCtx, null, mockCallbacks);
         expect(mockCallbacks.onThought).not.toHaveBeenCalled();
+    });
+
+    it('should run autonomous step without chemistry when disabled', async () => {
+        // chemistryEnabled=false means neuro state is ignored for behavior
+        mockCtx.chemistryEnabled = false;
+        await EventLoop.runSingleStep(mockCtx, null, mockCallbacks);
+        expect(mockCallbacks.onThought).toHaveBeenCalledWith("Autonomous processing...");
     });
 });

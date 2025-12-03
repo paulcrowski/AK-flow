@@ -5,16 +5,21 @@
  * input processing, and autonomous behavior with safety limits.
  */
 
-import { LimbicState, SomaState } from '../../types';
+import { LimbicState, SomaState, NeurotransmitterState, AgentType, PacketType, GoalState, Goal } from '../../types';
 import { LimbicSystem } from './LimbicSystem';
 import { CortexSystem, ConversationTurn } from './CortexSystem';
 import { VolitionSystem, calculatePoeticScore } from './VolitionSystem';
 import { CortexService } from '../../services/gemini';
+import { NeurotransmitterSystem, ActivityType } from './NeurotransmitterSystem';
+import { eventBus } from '../EventBus';
+import * as GoalSystem from './GoalSystem';
+import { GoalContext } from './GoalSystem';
 
 export namespace EventLoop {
     export interface LoopContext {
         soma: SomaState;
         limbic: LimbicState;
+        neuro: NeurotransmitterState; // NEW: Chemical state
         conversation: ConversationTurn[];
         autonomousMode: boolean;
         lastSpeakTimestamp: number;
@@ -22,6 +27,8 @@ export namespace EventLoop {
         thoughtHistory: string[];
         poeticMode: boolean; // NEW: Track if user requested poetic style
         autonomousLimitPerMinute: number; // Budget limit for autonomous operations
+        chemistryEnabled?: boolean; // Feature flag for Chemical Soul
+        goalState: GoalState;
     }
 
     // Module-level Budget Tracking (counters only, limit is in context)
@@ -100,15 +107,104 @@ export namespace EventLoop {
             }
             callbacks.onMessage('assistant', result.responseText, 'speech');
 
-            // Reset silence
+            // Reset silence & mark user interaction for GoalSystem
             ctx.silenceStart = Date.now();
             ctx.lastSpeakTimestamp = Date.now();
+            ctx.goalState.lastUserInteractionAt = Date.now();
         }
 
         // 3. Autonomous Volition (only if autonomousMode is ON)
         if (ctx.autonomousMode && !input) {
             const silenceDuration = (Date.now() - ctx.silenceStart) / 1000;
 
+            // ACTIVITY TYPE DETECTION (v1 heuristic)
+            let activity: ActivityType = 'IDLE';
+            if (ctx.conversation.length > 0) {
+                const last = ctx.conversation[ctx.conversation.length - 1];
+                activity = last.role === 'user' ? 'SOCIAL' : 'CREATIVE';
+            }
+
+            // 3A. GOAL FORMATION HOOK (FAZA 3)
+            if (!ctx.goalState.activeGoal) {
+                const now = Date.now();
+                const goalCtx: GoalContext = {
+                    now,
+                    lastUserInteractionAt: ctx.goalState.lastUserInteractionAt || ctx.silenceStart,
+                    soma: ctx.soma,
+                    neuro: ctx.neuro,
+                    limbic: ctx.limbic
+                };
+
+                const newGoal = await GoalSystem.formGoal(goalCtx, ctx.goalState);
+
+                if (newGoal) {
+                    ctx.goalState.activeGoal = newGoal;
+                    ctx.goalState.goalsFormedTimestamps = [
+                        ...(ctx.goalState.goalsFormedTimestamps || []).filter(t => now - t < 60 * 60 * 1000),
+                        now
+                    ];
+
+                    eventBus.publish({
+                        id: `goal-formed-${now}`,
+                        timestamp: now,
+                        source: AgentType.CORTEX_FLOW,
+                        type: PacketType.SYSTEM_ALERT,
+                        payload: {
+                            event: 'GOAL_FORMED',
+                            goal: {
+                                id: newGoal.id,
+                                source: newGoal.source,
+                                description: newGoal.description,
+                                priority: newGoal.priority
+                            }
+                        },
+                        priority: 0.7
+                    });
+                }
+            }
+
+            // 3B. GOAL EXECUTION (single-shot)
+            if (ctx.goalState.activeGoal) {
+                const goal: Goal = ctx.goalState.activeGoal;
+                const result = await CortexSystem.pursueGoal(goal, {
+                    limbic: ctx.limbic,
+                    soma: ctx.soma,
+                    conversation: ctx.conversation
+                } as any);
+
+                if (result.internalThought) {
+                    callbacks.onMessage('assistant', result.internalThought, 'thought');
+                }
+                callbacks.onMessage('assistant', result.responseText, 'speech');
+
+                const executedAt = Date.now();
+
+                eventBus.publish({
+                    id: `goal-executed-${executedAt}`,
+                    timestamp: executedAt,
+                    source: AgentType.CORTEX_FLOW,
+                    type: PacketType.SYSTEM_ALERT,
+                    payload: {
+                        event: 'GOAL_EXECUTED',
+                        goal: {
+                            id: goal.id,
+                            source: goal.source,
+                            description: goal.description,
+                            priority: goal.priority
+                        }
+                    },
+                    priority: 0.7
+                });
+
+                ctx.goalState.activeGoal = null;
+                ctx.lastSpeakTimestamp = executedAt;
+                ctx.silenceStart = executedAt;
+
+                // After executing a goal, skip regular autonomous volition in this tick
+                return ctx;
+            }
+
+            // 3C. Autonomous Volition (only if autonomousMode is ON)
             // Check if we should think
             if (VolitionSystem.shouldInitiateThought(silenceDuration)) {
 
@@ -142,10 +238,76 @@ export namespace EventLoop {
                     // console.log(`Poetic Cost Applied: Score ${pScore}`);
                 }
 
+                // NEUROTRANSMITTER UPDATE (Chemical Soul v1, Silent Influence)
+                if (ctx.chemistryEnabled) {
+                    const prevDopamine = ctx.neuro.dopamine;
+                    const updatedNeuro = NeurotransmitterSystem.updateNeuroState(ctx.neuro, {
+                        soma: ctx.soma,
+                        activity
+                    });
+
+                    const wasFlow = prevDopamine > 70;
+                    const isFlow = updatedNeuro.dopamine > 70;
+
+                    // Emit explicit FLOW_ON / FLOW_OFF events for observability
+                    if (!wasFlow && isFlow) {
+                        eventBus.publish({
+                            id: `chem-flow-on-${Date.now()}`,
+                            timestamp: Date.now(),
+                            source: AgentType.NEUROCHEM,
+                            type: PacketType.SYSTEM_ALERT,
+                            payload: {
+                                event: 'CHEM_FLOW_ON',
+                                dopamine: updatedNeuro.dopamine,
+                                activity
+                            },
+                            priority: 0.6
+                        });
+                    } else if (wasFlow && !isFlow) {
+                        eventBus.publish({
+                            id: `chem-flow-off-${Date.now()}`,
+                            timestamp: Date.now(),
+                            source: AgentType.NEUROCHEM,
+                            type: PacketType.SYSTEM_ALERT,
+                            payload: {
+                                event: 'CHEM_FLOW_OFF',
+                                dopamine: updatedNeuro.dopamine,
+                                activity
+                            },
+                            priority: 0.6
+                        });
+                    }
+
+                    ctx.neuro = updatedNeuro;
+                }
+
                 // Decide to speak
+                let voicePressure = volition.voice_pressure;
+                if (ctx.chemistryEnabled && ctx.neuro.dopamine > 70) {
+                    const biased = Math.min(1, voicePressure + 0.15); // Single Lever v1
+
+                    if (biased !== voicePressure) {
+                        // Emit explicit log event so we can see chemistry influencing voice
+                        eventBus.publish({
+                            id: `chem-voice-bias-${Date.now()}`,
+                            timestamp: Date.now(),
+                            source: AgentType.NEUROCHEM,
+                            type: PacketType.SYSTEM_ALERT,
+                            payload: {
+                                event: 'DOPAMINE_VOICE_BIAS',
+                                dopamine: ctx.neuro.dopamine,
+                                base_voice_pressure: voicePressure,
+                                biased_voice_pressure: biased
+                            },
+                            priority: 0.6
+                        });
+                    }
+
+                    voicePressure = biased;
+                }
                 const decision = VolitionSystem.shouldSpeak(
                     volition.internal_monologue,
-                    volition.voice_pressure,
+                    voicePressure,
                     silenceDuration,
                     ctx.limbic,
                     ctx.thoughtHistory,

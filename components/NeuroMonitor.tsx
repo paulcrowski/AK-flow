@@ -1,7 +1,7 @@
 
 import React, { useEffect, useState, useRef } from 'react';
 import { eventBus } from '../core/EventBus';
-import { CognitivePacket, LimbicState, PacketType, AgentType, SomaState, ResonanceField } from '../types';
+import { CognitivePacket, LimbicState, PacketType, AgentType, SomaState, ResonanceField, NeurotransmitterState, GoalState } from '../types';
 import { Activity, Zap, Database, Copy, Check, Cpu, Download, Share2, BrainCircuit, ShieldAlert, Radio, Moon, Image as ImageIcon, ExternalLink, Globe, Waves, Eye } from 'lucide-react';
 
 interface NeuroMonitorProps {
@@ -9,6 +9,10 @@ interface NeuroMonitorProps {
     somaState: SomaState;
     resonanceField?: ResonanceField;
     injectStateOverride?: (type: 'limbic' | 'soma', key: string, value: number) => void;
+    neuroState?: NeurotransmitterState;
+    chemistryEnabled?: boolean;
+    onToggleChemistry?: () => void;
+    goalState?: GoalState;
 }
 
 const AGENT_LAYOUT: Record<string, { x: number, y: number, label: string, color: string }> = {
@@ -21,6 +25,7 @@ const AGENT_LAYOUT: Record<string, { x: number, y: number, label: string, color:
     [AgentType.MOTOR]: { x: 50, y: 80, label: 'OUTPUT', color: '#94a3b8' },
     [AgentType.MORAL]: { x: 30, y: 35, label: 'MORAL', color: '#14b8a6' },
     [AgentType.VISUAL_CORTEX]: { x: 30, y: 65, label: 'VISION', color: '#f472b6' },
+    [AgentType.NEUROCHEM]: { x: 20, y: 75, label: 'CHEM', color: '#a855f7' },
 };
 
 const CircularGauge = ({ value, color, label, icon: Icon }: { value: number, color: string, label: string, icon: any }) => {
@@ -134,8 +139,13 @@ $$; `;
 
 type Tab = 'SYSTEM' | 'MIND' | 'SQL' | 'NETWORK' | 'DEBUG';
 
-export const NeuroMonitor: React.FC<NeuroMonitorProps> = ({ limbicState, somaState, resonanceField, injectStateOverride }) => {
+export const NeuroMonitor: React.FC<NeuroMonitorProps> = ({ limbicState, somaState, resonanceField, injectStateOverride, neuroState, chemistryEnabled, onToggleChemistry, goalState }) => {
     const [packets, setPackets] = useState<CognitivePacket[]>([]);
+    const [flowBursts5m, setFlowBursts5m] = useState<number>(0);
+    const [recentNeuroSamples, setRecentNeuroSamples] = useState<{ dopamine: number; serotonin: number }[]>([]);
+    const [dreamConsolidations5m, setDreamConsolidations5m] = useState<number>(0);
+    const [recentDreamSummaries, setRecentDreamSummaries] = useState<{ timestamp: number; summary: string }[]>([]);
+    const [logFilter, setLogFilter] = useState<'ALL' | 'DREAMS' | 'CHEM' | 'SPEECH' | 'ERRORS' | 'FLOW'>('ALL');
     const [activeTab, setActiveTab] = useState<Tab>('SYSTEM');
     const [copied, setCopied] = useState(false);
     const [agentActivity, setAgentActivity] = useState<Record<string, number>>({});
@@ -187,6 +197,41 @@ export const NeuroMonitor: React.FC<NeuroMonitorProps> = ({ limbicState, somaSta
                 setAgentActivity(prev => ({ ...prev, [p.source]: 2.0 }));
             });
 
+            // CHEM DASHBOARD: FLOW BURSTS + recent dopamine/serotonin
+            const fiveMinutesAgo = now - 5 * 60 * 1000;
+            const chemPackets = history.filter(p => p.source === AgentType.NEUROCHEM && p.timestamp >= fiveMinutesAgo);
+
+            const bursts = chemPackets.filter(p => p.type === PacketType.SYSTEM_ALERT && p.payload?.event === 'CHEM_FLOW_ON').length;
+            setFlowBursts5m(bursts);
+
+            const neuroStates = chemPackets
+                .filter(p => p.type === PacketType.STATE_UPDATE)
+                .map(p => ({
+                    dopamine: p.payload?.dopamine ?? 0,
+                    serotonin: p.payload?.serotonin ?? 0
+                }));
+
+            const lastSamples = neuroStates.slice(-20); // last 20 samples
+            setRecentNeuroSamples(lastSamples);
+
+            // DREAM DASHBOARD: count consolidations & capture recent summaries
+            const dreamPackets = history.filter(p =>
+                p.source === AgentType.MEMORY_EPISODIC &&
+                p.type === PacketType.SYSTEM_ALERT &&
+                p.timestamp >= fiveMinutesAgo &&
+                p.payload?.event === 'DREAM_CONSOLIDATION_COMPLETE'
+            );
+
+            setDreamConsolidations5m(dreamPackets.length);
+
+            const dreamSummaries = dreamPackets
+                .slice(-5)
+                .map(p => ({
+                    timestamp: p.timestamp,
+                    summary: (p.payload?.summary || p.payload?.note || '').toString()
+                }));
+            setRecentDreamSummaries(dreamSummaries);
+
         }, 100); // Faster polling for snappier response
 
         return () => {
@@ -225,6 +270,63 @@ export const NeuroMonitor: React.FC<NeuroMonitorProps> = ({ limbicState, somaSta
     };
 
     const renderPayload = (packet: CognitivePacket) => {
+        // NEUROCHEMISTRY SNAPSHOTS (Chemical Soul v1)
+        if (packet.source === AgentType.NEUROCHEM && packet.type === PacketType.STATE_UPDATE) {
+            const p: any = packet.payload || {};
+            return (
+                <div className="space-y-1 text-[10px] text-purple-200">
+                    <div className="flex justify-between text-[9px] text-purple-300">
+                        <span>Context</span>
+                        <span className="font-mono">{p.context || 'N/A'}</span>
+                    </div>
+                    <div className="flex justify-between">
+                        <span>DOPAMINE</span>
+                        <span className="font-mono">{(p.dopamine ?? 0).toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                        <span>SEROTONIN</span>
+                        <span className="font-mono">{(p.serotonin ?? 0).toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                        <span>NOREPI</span>
+                        <span className="font-mono">{(p.norepinephrine ?? 0).toFixed(2)}</span>
+                    </div>
+                </div>
+            );
+        }
+
+        // NEUROCHEMISTRY EVENTS (FLOW / BIAS)
+        if (packet.source === AgentType.NEUROCHEM && packet.type === PacketType.SYSTEM_ALERT) {
+            const p: any = packet.payload || {};
+            if (p.event === 'CHEM_FLOW_ON' || p.event === 'CHEM_FLOW_OFF') {
+                return (
+                    <div className="text-[10px] text-purple-200 space-y-1">
+                        <div className="flex justify-between">
+                            <span className="font-mono">{p.event}</span>
+                            <span className="font-mono">D={p.dopamine?.toFixed(2)}</span>
+                        </div>
+                        {p.activity && (
+                            <div className="text-[9px] text-purple-300">activity: {p.activity}</div>
+                        )}
+                    </div>
+                );
+            }
+
+            if (p.event === 'DOPAMINE_VOICE_BIAS') {
+                return (
+                    <div className="text-[10px] text-purple-200 space-y-1">
+                        <div className="flex justify-between">
+                            <span className="font-mono">VOICE BIAS</span>
+                            <span className="font-mono">D={p.dopamine?.toFixed(2)}</span>
+                        </div>
+                        <div className="flex justify-between text-[9px] text-purple-300">
+                            <span>base → biased</span>
+                            <span className="font-mono">{p.base_voice_pressure?.toFixed(2)} → {p.biased_voice_pressure?.toFixed(2)}</span>
+                        </div>
+                    </div>
+                );
+            }
+        }
         // VISUAL PERCEPTION (NEW 11/10 Feature)
         if (packet.type === PacketType.VISUAL_PERCEPTION) {
             return (
@@ -303,9 +405,66 @@ export const NeuroMonitor: React.FC<NeuroMonitorProps> = ({ limbicState, somaSta
         if (p.type === PacketType.FIELD_UPDATE && p.source === AgentType.GLOBAL_FIELD) return false;
 
         if (activeTab === 'SYSTEM') {
-            return (p.type === PacketType.PREDICTION_ERROR || p.source === AgentType.SOMA || p.type === PacketType.SYSTEM_ALERT);
+            return (
+                p.type === PacketType.PREDICTION_ERROR ||
+                p.source === AgentType.SOMA ||
+                p.type === PacketType.SYSTEM_ALERT ||
+                p.source === AgentType.NEUROCHEM // show chem alerts in kernel view too
+            );
         }
-        if (activeTab === 'MIND') return (p.type === PacketType.THOUGHT_CANDIDATE || p.type === PacketType.VISUAL_THOUGHT || p.type === PacketType.VISUAL_PERCEPTION || p.source === AgentType.LIMBIC || p.source === AgentType.MEMORY_EPISODIC || p.source === AgentType.VISUAL_CORTEX || p.source === AgentType.SENSORY_VISUAL);
+        if (activeTab === 'MIND') {
+            let include = (
+                p.type === PacketType.THOUGHT_CANDIDATE ||
+                p.type === PacketType.VISUAL_THOUGHT ||
+                p.type === PacketType.VISUAL_PERCEPTION ||
+                p.source === AgentType.LIMBIC ||
+                p.source === AgentType.MEMORY_EPISODIC ||
+                p.source === AgentType.VISUAL_CORTEX ||
+                p.source === AgentType.SENSORY_VISUAL ||
+                p.source === AgentType.NEUROCHEM // expose chem packets in CORTEX tab
+            );
+
+            if (!include) return false;
+
+            if (logFilter === 'DREAMS') {
+                return (
+                    p.source === AgentType.MEMORY_EPISODIC &&
+                    p.type === PacketType.SYSTEM_ALERT &&
+                    p.payload?.event === 'DREAM_CONSOLIDATION_COMPLETE'
+                );
+            }
+
+            if (logFilter === 'CHEM') {
+                return p.source === AgentType.NEUROCHEM;
+            }
+
+            if (logFilter === 'SPEECH') {
+                return (
+                    p.source === AgentType.CORTEX_FLOW &&
+                    p.type === PacketType.THOUGHT_CANDIDATE &&
+                    typeof p.payload?.speech_content === 'string'
+                );
+            }
+
+            if (logFilter === 'ERRORS') {
+                return (
+                    p.type === PacketType.PREDICTION_ERROR ||
+                    (p.type === PacketType.SYSTEM_ALERT && (p.payload?.code || p.payload?.error))
+                );
+            }
+
+            if (logFilter === 'FLOW') {
+                const isChem = p.source === AgentType.NEUROCHEM;
+                const isSpeech = (
+                    p.source === AgentType.CORTEX_FLOW &&
+                    p.type === PacketType.THOUGHT_CANDIDATE &&
+                    typeof p.payload?.speech_content === 'string'
+                );
+                return isChem || isSpeech;
+            }
+
+            return true;
+        }
         return true;
     });
 
@@ -326,7 +485,21 @@ export const NeuroMonitor: React.FC<NeuroMonitorProps> = ({ limbicState, somaSta
                         </div>
                     </div>
                 </div>
-                <button onClick={handleExportLogs} className="text-gray-500 hover:text-brain-accent" title="Export Logs"><Download size={14} /></button>
+                <div className="flex items-center gap-3">
+                    {typeof chemistryEnabled === 'boolean' && onToggleChemistry && (
+                        <button
+                            onClick={onToggleChemistry}
+                            className={`px-2 py-1 rounded-full text-[9px] font-mono border transition-all ${chemistryEnabled
+                                ? 'border-purple-500 text-purple-300 bg-purple-900/30'
+                                : 'border-gray-700 text-gray-500 bg-gray-900/40 hover:border-purple-500 hover:text-purple-300'}
+                            `}
+                            title="Toggle Chemical Soul influence"
+                        >
+                            CHEM: {chemistryEnabled ? 'ON' : 'OFF'}
+                        </button>
+                    )}
+                    <button onClick={handleExportLogs} className="text-gray-500 hover:text-brain-accent" title="Export Logs"><Download size={14} /></button>
+                </div>
             </div>
 
             <div className="bg-[#0a0c12] border-b border-gray-800 p-4">
@@ -357,6 +530,87 @@ export const NeuroMonitor: React.FC<NeuroMonitorProps> = ({ limbicState, somaSta
                         <div className="h-2 w-full bg-gray-800 rounded-full overflow-hidden"><div className="h-full bg-gradient-to-r from-green-600 to-green-400 transition-all duration-500" style={{ width: `${limbicState.satisfaction * 100}%` }} /></div>
                     </div>
                 </div>
+
+                {neuroState && (
+                    <div className="mt-4 pt-3 border-t border-gray-800">
+                        <div className="flex justify-between items-center mb-2">
+                            <span className="text-[9px] text-gray-500 uppercase tracking-wider flex items-center gap-1">
+                                <Radio size={10} className="text-purple-400" /> CHEMICAL SOUL
+                            </span>
+                            <span className="text-[9px] font-mono text-purple-300">
+                                FLOW: {neuroState.dopamine > 70 ? 'ON' : 'IDLE'}
+                            </span>
+                        </div>
+                        <div className="space-y-1.5">
+                            <div>
+                                <div className="flex justify-between text-[9px] text-gray-500 mb-0.5">
+                                    <span>DOPAMINE</span>
+                                    <span className="text-purple-300 font-mono">{neuroState.dopamine.toFixed(0)}%</span>
+                                </div>
+                                <div className="h-1.5 w-full bg-gray-800 rounded-full overflow-hidden">
+                                    <div className="h-full bg-gradient-to-r from-purple-600 to-purple-400" style={{ width: `${neuroState.dopamine}%` }} />
+                                </div>
+                            </div>
+                            <div>
+                                <div className="flex justify-between text-[9px] text-gray-500 mb-0.5">
+                                    <span>SEROTONIN</span>
+                                    <span className="text-sky-300 font-mono">{neuroState.serotonin.toFixed(0)}%</span>
+                                </div>
+                                <div className="h-1.5 w-full bg-gray-800 rounded-full overflow-hidden">
+                                    <div className="h-full bg-gradient-to-r from-sky-600 to-sky-400" style={{ width: `${neuroState.serotonin}%` }} />
+                                </div>
+                            </div>
+                            <div>
+                                <div className="flex justify-between text-[9px] text-gray-500 mb-0.5">
+                                    <span>NOREPI</span>
+                                    <span className="text-amber-300 font-mono">{neuroState.norepinephrine.toFixed(0)}%</span>
+                                </div>
+                                <div className="h-1.5 w-full bg-gray-800 rounded-full overflow-hidden">
+                                    <div className="h-full bg-gradient-to-r from-amber-600 to-amber-400" style={{ width: `${neuroState.norepinephrine}%` }} />
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="flex items-center gap-2 mt-2 flex-wrap">
+                            {['ALL', 'DREAMS', 'CHEM', 'SPEECH', 'ERRORS', 'FLOW'].map(mode => (
+                                <button
+                                    key={mode}
+                                    onClick={() => setLogFilter(mode as any)}
+                                    className={`px-2 py-1 rounded-full border text-[8px] font-mono tracking-wider transition-all ${
+                                        logFilter === mode
+                                            ? 'border-brain-accent text-brain-accent bg-gray-900'
+                                            : 'border-gray-800 text-gray-500 hover:text-gray-300 hover:bg-gray-900/60'
+                                    }`}
+                                >
+                                    {mode}
+                                </button>
+                            ))}
+                        </div>
+                        {goalState && (
+                            <div className="mt-3 pt-2 border-t border-gray-900 text-[9px] text-gray-400 flex justify-between items-center">
+                                <div className="flex flex-col gap-0.5">
+                                    <span className="uppercase tracking-wider text-gray-500">ACTIVE GOAL</span>
+                                    <span className="font-mono text-[9px] text-gray-300">
+                                        {goalState.activeGoal
+                                            ? `[${goalState.activeGoal.source.toUpperCase()}] ${goalState.activeGoal.description}`
+                                            : '— none —'}
+                                    </span>
+                                </div>
+                                <div className="flex flex-col items-end gap-0.5">
+                                    <span className="uppercase tracking-wider text-gray-500">LAST USER INPUT</span>
+                                    <span className="font-mono text-[9px] text-gray-300">
+                                        {(() => {
+                                            const last = goalState.lastUserInteractionAt;
+                                            if (!last) return 'n/a';
+                                            const diffSec = Math.floor((Date.now() - last) / 1000);
+                                            return `${diffSec}s ago`;
+                                        })()}
+                                    </span>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                )}
             </div>
 
             <div className="flex bg-[#0f1219] border-b border-gray-800">
@@ -480,6 +734,48 @@ export const NeuroMonitor: React.FC<NeuroMonitorProps> = ({ limbicState, somaSta
                                     );
                                 })}
                             </svg>
+                        </div>
+                    </div>
+                )}
+
+                {activeTab === 'MIND' && (
+                    <div className="px-3 pt-3 pb-2 border-b border-gray-800 bg-[#050608] flex flex-col gap-1 text-[9px] text-gray-400">
+                        <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                                <span className="uppercase tracking-wider text-gray-500">FLOW BURSTS (5m)</span>
+                                <span className="font-mono text-purple-300">{flowBursts5m}</span>
+                            </div>
+                            {recentNeuroSamples.length > 0 && (
+                                <div className="flex items-center gap-2">
+                                    <span className="uppercase tracking-wider text-gray-500">DOP / SER TREND</span>
+                                    <span className="font-mono text-[8px] text-purple-300">
+                                        {recentNeuroSamples.map((s, i) => (i % 2 === 0 ? Math.round(s.dopamine) : '.')).join(' ')}
+                                    </span>
+                                    <span className="font-mono text-[8px] text-sky-300 ml-1">
+                                        {recentNeuroSamples.map((s, i) => (i % 2 === 0 ? Math.round(s.serotonin) : '.')).join(' ')}
+                                    </span>
+                                </div>
+                            )}
+                        </div>
+
+                        <div className="flex items-start justify-between mt-1">
+                            <div className="flex items-center gap-2">
+                                <span className="uppercase tracking-wider text-gray-500">DREAMS (5m)</span>
+                                <span className="font-mono text-cyan-300">{dreamConsolidations5m}</span>
+                            </div>
+                            {recentDreamSummaries.length > 0 && (
+                                <div className="flex-1 ml-3 overflow-hidden">
+                                    <div className="text-[8px] text-gray-500 uppercase tracking-wider mb-0.5">LAST DREAM CONSOLIDATIONS</div>
+                                    <div className="space-y-0.5 max-h-[46px] overflow-y-auto pr-1">
+                                        {recentDreamSummaries.map((d, idx) => (
+                                            <div key={d.timestamp + '-' + idx} className="text-[8px] text-gray-300 truncate">
+                                                <span className="text-gray-500 mr-1 font-mono">{new Date(d.timestamp).toLocaleTimeString()}:</span>
+                                                <span className="opacity-80">{d.summary.replace(/^DREAM CONSOLIDATION:\s*/i, '')}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     </div>
                 )}

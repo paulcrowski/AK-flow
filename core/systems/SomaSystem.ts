@@ -8,6 +8,15 @@
  */
 
 import { SomaState } from '../../types';
+import {
+	METABOLIC_SLEEP_TRIGGER_ENERGY,
+	METABOLIC_WAKE_TRIGGER_ENERGY,
+	METABOLIC_AWAKE_DRAIN_RATE,
+	METABOLIC_SLEEP_REGEN_RATE,
+	AWAKE_TICK_MS,
+	SLEEP_TICK_MS,
+	WAKE_TRANSITION_TICK_MS
+} from '../constants';
 
 export interface MetabolicResult {
     newState: SomaState;
@@ -37,10 +46,10 @@ export const calculateMetabolicState = (
     let isSleeping = currentSoma.isSleeping;
     let shouldSleep = false;
     let shouldWake = false;
-    let nextTick = 3000; // Default tick interval
+    let nextTick = AWAKE_TICK_MS; // Default tick interval
 
     // 1. CHECK FOR EXHAUSTION (Sleep Trigger)
-    if (energy < 20 && !isSleeping) {
+    if (energy < METABOLIC_SLEEP_TRIGGER_ENERGY && !isSleeping) {
         shouldSleep = true;
         isSleeping = true;
     }
@@ -48,18 +57,18 @@ export const calculateMetabolicState = (
     // 2. SLEEP/WAKE CYCLE
     if (isSleeping) {
         // Sleep Mode: Regenerate energy
-        nextTick = 4000; // Slower tick during sleep
-        energy = Math.min(100, energy + 7); // Regenerate +7 per tick
+        nextTick = SLEEP_TICK_MS; // Slower tick during sleep
+        energy = Math.min(100, energy + METABOLIC_SLEEP_REGEN_RATE); // Regenerate per tick
 
         // Wake Up Check
-        if (energy >= 95) {
+        if (energy >= METABOLIC_WAKE_TRIGGER_ENERGY) {
             shouldWake = true;
             isSleeping = false;
-            nextTick = 2000; // Return to faster tick on wake
+            nextTick = WAKE_TRANSITION_TICK_MS; // Return to faster tick on wake
         }
     } else {
         // Awake Mode: Drain energy
-        energy = Math.max(0, energy - 0.1 - actionCost);
+        energy = Math.max(0, energy - METABOLIC_AWAKE_DRAIN_RATE - actionCost);
     }
 
     return {

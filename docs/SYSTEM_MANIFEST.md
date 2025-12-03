@@ -43,6 +43,8 @@ AK-FLOW is a **biological simulation** of a cognitive agent that transcends stan
 - `ResonanceField` - CEMI field state (coherence, intensity, frequency, timeDilation)
 - `CognitivePacket` - Event bus message format
 - `MemoryTrace` - Memory structure with embeddings and Hebbian strength
+ - `NeurotransmitterState` - Chemical state (dopamine, serotonin, norepinephrine)
+ - `Goal` / `GoalState` - Internal motivational goals and their runtime state (activeGoal, backlog, lastUserInteractionAt, safety counters)
 
 **Critical Updates (V4.0):**
 - `isVisualDream` - Boolean flag for internally generated vs external memories
@@ -142,6 +144,10 @@ AK-FLOW is a **biological simulation** of a cognitive agent that transcends stan
 - **RAG Integration:** Retrieves memories via MemoryService before generation.
 - **Structured Dialogue:** Uses Gemini for JSON-structured responses (thought + speech + mood).
 
+**Goal Execution (NEW):**
+- `pursueGoal(goal, state)` buduje celowo zorientowany prompt z opisem celu, stanu limbicznego/somatycznego i ostatnich tur rozmowy.
+- Wykonuje pojedynczą, krótką wypowiedź realizującą cel i zapisuje ją jako ślad pamięci (`GOAL EXECUTION [...]`).
+
 ---
 
 ### 🧠 Central Nervous System
@@ -179,11 +185,14 @@ AK-FLOW is a **biological simulation** of a cognitive agent that transcends stan
 - `limbicState` - Emotional state (useState)
 - `somaState` - Physical state (useState)
 - `resonanceField` - CEMI field (useState)
+ - `neuroState` - Chemical Soul (dopamine/serotonin/norepinephrine)
+ - `chemistryEnabled` - Feature flag włączająca/wyłączająca wpływ chemii
 - `autonomousMode` - Kill switch (useState, default: false)
 - `conversation` - Message history (useState)
 - `isProcessing` - Processing flag (useState)
 - `currentThought` - Current activity (useState)
 - `systemError` - Error state (useState)
+ - `goalState` - Runtime stan celów (activeGoal, backlog, lastUserInteractionAt, goalsFormedTimestamps)
 
 **Refs:**
 - `stateRef` - Prevents React closure staleness
@@ -193,6 +202,8 @@ AK-FLOW is a **biological simulation** of a cognitive agent that transcends stan
 - `visualBingeCountRef` - Visual addiction prevention
 - `isLoopRunning` - Loop state flag
 - `hasBootedRef` - Boot once flag
+ - `thoughtHistoryRef` - Ostatnie wewnętrzne monologi (dla regulacji volicji)
+ - `lastSpeakRef` - Timestamp ostatniej wypowiedzi (dla ciszy i budżetu autonomii)
 
 **Boot Sequence (NEW in V4.0):**
 - Captures complete initial state snapshot
@@ -204,12 +215,9 @@ AK-FLOW is a **biological simulation** of a cognitive agent that transcends stan
 **Cognitive Cycle Flow:**
 1. **Kill Switch Check** - Exit if autonomousMode = false
 2. **Metabolic State** - SomaSystem.calculateMetabolicState()
-3. **Sleep/Wake Handling** - Apply regeneration or drain
-4. **Volition Evaluation** - VolitionSystem.evaluateVolition()
-5. **Autonomous Thinking** - If awake and silence > 2s
-6. **Speech Decision** - If voice pressure > 0.75
-7. **Emotional Update** - LimbicSystem.applySpeechResponse()
-8. **Schedule Next Tick** - BiologicalClock tick intervals
+3. **Sleep/Wake Handling** - Apply regeneration or drain (w tym REM + Dream Consolidation)
+4. **EventLoop.runSingleStep** - Centralny mózg: homeostaza limbiczna, obsługa inputu, autonomia, chemia i cele (GoalSystem)
+5. **Schedule Next Tick** - BiologicalClock tick intervals, dopasowane do stanu (awake/sleep)
 
 **User Input Flow:**
 1. Wake if sleeping (SomaSystem.forceWake)
@@ -236,6 +244,41 @@ AK-FLOW is a **biological simulation** of a cognitive agent that transcends stan
 - `toggleAutonomy()` - Enable/disable autonomous mode
 - `toggleSleep()` - Manual sleep toggle
 - `injectStateOverride(type, key, value)` - Debug state injection
+ - `toggleChemistry()` / `chemistryEnabled` - Kontrola Chemical Soul
+ - `goalState` - Bieżąca obserwowalna reprezentacja celów (w tym lastUserInteractionAt)
+
+---
+
+#### `core/systems/NeurotransmitterSystem.ts` - The Chemical Soul
+**Role:** Czysta logika aktualizacji stanu neurochemicznego (dopamina, serotonina, norepinefryna).
+
+**Features:**
+- `applyHomeostasis(value, target, rate)` – łagodna relaksacja do wartości docelowej.
+- `updateNeuroState(prev, context)` – modyfikacje zależne od aktywności (SOCIAL/CREATIVE/IDLE) i stanu somy.
+- Wyznacza stan FLOW (`dopamine > 70`) bez wprowadzania negatywnych efektów typu depresja.
+
+**Integration:**
+- Wywoływany w `EventLoop.runSingleStep` po detekcji aktywności.
+- Steruje pojedynczą wajchą v1: bias `voicePressure` (gadatliwość) podczas autonomicznych myśli.
+- Generuje logi `CHEM_FLOW_ON/OFF` i `DOPAMINE_VOICE_BIAS` dla pełnej obserwowalności.
+
+---
+
+#### `core/systems/GoalSystem.ts` - The Motivational Core
+**Role:** Czysta logika formowania prostych celów na bazie ciszy, stanu ciała, chemii i emocji.
+
+**Key Concepts:**
+- `Goal` – opisuje pojedynczy cel (`id`, `description`, `priority`, `source`, `createdAt`, `progress`).
+- `GoalState` – bieżący runtime (`activeGoal`, `backlog`, `lastUserInteractionAt`, `goalsFormedTimestamps`).
+
+**Exports:**
+- `shouldConsiderGoal(ctx, goalState)` – bezpieczne kryteria: cisza > 60s, energia > 30, brak przeciążenia emocjonalnego, max 5 celów/h.
+- `formGoal(ctx, goalState)` – generuje cel typu `curiosity` lub `empathy` na podstawie stanu limbicznego.
+
+**Integration:**
+- Wywoływany z `EventLoop.runSingleStep` w gałęzi autonomii (brak nowego inputu).
+- Loguje `GOAL_FORMED` w EventBus przy utworzeniu celu.
+- Cel jest wykonywany jednokrotnie przez `CortexSystem.pursueGoal`, po czym oznaczany jako zakończony (`GOAL_EXECUTED`) i usuwany z `activeGoal`.
 
 ---
 
@@ -339,6 +382,8 @@ CREATE TABLE memories (
 - Resonance field (coherence, intensity, frequency, time dilation)
 - Conversation history (thoughts, speech, visuals, intel)
 - Debug controls (state injection, autonomy toggle, sleep toggle)
+ - Chemical Soul (dopamine, serotonin, norepinephrine, FLOW status, ostatnie próbki)
+ - Active Goal (źródło, opis) i czas od ostatniej interakcji użytkownika
 
 **Features:**
 - Real-time updates via EventBus subscription
@@ -346,6 +391,7 @@ CREATE TABLE memories (
 - Message type differentiation (thought/speech/visual/intel)
 - Image display for visual memories
 - Source citations for research
+ - Filtry logów: DREAMS / CHEM / SPEECH / ERRORS / FLOW umożliwiające podgląd snów, chemii, mowy i błędów osobno
 
 ---
 
@@ -570,6 +616,27 @@ CREATE TABLE memories (
 ---
 
 ## 📝 CHANGELOG
+
+### [4.2.0] - 2025-12-03 - Chemical Soul & Goal Formation
+
+#### 🧪 Chemical Soul v1 (Neurotransmitter System)
+- Dodano `NeurotransmitterState` i moduł `core/systems/NeurotransmitterSystem.ts`.
+- Zintegrowano z `EventLoop.runSingleStep` zgodnie z kolejnością biologiczną (Soma → Activity → Neuro → Levers).
+- Wprowadzono pojedynczą wajchę v1: dopaminowy bias `voicePressure` w autonomicznej volicji.
+- Dodano szczegółowe logowanie chemii: `CHEM_FLOW_ON/OFF`, `DOPAMINE_VOICE_BIAS`, snapshoty NEUROCHEM.
+
+#### 🌙 Dream Consolidation v1
+- Dodano `dreamConsolidation()` w `useCognitiveKernel.ts`, wywoływaną podczas snu.
+- Konsolidacja 50 ostatnich śladów pamięci do jednego core-memory z podsumowaniem.
+- `DREAM_CONSOLIDATION_COMPLETE` emitowane jako `SYSTEM_ALERT` i wizualizowane w NeuroMonitor (dashboard snów).
+
+#### 🎯 Goal Formation v1 (Autonomous Goals)
+- Dodano typy `Goal` i `GoalState` oraz moduł `core/systems/GoalSystem.ts` z heurystykami curiosity/empathy.
+- Rozszerzono `EventLoop.LoopContext` o `goalState` i hook na długą ciszę.
+- Implementacja: po ciszy > 60s i spełnionych warunkach energii/emocji powstaje cel (`GOAL_FORMED`), wykonywany jednokrotnie przez `CortexSystem.pursueGoal` (`GOAL_EXECUTED`).
+- `useCognitiveKernel` utrzymuje `goalState`, a NeuroMonitor wyświetla ACTIVE GOAL i czas od ostatniego inputu użytkownika.
+
+---
 
 ### [4.1.1] - 2025-12-02 - Neuro Repair: Tools & Debug
 

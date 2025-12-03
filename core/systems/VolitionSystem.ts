@@ -8,6 +8,7 @@
  */
 
 import { LimbicState } from '../../types';
+import { SPEECH_REFRACTORY_MS, SILENCE_BONUS_MAX, SILENCE_BONUS_FULL_SECONDS } from '../constants';
 
 export interface VolitionDecision {
     shouldSpeak: boolean;
@@ -61,9 +62,9 @@ export const VolitionSystem = {
             return { shouldSpeak: false, reason: "GABA_INHIBITION_REPETITION" };
         }
 
-        // 2. Speech refractory: do not speak if last message was < 1800ms ago
+        // 2. Speech refractory: do not speak if last message was < threshold
         if (lastSpeakTimestamp && currentTimestamp &&
-            currentTimestamp - lastSpeakTimestamp < 1800) {
+            currentTimestamp - lastSpeakTimestamp < SPEECH_REFRACTORY_MS) {
             return { shouldSpeak: false, reason: "SPEECH_REFRACTORY" };
         }
 
@@ -85,8 +86,8 @@ export const VolitionSystem = {
         if (limbic.fear > 0.8) threshold += 0.2;
 
         // Silence reduces inhibition (bonus to pressure)
-        // Max bonus 0.3 after 60 seconds
-        const silenceBonus = Math.min(0.3, silenceDuration / 60000);
+        // Max bonus after configured full duration
+        const silenceBonus = Math.min(SILENCE_BONUS_MAX, silenceDuration / SILENCE_BONUS_FULL_SECONDS);
         const effectivePressure = voicePressure + silenceBonus;
 
         if (effectivePressure > threshold) {

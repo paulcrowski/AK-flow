@@ -8,10 +8,7 @@
  */
 
 import { ResonanceField } from '../../types';
-
-// Tick interval constants
-export const MIN_TICK_MS = 1000;
-export const MAX_TICK_MS = 15000;
+import { MIN_TICK_MS, MAX_TICK_MS, AWAKE_TICK_MS, SLEEP_TICK_MS, WAKE_TRANSITION_TICK_MS } from '../constants';
 
 /**
  * Calculate the next tick interval based on resonance field and base interval.
@@ -36,28 +33,28 @@ export const calculateNextTick = (
 /**
  * Get default tick interval for awake state.
  * 
- * @returns Default awake tick interval (3000ms)
+ * @returns Default awake tick interval (from constants)
  */
 export const getDefaultAwakeTick = (): number => {
-    return 3000;
+    return AWAKE_TICK_MS;
 };
 
 /**
  * Get default tick interval for sleep state.
  * 
- * @returns Default sleep tick interval (4000ms)
+ * @returns Default sleep tick interval (from constants)
  */
 export const getDefaultSleepTick = (): number => {
-    return 4000;
+    return SLEEP_TICK_MS;
 };
 
 /**
  * Get default tick interval for wake transition.
  * 
- * @returns Default wake transition tick interval (2000ms)
+ * @returns Default wake transition tick interval (from constants)
  */
 export const getWakeTransitionTick = (): number => {
-    return 2000;
+    return WAKE_TRANSITION_TICK_MS;
 };
 
 /**

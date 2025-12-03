@@ -3,17 +3,16 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { eventBus } from '../core/EventBus';
 import { CortexService } from '../services/gemini';
 import { MemoryService } from '../services/supabase';
-import { AgentType, PacketType, LimbicState, SomaState, CognitiveError, ResonanceField } from '../types';
+import { AgentType, PacketType, LimbicState, SomaState, CognitiveError, ResonanceField, NeurotransmitterState, GoalState } from '../types';
 import { generateUUID } from '../utils/uuid';
 import * as SomaSystem from '../core/systems/SomaSystem';
 import * as LimbicSystem from '../core/systems/LimbicSystem';
 import * as VolitionSystem from '../core/systems/VolitionSystem';
 import * as BiologicalClock from '../core/systems/BiologicalClock';
+import { MIN_TICK_MS, MAX_TICK_MS } from '../core/constants';
 import { CortexSystem } from '../core/systems/CortexSystem';
 import { EventLoop } from '../core/systems/EventLoop';
-
-// Constants
-const VISUAL_BASE_COOLDOWN = 60000; // 1 minute base cooldown (increased for safety)
+import { createProcessOutputForTools } from '../utils/toolParser';
 
 // Helper for delays
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
@@ -65,13 +64,28 @@ export const useCognitiveKernel = () => {
     // NEW: Persist Poetic Mode (Fixes Amnesia Bug)
     const [poeticMode, setPoeticMode] = useState(false);
 
+    // NEW: Chemical Soul v1
+    const [neuroState, setNeuroState] = useState<NeurotransmitterState>({
+        dopamine: 55,
+        serotonin: 60,
+        norepinephrine: 50
+    });
+    const [chemistryEnabled, setChemistryEnabled] = useState<boolean>(true);
+
     const [conversation, setConversation] = useState<{ role: string, text: string, type?: 'thought' | 'speech' | 'visual' | 'intel', imageData?: string, sources?: any[] }[]>([]);
     const [isProcessing, setIsProcessing] = useState(false);
     const [currentThought, setCurrentThought] = useState<string>("Initializing Synapses...");
     const [systemError, setSystemError] = useState<CognitiveError | null>(null);
 
     // Refs
-    const stateRef = useRef({ limbicState, somaState, resonanceField, conversation, autonomousMode, poeticMode });
+    const [goalState, setGoalState] = useState<GoalState>({
+        activeGoal: null,
+        backlog: [],
+        lastUserInteractionAt: Date.now(),
+        goalsFormedTimestamps: []
+    });
+
+    const stateRef = useRef({ limbicState, somaState, resonanceField, conversation, autonomousMode, poeticMode, neuroState, chemistryEnabled, goalState });
     const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const silenceStartRef = useRef<number>(Date.now());
     const lastVisualTimestamp = useRef<number>(0);
@@ -84,8 +98,8 @@ export const useCognitiveKernel = () => {
 
     // Sync Ref
     useEffect(() => {
-        stateRef.current = { limbicState, somaState, resonanceField, conversation, autonomousMode, poeticMode };
-    }, [limbicState, somaState, resonanceField, conversation, autonomousMode, poeticMode]);
+        stateRef.current = { limbicState, somaState, resonanceField, conversation, autonomousMode, poeticMode, neuroState, chemistryEnabled, goalState };
+    }, [limbicState, somaState, resonanceField, conversation, autonomousMode, poeticMode, neuroState, chemistryEnabled, goalState]);
 
     // --- ACTIONS ---
 
@@ -108,6 +122,24 @@ export const useCognitiveKernel = () => {
             priority: 0.2
         });
 
+        // Neurochem snapshot (if enabled)
+        if (chemistryEnabled) {
+            eventBus.publish({
+                id: generateUUID(),
+                timestamp: Date.now(),
+                source: AgentType.NEUROCHEM,
+                type: PacketType.STATE_UPDATE,
+                payload: {
+                    context,
+                    dopamine: snapshot.neuroState?.dopamine ?? neuroState.dopamine,
+                    serotonin: snapshot.neuroState?.serotonin ?? neuroState.serotonin,
+                    norepinephrine: snapshot.neuroState?.norepinephrine ?? neuroState.norepinephrine,
+                    isFlow: (snapshot.neuroState?.dopamine ?? neuroState.dopamine) > 70
+                },
+                priority: 0.2
+            });
+        }
+
         // Soma snapshot
         eventBus.publish({
             id: generateUUID(),
@@ -124,9 +156,51 @@ export const useCognitiveKernel = () => {
         });
     };
 
+    const dreamConsolidation = async () => {
+        try {
+            const recentMemories = await MemoryService.recallRecent(50);
+            const summary = await CortexService.consolidateMemories(recentMemories);
+
+            await MemoryService.storeMemory({
+                content: `DREAM CONSOLIDATION: ${summary}`,
+                emotionalContext: limbicState,
+                timestamp: new Date().toISOString(),
+                id: generateUUID(),
+                neuralStrength: 100,
+                isCoreMemory: true
+            } as any);
+
+            eventBus.publish({
+                id: generateUUID(),
+                timestamp: Date.now(),
+                source: AgentType.MEMORY_EPISODIC,
+                type: PacketType.SYSTEM_ALERT,
+                payload: {
+                    event: 'DREAM_CONSOLIDATION_COMPLETE',
+                    note: 'Core memory stored from sleep cycle.',
+                    summary
+                },
+                priority: 0.7
+            });
+        } catch (e) {
+            console.warn('Dream Consolidation Error (non-critical)', e);
+        }
+    };
+
+    const toggleChemistry = () => {
+        setChemistryEnabled(prev => !prev);
+    };
+
     const addMessage = (role: 'user' | 'assistant', text: string, type: 'thought' | 'speech' | 'visual' | 'intel' = 'speech', imageData?: string, sources?: any[]) => {
         setConversation(prev => [...prev, { role, text, type, imageData, sources }]);
         silenceStartRef.current = Date.now();
+
+        if (role === 'user') {
+            setGoalState(prev => ({
+                ...prev,
+                lastUserInteractionAt: Date.now()
+            }));
+        }
 
         // RESTORED LOGGING: Publish speech/output to EventBus
         if (role === 'assistant' && type === 'speech') {
@@ -179,163 +253,15 @@ export const useCognitiveKernel = () => {
     };
 
     // --- TOOL PARSER ---
-    const processOutputForTools = async (rawText: string): Promise<string> => {
-        let cleanText = rawText;
-
-        // 1. SEARCH TAG
-        let searchMatch = cleanText.match(/\[SEARCH:\s*(.*?)\]/i);
-        if (!searchMatch) {
-            // Fallback: handle legacy form like "[SEARCH] for: topic ..."
-            const legacySearch = cleanText.match(/\[SEARCH\]\s*(?:for\s*)?:?\s*(.+)$/i);
-            if (legacySearch) {
-                // Synthesize a pseudo-match compatible with the main handler
-                searchMatch = [legacySearch[0], legacySearch[1]] as any;
-            }
-        }
-
-        if (searchMatch) {
-            const query = searchMatch[1].trim();
-            cleanText = cleanText.replace(searchMatch[0], '').trim();
-
-            setCurrentThought(`Researching: ${query}...`);
-            const research = await CortexSystem.performDeepResearch(query, "User requested data.");
-
-            if (!research) {
-                addMessage('assistant', `[Deep Research Skipped: Topic "${query}" already processed]`, 'thought');
-                return cleanText;
-            }
-
-            addMessage('assistant', research.synthesis, 'intel', undefined, research.sources);
-
-            eventBus.publish({
-                id: generateUUID(),
-                timestamp: Date.now(),
-                source: AgentType.CORTEX_FLOW,
-                type: PacketType.FIELD_UPDATE,
-                payload: { action: "DEEP_RESEARCH_COMPLETE", topic: query, found_sources: research.sources },
-                priority: 0.8
-            });
-        }
-
-        // 2. VISUAL TAG
-        let visualMatch = cleanText.match(/\[VISUALIZE:\s*([\s\S]*?)\]/i);
-        if (!visualMatch) {
-            // Fallback A: "[VISUALIZE] this framework ..."
-            const legacyVisual = cleanText.match(/\[VISUALIZE\]\s*(.+)$/is);
-            if (legacyVisual) {
-                visualMatch = [legacyVisual[0], legacyVisual[1]] as any;
-            }
-        }
-        if (!visualMatch) {
-            // Fallback B: autonomous phrasing like "[Visualizing the evolving conceptual framework ...]"
-            const progressiveVisual = cleanText.match(/\[(Visualize|visualize|Visualizing|visualizing)\s+(.+?)\]/is);
-            if (progressiveVisual) {
-                visualMatch = [progressiveVisual[0], progressiveVisual[2]] as any;
-            }
-        }
-
-        if (visualMatch) {
-            let prompt = visualMatch[1].trim();
-            if (prompt.endsWith(']')) prompt = prompt.slice(0, -1);
-
-            console.log("Visual Tag Detected:", prompt); // DEBUG
-
-            cleanText = cleanText.replace(visualMatch[0], '').trim();
-
-            const now = Date.now();
-            if (now - lastVisualTimestamp.current > 600000) {
-                visualBingeCountRef.current = 0;
-            }
-
-            const currentBinge = visualBingeCountRef.current;
-            const dynamicCooldown = VISUAL_BASE_COOLDOWN * (currentBinge + 1);
-            const timeSinceLast = now - lastVisualTimestamp.current;
-
-            // REFRACTORY PERIOD CHECK
-            if (timeSinceLast < dynamicCooldown) {
-                const remainingSec = Math.ceil((dynamicCooldown - timeSinceLast) / 1000);
-                const distractions = [
-                    "System Alert: Sudden spike in entropy detected. Analyze logic structure instead.",
-                    "Data Stream Update: Reviewing recent memory coherence.",
-                    "Focus Shift: Analyzing linguistic patterns in user input."
-                ];
-                const randomDistraction = distractions[Math.floor(Math.random() * distractions.length)];
-
-                addMessage('assistant', `[VISUAL CORTEX REFRACTORY PERIOD ACTIVE - ${remainingSec}s REMAINING] ${randomDistraction}`, 'thought');
-
-                eventBus.publish({
-                    id: generateUUID(),
-                    timestamp: Date.now(),
-                    source: AgentType.CORTEX_FLOW,
-                    type: PacketType.SYSTEM_ALERT,
-                    payload: { msg: "Visual Cortex Overload. Redirecting focus." },
-                    priority: 0.2
-                });
-
-                return cleanText;
-
-            } else {
-                // ALLOWED
-                setCurrentThought(`Visualizing: ${prompt.substring(0, 30)}...`);
-                lastVisualTimestamp.current = now;
-                visualBingeCountRef.current += 1;
-
-                const energyCost = 15 * (currentBinge + 1);
-
-                // Apply metabolic and emotional costs using system modules
-                setSomaState(prev => {
-                    let updated = SomaSystem.applyEnergyCost(prev, energyCost);
-                    updated = SomaSystem.applyCognitiveLoad(updated, 15);
-                    return updated;
-                });
-
-                setLimbicState(prev => LimbicSystem.applyVisualEmotionalCost(prev, currentBinge));
-
-                eventBus.publish({
-                    id: generateUUID(),
-                    timestamp: Date.now(),
-                    source: AgentType.VISUAL_CORTEX,
-                    type: PacketType.VISUAL_THOUGHT,
-                    payload: { status: "RENDERING", prompt },
-                    priority: 0.5
-                });
-
-                try {
-                    const img = await CortexService.generateVisualThought(prompt);
-                    if (img) {
-                        const perception = await CortexService.analyzeVisualInput(img);
-
-                        eventBus.publish({
-                            id: generateUUID(),
-                            timestamp: Date.now(),
-                            source: AgentType.VISUAL_CORTEX,
-                            type: PacketType.VISUAL_PERCEPTION,
-                            payload: {
-                                status: "PERCEPTION_COMPLETE",
-                                prompt: prompt,
-                                perception_text: perception
-                            },
-                            priority: 0.9
-                        });
-
-                        addMessage('assistant', perception, 'visual', img);
-
-                        MemoryService.storeMemory({
-                            content: `ACTION: Generated Image of "${prompt}". PERCEPTION: ${perception}`,
-                            emotionalContext: stateRef.current.limbicState,
-                            timestamp: new Date().toISOString(),
-                            imageData: img,
-                            isVisualDream: true
-                        });
-                    }
-                } catch (e) {
-                    console.warn("Visual gen failed", e);
-                }
-            }
-        }
-
-        return cleanText;
-    };
+    const processOutputForTools = createProcessOutputForTools({
+        setCurrentThought,
+        addMessage,
+        setSomaState,
+        setLimbicState,
+        lastVisualTimestampRef: lastVisualTimestamp,
+        visualBingeCountRef,
+        stateRef
+    });
 
     const handleCortexMessage = (role: 'user' | 'assistant', text: string, type: 'thought' | 'speech' | 'visual' | 'intel' = 'speech', imageData?: string, sources?: any[]) => {
         if (role === 'assistant' && type === 'speech') {
@@ -417,6 +343,13 @@ export const useCognitiveKernel = () => {
                         priority: 0.1
                     });
                 }
+
+                // DREAM CONSOLIDATION (FAZA 2) - occasional during sleep, fire-and-forget
+                if (Math.random() > 0.5) {
+                    (async () => {
+                        await dreamConsolidation();
+                    })();
+                }
             }
         } else {
             // Awake: Apply energy drain
@@ -431,13 +364,16 @@ export const useCognitiveKernel = () => {
                 const ctx: EventLoop.LoopContext = {
                     soma: metabolicResult.newState,
                     limbic: currentState.limbicState,
+                    neuro: currentState.neuroState,
                     conversation: currentState.conversation,
                     autonomousMode: currentState.autonomousMode,
                     lastSpeakTimestamp: lastSpeakRef.current,
                     silenceStart: silenceStartRef.current,
                     thoughtHistory: thoughtHistoryRef.current,
                     poeticMode: currentState.poeticMode, // FIXED: Use persisted state
-                    autonomousLimitPerMinute: 3 // Budget limit for safety
+                    autonomousLimitPerMinute: 3, // Budget limit for safety
+                    chemistryEnabled: currentState.chemistryEnabled,
+                    goalState: currentState.goalState
                 };
 
                 const nextCtx = await EventLoop.runSingleStep(ctx, null, {
@@ -470,6 +406,16 @@ export const useCognitiveKernel = () => {
                 // UPDATE STATE FROM CONTEXT (If EventLoop changed it)
                 if (nextCtx.poeticMode !== currentState.poeticMode) {
                     setPoeticMode(nextCtx.poeticMode);
+                }
+
+                if (nextCtx.neuro && (nextCtx.neuro.dopamine !== currentState.neuroState.dopamine
+                    || nextCtx.neuro.serotonin !== currentState.neuroState.serotonin
+                    || nextCtx.neuro.norepinephrine !== currentState.neuroState.norepinephrine)) {
+                    setNeuroState(nextCtx.neuro);
+                }
+
+                if (nextCtx.goalState && nextCtx.goalState !== currentState.goalState) {
+                    setGoalState(nextCtx.goalState);
                 }
 
                 silenceStartRef.current = nextCtx.silenceStart;
@@ -691,6 +637,11 @@ export const useCognitiveKernel = () => {
                 frequency: resonanceField.frequency,
                 timeDilation: resonanceField.timeDilation
             },
+            neuro: {
+                dopamine: neuroState.dopamine,
+                serotonin: neuroState.serotonin,
+                norepinephrine: neuroState.norepinephrine
+            },
 
             // System Configuration
             config: {
@@ -699,8 +650,8 @@ export const useCognitiveKernel = () => {
                     awake: BiologicalClock.getDefaultAwakeTick(),
                     sleep: BiologicalClock.getDefaultSleepTick(),
                     wakeTransition: BiologicalClock.getWakeTransitionTick(),
-                    min: BiologicalClock.MIN_TICK_MS,
-                    max: BiologicalClock.MAX_TICK_MS
+                    min: MIN_TICK_MS,
+                    max: MAX_TICK_MS
                 },
                 thresholds: {
                     sleepTrigger: 20, // Energy < 20 = Sleep
@@ -714,7 +665,8 @@ export const useCognitiveKernel = () => {
                     sleepRegen: 7,
                     inputCost: 2,
                     visualCost: 15
-                }
+                },
+                chemistryEnabled
             }
         };
 
@@ -753,6 +705,7 @@ export const useCognitiveKernel = () => {
         limbicState,
         somaState,
         resonanceField,
+        neuroState,
         conversation,
         isProcessing,
         currentThought,
@@ -761,7 +714,10 @@ export const useCognitiveKernel = () => {
         setAutonomousMode,
         toggleAutonomy,
         toggleSleep,
+        chemistryEnabled,
+        toggleChemistry,
         injectStateOverride,
+        goalState,
         retryLastAction,
         handleInput
     };

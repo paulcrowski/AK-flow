@@ -14,6 +14,7 @@ function App() {
         limbicState,
         somaState,
         resonanceField,
+        neuroState,
         autonomousMode,
         conversation,
         isProcessing,
@@ -23,7 +24,10 @@ function App() {
         retryLastAction,
         toggleAutonomy,
         toggleSleep,
-        injectStateOverride
+        chemistryEnabled,
+        toggleChemistry,
+        injectStateOverride,
+        goalState
     } = useCognitiveKernel();
 
     const [input, setInput] = useState('');
@@ -299,7 +303,16 @@ function App() {
             {/* RIGHT: NEURO-MONITOR */}
             <div className="w-[500px] h-full border-l border-gray-800 hidden lg:block">
                 <ComponentErrorBoundary componentName="NeuroMonitor">
-                    <NeuroMonitor limbicState={limbicState} somaState={somaState} resonanceField={resonanceField} injectStateOverride={injectStateOverride} />
+                    <NeuroMonitor
+                        limbicState={limbicState}
+                        somaState={somaState}
+                        resonanceField={resonanceField}
+                        injectStateOverride={injectStateOverride}
+                        neuroState={neuroState}
+                        chemistryEnabled={chemistryEnabled}
+                        onToggleChemistry={toggleChemistry}
+                        goalState={goalState}
+                    />
                 </ComponentErrorBoundary>
             </div>
         </div>

@@ -23,7 +23,8 @@ export enum AgentType {
   MORAL = 'MORAL',
   MOTOR = 'MOTOR', // Output gateway
   VISUAL_CORTEX = 'VISUAL_CORTEX', // NEW: Imagination
-  GLOBAL_FIELD = 'GLOBAL_FIELD' // NEW: CEMI Resonance Field
+  GLOBAL_FIELD = 'GLOBAL_FIELD', // NEW: CEMI Resonance Field
+  NEUROCHEM = 'NEUROCHEM' // NEW: Neurotransmitter state
 }
 
 export enum PacketType {
@@ -54,12 +55,35 @@ export interface SomaState {
   isSleeping: boolean;
 }
 
+// NEW: Neurotransmitter state (Chemical Soul v1)
+export interface NeurotransmitterState {
+  dopamine: number;      // 0-100
+  serotonin: number;     // 0-100
+  norepinephrine: number;// 0-100
+}
+
 // NEW: The Quantum Field State
 export interface ResonanceField {
   coherence: number; // 0-1 (How aligned is the system?)
   intensity: number; // 0-1 (Amplitude of consciousness)
   frequency: number; // Hz (Virtual processing speed)
   timeDilation: number; // 1.0 = Normal, 0.1 = Bullet Time (Fast), 5.0 = Deep Sleep (Slow)
+}
+
+export interface Goal {
+  id: string;
+  description: string;
+  priority: number; // 0-1
+  progress: number; // 0-100
+  source: 'curiosity' | 'empathy' | 'survival' | 'user';
+  createdAt: number; // timestamp
+}
+
+export interface GoalState {
+  activeGoal: Goal | null;
+  backlog: Goal[];
+  lastUserInteractionAt: number; // ms
+  goalsFormedTimestamps: number[]; // for rate limiting
 }
 
 export interface PredictionError {
