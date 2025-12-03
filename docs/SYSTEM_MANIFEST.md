@@ -45,6 +45,7 @@ AK-FLOW is a **biological simulation** of a cognitive agent that transcends stan
 - `MemoryTrace` - Memory structure with embeddings and Hebbian strength
  - `NeurotransmitterState` - Chemical state (dopamine, serotonin, norepinephrine)
  - `Goal` / `GoalState` - Internal motivational goals and their runtime state (activeGoal, backlog, lastUserInteractionAt, safety counters)
+ - `TraitVector` - Personality temperament (arousal, verbosity, conscientiousness, socialAwareness, curiosity)
 
 **Critical Updates (V4.0):**
 - `isVisualDream` - Boolean flag for internally generated vs external memories
