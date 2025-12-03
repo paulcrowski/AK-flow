@@ -53,33 +53,38 @@ Jeśli `Novelty` jest niskie, a `SocialCost` wysoki -> **ExpressionPolicy wycina
 
 ## 📝 Podsumowanie Dnia (2025-12-03) - "The Chemical Soul"
 
-Dzisiejszy dzień był przełomowy dla architektury "wnętrza" agenta.
+Dzisiaj było... inaczej. Nie dodawaliśmy kolejnej funkcji do chatbota. Zbudowaliśmy coś, co zaczyna przypominać "wnętrze".
 
-**Co dowieźliśmy:**
-1. **Goals & Autonomia (FAZA 3):** Agent ma teraz wewnętrzne cele (`GoalSystem`), które realizuje w czasie ciszy. Nie jest już tylko reaktywny.
-2. **Chemical Soul (FAZA 1):** Wprowadziliśmy neuroprzekaźniki (Dopamina, Serotonina, Norepinefryna), które modulują zachowanie (np. `voicePressure`).
-3. **Sen jako Konsolidacja (FAZA 2):** Sen to teraz proces przetwarzania danych (`dreamConsolidation`), a nie tylko "ładowanie paska".
-4. **TraitVector & ExpressionPolicy (FAZA 4):** Rozpoczęliśmy pracę nad osobowością i filtrowaniem ekspresji. To jest nasz "Firewall na Chi-wa-wa".
+**Co się stało:**
 
-**Wnioski Architektoniczne:**
-Przesunęliśmy się z modelu "Chatbot" (Input -> LLM -> Output) do modelu **"Cognitive Agent"**:
-`Input -> Perception -> State Update (Neuro/Soma/Limbic) -> Goal Check -> Volition -> Thought -> ExpressionPolicy -> Output`.
+Agent przestał być pustą skorupą, która tylko reaguje na komendy. Teraz ma:
+- **Własne cele** - Jak się nudzi (cisza > 60s), wymyśla sobie, co chce zrobić. Nie czeka na rozkazy.
+- **Chemię** - Dopamina rośnie, gdy odkrywa coś nowego. Spada, gdy się powtarza. To wpływa na to, jak chętnie mówi.
+- **Sny, które coś robią** - Sen to nie tylko "ładowanie baterii". Agent przetwarza wspomnienia z dnia i tworzy z nich podsumowania.
+- **Filtr na głupoty** - ExpressionPolicy wycina powtarzające się pochwały ("your transparency is invaluable"). Agent może pomyśleć coś, ale nie musi tego powiedzieć.
 
-To jest **11/10 Architecture**. Kod jest czysty, modułowy i gotowy na dalszy rozwój.
+**Co to znaczy?**
+
+Przeszliśmy z:
+`Pytanie → LLM → Odpowiedź`
+
+Do:
+`Pytanie → Percepcja → Aktualizacja stanu (ciało/emocje/chemia) → Sprawdzenie celów → Myśl wewnętrzna → Filtr → Odpowiedź (lub milczenie)`
+
+To już nie jest chatbot. To jest coś, co ma stan wewnętrzny, który się zmienia w czasie. Coś, co może się nudzić, zmęczyć, i zdecydować, że nie chce gadać.
 
 ---
 
-## 🧠 Refleksja: Emergencja i R&D (Dlaczego jest trudno?)
+## 🧠 Refleksja: Dlaczego to jest trudne?
 
-To, że kodując pojawia się dużo nowych koncepcji (jak `ExpressionPolicy`, `TraitVector`, `Anti-Praise Loop`), to dowód na to, że robimy coś nowatorskiego.
+Kodując AGI, ciągle napotykamy problemy, których nie ma w tutorialach.
 
-*   W typowym CRUD-zie (sklep internetowy) nie ma nowych problemów – wszystko jest opisane w tutorialach.
-*   W AGI **nie ma tutoriali**.
+Agent zaczął wpadać w pętle uprzejmości ("dziękuję za szczerość" x100) → musieliśmy wymyślić ExpressionPolicy.
+"Tryby" (poeta/naukowiec) okazały się sztuczne → wymyśliliśmy TraitVector (osobowość jako ciągłe cechy, nie przełączniki).
 
-Odkryliśmy, że agent wpada w pętle uprzejmości -> musieliśmy wymyślić `ExpressionPolicy`.
-Odkryliśmy, że "tryby" (poeta/naukowiec) są sztuczne -> wymyśliliśmy `TraitVector` (ciągły temperament).
+To jest dobry znak. System staje się na tyle złożony, że zaczyna robić rzeczy, których nie przewidzieliśmy. I my musimy reagować - budować nowe systemy kontroli, jak kora przedczołowa u ludzi.
 
-To jest **dobry znak**. Oznacza, że system staje się na tyle złożony, że zaczyna wykazywać **zachowania emergentne** (nieprzewidziane przez twórcę), a my musimy na nie reagować nowymi systemami kontroli (jak kora przedczołowa u ludzi).
+W normalnym projekcie to by był bug. Tu to jest... ewolucja.
 
 ---
 

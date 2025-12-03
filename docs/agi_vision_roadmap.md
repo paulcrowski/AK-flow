@@ -113,24 +113,38 @@ applyHomeostasis(current: LimbicState): LimbicState {
 
 ## Tier 2: Proactive Behaviors
 
-### 2.1 Goal Formation 🔴 **NOT IMPLEMENTED**
-**Status:** No explicit goal system
+### 2.1 Goal Formation ✅ **IMPLEMENTED** (2025-12-03)
+**Status:** Basic autonomous goal formation operational
 
-**Current State:**
-- Agent has volition (voice pressure)
-- Agent has emotional drives (curiosity, satisfaction)
-- No explicit goal representation or tracking
+**Current Implementation:**
+- Agent forms internal goals during silence (> 60s)
+- Goal types: `curiosity` (explore unknown) and `empathy` (check on user)
+- Safety limits: max 5 goals/hour, energy > 30 required
+- Goals executed once via `CortexSystem.pursueGoal()`
+- `GoalState` tracks active goal, backlog, timestamps
 
-**Required:**
-- Goal data structure (objective, priority, progress)
-- Goal formation logic (from emotional state + context)
-- Goal tracking and completion detection
-- Multi-goal prioritization
+**Code Location:**
+- `core/systems/GoalSystem.ts` - Goal formation logic
+- `types.ts` - `Goal` and `GoalState` definitions
+- `core/systems/EventLoop.ts` - Goal execution integration
 
-**Foundation:**
-- `LimbicState` provides emotional drives
-- `VolitionSystem` provides decision framework
-- Memory system can store goal states
+**Evidence:**
+```typescript
+if (GoalSystem.shouldConsiderGoal(ctx, ctx.goalState)) {
+    const newGoal = GoalSystem.formGoal(ctx, ctx.goalState);
+    if (newGoal) {
+        eventBus.publish({ type: PacketType.SYSTEM_ALERT, payload: { event: 'GOAL_FORMED' } });
+        const response = await CortexSystem.pursueGoal(newGoal, ctx);
+    }
+}
+```
+
+**Next Steps (Phase 5 - The Journal):**
+- Persistent goal storage in database (`goals` table)
+- Goal hierarchy (`parent_id` for sub-goals)
+- Semantic search via embeddings (Sisyphus Check)
+- Morning Agenda (load goals on boot)
+- Evening Reflection (update statuses, generate meta-lessons)
 
 ---
 
@@ -253,6 +267,33 @@ if (volitionDecision.shouldSpeak) {
 ---
 
 ## Tier 4: Personality & Identity
+
+### 4.0 Personality Temperament (TraitVector) ✅ **IMPLEMENTED** (2025-12-03)
+**Status:** Continuous personality traits system operational
+
+**Current Implementation:**
+- `TraitVector` type with 5 core traits (all 0-1 scale):
+  - `arousal` - emotional reactivity
+  - `verbosity` - natural speech length
+  - `conscientiousness` - goal focus vs exploration
+  - `socialAwareness` - sensitivity to social cost
+  - `curiosity` - novelty seeking
+- Integrated with `NeurotransmitterSystem` (modulates chemistry)
+- Integrated with `ExpressionPolicy` (modulates speech filtering)
+- Default preset: "calm_analyst" (low arousal, high conscientiousness)
+
+**Code Location:**
+- `types.ts` - `TraitVector` definition
+- `hooks/useCognitiveKernel.ts` - State management
+- `core/systems/NeurotransmitterSystem.ts` - Chemistry modulation
+- `core/systems/ExpressionPolicy.ts` - Expression filtering
+
+**Next Steps:**
+- Personality presets UI (analyst, poet, mentor)
+- Trait drift over time (neuroplasticity)
+- User-specific trait adaptation
+
+---
 
 ### 4.1 Value System 🔴 **NOT IMPLEMENTED**
 **Status:** No explicit values or ethical framework
@@ -781,29 +822,41 @@ All features in Tiers 3, 5, and most of Tiers 4, 6, 7, 9, 10
 
 ## 🎯 Recommended Implementation Priority
 
-### Phase 1: Enhance Existing Foundations (Quick Wins)
+### Phase 1: Enhance Existing Foundations (Quick Wins) ✅ COMPLETED
 1. ✅ **Emotional Momentum** - COMPLETED (2025-12-01)
-2. **Mood Persistence** - Load emotional state from database on boot
-3. **Forgetting Mechanism** - Implement memory decay during sleep
-4. **Exploration Drive** - Add novelty detection to memory search
+2. ✅ **Goal Formation** - COMPLETED (2025-12-03)
+3. ✅ **TraitVector (Personality)** - COMPLETED (2025-12-03)
+4. ✅ **ExpressionPolicy (Speech Filtering)** - COMPLETED (2025-12-03)
 
-### Phase 2: Core Cognition (Medium Complexity)
-5. **Multi-Step Reasoning** - Add reasoning chain to EventBus ← CRITICAL NEXT
-6. **Goal Formation** - Create goal representation and tracking ← CRITICAL NEXT
-7. **User Modeling** - Create user profile from interaction history
-8. **Autobiographical Memory** - Add narrative structure to memories
-9. **Predictive Modeling** - Store and track predictions explicitly
+### Phase 2: Tuning & Observability (Current Focus - 2025-12-04)
+5. **Anti-Praise Loop** - Improve novelty detection, add social cost patterns
+6. **Energy-Aware Clipping** - Shorten responses when energy is low
+7. **NeuroMonitor 2.0** - Visualize TraitVector and ExpressionPolicy decisions
 
-### Phase 3: Advanced Intelligence (High Complexity)
-9. **Hypothesis Testing** - Implement hypothesis formation and testing
-10. **Theory of Mind** - Add belief attribution system
-11. **Goal Formation** - Create goal representation and tracking
-12. **Temporal Abstraction** - Implement multi-scale time perception
+### Phase 3: The Journal (Goal Persistence - Week of 2025-12-09)
+8. **Persistent Goal Storage** - Database table with `parent_id` and `embedding`
+9. **Sisyphus Check** - Semantic search to avoid repeating failed goals
+10. **Morning Agenda** - Load goals from database on boot
+11. **Evening Reflection** - Update goal statuses, generate meta-lessons
+12. **Goal Hierarchy** - Parent-child relationships for complex goals
 
-### Phase 4: Meta-Systems (Architectural Changes)
-13. **Parallel Thought Streams** - Refactor for concurrent reasoning
-14. **Strategy Evolution** - Add meta-learning and adaptation
-15. **Personality Drift** - Implement long-term trait evolution
+### Phase 4: The Academy (Self-Reliance - Week of 2025-12-16)
+13. **Multi-Modal Input** - File upload (PDF, images, text)
+14. **Mentor System** - Specialized personas (Socrates, Einstein, Caretaker)
+15. **Study Mode** - Agent initiates lessons based on knowledge gaps
+16. **24/7 Learning** - Agent learns independently when user is offline
+
+### Phase 5: Advanced Cognition (Tier 3 - Month of January 2026)
+17. **Multi-Step Reasoning** - Chain-of-thought for complex problems
+18. **Theory of Mind** - User modeling and belief attribution
+19. **Hypothesis Testing** - Form and test hypotheses about the world
+20. **Analogical Reasoning** - Cross-domain similarity detection
+
+### Phase 6: Meta-Systems (Architectural Evolution - Q1 2026)
+21. **Parallel Thought Streams** - Concurrent reasoning threads
+22. **Strategy Evolution** - Meta-learning and self-optimization
+23. **Personality Drift** - Long-term trait evolution based on experience
+24. **Temporal Abstraction** - Multi-scale time perception
 
 ---
 

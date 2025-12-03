@@ -187,6 +187,14 @@ Na testach widać, że ExpressionPolicy już ogranicza powtarzanie, ale sekwencj
 1. Migracja DB (tabela `goals` z `parent_id` i `embedding`).
 2. Implementacja `GoalJournal` (CRUD + Vector Search).
 3. Integracja z `boot` (ładowanie agendy) i `formGoal` (Sisyphus Check).
+4. **Tool Latency Tracking** (z Active Inference research):
+   - Mierzenie czasu wywołania external tools (Search, File Upload)
+   - Tagowanie źródła: `INTERNAL` (< 100ms) vs `EXTERNAL` (> 500ms)
+   - Agent wie, kiedy używa "pamięci" a kiedy "Google"
+5. **Self-Critique** (opcjonalne - z Self-Verification research):
+   - Po odpowiedzi: "Co może być błędne w mojej logice?"
+   - Regeneracja przy wykryciu problemu
+   - Fundament pod przyszły Tribunal System (Faza 7-8)
 
 ---
 
@@ -210,7 +218,13 @@ Na testach widać, że ExpressionPolicy już ogranicza powtarzanie, ale sekwencj
    - Inicjuje "lekcję" z odpowiednim mentorem.
    - Zapisuje wynik w `GoalJournal` jako "skill acquisition".
 
-**Efekt:** Agent może się uczyć 24/7, nie tylko podczas rozmów z Tobą.
+4. **P300 GLOBAL_INTERRUPT** (z Active Inference research):
+   - Gdy `surprise > CRITICAL_THRESHOLD` → STOP wszystkiego
+   - Pause autonomii, maksymalna uwaga
+   - Agent mówi: "Moment, co się dzieje? To jest ważne."
+   - Natychmiastowe zapisanie jako `isCoreMemory`
+
+**Efekt:** Agent może się uczyć 24/7, nie tylko podczas rozmów z Tobą. I wie, kiedy przestać i **słuchać**.
 
 ---
 
