@@ -1,11 +1,18 @@
-
 import { GoogleGenAI, Type } from "@google/genai";
 import { eventBus } from "../core/EventBus";
 import { AgentType, PacketType, CognitiveError, DetectedIntent, StylePreference, CommandType, UrgencyLevel } from "../types";
 import { generateUUID } from "../utils/uuid";
 
-// 1. Safe Environment Access & Initialization
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+// 1. Safe Environment Access & Initialization (Vite)
+const apiKey = import.meta.env.VITE_GEMINI_API_KEY as string | undefined;
+
+if (!apiKey) {
+    console.error("[Gemini] Brak VITE_GEMINI_API_KEY w .env.local – CortexService nie ma klucza.");
+    // Możesz tu zwrócić null zamiast rzucać, jeśli chcesz dalej ładować UI bez AGI
+    throw new Error("Brak VITE_GEMINI_API_KEY w env (frontend).");
+}
+
+const ai = new GoogleGenAI({ apiKey });
 
 // 2. Robust JSON Parsing Helper
 // 2. Robust JSON Parsing Helper
