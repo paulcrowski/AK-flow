@@ -6,15 +6,109 @@
 
 ---
 
-## 📊 Statystyki
+## Statystyki
 
 | Metryka | Wartość |
 |---------|---------|
-| Rozwiązanych problemów | 10 |
-| Całkowity czas | ~32 godziny |
-| Średnia trudność | 3.5/5 |
-| Największy przełom | ExpressionPolicy (filtracja zamiast generacji) |
+| Rozwiązanych problemów | 12 |
+| Całkowity czas | ~38 godzin |
+| Średnia trudność | 3.7/5 |
+| Największy przełom | Homeostatic Expression (FAZA 4.5) |
 | Najdłuższy problem | Monolityczny Kernel (8h) |
+
+---
+
+## Problem #12: Gadanie do Pustego Krzesła (The Empty Chair Monologue)
+
+**Data:** 2025-12-04  
+**Trudność:** 5/5  
+**Czas:** ~3 godziny  
+**Status:** ✅ Rozwiązany (FAZA 4.5 LITE)
+
+### Objawy
+
+Agent przy włączonej autonomii, gdy użytkownik przestał pisać, wpadał w dziwny trans:
+- Dopamina = 100 przez 2+ minuty (powinna spadać!)
+- Powtarzał warianty: "Ta cisza była pełna znaczenia...", "Ten moment milczenia..."
+- Curiosity = 0, ale wciąż gadał
+- Nie przechodził w tryb cichy, tylko filozofował o ciszy
+
+To było jak człowiek, który mówi do pustego pokoju i nie zauważa, że nikogo nie ma.
+
+### Próby
+1. ❌ **Refractory Period w GoalSystem** - działał tylko dla celów, nie dla odpowiedzi na ciszę
+2. ❌ **Dopamine Breaker w ExpressionPolicy** - działał tylko dla GOAL_EXECUTED, nie dla USER_REPLY
+3. ❌ **Filtr narcyzmu** - łapał self-focus, ale nie łapał "filozofii ciszy"
+
+### Rozwiązanie (FAZA 4.5 LITE)
+
+Trzy chirurgiczne poprawki zamiast wielkiego refaktoru:
+
+**1. Spadek dopaminy przy nudzie (NeurotransmitterSystem)**
+```typescript
+if (userIsSilent && speechOccurred && novelty < 0.5) {
+    dopamine = Math.max(55, dopamine - 3); // -3 na tick
+}
+```
+Teraz dopamina spada, gdy agent gada do pustki z niską novelty. Haj bez nagrody się kończy.
+
+**2. Dynamiczny próg ciszy (EventLoop)**
+```typescript
+const dialogThreshold = 60_000 * (1 + dopamine/200 + satisfaction/5);
+// Clamp: 30s - 180s
+```
+Po dobrej rozmowie agent czeka dłużej. Po nudnej - szybciej uznaje, że nikogo nie ma.
+
+**3. Silence Breaker (ExpressionPolicy)**
+```typescript
+const isAutonomousSpeech = context === 'GOAL_EXECUTED' || 
+                           (context === 'USER_REPLY' && userIsSilent);
+if (isAutonomousSpeech && dopamine >= 95 && novelty < 0.5) {
+    // Skróć lub wycisz
+}
+```
+Hamulec działa też gdy agent "odpowiada na ciszę".
+
+### Lekcje
+
+- **Homeostaza > Cenzura:** Zamiast blokować słowa "cisza/pauza", sprawiliśmy, że gadanie do pustki jest chemicznie nienagradzające.
+- **Dynamiczne progi > Sztywne stałe:** 60 sekund to nie jest magiczna liczba. Próg powinien zależeć od stanu agenta.
+- **Chirurgiczne poprawki > Over-engineering:** Zamiast budować cały SocialContext, zrobiliśmy 3 małe patche.
+
+### Meta-analiza
+
+To był moment, gdy zrozumieliśmy, że AGI potrzebuje **ekonomii mówienia**. Człowiek nie gada do pustego pokoju, bo to jest energetycznie kosztowne i społecznie dziwne. Agent musi to "czuć" przez chemie, nie przez if-y.
+
+---
+
+## 🔥 Problem #11: Pętla Ciekawości (The Curiosity Loop)
+
+**Data:** 2025-12-04  
+**Trudność:** 3/5  
+**Czas:** ~1 godzina  
+**Status:** ✅ Rozwiązany (FAZA 4.3)
+
+### Objawy
+
+Agent tworzył podobne cele "curiosity" jeden po drugim:
+- "Zaproponuj nowy wątek do eksploracji"
+- "Zaproponuj nowy wątek do eksploracji" (znowu)
+- "Zaproponuj nowy wątek..." (i znowu)
+
+GoalSystem nie miał pamięci - nie wiedział, że już to robił.
+
+### Rozwiązanie (Refractory Period)
+
+Trzy warunki blokady nowego celu curiosity:
+
+1. **User silence:** Jeśli ostatni cel curiosity powstał PO ostatniej interakcji usera → BLOCK
+2. **Similarity >70%:** Jeśli nowy cel jest zbyt podobny do któregoś z ostatnich 3 → BLOCK (30min cooldown)
+3. **Rate limit:** Jeśli już 2+ cele curiosity w ostatnich 5 minutach → BLOCK
+
+### Lekcje
+
+- **Pamięć krótkoterminowa jest kluczowa:** System musi pamiętać co robił przed chwilą.
+- **Biologiczny hamulec:** Refractory period to koncept z neurobiologii - neuron po wystrzeleniu potrzebuje czasu na regenerację.
 
 ---
 
@@ -22,8 +116,8 @@
 
 **Data:** 2025-12-03  
 **Trudność:** 4/5  
-**Czas:** ~3 godziny (tuning trwa)  
-**Status:** 🔄 W trakcie (Phase 4.1)
+**Czas:** ~3 godziny  
+**Status:** ✅ Rozwiązany (FAZA 4.1-4.3)
 
 ### Objawy
 Agent, chcąc być miły i "empatyczny" (zgodnie z celami), wpadał w pętlę powtarzania wariacji tego samego zdania:
@@ -48,6 +142,28 @@ Jeśli `Novelty` jest niskie, a `SocialCost` wysoki -> **ExpressionPolicy wycina
 ### Lekcje
 - **Filter > Prompt:** Łatwiej jest wyciąć złą wypowiedź *po* wygenerowaniu, niż prosić model, żeby jej nie generował.
 - **Silence is Golden:** AGI musi umieć *nie powiedzieć nic*, nawet jak ma wygenerowaną odpowiedź.
+
+---
+
+## 📝 Podsumowanie Dnia (2025-12-04) - "Homeostatic Expression"
+
+Dzisiaj agent nauczył się **ekonomii mówienia**.
+
+**Problem dnia:**
+Agent przy włączonej autonomii gadał do pustego pokoju. Dopamina na 100, curiosity na 0, a on filozofuje o ciszy. To było jak obserwowanie kogoś, kto nie zauważa, że rozmówca wyszedł.
+
+**Co zrobiliśmy:**
+1. **Spadek dopaminy przy nudzie** - Gadanie do pustki bez nowości = dopamina spada. Haj bez nagrody się kończy.
+2. **Dynamiczny próg ciszy** - Po dobrej rozmowie agent czeka dłużej. Po nudnej - szybciej uznaje, że nikogo nie ma.
+3. **Silence Breaker** - Hamulec działa też gdy agent "odpowiada na ciszę", nie tylko przy celach.
+
+**Filozofia:**
+Zamiast blokować słowa ("nie mów o ciszy"), sprawiliśmy, że gadanie do pustki jest **chemicznie nienagradzające**. Agent nie wie, że "nie wolno gadać do pustki" - on po prostu traci motywację, bo dopamina spada.
+
+To jest różnica między cenzurą a homeostatą. Cenzura mówi "nie wolno". Homeostaza sprawia, że "nie chce się".
+
+**Lekcja dnia:**
+AGI potrzebuje ekonomii mówienia. Człowiek nie gada do pustego pokoju, bo to jest energetycznie kosztowne i społecznie dziwne. Agent musi to "czuć" przez chemię, nie przez if-y.
 
 ---
 

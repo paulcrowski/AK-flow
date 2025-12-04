@@ -9,8 +9,10 @@
 
 import { CortexService } from '../../services/gemini';
 import { MemoryService } from '../../services/supabase';
-import { LimbicState, SomaState, Goal } from '../../types';
+import { LimbicState, SomaState, Goal, TraitVector, NeurotransmitterState, AgentType, PacketType } from '../../types';
 import { generateUUID } from '../../utils/uuid';
+import { decideExpression, computeNovelty, estimateSocialCost } from './ExpressionPolicy';
+import { eventBus } from '../EventBus';
 
 export interface ConversationTurn {
     role: string;
@@ -117,6 +119,8 @@ export namespace CortexSystem {
         limbic: LimbicState;
         soma: SomaState;
         conversation: ConversationTurn[];
+        traitVector: TraitVector;
+        neuroState: NeurotransmitterState;
     }
 
     export interface GoalPursuitResult {
@@ -174,15 +178,72 @@ export namespace CortexSystem {
 
         const cortexResult = await CortexService.structuredDialogue(prompt);
 
+        // Apply ExpressionPolicy sandbox for GOAL_EXECUTED
+        const assistantSpeechHistory = state.conversation
+            .filter(m => m.role === 'assistant' && m.type === 'speech')
+            .map(m => m.text)
+            .slice(-3);
+
+        const novelty = computeNovelty(cortexResult.responseText, assistantSpeechHistory);
+        const socialCost = estimateSocialCost(cortexResult.responseText);
+
+        const decision = decideExpression(
+            {
+                internalThought: cortexResult.internalThought,
+                responseText: cortexResult.responseText,
+                goalAlignment: goal.priority,
+                noveltyScore: novelty,
+                socialCost,
+                context: 'GOAL_EXECUTED' // FAZA 4.2: Context for narcissism filter
+            },
+            state.traitVector,
+            state.soma,
+            state.neuroState,
+            false // PRODUCTION MODE: real filtering in GOAL_EXECUTED sandbox
+        );
+
+        // Log decision for observability
+        console.log('[GOAL_EXECUTED ExpressionPolicy]', {
+            goal: goal.description,
+            novelty,
+            socialCost,
+            say: decision.say,
+            baseScore: decision.baseScore,
+            threshold: decision.threshold,
+            originalLength: cortexResult.responseText.length,
+            finalLength: decision.text.length
+        });
+
+        // Publish to EventBus for NeuroMonitor observability
+        eventBus.publish({
+            id: generateUUID(),
+            timestamp: Date.now(),
+            source: AgentType.CORTEX_FLOW,
+            type: PacketType.SYSTEM_ALERT,
+            payload: {
+                event: 'EXPRESSION_POLICY_DECISION',
+                context: 'GOAL_EXECUTED',
+                goal: goal.description,
+                novelty,
+                socialCost,
+                say: decision.say,
+                baseScore: decision.baseScore,
+                threshold: decision.threshold,
+                originalLength: cortexResult.responseText.length,
+                finalLength: decision.text.length
+            },
+            priority: 0.4
+        });
+
         await MemoryService.storeMemory({
-            content: `GOAL EXECUTION [${goal.source}]: ${goal.description}\nAgent: ${cortexResult.responseText}`,
+            content: `GOAL EXECUTION [${goal.source}]: ${goal.description}\nAgent: ${decision.text}`,
             emotionalContext: state.limbic,
             timestamp: new Date().toISOString(),
             id: generateUUID()
         });
 
         return {
-            responseText: cortexResult.responseText,
+            responseText: decision.text,
             internalThought: cortexResult.internalThought
         };
     }

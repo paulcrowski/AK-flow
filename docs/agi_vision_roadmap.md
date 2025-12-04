@@ -1,9 +1,17 @@
 # AK-FLOW: AGI Vision Roadmap
 **30 Advanced Features Across 10 Tiers**  
 **Status Report:** Implementation vs. Vision  
-**Last Updated:** 2025-12-02
+**Last Updated:** 2025-12-04
 
-> **Latest Achievement (2025-12-02):** Reached 9.0/10 quality through Modularność 10/10, Type Safety, Error Boundaries, Unit Tests, and Semantic Intent Detection. System is now stable, tested, and ready for "Chemical Soul" (Neurotransmitters, Dream Consolidation, Goal Formation).
+> **Latest Achievement (2025-12-04):** FAZA 4.5 "Homeostatic Expression" - Agent nauczył się ekonomii mówienia. Dopamina spada przy nudzie, dynamiczny próg ciszy, Silence Breaker. System v4.5 jest stabilny i gotowy do testów.
+
+### 🆕 Changelog (2025-12-04)
+- ✅ **Boredom Decay** - Dopamina spada gdy agent gada do pustki z niską novelty
+- ✅ **Dynamic Dialog Threshold** - Próg ciszy 30s-180s zależny od dopaminy/satisfaction
+- ✅ **Silence Breaker** - Dopamine Breaker rozszerzony na USER_REPLY + userIsSilent
+- ✅ **Refractory Period** - 3 warunki blokady pętli curiosity w GoalSystem
+- ✅ **Narcissism Filter** - Próg 15%, skalowana kara socialCost
+- ✅ **ARCHITECTURE_MAP.md** - Pełna mapa flow agenta
 
 ---
 
@@ -364,23 +372,26 @@ Load last emotional state from database on boot, implement mood trend analysis
 
 ## Tier 5: Meta-Cognition
 
-### 5.1 Learning Adaptation 🔴 **NOT IMPLEMENTED**
-**Status:** No learning rate adjustment or strategy modification
+### 5.1 Learning Adaptation 🟡 **PARTIAL**
+**Status:** Concept defined (Research 2025-12-04), implementation pending
 
 **Current State:**
 - Hebbian learning (memory strength increases)
 - No meta-learning (learning about learning)
-- No strategy adaptation
+- **NEW:** Research "Self-Adapting Language Models (SEAL)" approved for implementation
 
 **Required:**
-- Learning rate tracking
-- Performance metrics
+- Self-Edit Module v1.0 (JSON reports)
+- Synthetic data generation (implications/QA)
+- Micro-finetuning (or memory-based simulation)
 - Strategy effectiveness evaluation
-- Adaptive learning algorithms
 
 **Foundation:**
 - Memory system tracks recall frequency
 - EventBus can log learning events
+
+**Upgrade Path:**
+Implement Self-Edit Module to generate "learning notes" after tasks, then evolve to micro-SFT
 
 ---
 
@@ -405,16 +416,16 @@ Load last emotional state from database on boot, implement mood trend analysis
 
 ---
 
-### 5.3 Meta-Reflection 🔴 **NOT IMPLEMENTED**
-**Status:** No reflection on own cognitive processes
+### 5.3 Meta-Reflection 🟡 **PARTIAL**
+**Status:** Concept defined (Research 2025-12-04), implementation pending
 
 **Current State:**
 - Agent thinks about external topics
 - No self-analysis of thought quality
-- No cognitive process monitoring
+- **NEW:** Research "Training LLMs for Honesty via Confessions" approved for implementation
 
 **Required:**
-- Thought quality metrics
+- Confession Module v1.0 (JSON reports)
 - Cognitive process introspection
 - Meta-thoughts about thinking
 - Self-improvement suggestions
@@ -423,6 +434,9 @@ Load last emotional state from database on boot, implement mood trend analysis
 - EventBus publishes all cognitive events
 - Memory system can store meta-reflections
 - `currentThought` tracks processing stage
+
+**Upgrade Path:**
+Implement Confession Module ("Truth Serum Mode") to generate honesty/compliance reports after each interaction
 
 ---
 
@@ -828,10 +842,13 @@ All features in Tiers 3, 5, and most of Tiers 4, 6, 7, 9, 10
 3. ✅ **TraitVector (Personality)** - COMPLETED (2025-12-03)
 4. ✅ **ExpressionPolicy (Speech Filtering)** - COMPLETED (2025-12-03)
 
-### Phase 2: Tuning & Observability (Current Focus - 2025-12-04)
-5. **Anti-Praise Loop** - Improve novelty detection, add social cost patterns
-6. **Energy-Aware Clipping** - Shorten responses when energy is low
-7. **NeuroMonitor 2.0** - Visualize TraitVector and ExpressionPolicy decisions
+### Phase 2: Tuning & Observability ✅ COMPLETED (2025-12-04)
+5. ✅ **Anti-Praise Loop** - Novelty detection + social cost patterns (ExpressionPolicy)
+6. ✅ **Energy-Aware Clipping** - Shorten responses when energy is low
+7. ✅ **Boredom Decay** - Dopamina spada przy gadaniu do pustki
+8. ✅ **Dynamic Dialog Threshold** - Próg ciszy zależny od stanu agenta
+9. ✅ **Silence Breaker** - Hamulec dla gadania do pustki
+10. 🔄 **NeuroMonitor 2.0** - Visualize TraitVector and ExpressionPolicy decisions (TODO)
 
 ### Phase 3: The Journal (Goal Persistence - Week of 2025-12-09)
 8. **Persistent Goal Storage** - Database table with `parent_id` and `embedding`
@@ -926,20 +943,25 @@ The current AK-FLOW system provides **excellent foundations** for AGI developmen
 
 *This roadmap represents the vision for AK-FLOW's evolution from a cognitive agent to a proto-AGI system. Current implementation (v4.1 - 2025-12-01) provides a solid foundation with **47% feature coverage** (+4% from v4.0). The modular architecture, biological realism, and new central control systems (EventLoop, CortexSystem) make this system uniquely positioned for AGI development.*
 
-**Latest Update (2025-12-01):**
-- ✅ Emotional Homeostasis implemented
-- ✅ GABA Inhibition (repetition prevention)
-- ✅ Speech Refractory Period (3s cooldown)
-- ✅ Global Autonomy Budget (3 ops/min)
-- ✅ EventLoop centralization
-- ✅ CortexSystem encapsulation
-- ✅ Deep Research caching
+**Latest Update (2025-12-04):**
+- ✅ Boredom Decay (dopamina spada przy nudzie)
+- ✅ Dynamic Dialog Threshold (30s-180s)
+- ✅ Silence Breaker (hamulec dla gadania do pustki)
+- ✅ Refractory Period (blokada pętli curiosity)
+- ✅ Narcissism Filter (kara za self-focus)
+- ✅ ARCHITECTURE_MAP.md (pełna mapa flow)
+
+**Previous Updates (2025-12-03):**
+- ✅ Goal Formation System
+- ✅ TraitVector (Personality)
+- ✅ ExpressionPolicy (Speech Filtering)
+- ✅ Chemical Soul (Neurotransmitters)
 
 **Next Critical Steps:**
-1. Goal Formation System
-2. Multi-Step Reasoning
-3. Theory of Mind
-4. Temporal Abstraction
+1. NeuroMonitor 2.0 (UI dla TraitVector)
+2. The Journal (Goal Persistence)
+3. Multi-Step Reasoning
+4. Theory of Mind
 
-**AGI Progress:** 6.5/10 → Target: 8/10 in 3 months
+**AGI Progress:** 7.5/10 → Target: 8/10 in 2 months
 

@@ -92,7 +92,8 @@ export const useCognitiveKernel = () => {
         activeGoal: null,
         backlog: [],
         lastUserInteractionAt: Date.now(),
-        goalsFormedTimestamps: []
+        goalsFormedTimestamps: [],
+        lastGoals: []
     });
 
     const stateRef = useRef({ limbicState, somaState, resonanceField, conversation, autonomousMode, poeticMode, neuroState, chemistryEnabled, goalState, traitVector });
@@ -287,6 +288,13 @@ export const useCognitiveKernel = () => {
                 const novelty = computeNovelty(text, assistantSpeechHistory);
                 const socialCost = estimateSocialCost(text);
 
+                // FAZA 4.5: Oblicz czy user milczy (dynamiczny próg)
+                const BASE_DIALOG_MS = 60_000;
+                const timeSinceLastUserInput = Date.now() - (current.goalState?.lastUserInteractionAt || Date.now());
+                const dialogFactor = 1 + current.neuroState.dopamine / 200 + current.limbicState.satisfaction / 5;
+                const dialogThreshold = Math.max(30_000, Math.min(180_000, BASE_DIALOG_MS * dialogFactor));
+                const userIsSilent = timeSinceLastUserInput > dialogThreshold;
+
                 const decision = decideExpression(
                     {
                         internalThought: undefined,
@@ -294,16 +302,46 @@ export const useCognitiveKernel = () => {
                         // Heuristic: if there is an active goal, be slightly more strict about relevance
                         goalAlignment: current.goalState?.activeGoal ? 0.7 : 0.5,
                         noveltyScore: novelty,
-                        socialCost
+                        socialCost,
+                        context: 'USER_REPLY', // FAZA 4.2
+                        userIsSilent // FAZA 4.5
                     },
                     current.traitVector,
                     current.somaState,
-                    current.neuroState
+                    current.neuroState,
+                    true // SHADOW MODE: log decisions but don't block conversations
                 );
 
-                if (!decision.say) {
-                    return; // ExpressionPolicy chose silence
-                }
+                // Log shadow-mode decision for observability
+                console.log('[SHADOW MODE ExpressionPolicy]', {
+                    novelty,
+                    socialCost,
+                    say: decision.say,
+                    baseScore: decision.baseScore,
+                    threshold: decision.threshold,
+                    originalLength: text.length,
+                    finalLength: decision.text.length
+                });
+
+                // Publish to EventBus for NeuroMonitor observability
+                eventBus.publish({
+                    id: generateUUID(),
+                    timestamp: Date.now(),
+                    source: AgentType.CORTEX_FLOW,
+                    type: PacketType.SYSTEM_ALERT,
+                    payload: {
+                        event: 'EXPRESSION_POLICY_DECISION',
+                        context: 'SHADOW_MODE',
+                        novelty,
+                        socialCost,
+                        say: decision.say,
+                        baseScore: decision.baseScore,
+                        threshold: decision.threshold,
+                        originalLength: text.length,
+                        finalLength: decision.text.length
+                    },
+                    priority: 0.3
+                });
 
                 const cleanSpeech = await processOutputForTools(decision.text);
                 if (cleanSpeech.trim()) {

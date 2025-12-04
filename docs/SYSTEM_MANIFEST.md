@@ -1,8 +1,24 @@
 # AK-FLOW: Cognitive Agent Architecture Manifest
-**System Version:** 4.3 (Chemical Soul + Goals + TraitVector + ExpressionPolicy)  
-**Last Updated:** 2025-12-03  
+**System Version:** 4.5 (Homeostatic Expression + Boredom Decay)  
+**Last Updated:** 2025-12-04  
 **Architecture Type:** Active Inference (Friston) + Global Workspace Theory + Multi-Modal RAG  
 **Status:** Autonomous / Stateful / Modular / Self-Aware / Goal-Driven / Personality-Driven
+
+---
+
+## 🆕 What's New in V4.5 (2025-12-04)
+
+### FAZA 4.3: Refractory Period + Narcissism Filter
+- **GoalSystem:** 3-condition refractory period prevents curiosity goal loops
+- **ExpressionPolicy:** Narcissism filter (15% threshold) penalizes self-focused speech
+- **ExpressionPolicy:** Dopamine Breaker mutes at dopamine>=95 + novelty<0.5
+
+### FAZA 4.5 LITE: Boredom Decay + Dynamic Silence
+- **NeurotransmitterSystem:** Dopamine decays (-3/tick) when talking to silence with low novelty
+- **EventLoop:** Dynamic dialog threshold (30s-180s) based on dopamine/satisfaction
+- **ExpressionPolicy:** Silence Breaker extends Dopamine Breaker to USER_REPLY + userIsSilent
+
+**See:** `docs/ARCHITECTURE_MAP.md` for full flow diagram
 
 ---
 

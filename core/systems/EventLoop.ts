@@ -16,6 +16,18 @@ import * as GoalSystem from './GoalSystem';
 import { GoalContext } from './GoalSystem';
 import { decideExpression, computeNovelty, estimateSocialCost } from './ExpressionPolicy';
 
+// FAZA 4.5: Dynamiczny próg ciszy
+const BASE_DIALOG_MS = 60_000;
+const MIN_DIALOG_MS = 30_000;
+const MAX_DIALOG_MS = 180_000;
+
+function computeDialogThreshold(neuro: NeurotransmitterState, limbic: LimbicState): number {
+    // Dynamiczny próg: wysoka dopamina/satisfaction = dłużej czekamy
+    const factor = 1 + neuro.dopamine / 200 + limbic.satisfaction / 5;
+    const threshold = BASE_DIALOG_MS * factor;
+    return Math.max(MIN_DIALOG_MS, Math.min(MAX_DIALOG_MS, threshold));
+}
+
 export namespace EventLoop {
     export interface LoopContext {
         soma: SomaState;
@@ -31,6 +43,7 @@ export namespace EventLoop {
         chemistryEnabled?: boolean; // Feature flag for Chemical Soul
         goalState: GoalState;
         traitVector: TraitVector; // NEW: Temperament / personality vector (FAZA 4)
+        lastSpeechNovelty?: number; // FAZA 4.5: Novelty of last speech for boredom detection
     }
 
     // Module-level Budget Tracking (counters only, limit is in context)
@@ -145,6 +158,11 @@ export namespace EventLoop {
                         ...(ctx.goalState.goalsFormedTimestamps || []).filter(t => now - t < 60 * 60 * 1000),
                         now
                     ];
+                    // FAZA 4.2: Update lastGoals history (Refractory Period)
+                    ctx.goalState.lastGoals = [
+                        { description: newGoal.description, timestamp: now, source: newGoal.source },
+                        ...(ctx.goalState.lastGoals || [])
+                    ].slice(0, 3);
 
                     eventBus.publish({
                         id: `goal-formed-${now}`,
@@ -171,38 +189,16 @@ export namespace EventLoop {
                 const result = await CortexSystem.pursueGoal(goal, {
                     limbic: ctx.limbic,
                     soma: ctx.soma,
-                    conversation: ctx.conversation
-                } as any);
+                    conversation: ctx.conversation,
+                    traitVector: ctx.traitVector,
+                    neuroState: ctx.neuro
+                });
 
                 if (result.internalThought) {
                     callbacks.onMessage('assistant', result.internalThought, 'thought');
                 }
 
-                // FAZA 4: ExpressionPolicy sandbox for GOAL_EXECUTED only
-                const assistantSpeechHistory = ctx.conversation
-                    .filter(turn => (turn as any).role === 'assistant' && (turn as any).type === 'speech')
-                    .map(turn => (turn as any).text)
-                    .slice(-3);
-
-                const novelty = computeNovelty(result.responseText, assistantSpeechHistory);
-                const socialCost = estimateSocialCost(result.responseText);
-
-                const decision = decideExpression(
-                    {
-                        internalThought: result.internalThought,
-                        responseText: result.responseText,
-                        goalAlignment: 1.0, // pursueGoal is, by design, goal-focused
-                        noveltyScore: novelty,
-                        socialCost
-                    },
-                    ctx.traitVector,
-                    ctx.soma,
-                    ctx.neuro
-                );
-
-                if (decision.say) {
-                    callbacks.onMessage('assistant', decision.text, 'speech');
-                }
+                callbacks.onMessage('assistant', result.responseText, 'speech');
 
                 const executedAt = Date.now();
 
@@ -265,13 +261,27 @@ export namespace EventLoop {
                     // console.log(`Poetic Cost Applied: Score ${pScore}`);
                 }
 
+                // FAZA 4.5: Oblicz czy user milczy (dynamiczny próg)
+                const timeSinceLastUserInput = Date.now() - (ctx.goalState.lastUserInteractionAt || ctx.silenceStart);
+                const dialogThreshold = computeDialogThreshold(ctx.neuro, ctx.limbic);
+                const userIsSilent = timeSinceLastUserInput > dialogThreshold;
+                
+                // Oblicz novelty dla bieżącej wypowiedzi
+                const recentSpeech = ctx.thoughtHistory.slice(-5);
+                const currentNovelty = computeNovelty(volition.speech_content, recentSpeech);
+                ctx.lastSpeechNovelty = currentNovelty;
+
                 // NEUROTRANSMITTER UPDATE (Chemical Soul v1, Silent Influence)
                 if (ctx.chemistryEnabled) {
                     const prevDopamine = ctx.neuro.dopamine;
                     const updatedNeuro = NeurotransmitterSystem.updateNeuroState(ctx.neuro, {
                         soma: ctx.soma,
                         activity,
-                        temperament: ctx.traitVector
+                        temperament: ctx.traitVector,
+                        // FAZA 4.5: Przekazujemy kontekst nudy
+                        userIsSilent,
+                        speechOccurred: true, // W tym miejscu agent zamierza mówić
+                        novelty: currentNovelty
                     });
 
                     const wasFlow = prevDopamine > 70;

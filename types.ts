@@ -93,6 +93,7 @@ export interface GoalState {
   backlog: Goal[];
   lastUserInteractionAt: number; // ms
   goalsFormedTimestamps: number[]; // for rate limiting
+  lastGoals: { description: string; timestamp: number; source: string }[]; // NEW: For refrain mechanism
 }
 
 export interface PredictionError {
