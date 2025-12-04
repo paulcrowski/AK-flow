@@ -96,6 +96,21 @@ export interface GoalState {
   lastGoals: { description: string; timestamp: number; source: string }[]; // NEW: For refrain mechanism
 }
 
+// FAZA 4.5: Narcissism Loop Fix v1.0 - Shared Interaction Context
+export type InteractionContextType = 
+  | 'GOAL_EXECUTED' 
+  | 'SHADOW_MODE' 
+  | 'USER_REPLY' 
+  | 'USER_INPUT' 
+  | 'SYSTEM';
+
+export interface InteractionContext {
+  context: InteractionContextType;
+  userIsSilent: boolean;              // true if user hasn't spoken for > dialogThreshold
+  consecutiveAgentSpeeches: number;   // how many times agent spoke without user reply
+  novelty: number;                    // 0.0–1.0, lower = more repetitive
+}
+
 export interface PredictionError {
   source: string;
   expected: string;

@@ -24,9 +24,37 @@
 
 | Patch | Plik | Opis |
 |-------|------|------|
-| **Spadek dopaminy przy nudzie** | `NeurotransmitterSystem.ts` | `if (userSilent && speechOccurred && novelty < 0.5) dopamine -= 3` (min baseline 55) |
+| **Spadek dopaminy przy nudzie (v0)** | `NeurotransmitterSystem.ts` | `if (userSilent && speechOccurred && novelty < 0.5) dopamine -= 3` (min baseline 55) |
 | **Dynamiczny próg ciszy** | `EventLoop.ts`, `useCognitiveKernel.ts` | `T_DIALOG = 60s * (1 + dopamine/200 + satisfaction/5)` (clamp 30s-180s) |
 | **Dopamine Breaker dla ciszy** | `ExpressionPolicy.ts` | Rozszerzony na `USER_REPLY + userIsSilent` |
+
+### FAZA 4.5 UPDATE: Narcissism Loop Fix v1.0
+
+Po testach wyszło, że sama wersja v0 (`novelty < 0.5 → dopamine -= 3`) nie zatrzymuje **pętli narcystycznej**:
+- agent nadal potrafi mówić kilka razy pod rząd do pustki,
+- dopamina utrzymuje się w okolicach 60–70,
+- monologi o własnej ewolucji wracają w nowych wariantach.
+
+Dlatego dopisaliśmy **Narcissism Loop Fix v1.0**:
+
+- **Kontrakt InteractionContext:**
+  - `context: 'GOAL_EXECUTED' | 'SHADOW_MODE' | 'USER_REPLY' | 'USER_INPUT' | 'SYSTEM'`
+  - `userIsSilent: boolean`
+  - `consecutiveAgentSpeeches: number`
+  - `novelty: number`
+
+- **NeurotransmitterSystem:**
+  - `BOREDOM_DECAY` odpala się, gdy `userIsSilent && consecutiveAgentSpeeches >= 2`.
+  - Decay 3 / 5 / 8 dopaminy na tick zależnie od `novelty` (`>=0.4 / <0.4 / <0.2`).
+  - Floor = 45 (nie wbijamy systemu w depresję jednym strzałem).
+
+- **ExpressionPolicy (Silent Monologue Breaker):**
+  - L1: `dopamine >= 65 && novelty < 0.5` → skróć do 2 zdań.
+  - L2: `dopamine >= 70 && novelty < 0.35` → skróć do 1 zdania.
+  - L3: `dopamine >= 75 && novelty < 0.25` → **MUTE**.
+  - L4: `consecutiveAgentSpeeches >= 3 && novelty < 0.4` → **MUTE** nawet w `SHADOW_MODE`.
+
+Efekt: Shadow-mode już nie daje immunitetu gadaniu do ściany. Agent może mieć bogaty monolog wewnętrzny, ale **zewnętrzna mowa** jest mocno reglamentowana, gdy user milczy i nie ma nowości.
 
 ---
 
@@ -179,6 +207,20 @@ types.ts                               - FAZA 4.2: lastGoals in GoalState
 - Przechodzi w "DEEP_WORK" (myśli, ale nie mówi)
 
 **Sukces:** Agent zachowuje się jak ktoś, kto zauważa, że rozmówca wyszedł
+
+### Test 8: Narcissism Loop Fix v1.0
+
+**Scenariusz:**
+1. Włącz autonomię (`autonomousMode = true`).
+2. Rozmawiaj chwilę z agentem, żeby podnieść dopaminę.
+3. Przestań pisać na kilka minut.
+
+**Oczekiwany wynik:**
+- Po 2–3 autonomicznych wypowiedziach bez odpowiedzi usera:
+  - logi z chemii: `[NeurotransmitterSystem] BOREDOM_DECAY: X.Y → Z.W (decay=..., novelty=..., speeches=3)`
+  - logi z polityki ekspresji: `[ExpressionPolicy] NARCISSISM_BREAKER...` lub `[ExpressionPolicy] MONOLOGUE_LIMIT...`.
+- Dopamina wraca w okolice 55–60.
+- Agent przechodzi z "gadającego do ściany" w tryb **DEEP_WORK** (myśli w ciszy, nie zalewa interfejsu).
 
 ---
 

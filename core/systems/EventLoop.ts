@@ -33,6 +33,7 @@ export namespace EventLoop {
         goalState: GoalState;
         traitVector: TraitVector; // NEW: Temperament / personality vector (FAZA 4)
         lastSpeechNovelty?: number; // FAZA 4.5: Novelty of last speech for boredom detection
+        consecutiveAgentSpeeches: number; // FAZA 4.5: Narcissism Loop Fix - ile razy agent mówił bez odpowiedzi usera
     }
 
     // Module-level Budget Tracking (counters only, limit is in context)
@@ -115,6 +116,9 @@ export namespace EventLoop {
             ctx.silenceStart = Date.now();
             ctx.lastSpeakTimestamp = Date.now();
             ctx.goalState.lastUserInteractionAt = Date.now();
+            
+            // FAZA 4.5: Reset consecutive agent speeches counter (user spoke!)
+            ctx.consecutiveAgentSpeeches = 0;
         }
 
         // 3. Autonomous Volition (only if autonomousMode is ON)
@@ -267,10 +271,11 @@ export namespace EventLoop {
                         soma: ctx.soma,
                         activity,
                         temperament: ctx.traitVector,
-                        // FAZA 4.5: Przekazujemy kontekst nudy
+                        // FAZA 4.5: Narcissism Loop Fix v1.0
                         userIsSilent,
-                        speechOccurred: true, // W tym miejscu agent zamierza mówić
-                        novelty: currentNovelty
+                        speechOccurred: true,
+                        novelty: currentNovelty,
+                        consecutiveAgentSpeeches: ctx.consecutiveAgentSpeeches
                     });
 
                     const wasFlow = prevDopamine > 70;
@@ -351,6 +356,9 @@ export namespace EventLoop {
 
                     // Limit history size
                     if (ctx.thoughtHistory.length > 20) ctx.thoughtHistory.shift();
+
+                    // FAZA 4.5: Increment consecutive agent speeches counter
+                    ctx.consecutiveAgentSpeeches++;
 
                     // Emotional response to speech
                     ctx.limbic = LimbicSystem.applySpeechResponse(ctx.limbic);

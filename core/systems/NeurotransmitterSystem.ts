@@ -12,10 +12,11 @@ export interface NeuroContext {
   soma: SomaState;
   activity: ActivityType;
   temperament: TraitVector; // NEW: Temperament / personality vector (FAZA 4)
-  // FAZA 4.5: Boredom detection
-  userIsSilent?: boolean;      // true if user hasn't spoken recently
-  speechOccurred?: boolean;    // true if agent just spoke
-  novelty?: number;            // 0-1, how novel was the last speech
+  // FAZA 4.5: Narcissism Loop Fix v1.0
+  userIsSilent?: boolean;           // true if user hasn't spoken recently
+  speechOccurred?: boolean;         // true if agent just spoke
+  novelty?: number;                 // 0-1, how novel was the last speech
+  consecutiveAgentSpeeches?: number; // how many times agent spoke without user reply
 }
 
 export const clampNeuro = (v: number) => Math.max(0, Math.min(100, v));
@@ -33,15 +34,32 @@ export const NeurotransmitterSystem = {
 
     const traits = ctx.temperament;
 
-    // FAZA 4.5: Spadek dopaminy przy nudzie (gadanie do pustki bez nowości)
-    // Jeśli user milczy, agent mówił, i novelty < 0.5 → dopamina spada
+    // =========================================================================
+    // FAZA 4.5: Narcissism Loop Fix v1.0 - BOREDOM_DECAY
+    // Gadanie do ściany = realny koszt dopaminy
+    // =========================================================================
     const DOPAMINE_BASELINE = 55;
-    const BOREDOM_DECAY = 3; // punkty na tick
+    const DOPAMINE_FLOOR = 45; // Nie schodzimy poniżej, żeby nie wbić w depresję
+    const consecutiveSpeeches = ctx.consecutiveAgentSpeeches ?? 0;
+    const novelty = ctx.novelty ?? 1;
     
-    if (ctx.userIsSilent && ctx.speechOccurred && (ctx.novelty ?? 1) < 0.5) {
-        // Nuda = spadek dopaminy, ale nie poniżej baseline
-        dopamine = Math.max(DOPAMINE_BASELINE, dopamine - BOREDOM_DECAY);
-        console.log(`[NeurotransmitterSystem] BOREDOM_DECAY: dopamine ${prev.dopamine.toFixed(0)} → ${dopamine.toFixed(0)} (novelty=${(ctx.novelty ?? 1).toFixed(2)}, userSilent=${ctx.userIsSilent})`);
+    // Warunek: user milczy + agent gadał 2+ razy pod rząd
+    const speakingToWall = ctx.userIsSilent && consecutiveSpeeches >= 2;
+    
+    if (speakingToWall) {
+        // Dynamiczny decay zależny od novelty
+        let decay = 3.0; // bazowa kara
+        
+        if (novelty < 0.4) decay = 5.0;  // powtarzanie się
+        if (novelty < 0.2) decay = 8.0;  // ciężkie powtarzanie
+        
+        const prevDopa = dopamine;
+        dopamine = Math.max(DOPAMINE_FLOOR, dopamine - decay);
+        
+        console.log(
+            `[NeurotransmitterSystem] BOREDOM_DECAY: ${prevDopa.toFixed(1)} → ${dopamine.toFixed(1)} ` +
+            `(decay=${decay.toFixed(1)}, novelty=${novelty.toFixed(2)}, speeches=${consecutiveSpeeches})`
+        );
     }
 
     // Base homeostasis toward mid-levels (no punishments, only gentle pull to baseline)
@@ -61,16 +79,25 @@ export const NeurotransmitterSystem = {
 
     if (ctx.activity === 'SOCIAL') {
       // Curious + socially aware agents get more reward from social connection
-      const dopMult = 0.5 + curiosity;           // 0.5 - 1.5
-      const serMult = 0.5 + 0.5 * socialAwareness; // 0.5 - 1.0
-      dopamine += 2 * energyFactor * dopMult;
-      serotonin += 1.5 * energyFactor * serMult;
+      // BUT: only if user is NOT silent (real social interaction)
+      if (!ctx.userIsSilent) {
+        const dopMult = 0.5 + curiosity;           // 0.5 - 1.5
+        const serMult = 0.5 + 0.5 * socialAwareness; // 0.5 - 1.0
+        dopamine += 2 * energyFactor * dopMult;
+        serotonin += 1.5 * energyFactor * serMult;
+      }
     } else if (ctx.activity === 'CREATIVE') {
       // Curiosity and arousal amplify creative boosts
+      // BUT: reduced reward if user is silent (no audience = less dopamine)
       const dopMult = 0.5 + curiosity;           // 0.5 - 1.5
       const neMult = 0.75 + 0.5 * arousal;       // 0.75 - 1.25
-      dopamine += 3 * energyFactor * dopMult;
+      const silencePenalty = ctx.userIsSilent ? 0.3 : 1.0; // 70% less dopamine if talking to empty room
+      dopamine += 3 * energyFactor * dopMult * silencePenalty;
       norepinephrine += 2 * energyFactor * neMult;
+      
+      if (ctx.userIsSilent && silencePenalty < 1) {
+        console.log(`[NeurotransmitterSystem] CREATIVE_SILENCE_PENALTY: dopamine boost reduced by ${((1-silencePenalty)*100).toFixed(0)}%`);
+      }
     } else if (ctx.activity === 'REPETITIVE') {
       // High conscientiousness: less reward for repetition (but still non-negative)
       const repMult = 1 - 0.5 * conscientiousness; // 1.0 - 0.5

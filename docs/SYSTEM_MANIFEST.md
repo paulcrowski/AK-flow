@@ -14,9 +14,14 @@
 - **ExpressionPolicy:** Dopamine Breaker mutes at dopamine>=95 + novelty<0.5
 
 ### FAZA 4.5 LITE: Boredom Decay + Dynamic Silence
-- **NeurotransmitterSystem:** Dopamine decays (-3/tick) when talking to silence with low novelty
+- **NeurotransmitterSystem:** Wersja v0 – dopamine decays (-3/tick) when talking to silence with low novelty
 - **EventLoop:** Dynamic dialog threshold (30s-180s) based on dopamine/satisfaction
 - **ExpressionPolicy:** Silence Breaker extends Dopamine Breaker to USER_REPLY + userIsSilent
+
+### FAZA 4.5.1: Narcissism Loop Fix v1.0
+- **types.ts:** Dodano `InteractionContextType` i `InteractionContext` (context, `userIsSilent`, `consecutiveAgentSpeeches`, `novelty`) jako wspólny kontrakt dla chemii i polityki ekspresji.
+- **NeurotransmitterSystem:** `BOREDOM_DECAY` odpala się, gdy `userIsSilent && consecutiveAgentSpeeches >= 2`, z dynamicznym decay 3 / 5 / 8 zależnie od novelty (`>=0.4 / <0.4 / <0.2`), z dolnym progiem dopaminy 45.
+- **ExpressionPolicy:** Silent Monologue / Narcissism Loop Breaker – progresywne skracanie i mutowanie gadania do ściany, również w `SHADOW_MODE` gdy user faktycznie milczy.
 
 **See:** `docs/ARCHITECTURE_MAP.md` for full flow diagram
 
@@ -271,13 +276,15 @@ AK-FLOW is a **biological simulation** of a cognitive agent that transcends stan
 
 **Features:**
 - `applyHomeostasis(value, target, rate)` – łagodna relaksacja do wartości docelowej.
-- `updateNeuroState(prev, context)` – modyfikacje zależne od aktywności (SOCIAL/CREATIVE/IDLE) i stanu somy.
+- `updateNeuroState(prev, context)` – modyfikacje zależne od aktywności (SOCIAL/CREATIVE/IDLE), stanu somy oraz kontekstu interakcji (`userIsSilent`, `consecutiveAgentSpeeches`, `novelty`).
 - Wyznacza stan FLOW (`dopamine > 70`) bez wprowadzania negatywnych efektów typu depresja.
+- `BOREDOM_DECAY` – przy `userIsSilent && consecutiveAgentSpeeches >= 2` dopamina spada o 3 / 5 / 8 punktów (zależnie od novelty), ale nigdy poniżej 45.
+- `CREATIVE_SILENCE_PENALTY` – kreatywna aktywność przy milczącym użytkowniku daje dużo mniejszy dopaminowy reward (mniej nagrody za „występ do pustej sali”).
 
 **Integration:**
 - Wywoływany w `EventLoop.runSingleStep` po detekcji aktywności.
 - Steruje pojedynczą wajchą v1: bias `voicePressure` (gadatliwość) podczas autonomicznych myśli.
-- Generuje logi `CHEM_FLOW_ON/OFF` i `DOPAMINE_VOICE_BIAS` dla pełnej obserwowalności.
+- Generuje logi `CHEM_FLOW_ON/OFF`, `DOPAMINE_VOICE_BIAS` oraz `BOREDOM_DECAY` / `CREATIVE_SILENCE_PENALTY` dla pełnej obserwowalności.
 
 ---
 
@@ -633,6 +640,18 @@ CREATE TABLE memories (
 ---
 
 ## 📝 CHANGELOG
+
+### [4.5.1] - 2025-12-04 - Narcissism Loop Fix v1.0
+
+#### 🧠 InteractionContext & Boredom Decay v2
+- Dodano `InteractionContextType` + `InteractionContext` łączące ExpressionPolicy i NeurotransmitterSystem (context, `userIsSilent`, `consecutiveAgentSpeeches`, `novelty`).
+- `NeurotransmitterSystem.updateNeuroState` wykorzystuje teraz licznik `consecutiveAgentSpeeches` do stosowania `BOREDOM_DECAY` tylko przy realnym gadaniu do ściany.
+
+#### 🗣️ Silent Monologue / Narcissism Loop Breaker
+- `ExpressionPolicy` otrzymuje `consecutiveAgentSpeeches` i stosuje progresywne skracanie/wyciszanie autonomicznych wypowiedzi w ciszy.
+- `SHADOW_MODE` przestał być świętą krową: Narcissism Breaker może zmutować wyjście, gdy user długo milczy, a agent kręci się w kółko wokół siebie.
+
+---
 
 ### [4.2.0] - 2025-12-03 - Chemical Soul & Goal Formation
 

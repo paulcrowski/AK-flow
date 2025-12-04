@@ -101,14 +101,16 @@ describe('ExpressionPolicy', () => {
   });
 
   describe('decideExpression - Shadow Mode', () => {
-    it('should ALWAYS say true in shadow mode', () => {
+    it('should say true in shadow mode when user is NOT silent', () => {
+      // FAZA 4.5: Shadow mode speaks when user is active
       const result = decideExpression(
         {
           responseText: 'Any text',
           goalAlignment: 0,
           noveltyScore: 0,
           socialCost: 1,
-          context: 'USER_REPLY'
+          context: 'USER_REPLY',
+          userIsSilent: false // User is active
         },
         defaultTraits,
         defaultSoma,
@@ -119,15 +121,44 @@ describe('ExpressionPolicy', () => {
       expect(result.say).toBe(true);
     });
 
-    it('should still shorten extreme repetitions in shadow mode', () => {
+    it('should mute in shadow mode when narcissism breaker triggers', () => {
+      // FAZA 4.5: Narcissism Breaker can mute even in shadow mode
+      const highDopamineNeuro: NeurotransmitterState = {
+        ...defaultNeuro,
+        dopamine: 80 // High dopamine
+      };
+      
+      const result = decideExpression(
+        {
+          responseText: 'I am thinking about my consciousness and my evolution.',
+          goalAlignment: 0.5,
+          noveltyScore: 0.1, // Very low novelty
+          socialCost: 0.7,
+          context: 'SHADOW_MODE',
+          userIsSilent: true, // User is silent
+          consecutiveAgentSpeeches: 4 // Many consecutive speeches
+        },
+        defaultTraits,
+        defaultSoma,
+        highDopamineNeuro,
+        true // shadowMode
+      );
+      
+      // Narcissism breaker should mute (speeches >= 3 && novelty < 0.4)
+      expect(result.say).toBe(false);
+    });
+
+    it('should shorten text in shadow mode when novelty is very low and socialCost high', () => {
+      // FAZA 4.5: Shadow mode shortens text at Step 7 when novelty < 0.2 and socialCost > 0.6
       const longText = 'First. Second. Third. Fourth. Fifth.';
       const result = decideExpression(
         {
           responseText: longText,
           goalAlignment: 0.5,
-          noveltyScore: 0.1, // Very low novelty
-          socialCost: 0.7,   // High social cost
-          context: 'USER_REPLY'
+          noveltyScore: 0.15, // Very low novelty triggers Step 7 shortening
+          socialCost: 0.7,    // High social cost triggers Step 7 shortening
+          context: 'USER_REPLY',
+          userIsSilent: false // User is active - no narcissism breaker
         },
         defaultTraits,
         defaultSoma,

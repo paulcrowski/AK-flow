@@ -56,7 +56,22 @@ describe('EventLoop', () => {
             thoughtHistory: [],
             poeticMode: false,
             autonomousLimitPerMinute: 2,
-            chemistryEnabled: false
+            chemistryEnabled: false,
+            goalState: {
+                activeGoal: null,
+                backlog: [],
+                lastUserInteractionAt: Date.now(),
+                goalsFormedTimestamps: [],
+                lastGoals: []
+            },
+            traitVector: {
+                arousal: 0.3,
+                verbosity: 0.4,
+                conscientiousness: 0.8,
+                socialAwareness: 0.8,
+                curiosity: 0.6
+            },
+            consecutiveAgentSpeeches: 0
         };
 
         mockCallbacks = {

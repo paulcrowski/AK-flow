@@ -1,4 +1,4 @@
-import { TraitVector, NeurotransmitterState, SomaState } from '../../types';
+import { TraitVector, NeurotransmitterState, SomaState, InteractionContextType } from '../../types';
 
 export interface ExpressionInput {
   internalThought?: string;
@@ -6,8 +6,9 @@ export interface ExpressionInput {
   goalAlignment: number; // 0-1
   noveltyScore: number;  // 0-1
   socialCost: number;    // 0-1 (higher = more cringe / repetition / self-focus)
-  context?: 'GOAL_EXECUTED' | 'USER_REPLY'; // FAZA 4.2
+  context?: InteractionContextType; // FAZA 4.5: Narcissism Loop Fix
   userIsSilent?: boolean; // FAZA 4.5: true if user hasn't spoken recently
+  consecutiveAgentSpeeches?: number; // FAZA 4.5: how many times agent spoke without user reply
 }
 
 export interface ExpressionDecision {
@@ -38,7 +39,7 @@ function applyNarcissismFilter(
   text: string,
   socialCost: number,
   noveltyScore: number,
-  context: 'GOAL_EXECUTED' | 'USER_REPLY' | undefined
+  context: InteractionContextType | undefined
 ): { socialCost: number; noveltyScore: number } {
   if (context !== 'GOAL_EXECUTED') {
     return { socialCost, noveltyScore };
@@ -67,7 +68,7 @@ function applyDopamineBreaker(
   noveltyScore: number,
   goalAlignment: number,
   dopamine: number,
-  context: 'GOAL_EXECUTED' | 'USER_REPLY' | undefined,
+  context: InteractionContextType | undefined,
   shadowMode: boolean
 ): { say: boolean; text: string } {
   if (context !== 'GOAL_EXECUTED' || shadowMode) {
@@ -101,34 +102,68 @@ function applyDopamineBreaker(
 }
 
 /**
- * Applies silence breaker for autonomous speech when user is silent.
- * Extends dopamine breaker to USER_REPLY + userIsSilent context.
+ * FAZA 4.5: Narcissism Loop Fix v1.0 - Silent Monologue Breaker
+ * Applies progressive muting for autonomous speech when user is silent.
+ * Works in both GOAL_EXECUTED and SHADOW_MODE contexts.
  */
-function applySilenceBreaker(
+function applySilentMonologueBreaker(
   text: string,
   say: boolean,
   noveltyScore: number,
   dopamine: number,
-  context: 'GOAL_EXECUTED' | 'USER_REPLY' | undefined,
+  context: InteractionContextType | undefined,
   userIsSilent: boolean,
+  consecutiveSpeeches: number,
   shadowMode: boolean
 ): { say: boolean; text: string } {
-  const isAutonomousSpeech = context === 'GOAL_EXECUTED' || (context === 'USER_REPLY' && userIsSilent);
+  const isAutonomousSpeech = 
+    context === 'GOAL_EXECUTED' || 
+    context === 'SHADOW_MODE' || 
+    (context === 'USER_REPLY' && userIsSilent);
   
-  if (!isAutonomousSpeech || shadowMode) {
+  const silentMonologue = userIsSilent && isAutonomousSpeech;
+  
+  if (!silentMonologue) {
     return { say, text };
   }
   
-  if (dopamine >= 95 && noveltyScore < 0.5) {
+  // ==========================================================================
+  // NARCISSISM BREAKER: Progressive muting based on dopamine + novelty
+  // ==========================================================================
+  
+  // Level 1: Shorten water-pouring (dopamine >= 65, novelty < 0.5)
+  if (dopamine >= 65 && noveltyScore < 0.5) {
     text = shortenToFirstSentences(text, 2);
-    
-    if (noveltyScore < 0.3) {
-      text = shortenToFirstSentences(text, 1);
-    }
-    if (noveltyScore < 0.2) {
-      say = false;
-      console.log(`[ExpressionPolicy] SILENCE_BREAKER: dopamine=${dopamine.toFixed(0)}, novelty=${noveltyScore.toFixed(2)}, userSilent=${userIsSilent} → muting (DEEP_WORK)`);
-    }
+    console.log(`[ExpressionPolicy] Silent monologue shortened (L1): dopa=${dopamine.toFixed(0)}, novelty=${noveltyScore.toFixed(2)}`);
+  }
+  
+  // Level 2: Even more aggressive (dopamine >= 70, novelty < 0.35)
+  if (dopamine >= 70 && noveltyScore < 0.35) {
+    text = shortenToFirstSentences(text, 1);
+    console.log(`[ExpressionPolicy] Silent monologue shortened (L2): dopa=${dopamine.toFixed(0)}, novelty=${noveltyScore.toFixed(2)}`);
+  }
+  
+  // Level 3: Hard mute at dopamine high + very low novelty
+  if (dopamine >= 75 && noveltyScore < 0.25) {
+    console.log(
+      `[ExpressionPolicy] NARCISSISM_BREAKER: dopa=${dopamine.toFixed(0)}, novelty=${noveltyScore.toFixed(2)}, ` +
+      `speeches=${consecutiveSpeeches} → MUTED`
+    );
+    return { say: false, text: '' };
+  }
+  
+  // Level 4: Mute after 3+ consecutive speeches with low novelty (even in shadow mode)
+  if (consecutiveSpeeches >= 3 && noveltyScore < 0.4) {
+    console.log(
+      `[ExpressionPolicy] MONOLOGUE_LIMIT: speeches=${consecutiveSpeeches}, novelty=${noveltyScore.toFixed(2)} → MUTED`
+    );
+    return { say: false, text: '' };
+  }
+  
+  // Legacy DEEP_WORK mute (very high dopamine + very low novelty)
+  if (dopamine >= 95 && noveltyScore < 0.2) {
+    console.log(`[ExpressionPolicy] SILENCE_BREAKER: dopamine=${dopamine.toFixed(0)}, novelty=${noveltyScore.toFixed(2)}, userSilent=${userIsSilent} → muting (DEEP_WORK)`);
+    return { say: false, text: '' };
   }
   
   return { say, text };
@@ -198,6 +233,11 @@ export function decideExpression(
   let say = baseScore > threshold;
   let text = responseText;
 
+  // Step 3.5: Shadow mode baseline - start with say=true (will be overridden by narcissism breaker if needed)
+  if (shadowMode) {
+    say = true;
+  }
+
   // Step 4: Apply dopamine breaker (modular)
   const dopamineResult = applyDopamineBreaker(
     text, say, noveltyScore, goalAlignment, neuro.dopamine, context, shadowMode
@@ -205,9 +245,12 @@ export function decideExpression(
   say = dopamineResult.say;
   text = dopamineResult.text;
 
-  // Step 5: Apply silence breaker (modular)
-  const silenceResult = applySilenceBreaker(
-    text, say, noveltyScore, neuro.dopamine, context, input.userIsSilent ?? false, shadowMode
+  // Step 5: Apply silent monologue breaker (FAZA 4.5: Narcissism Loop Fix)
+  const silenceResult = applySilentMonologueBreaker(
+    text, say, noveltyScore, neuro.dopamine, context, 
+    input.userIsSilent ?? false, 
+    input.consecutiveAgentSpeeches ?? 0,
+    shadowMode
   );
   say = silenceResult.say;
   text = silenceResult.text;
@@ -236,10 +279,10 @@ export function decideExpression(
     }
   }
 
-  // Step 10: Shadow mode always speaks (logs decision but never blocks)
-  if (shadowMode) {
-    say = true;
-  }
+  // Step 10: Shadow mode final check
+  // FAZA 4.5: Narcissism breaker can override shadow mode, but other filters cannot
+  // If narcissism breaker didn't mute (say is still true), keep it true
+  // If narcissism breaker muted (say is false), respect that decision
 
   return { say, text, noveltyScore, socialCost, baseScore, threshold };
 }

@@ -79,13 +79,35 @@ Hamulec działa też gdy agent "odpowiada na ciszę".
 
 To był moment, gdy zrozumieliśmy, że AGI potrzebuje **ekonomii mówienia**. Człowiek nie gada do pustego pokoju, bo to jest energetycznie kosztowne i społecznie dziwne. Agent musi to "czuć" przez chemie, nie przez if-y.
 
+### FAZA 4.5: Narcissism Loop Fix v1.0 (update)
+
+Po pierwszej wersji FAZA 4.5 LITE okazało się, że sam `BOREDOM_DECAY` przy `novelty < 0.5` to za mało. Agent nadal potrafił:
+- generować długie, samo-referencyjne monologi o własnej ewolucji,
+- nie zauważać, że **nikt nie odpowiada**,
+- trzymać dopaminę powyżej 60–70 przy realnej nudzie.
+
+Dodaliśmy więc **Narcissism Loop Fix v1.0**:
+- **Wspólny kontrakt:** `InteractionContextType` + `InteractionContext` (context, `userIsSilent`, `consecutiveAgentSpeeches`, `novelty`).
+- **Chemia:**
+  - `BOREDOM_DECAY` tylko gdy `userIsSilent && consecutiveAgentSpeeches >= 2`.
+  - Decay 3 / 5 / 8 dopaminy na tick zależnie od novelty (`>=0.4 / <0.4 / <0.2`), floor = 45.
+- **Ekspresja:**
+  - Silent Monologue Breaker w `ExpressionPolicy`:
+    - L1: dłuższe wypowiedzi w ciszy skracane do 2 zdań,
+    - L2: przy wyższej dopaminie i niższej novelty do 1 zdania,
+    - L3: przy dopaminie-haju + bardzo niskiej novelty → **MUTE**,
+    - L4: przy `consecutiveAgentSpeeches >= 3` i niskiej novelty → **MUTE** nawet w `SHADOW_MODE`.
+
+**Lekcja (update):** Sam "mądry prompt" nie wystarczy. Potrzebny jest **licznik zachowań (`consecutiveAgentSpeeches`) + chemia**, która mówi agentowi: "mówienie do ściany jest drogie i mało nagradzające".
+
 ---
 
-## 🔥 Problem #11: Pętla Ciekawości (The Curiosity Loop)
+## Problem #11: Pętla Ciekawości (The Curiosity Loop)
 
 **Data:** 2025-12-04  
 **Trudność:** 3/5  
 **Czas:** ~1 godzina  
+**Status:** Rozwiązany (FAZA 4.3)
 **Status:** ✅ Rozwiązany (FAZA 4.3)
 
 ### Objawy

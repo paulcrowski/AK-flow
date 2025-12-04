@@ -107,6 +107,7 @@ export const useCognitiveKernel = () => {
     const thoughtHistoryRef = useRef<string[]>([]);
     const lastSpeakRef = useRef<number>(0);
     const lastUserInputRef = useRef<string | null>(null);
+    const consecutiveAgentSpeechesRef = useRef<number>(0); // FAZA 4.5: Narcissism Loop Fix
 
     // Sync Ref
     useEffect(() => {
@@ -452,7 +453,8 @@ export const useCognitiveKernel = () => {
                     autonomousLimitPerMinute: 3, // Budget limit for safety
                     chemistryEnabled: currentState.chemistryEnabled,
                     goalState: currentState.goalState,
-                    traitVector: currentState.traitVector
+                    traitVector: currentState.traitVector,
+                    consecutiveAgentSpeeches: consecutiveAgentSpeechesRef.current // FAZA 4.5: Narcissism Loop Fix
                 };
 
                 const nextCtx = await EventLoop.runSingleStep(ctx, null, {
@@ -500,6 +502,7 @@ export const useCognitiveKernel = () => {
                 silenceStartRef.current = nextCtx.silenceStart;
                 lastSpeakRef.current = nextCtx.lastSpeakTimestamp;
                 thoughtHistoryRef.current = nextCtx.thoughtHistory;
+                consecutiveAgentSpeechesRef.current = nextCtx.consecutiveAgentSpeeches; // FAZA 4.5: Sync counter
             } catch (e) {
                 console.warn("EventLoop Error", e);
             } finally {
@@ -607,6 +610,9 @@ export const useCognitiveKernel = () => {
     const handleInput = async (input: string) => {
         lastUserInputRef.current = input;
         addMessage('user', input);
+
+        // FAZA 4.5: Reset consecutive agent speeches (user spoke!)
+        consecutiveAgentSpeechesRef.current = 0;
 
         if (somaState.isSleeping) {
             setSomaState(prev => SomaSystem.forceWake(prev));
