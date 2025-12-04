@@ -18,14 +18,23 @@
 - **EventLoop:** Dynamic dialog threshold (30s-180s) based on dopamine/satisfaction
 - **ExpressionPolicy:** Silence Breaker extends Dopamine Breaker to USER_REPLY + userIsSilent
 
-### FAZA 4.5.1: Narcissism Loop Fix v1.0
-- **types.ts:** Dodano `InteractionContextType` i `InteractionContext` (context, `userIsSilent`, `consecutiveAgentSpeeches`, `novelty`) jako wspólny kontrakt dla chemii i polityki ekspresji.
-- **NeurotransmitterSystem:** `BOREDOM_DECAY` odpala się, gdy `userIsSilent && consecutiveAgentSpeeches >= 2`, z dynamicznym decay 3 / 5 / 8 zależnie od novelty (`>=0.4 / <0.4 / <0.2`), z dolnym progiem dopaminy 45.
-- **ExpressionPolicy:** Silent Monologue / Narcissism Loop Breaker – progresywne skracanie i mutowanie gadania do ściany, również w `SHADOW_MODE` gdy user faktycznie milczy.
+### FAZA 4.5.1: Narcissism
+### V4.5 (FAZA AKTUALNA - COMPLETED)
+**Focus:** Narcissism Loop Fix & BOREDOM_DECAY
+- **InteractionContext**: Nowy kontekst (userIsSilent, consecutiveAgentSpeeches, novelty).
+- **Narcissism Loop Fix v1.0**:
+    - Wykrywanie monologów (consecutiveAgentSpeeches > 2).
+    - Progresywne mutowanie przy braku nowości (ExpressionPolicy).
+    - Nowy BOREDOM_DECAY: dopamina spada, gdy gadamy do pustki.
+- **Shadow Mode Tuning**: Shadow Mode szanuje teraz breakery narcyzmu.
 
-**See:** `docs/ARCHITECTURE_MAP.md` for full flow diagram
-
----
+### V5.0 (NEXT PHASE - THE SELF ENGINE)
+**Focus:** Identity, Memory & Persistence (Blueprint 11/10)
+- **CoreIdentity**: Twardy, wersjonowany obiekt w DB (Traits + Values + Narrative).
+- **Memory Engine**: Przejście z surowych logów na epizody (Event + Emotion + Lesson).
+- **GoalJournal**: Pamięć przyszłości i długoterminowych misji.
+- **DreamConsolidation 2.0**: Sen jako proces edycji osobowości, a nie tylko streszczenie.
+- **Boot Protocol v2**: Start dnia na bazie tożsamości i celów, z neutralną chemią.
 
 ## 🎯 Core Philosophy
 

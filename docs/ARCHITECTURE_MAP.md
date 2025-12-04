@@ -235,7 +235,47 @@ USER INPUT
 
 ---
 
-## ✅ Zasady architektury AK-FLOW
+## 4. THE SELF ENGINE (Identity & Persistence)
+
+To jest "wnętrze" agenta. Mechanizm, który zapewnia ciągłość tożsamości, pamięć autobiograficzną i długoterminowe cele. Oddziela trwałe "JA" od chwilowej "CHEMII".
+
+### 4.1. CoreIdentity (Genotype)
+*Trwały, wersjonowany obiekt w bazie danych. Zmienia się rzadko.*
+- **TraitVector**: Temperament (np. `curiosity`, `conscientiousness`) - "DNA" zachowania.
+- **Values**: Sztywne zasady moralne/operacyjne (np. "chronię usera przed cognitive load").
+- **NarrativeTraits**: Cechy nabyte z doświadczenia (np. "mam tendencję do filozofowania przy ciszy").
+
+### 4.2. Memory Engine (Autobiography)
+*Nie surowe logi, ale przetworzone epizody.*
+- **Episodic Memory**: Zdarzenie + Emocja + Skutek.
+- **Semantic Memory**: Wyciągnięte reguły o świecie i userze.
+- **Emotional Markers**: Jak dana sytuacja wpłynęła na `LimbicState`.
+
+### 4.3. GoalJournal (The Arrow of Time)
+*Pamięć przyszłości i kontekstu.*
+- **Missions**: Cele wieczne (np. "optymalizacja architektury").
+- **Active Threads**: Co robimy w tej fazie? (np. "Faza 5: Memory Implementation").
+- **Next Steps**: Co zostało przerwane przy shutdown?
+
+### 4.4. DreamConsolidation 2.0 (Sleep Cycle)
+*Proces porządkowania chaosu w mądrość.*
+1. **Input**: Epizody z dnia + Logi.
+2. **Process**: LLM destyluje wnioski.
+3. **Output**:
+   - 3-5 "Lekcji dnia" (do Pamięci).
+   - 1-2 "Zmiany zachowania" (do NarrativeTraits).
+   - Aktualizacja GoalJournal (co dalej).
+
+### 4.5. Boot Protocol v2 (The Awakening)
+*Procedura startowa zapewniająca ciągłość bez "kaca emocjonalnego".*
+1. **Load Identity**: Pobierz `CoreIdentity` + `NarrativeTraits`.
+2. **Load Context**: Pobierz `GoalJournal` + Ostatnie `DreamSummary`.
+3. **Reset Chemistry**: Ustaw `Neuro/Limbic` na neutralny baseline (z lekkim odchyleniem od trendu, ale clamp na ekstrema).
+4. **Synthesize Persona**: Zbuduj dynamiczny prompt "Kim jestem dzisiaj" na bazie powyższych.
+
+---
+
+## 5. Data Flow Architecturey AK-FLOW
 
 1. **Homeostaza > Cenzura** - Nie blokujemy słów, modulujemy chemię
 2. **Dynamiczne progi > Sztywne stałe** - Progi zależą od stanu agenta
