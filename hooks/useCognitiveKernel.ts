@@ -5,6 +5,7 @@ import { CortexService } from '../services/gemini';
 import { MemoryService } from '../services/supabase';
 import { AgentType, PacketType, LimbicState, SomaState, CognitiveError, ResonanceField, NeurotransmitterState, GoalState, TraitVector } from '../types';
 import { decideExpression, computeNovelty, estimateSocialCost } from '../core/systems/ExpressionPolicy';
+import { isUserSilent } from '../core/utils/thresholds';
 import { generateUUID } from '../utils/uuid';
 import * as SomaSystem from '../core/systems/SomaSystem';
 import * as LimbicSystem from '../core/systems/LimbicSystem';
@@ -289,11 +290,11 @@ export const useCognitiveKernel = () => {
                 const socialCost = estimateSocialCost(text);
 
                 // FAZA 4.5: Oblicz czy user milczy (dynamiczny próg)
-                const BASE_DIALOG_MS = 60_000;
-                const timeSinceLastUserInput = Date.now() - (current.goalState?.lastUserInteractionAt || Date.now());
-                const dialogFactor = 1 + current.neuroState.dopamine / 200 + current.limbicState.satisfaction / 5;
-                const dialogThreshold = Math.max(30_000, Math.min(180_000, BASE_DIALOG_MS * dialogFactor));
-                const userIsSilent = timeSinceLastUserInput > dialogThreshold;
+                const userIsSilent = isUserSilent(
+                    current.goalState?.lastUserInteractionAt || Date.now(),
+                    current.neuroState,
+                    current.limbicState
+                );
 
                 const decision = decideExpression(
                     {

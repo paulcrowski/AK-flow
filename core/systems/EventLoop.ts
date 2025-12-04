@@ -15,18 +15,7 @@ import { eventBus } from '../EventBus';
 import * as GoalSystem from './GoalSystem';
 import { GoalContext } from './GoalSystem';
 import { decideExpression, computeNovelty, estimateSocialCost } from './ExpressionPolicy';
-
-// FAZA 4.5: Dynamiczny próg ciszy
-const BASE_DIALOG_MS = 60_000;
-const MIN_DIALOG_MS = 30_000;
-const MAX_DIALOG_MS = 180_000;
-
-function computeDialogThreshold(neuro: NeurotransmitterState, limbic: LimbicState): number {
-    // Dynamiczny próg: wysoka dopamina/satisfaction = dłużej czekamy
-    const factor = 1 + neuro.dopamine / 200 + limbic.satisfaction / 5;
-    const threshold = BASE_DIALOG_MS * factor;
-    return Math.max(MIN_DIALOG_MS, Math.min(MAX_DIALOG_MS, threshold));
-}
+import { computeDialogThreshold } from '../utils/thresholds';
 
 export namespace EventLoop {
     export interface LoopContext {

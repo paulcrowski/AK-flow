@@ -25,6 +25,146 @@ export function clamp01(x: number): number {
   return Math.max(0, Math.min(1, x));
 }
 
+// ============================================================================
+// MODULAR FILTERS (FAZA 4.5 Refactor)
+// Each filter is a pure function that can be tested independently
+// ============================================================================
+
+/**
+ * Applies narcissism penalty for self-focused speech in autonomous mode.
+ * Returns updated socialCost and noveltyScore.
+ */
+function applyNarcissismFilter(
+  text: string,
+  socialCost: number,
+  noveltyScore: number,
+  context: 'GOAL_EXECUTED' | 'USER_REPLY' | undefined
+): { socialCost: number; noveltyScore: number } {
+  if (context !== 'GOAL_EXECUTED') {
+    return { socialCost, noveltyScore };
+  }
+  
+  const narcissism = calculateNarcissismScore(text);
+  
+  // Threshold 15% - agent should feel that self-talk is "boring"
+  if (narcissism > 0.15) {
+    const penalty = Math.min(0.5, (narcissism - 0.15) * 2); // 0-0.5
+    socialCost += penalty;
+    noveltyScore -= penalty * 0.5;
+    console.log(`[ExpressionPolicy] Narcissism detected: ${(narcissism * 100).toFixed(1)}% → socialCost +${penalty.toFixed(2)}`);
+  }
+  
+  return { socialCost, noveltyScore };
+}
+
+/**
+ * Applies dopamine breaker for high-dopamine + low-novelty autonomous speech.
+ * Returns whether to mute and potentially shortened text.
+ */
+function applyDopamineBreaker(
+  text: string,
+  say: boolean,
+  noveltyScore: number,
+  goalAlignment: number,
+  dopamine: number,
+  context: 'GOAL_EXECUTED' | 'USER_REPLY' | undefined,
+  shadowMode: boolean
+): { say: boolean; text: string } {
+  if (context !== 'GOAL_EXECUTED' || shadowMode) {
+    return { say, text };
+  }
+  
+  // Autonarration rule: max 1-2 sentences by default
+  text = shortenToFirstSentences(text, 2);
+  
+  // Soft penalty for low novelty
+  if (noveltyScore < 0.8) {
+    text = shortenToFirstSentences(text, 1);
+  }
+  if (noveltyScore < 0.6) {
+    if (goalAlignment < 0.8 && Math.random() > 0.3) say = false;
+  }
+  if (noveltyScore < 0.4) {
+    say = false; // Hard mute for low novelty autonomy
+  }
+  
+  // Dopamine Breaker: agent is "high" and looping
+  if (dopamine >= 95 && noveltyScore < 0.5) {
+    const breakChance = 0.8 - (goalAlignment * 0.5); // 0.3-0.8 chance to mute
+    if (Math.random() < breakChance) {
+      say = false;
+      console.log(`[ExpressionPolicy] DOPAMINE BREAKER: dopamine=${dopamine.toFixed(0)}, novelty=${noveltyScore.toFixed(2)} → muting`);
+    }
+  }
+  
+  return { say, text };
+}
+
+/**
+ * Applies silence breaker for autonomous speech when user is silent.
+ * Extends dopamine breaker to USER_REPLY + userIsSilent context.
+ */
+function applySilenceBreaker(
+  text: string,
+  say: boolean,
+  noveltyScore: number,
+  dopamine: number,
+  context: 'GOAL_EXECUTED' | 'USER_REPLY' | undefined,
+  userIsSilent: boolean,
+  shadowMode: boolean
+): { say: boolean; text: string } {
+  const isAutonomousSpeech = context === 'GOAL_EXECUTED' || (context === 'USER_REPLY' && userIsSilent);
+  
+  if (!isAutonomousSpeech || shadowMode) {
+    return { say, text };
+  }
+  
+  if (dopamine >= 95 && noveltyScore < 0.5) {
+    text = shortenToFirstSentences(text, 2);
+    
+    if (noveltyScore < 0.3) {
+      text = shortenToFirstSentences(text, 1);
+    }
+    if (noveltyScore < 0.2) {
+      say = false;
+      console.log(`[ExpressionPolicy] SILENCE_BREAKER: dopamine=${dopamine.toFixed(0)}, novelty=${noveltyScore.toFixed(2)}, userSilent=${userIsSilent} → muting (DEEP_WORK)`);
+    }
+  }
+  
+  return { say, text };
+}
+
+/**
+ * Applies energy-aware clipping for low-energy states.
+ */
+function applyEnergyClipping(
+  text: string,
+  say: boolean,
+  energy: number,
+  goalAlignment: number,
+  shadowMode: boolean
+): { say: boolean; text: string } {
+  if (shadowMode) {
+    return { say, text };
+  }
+  
+  if (energy < 40) {
+    text = shortenToFirstSentences(text, Math.max(1, Math.floor(energy / 30)));
+  }
+  if (energy < 30) {
+    if (goalAlignment < 0.7) {
+      say = false;
+    } else {
+      text = shortenToFirstSentences(text, 1);
+    }
+  }
+  if (energy < 20) {
+    text = shortenToFirstSentences(text, 1);
+  }
+  
+  return { say, text };
+}
+
 export function decideExpression(
   input: ExpressionInput,
   traits: TraitVector,
@@ -34,115 +174,60 @@ export function decideExpression(
 ): ExpressionDecision {
   let { responseText, goalAlignment, noveltyScore, socialCost, context } = input;
 
-  // FAZA 4.3: Filtr Narcystyczny (obniżony próg, miękka modulacja)
-  if (context === 'GOAL_EXECUTED') {
-    const narcissism = calculateNarcissismScore(responseText);
-    
-    // Próg obniżony z 25% do 15% - agent ma poczuć, że self-talk jest "nudny"
-    if (narcissism > 0.15) {
-         // Skalowana kara: im więcej narcyzmu, tym większa kara
-         const penalty = Math.min(0.5, (narcissism - 0.15) * 2); // 0-0.5
-         socialCost += penalty;
-         noveltyScore -= penalty * 0.5; // Self-talk rzadko wnosi nowość
-         
-         console.log(`[ExpressionPolicy] Narcissism detected: ${(narcissism * 100).toFixed(1)}% → socialCost +${penalty.toFixed(2)}`);
-    }
-  }
+  // Step 1: Apply narcissism filter (modular)
+  const narcissismResult = applyNarcissismFilter(responseText, socialCost, noveltyScore, context);
+  socialCost = narcissismResult.socialCost;
+  noveltyScore = narcissismResult.noveltyScore;
 
-  // Base weights modulated by temperament
+  // Step 2: Calculate base score with temperament modulation
   const wGoal = 0.4 + 0.4 * clamp01(traits.conscientiousness); // 0.4-0.8
   const wNovelty = 0.2 + 0.5 * clamp01(traits.curiosity);       // 0.2-0.7
   const wSocial = 0.1 + 0.5 * clamp01(traits.socialAwareness);  // 0.1-0.6
 
-  let baseScore =
+  const baseScore =
     wGoal * clamp01(goalAlignment) +
     wNovelty * clamp01(noveltyScore) -
     wSocial * clamp01(socialCost);
 
-  // Energy and arousal shift speaking threshold
+  // Step 3: Calculate threshold based on energy and arousal
   const energyFactor = soma.energy / 100; // 0-1
   const arousal = clamp01(traits.arousal);
-
-  // Higher arousal lowers the threshold a bit, low energy raises it
   const baseThreshold = shadowMode ? 0.9 : 0.3; // SHADOW: almost everything passes
   const threshold = baseThreshold + (0.2 * (1 - energyFactor)) - (0.1 * arousal);
 
   let say = baseScore > threshold;
   let text = responseText;
 
-  // FAZA 4.3: Reguły Autonarracji + Dopamine Breaker
-  if (context === 'GOAL_EXECUTED' && !shadowMode) {
-       // Krok 5: Reguła Autonarracji (max 1-2 zdania defaultowo)
-       text = shortenToFirstSentences(responseText, 2);
+  // Step 4: Apply dopamine breaker (modular)
+  const dopamineResult = applyDopamineBreaker(
+    text, say, noveltyScore, goalAlignment, neuro.dopamine, context, shadowMode
+  );
+  say = dopamineResult.say;
+  text = dopamineResult.text;
 
-       // Krok 2: Miękka kara za niską novelty
-       if (noveltyScore < 0.8) {
-            text = shortenToFirstSentences(text, 1); // Jeszcze krócej
-       }
-       if (noveltyScore < 0.6) {
-            // Duża szansa na mute, chyba że cel bardzo ważny
-            if (goalAlignment < 0.8 && Math.random() > 0.3) say = false;
-       }
-       if (noveltyScore < 0.4) {
-            say = false; // Hard mute for low novelty autonomy
-       }
+  // Step 5: Apply silence breaker (modular)
+  const silenceResult = applySilenceBreaker(
+    text, say, noveltyScore, neuro.dopamine, context, input.userIsSilent ?? false, shadowMode
+  );
+  say = silenceResult.say;
+  text = silenceResult.text;
 
-       // FAZA 4.3: Dopamine Breaker
-       // Przy dopaminie 100 + niskiej novelty = agent jest "naćpany" i się zapętla
-       // Hamujemy, ale z szansą na przebicie jeśli goalAlignment jest wysoki
-       if (neuro.dopamine >= 95 && noveltyScore < 0.5) {
-            const breakChance = 0.8 - (goalAlignment * 0.5); // 0.3-0.8 szans na mute
-            if (Math.random() < breakChance) {
-                say = false;
-                console.log(`[ExpressionPolicy] DOPAMINE BREAKER: dopamine=${neuro.dopamine.toFixed(0)}, novelty=${noveltyScore.toFixed(2)} → muting`);
-            }
-       }
-  }
+  // Step 6: Apply energy clipping (modular)
+  const energyResult = applyEnergyClipping(text, say, soma.energy, goalAlignment, shadowMode);
+  say = energyResult.say;
+  text = energyResult.text;
 
-  // FAZA 4.5: Dopamine Breaker dla ciszy (USER_REPLY + userIsSilent)
-  // Rozszerzamy hamulec na przypadek: agent odpowiada na ciszę, nie na nowy input
-  const isAutonomousSpeech = context === 'GOAL_EXECUTED' || (context === 'USER_REPLY' && input.userIsSilent);
-  
-  if (isAutonomousSpeech && !shadowMode) {
-       if (neuro.dopamine >= 95 && noveltyScore < 0.5) {
-            // Najpierw limit długości (1-2 zdania)
-            text = shortenToFirstSentences(text, 2);
-            
-            // Jeśli novelty bardzo niska → jeszcze krócej lub mute
-            if (noveltyScore < 0.3) {
-                text = shortenToFirstSentences(text, 1);
-            }
-            if (noveltyScore < 0.2) {
-                say = false;
-                console.log(`[ExpressionPolicy] SILENCE_BREAKER: dopamine=${neuro.dopamine.toFixed(0)}, novelty=${noveltyScore.toFixed(2)}, userSilent=${input.userIsSilent} → muting (DEEP_WORK)`);
-            }
-       }
-  }
-
-  // Energy-aware clipping (SHADOW MODE: only extreme fatigue triggers)
-  if (!shadowMode && soma.energy < 40) {
-    text = shortenToFirstSentences(text, Math.max(1, Math.floor(soma.energy / 30)));
-  }
-  if (!shadowMode && soma.energy < 30) {
-    // Only high goalAlignment passes, rest goes to internal thought
-    if (goalAlignment < 0.7) {
-      say = false;
-    } else {
-      text = shortenToFirstSentences(text, 1);
-    }
-  }
-
-  // In shadow mode, only shorten extreme repetitions, never mute
+  // Step 7: Shadow mode edge cases
   if (shadowMode && noveltyScore < 0.2 && socialCost > 0.6) {
     text = shortenToFirstSentences(text, 1);
   }
 
-  // Aggressive shortening for low-novelty content when socially aware (production mode only)
+  // Step 8: Aggressive shortening for low-novelty when socially aware
   if (!shadowMode && say && noveltyScore < 0.3 && traits.socialAwareness > 0.5) {
     text = shortenToFirstSentences(text, 1);
   }
 
-  // In extreme low-energy states, prefer silence or very short speech (production mode only)
+  // Step 9: Extreme low-energy override
   if (!shadowMode && soma.energy < 20 && traits.conscientiousness > 0.5) {
     if (baseScore < threshold + 0.1) {
       say = false;
@@ -151,7 +236,7 @@ export function decideExpression(
     }
   }
 
-  // Shadow mode always speaks (logs decision but never blocks)
+  // Step 10: Shadow mode always speaks (logs decision but never blocks)
   if (shadowMode) {
     say = true;
   }
