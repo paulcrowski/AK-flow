@@ -79,7 +79,12 @@
 │  SomaSystem.ts                                                  │
 │  ├── energy: 0-100 (spada przy pracy, rośnie przy śnie)         │
 │  ├── cognitiveLoad: 0-100 (rośnie przy myśleniu)                │
-│  └── isSleeping: bool (auto-sleep gdy energy < 20)              │
+│  └── isSleeping: bool (Sleep Mode v1, sterowane przez kernel)   │
+│                                                                 │
+│  Sleep Mode v1:                                                 │
+│  ├── forceSleep/forceWake → ustawia isSleeping                  │
+│  ├── SLEEP_START / SLEEP_END w EventBus                         │
+│  └── reset chemii do BASELINE_NEURO przy wejściu w sen          │
 └─────────────────────────────────────────────────────────────────┘
 ```
 

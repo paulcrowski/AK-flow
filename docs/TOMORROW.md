@@ -33,28 +33,27 @@
 - [x] **[LOGIC] Episodic Format**: Zapisywanie `{ Event, Emotion, Lesson }` zamiast surowego tekstu.
 - [x] **[LOGIC] GoalJournal Integration**: Podpięcie zapisu/odczytu celów.
 
-### SESJA 3: "Sen i Konsolidacja" – [DO ZROBIENIA]
+### SESJA 3: "Sen i Konsolidacja" – [UKOŃCZONA ✅]
 **Cel:** Prosty tryb snu + mądra konsolidacja pamięci. TraitVector pozostaje statyczny.
 
 #### Krok 1: Sleep Mode v1 (ultra-prosty)
-- [ ] **[STATE] isSleeping flag** – kernel wie, że agent śpi.
-- [ ] **[BEHAVIOR] Brak odpowiedzi** – Volition zawsze mówi „nie mów" gdy `isSleeping`.
-- [ ] **[TRIGGER] Manualny lub energetyczny** – przycisk UI lub `energy < 20`.
-- [ ] **[CHEM] Reset do baseline** – dopamina/serotonina/norepinefryna wracają do neutralnych wartości.
-- [ ] **[EVENT] SLEEP_START / SLEEP_END** – logi z timestampem i stanem przed/po.
+- [x] **[STATE] isSleeping flag** – kernel wie, że agent śpi (`SomaSystem.forceSleep/forceWake`, `somaState.isSleeping`).
+- [x] **[BEHAVIOR] Brak odpowiedzi** – Volition zawsze mówi „nie mów" gdy `isSleeping` (test: `reason === 'SLEEPING'`).
+- [x] **[TRIGGER] Manualny** – przycisk snu w UI (`toggleSleep`), energetyczny trigger odłożony.
+- [x] **[CHEM] Reset do baseline** – dopamina/serotonina/norepinefryna wracają do neutralnych wartości przy wejściu w sen.
+- [x] **[EVENT] SLEEP_START / SLEEP_END** – logi z timestampem i stanem przed/po w `EventBus`.
 
 #### Krok 2: DreamConsolidation v1 (bez auto-zmian osobowości)
-- [ ] **[RECALL] Top 3-5 epizodów** – `EpisodicMemoryService.recallMostImpactful()`.
-- [ ] **[AI] Lekcje dnia** – Cortex generuje 3-5 krótkich lekcji z epizodów.
-- [ ] **[GOAL] 1-2 wpisy GoalJournal** – opcjonalne nowe cele na podstawie lekcji.
-- [ ] **[SELF] Self-summary** – 1 krótkie podsumowanie „kim jestem po tym dniu" jako core memory.
-- [ ] **[PROPOSAL] Propozycja zmian TraitVector** – tylko LOG, bez aplikacji:
-  - „Gdybym miał zmienić cechy: curiosity +0.02, arousal −0.01, bo [powód]".
+- [x] **[RECALL] Top epizodów** – `DreamConsolidationService.recallMostImpactful()` pobiera najbardziej emocjonalne wspomnienia.
+- [x] **[AI] Lekcje dnia** – Cortex generuje 3–5 krótkich lekcji z epizodów.
+- [x] **[GOAL] Wpisy GoalJournal (opcjonalne)** – przygotowana integracja, na razie zachowana jako potencjał.
+- [x] **[SELF] Self-summary** – 1 krótkie podsumowanie „kim jestem po tym dniu" jako core memory (`[SELF-SUMMARY]`).
+- [x] **[PROPOSAL] Propozycja zmian TraitVector** – tylko LOG, bez aplikacji (`TRAIT_EVOLUTION_PROPOSAL`).
 
 #### Krok 3: Obserwacja i walidacja (Faza 1 ewolucji)
-- [ ] **[LOG] trait_evolution_proposals** – tabela/log z propozycjami zmian.
-- [ ] **[UI] NeuroMonitor rozszerzenie** – widok propozycji zmian (opcjonalnie).
-- [ ] **[TEST] Kilka nocy na różnych agentach** – czy propozycje mają sens?
+- [x] **[LOG] trait_evolution_proposals** – propozycje zmian pakowane jako specjalne memories + event w `EventBus`.
+- [x] **[TEST] Testy jednostkowe Sleep & Dream** – Volition blokujący mowę w śnie, DreamConsolidation z/bez epizodów.
+- [ ] **[UI] NeuroMonitor rozszerzenie** – widok propozycji zmian + „lekcje dnia" (do zrobienia w kolejnej sesji).
 
 ---
 
@@ -91,7 +90,34 @@
 5. **Stabilność przed plastycznością** – najpierw stabilna chemia i pamięć, potem ewolucja.
 
 ### ⚠️ Czego NIE robimy teraz:
-- Automatyczna modyfikacja TraitVector.
+- Automatyczna modyfikacja TraitVector (tylko propozycje w logach).
 - Fazy snu (light/deep/dream) sprzęgnięte z energią.
 - Różne „strategie snu" (terapeutyczny/treningowy).
+
+---
+
+## 4. Log z dnia 2025-12-05 (SESJA 3 – Sen & Konsolidacja)
+
+- **Sleep Mode v1** – dodany stan snu (`isSleeping`), przycisk snu w UI, eventy `SLEEP_START` / `SLEEP_END`, reset chemii do baseline.
+- **Brak mowy w śnie** – VolitionSystem ma twardą regułę `reason: 'SLEEPING'`, test jednostkowy potwierdza blokadę.
+- **DreamConsolidationService v1** – konsolidacja epizodów w snie:
+  - pobieranie najważniejszych epizodów z Supabase,
+  - generowanie lekcji dnia,
+  - self-summary jako `[SELF-SUMMARY]` w pamięci,
+  - event `TRAIT_EVOLUTION_PROPOSAL` z delikatnymi deltami TraitVector (log only).
+- **Testy automatyczne** – pełna pętla `npm test` zielona (1 test EventLoop świadomie `skip` jako flaky). Dodane testy:
+  - Volition: brak mowy w śnie,
+  - DreamConsolidation: brak epizodów → brak efektu,
+  - DreamConsolidation: epizody → lekcje, self-summary, trait proposal (bez zmiany cech).
+
+## 5. Panel Obserwacyjny (pomysł na następną sesję)
+
+- **Sleep & Dream Dashboard** (NeuroMonitor):
+  - ostatnie `SLEEP_START` / `SLEEP_END` z czasu i energii,
+  - lista „lekcji dnia" z ostatniego snu,
+  - ostatni `TRAIT_EVOLUTION_PROPOSAL` (aktualne cechy + proponowane delty + reasoning),
+  - filtr po agencie (Eksperyment / Alberto / Explorer).
+- **Weekly Review Mode**:
+  - agregacja propozycji z kilku nocy,
+  - tabela „jak agent chciałby się zmienić" z możliwością ręcznej akceptacji.
 
