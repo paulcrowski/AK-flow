@@ -42,8 +42,14 @@ export const VolitionSystem = {
         history: string[] = [],
         lastSpeakTimestamp?: number,
         currentTimestamp?: number,
-        poeticMode: boolean = false // NEW param
+        poeticMode: boolean = false, // NEW param
+        isSleeping: boolean = false  // FAZA 5: Sleep Mode v1
     ): VolitionDecision {
+        // FAZA 5: Sleep Mode - agent NEVER speaks while sleeping
+        if (isSleeping) {
+            return { shouldSpeak: false, reason: "SLEEPING" };
+        }
+
         const trimmedContent = thought.trim();
         if (!trimmedContent) {
             return { shouldSpeak: false, reason: "NO_CONTENT" };

@@ -354,7 +354,8 @@ export namespace EventLoop {
                     ctx.thoughtHistory,
                     ctx.lastSpeakTimestamp,
                     Date.now(),
-                    ctx.poeticMode // Pass mode to volition
+                    ctx.poeticMode, // Pass mode to volition
+                    ctx.soma.isSleeping // FAZA 5: Sleep Mode v1
                 );
 
                 if (decision.shouldSpeak) {

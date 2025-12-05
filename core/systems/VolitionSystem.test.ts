@@ -28,4 +28,21 @@ describe('VolitionSystem.shouldSpeak', () => {
     // silenceDuration is large, so effectivePressure should be > threshold
     expect(d.shouldSpeak).toBe(true);
   });
+
+  it('should not speak while sleeping', () => {
+    const d = VolitionSystem.shouldSpeak(
+      'hello',
+      1,
+      100,
+      calmLimbic,
+      [],
+      undefined,
+      undefined,
+      false,
+      true // isSleeping
+    );
+
+    expect(d.shouldSpeak).toBe(false);
+    expect(d.reason).toBe('SLEEPING');
+  });
 });

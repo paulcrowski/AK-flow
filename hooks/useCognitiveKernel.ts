@@ -15,6 +15,7 @@ import { MIN_TICK_MS, MAX_TICK_MS } from '../core/constants';
 import { CortexSystem } from '../core/systems/CortexSystem';
 import { EventLoop } from '../core/systems/EventLoop';
 import { createProcessOutputForTools } from '../utils/toolParser';
+import { DreamConsolidationService, BASELINE_NEURO } from '../services/DreamConsolidationService';
 
 // Helper for delays
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
@@ -345,14 +346,83 @@ export const useCognitiveKernel = (loadedIdentity?: AgentIdentity | null) => {
         silenceStartRef.current = Date.now();
     };
 
-    const toggleSleep = () => {
-        setSomaState(prev => {
-            if (prev.isSleeping) {
-                return SomaSystem.forceWake(prev);
-            } else {
-                return SomaSystem.forceSleep(prev);
+    const toggleSleep = async () => {
+        const wasAsleep = stateRef.current.somaState.isSleeping;
+        
+        if (wasAsleep) {
+            // === WAKING UP ===
+            setSomaState(prev => SomaSystem.forceWake(prev));
+            
+            // Publish SLEEP_END event
+            eventBus.publish({
+                id: generateUUID(),
+                timestamp: Date.now(),
+                source: AgentType.SOMA,
+                type: PacketType.SYSTEM_ALERT,
+                payload: {
+                    event: 'SLEEP_END',
+                    energy: stateRef.current.somaState.energy,
+                    message: '☀️ Agent is waking up'
+                },
+                priority: 0.9
+            });
+            
+            console.log('☀️ [Sleep] Agent woke up');
+            setCurrentThought('Waking up... processing night insights...');
+            
+        } else {
+            // === GOING TO SLEEP ===
+            setSomaState(prev => SomaSystem.forceSleep(prev));
+            
+            // Publish SLEEP_START event
+            eventBus.publish({
+                id: generateUUID(),
+                timestamp: Date.now(),
+                source: AgentType.SOMA,
+                type: PacketType.SYSTEM_ALERT,
+                payload: {
+                    event: 'SLEEP_START',
+                    energy: stateRef.current.somaState.energy,
+                    limbic: stateRef.current.limbicState,
+                    neuro: stateRef.current.neuroState,
+                    message: '🌙 Agent entering sleep mode'
+                },
+                priority: 0.9
+            });
+            
+            console.log('🌙 [Sleep] Agent entering sleep mode');
+            setCurrentThought('Entering sleep... consolidating memories...');
+            
+            // Reset chemistry to baseline
+            setNeuroState({
+                dopamine: BASELINE_NEURO.dopamine,
+                serotonin: BASELINE_NEURO.serotonin,
+                norepinephrine: BASELINE_NEURO.norepinephrine
+            });
+            
+            // Run Dream Consolidation (async, non-blocking)
+            try {
+                const result = await DreamConsolidationService.consolidate(
+                    stateRef.current.limbicState,
+                    stateRef.current.traitVector,
+                    agentName
+                );
+                
+                if (result.episodesProcessed > 0) {
+                    setCurrentThought(`Dreaming... processed ${result.episodesProcessed} memories, learned ${result.lessonsGenerated.length} lessons`);
+                    
+                    // Add dream summary to conversation
+                    if (result.selfSummary) {
+                        addMessage('assistant', `[Dream Journal] ${result.selfSummary}`, 'thought');
+                    }
+                } else {
+                    setCurrentThought('Resting... no significant memories to process');
+                }
+            } catch (err) {
+                console.error('🌙 [Sleep] Consolidation error:', err);
+                setCurrentThought('Resting... dream consolidation encountered an issue');
             }
-        });
+        }
     };
 
     const injectStateOverride = (type: 'limbic' | 'soma', key: string, value: number) => {
