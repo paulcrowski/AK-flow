@@ -909,6 +909,39 @@ export const useCognitiveKernel = (loadedIdentity?: AgentIdentity | null) => {
         console.log("🧠 COGNITIVE KERNEL BOOT SNAPSHOT:", bootStateSnapshot);
     }, [kernelEpoch]); // Re-run boot sequence on kernel reset (epoch change)
 
+    // --- FAZA 5: IDENTITY SNAPSHOT - Separate effect that fires when identity changes ---
+    useEffect(() => {
+        // Only publish when we have a real identity from DB
+        if (!loadedIdentity) return;
+
+        eventBus.publish({
+            id: generateUUID(),
+            timestamp: Date.now(),
+            source: AgentType.CORTEX_FLOW,
+            type: PacketType.SYSTEM_ALERT,
+            payload: {
+                event: "IDENTITY_SNAPSHOT",
+                agentId: loadedIdentity.id,
+                agentName: loadedIdentity.name,
+                agentPersona: loadedIdentity.persona,
+                traitVector: loadedIdentity.trait_vector,
+                coreValues: loadedIdentity.core_values || ['curiosity', 'authenticity', 'growth'],
+                voiceStyle: loadedIdentity.voice_style || 'balanced',
+                narrativeTraits: loadedIdentity.narrative_traits || null,
+                message: `🎭 Identity Active: ${loadedIdentity.name}`
+            },
+            priority: 1.0
+        });
+
+        console.log("🎭 IDENTITY_SNAPSHOT:", {
+            id: loadedIdentity.id,
+            name: loadedIdentity.name,
+            persona: loadedIdentity.persona?.slice(0, 60) + '...',
+            traits: loadedIdentity.trait_vector,
+            values: loadedIdentity.core_values
+        });
+    }, [loadedIdentity]); // Only fires when loadedIdentity changes (after DB fetch)
+
     return {
         limbicState,
         somaState,

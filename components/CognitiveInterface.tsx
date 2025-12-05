@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { eventBus } from '../core/EventBus';
 import { AgentType, PacketType } from '../types';
+import { generateUUID } from '../utils/uuid';
 import { setCurrentAgentId } from '../services/supabase';
 import { NeuroMonitor } from './NeuroMonitor';
 import { useCognitiveKernel, AgentIdentity } from '../hooks/useCognitiveKernel';
@@ -52,7 +53,33 @@ export function CognitiveInterface() {
                 const identity = await getAgentIdentity(agentId);
                 if (identity) {
                     console.log('[CognitiveInterface] Loaded agent identity:', identity.name);
-                    setLoadedIdentity(agentToIdentity(identity as Agent));
+                    const convertedIdentity = agentToIdentity(identity as Agent);
+                    setLoadedIdentity(convertedIdentity);
+                    
+                    // FAZA 5: Publish IDENTITY_LOADED event to EventBus
+                    eventBus.publish({
+                        id: generateUUID(),
+                        timestamp: Date.now(),
+                        source: AgentType.CORTEX_FLOW,
+                        type: PacketType.SYSTEM_ALERT,
+                        payload: {
+                            event: 'IDENTITY_LOADED',
+                            agentId: identity.id,
+                            name: identity.name,
+                            persona: identity.persona || 'Default persona',
+                            core_values: identity.core_values || [],
+                            voice_style: identity.voice_style || 'balanced',
+                            trait_vector: identity.trait_vector,
+                            narrative_traits: identity.narrative_traits
+                        },
+                        priority: 1.0
+                    });
+                    
+                    console.log('🎭 IDENTITY_LOADED:', {
+                        name: identity.name,
+                        persona: identity.persona?.slice(0, 50) + '...',
+                        values: identity.core_values
+                    });
                 } else {
                     // Fallback to currentAgent from context
                     console.log('[CognitiveInterface] Using fallback identity from context');
@@ -117,6 +144,19 @@ export function CognitiveInterface() {
             chatEndRef.current.scrollIntoView({ behavior: 'smooth' });
         }
     }, [conversation]);
+
+    // FAZA 5: Show loading screen while identity is being fetched
+    // All hooks are above this point, so React rules are satisfied
+    if (identityLoading) {
+        return (
+            <div className="flex h-screen items-center justify-center bg-brain-dark text-gray-100">
+                <div className="flex flex-col items-center gap-4">
+                    <Loader2 className="w-8 h-8 animate-spin text-brain-accent" />
+                    <span className="text-sm text-gray-400">Loading agent identity...</span>
+                </div>
+            </div>
+        );
+    }
 
     const onSend = () => {
         if (!input.trim()) return;
