@@ -8,6 +8,7 @@ Ten katalog zawiera **eksperymentalne koncepcje** i **inspiracje badawcze**, kt�
 - [`02_self_verification.md`](./02_self_verification.md) - Architektura Uczeń->Profesor->Dziekan
 - [`03_active_inference.md`](./03_active_inference.md) - Blueprint cognitive z biologii
 - [`04_deepseek_v3_integration.md`](./04_deepseek_v3_integration.md) - DeepSeek V3.2: Sparse Attention & Agentic Synthesis
+- [`05_confession_module.md`](./05_confession_module.md) - Confession Module: Training LLMs for Honesty
 - [`2025-12-04_CONFESSIONS_PAPER.md`](./2025-12-04_CONFESSIONS_PAPER.md) - Confession Mode (Truth Serum) dla uczciwości i introspekcji
 - [`2025-12-04_SEAL_PAPER.md`](./2025-12-04_SEAL_PAPER.md) - Self-Edit / SEAL: samouczenie się agenta
 
