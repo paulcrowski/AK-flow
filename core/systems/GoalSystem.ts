@@ -1,7 +1,10 @@
 // GoalSystem.ts - FAZA 3: Goal Formation (11/10)
 // FAZA 4.3: Refractory Period + Dopamine Redirect
+// FAZA 5: GoalJournal Integration
 
 import { LimbicState, SomaState, NeurotransmitterState, Goal, GoalState } from '../../types';
+import { GoalJournalService, JournalGoal } from '../../services/GoalJournalService';
+import { getCurrentAgentId } from '../../services/supabase';
 
 // Simple text similarity (Jaccard on words)
 function textSimilarity(a: string, b: string): number {
@@ -102,7 +105,7 @@ export async function formGoal(ctx: GoalContext, goalState: GoalState): Promise<
 
   const priority = source === 'empathy' ? 0.9 : 0.6;
 
-  return {
+  const goal: Goal = {
     id: `goal-${ctx.now}`,
     description,
     priority,
@@ -110,4 +113,48 @@ export async function formGoal(ctx: GoalContext, goalState: GoalState): Promise<
     source,
     createdAt: ctx.now,
   };
+
+  // FAZA 5: Persist to GoalJournal (fire and forget)
+  const agentId = getCurrentAgentId();
+  if (agentId) {
+    GoalJournalService.createGoal({
+      agentId,
+      description,
+      source,
+      priority
+    }).catch(err => console.warn('[GoalSystem] Journal persist failed:', err));
+  }
+
+  return goal;
+}
+
+// FAZA 5: Load persistent goals from journal on boot
+export async function loadPersistentGoals(): Promise<Goal[]> {
+  const agentId = getCurrentAgentId();
+  if (!agentId) return [];
+
+  try {
+    const journalGoals = await GoalJournalService.getActiveGoals(agentId);
+    return journalGoals.map(jg => ({
+      id: jg.id,
+      description: jg.description,
+      priority: jg.priority,
+      progress: jg.progress,
+      source: jg.source as Goal['source'],
+      createdAt: new Date(jg.createdAt).getTime()
+    }));
+  } catch (error) {
+    console.warn('[GoalSystem] Failed to load persistent goals:', error);
+    return [];
+  }
+}
+
+// FAZA 5: Mark goal as completed in journal
+export async function completeGoalInJournal(goalId: string, notes?: string): Promise<void> {
+  try {
+    await GoalJournalService.completeGoal(goalId, notes);
+    console.log(`[GoalSystem] Goal ${goalId} marked complete in journal`);
+  } catch (error) {
+    console.warn('[GoalSystem] Failed to complete goal in journal:', error);
+  }
 }

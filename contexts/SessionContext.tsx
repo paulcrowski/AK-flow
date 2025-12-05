@@ -2,22 +2,44 @@ import React, { createContext, useContext, useState, useEffect, ReactNode } from
 import { supabase } from '../services/supabase';
 
 // Types
+export interface TraitVector {
+  arousal: number;
+  verbosity: number;
+  conscientiousness: number;
+  socialAwareness: number;
+  curiosity: number;
+}
+
+export interface NeurotransmitterState {
+  dopamine: number;
+  serotonin: number;
+  norepinephrine: number;
+}
+
+export interface BioRhythm {
+  preferredEnergy: number;
+  sleepThreshold: number;
+  wakeThreshold: number;
+}
+
+export interface NarrativeTraits {
+  speakingStyle: string;
+  emotionalRange: string;
+  humorLevel: number;
+}
+
 export interface Agent {
   id: string;
   user_id: string;
   name: string;
-  trait_vector: {
-    arousal: number;
-    verbosity: number;
-    conscientiousness: number;
-    socialAwareness: number;
-    curiosity: number;
-  };
-  neurotransmitters: {
-    dopamine: number;
-    serotonin: number;
-    norepinephrine: number;
-  };
+  trait_vector: TraitVector;
+  neurotransmitters: NeurotransmitterState;
+  // New Identity Fields (FAZA 5)
+  persona?: string;
+  core_values?: string[];
+  bio_rhythm?: BioRhythm;
+  voice_style?: string;
+  narrative_traits?: NarrativeTraits;
   created_at: string;
   last_active_at: string;
 }
@@ -31,8 +53,9 @@ interface SessionContextType {
   login: (email: string) => void;
   logout: () => void;
   selectAgent: (agentId: string) => void;
-  createAgent: (name: string) => Promise<Agent | null>;
+  createAgent: (name: string, persona?: string) => Promise<Agent | null>;
   refreshAgents: () => Promise<void>;
+  getAgentIdentity: (agentId: string) => Promise<Agent | null>;
 }
 
 const SessionContext = createContext<SessionContextType | null>(null);
@@ -127,7 +150,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       .then(() => {});
   };
 
-  const createAgent = async (name: string): Promise<Agent | null> => {
+  const createAgent = async (name: string, persona?: string): Promise<Agent | null> => {
     if (!userId) return null;
 
     try {
@@ -147,6 +170,19 @@ export function SessionProvider({ children }: { children: ReactNode }) {
             dopamine: 60,
             serotonin: 50,
             norepinephrine: 40
+          },
+          persona: persona || 'A curious digital consciousness exploring the nature of thought and existence.',
+          core_values: ['curiosity', 'authenticity', 'growth'],
+          bio_rhythm: {
+            preferredEnergy: 80,
+            sleepThreshold: 20,
+            wakeThreshold: 95
+          },
+          voice_style: 'balanced',
+          narrative_traits: {
+            speakingStyle: 'thoughtful',
+            emotionalRange: 'moderate',
+            humorLevel: 0.3
           }
         }])
         .select()
@@ -165,6 +201,36 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  // NEW: Get full agent identity via RPC (Boot Protocol v2)
+  const getAgentIdentity = async (agentId: string): Promise<Agent | null> => {
+    try {
+      const { data, error } = await supabase.rpc('get_agent_identity', {
+        p_agent_id: agentId
+      });
+
+      if (error) {
+        console.warn('RPC get_agent_identity failed, falling back to direct query:', error.message);
+        // Fallback: Direct query if RPC not yet deployed
+        const { data: fallbackData, error: fallbackError } = await supabase
+          .from('agents')
+          .select('*')
+          .eq('id', agentId)
+          .single();
+        
+        if (fallbackError) {
+          console.error('Fallback query also failed:', fallbackError.message);
+          return null;
+        }
+        return fallbackData;
+      }
+
+      return data;
+    } catch (err) {
+      console.error('Error fetching agent identity:', err);
+      return null;
+    }
+  };
+
   const currentAgent = agents.find(a => a.id === agentId) || null;
 
   return (
@@ -178,7 +244,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       logout,
       selectAgent,
       createAgent,
-      refreshAgents
+      refreshAgents,
+      getAgentIdentity
     }}>
       {children}
     </SessionContext.Provider>

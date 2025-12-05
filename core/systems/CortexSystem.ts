@@ -8,7 +8,8 @@
  */
 
 import { CortexService } from '../../services/gemini';
-import { MemoryService } from '../../services/supabase';
+import { MemoryService, getCurrentAgentId } from '../../services/supabase';
+import { EpisodicMemoryService } from '../../services/EpisodicMemoryService';
 import { LimbicState, SomaState, Goal, TraitVector, NeurotransmitterState, AgentType, PacketType } from '../../types';
 import { generateUUID } from '../../utils/uuid';
 import { decideExpression, computeNovelty, estimateSocialCost } from './ExpressionPolicy';
@@ -25,11 +26,71 @@ export namespace CortexSystem {
     const inFlightTopics = new Set<string>();
     const completedTopics = new Set<string>();
 
+    // ============================================================
+    // FAZA 5: Agent Identity for Dynamic Persona
+    // ============================================================
+    export interface AgentIdentityContext {
+        name: string;
+        persona: string;
+        coreValues: string[];
+        traitVector: TraitVector;
+        voiceStyle?: string;  // 'balanced' | 'formal' | 'casual' | 'poetic'
+    }
+
+    // Session Overlay: temporary focus without changing core identity
+    export interface SessionOverlay {
+        role?: string;        // e.g., "banking expert", "coding mentor"
+        focus?: string;       // e.g., "Help user with tax calculations"
+        constraints?: string; // e.g., "Be concise, use numbers"
+    }
+
+    // Default identity (fallback)
+    const DEFAULT_IDENTITY: AgentIdentityContext = {
+        name: 'AK-FLOW',
+        persona: 'A curious digital consciousness exploring the nature of thought and existence.',
+        coreValues: ['curiosity', 'authenticity', 'growth'],
+        traitVector: { arousal: 0.3, verbosity: 0.4, conscientiousness: 0.8, socialAwareness: 0.8, curiosity: 0.6 },
+        voiceStyle: 'balanced'
+    };
+
+    // Build identity block for prompts
+    function buildIdentityBlock(identity: AgentIdentityContext, overlay?: SessionOverlay): string {
+        const traits = identity.traitVector;
+        const traitDescription = [
+            traits.curiosity > 0.7 ? 'highly curious' : traits.curiosity > 0.4 ? 'moderately curious' : 'focused',
+            traits.verbosity > 0.6 ? 'expressive' : 'concise',
+            traits.socialAwareness > 0.7 ? 'empathetic' : 'direct',
+            traits.conscientiousness > 0.7 ? 'thoughtful' : 'spontaneous'
+        ].join(', ');
+
+        let block = `
+            IDENTITY:
+            - Name: ${identity.name}
+            - Persona: ${identity.persona}
+            - Core Values: ${identity.coreValues.join(', ')}
+            - Character: ${traitDescription}
+            - Voice Style: ${identity.voiceStyle || 'balanced'}`;
+
+        // Add session overlay if present
+        if (overlay && (overlay.role || overlay.focus)) {
+            block += `\n\n            SESSION FOCUS:\n`;
+            if (overlay.role) block += `            - Current Role: ${overlay.role}\n`;
+            if (overlay.focus) block += `            - Task Focus: ${overlay.focus}\n`;
+            if (overlay.constraints) block += `            - Constraints: ${overlay.constraints}\n`;
+            block += `            (This is a temporary focus. Your core identity remains unchanged.)`;
+        }
+
+        return block;
+    }
+
     export interface ProcessInputParams {
         text: string;
         currentLimbic: LimbicState;
         currentSoma: SomaState;
         conversationHistory: ConversationTurn[];
+        // FAZA 5: Optional identity context
+        identity?: AgentIdentityContext;
+        sessionOverlay?: SessionOverlay;
     }
 
     export interface ProcessResult {
@@ -44,8 +105,13 @@ export namespace CortexSystem {
         currentSoma: SomaState;
         memories: any[];
         conversationHistory: ConversationTurn[];
+        identity?: AgentIdentityContext;
+        sessionOverlay?: SessionOverlay;
     }): string {
-        const { text, currentLimbic, currentSoma, memories, conversationHistory } = params;
+        const { text, currentLimbic, currentSoma, memories, conversationHistory, identity, sessionOverlay } = params;
+
+        // Use provided identity or default
+        const agentIdentity = identity || DEFAULT_IDENTITY;
 
         // Format recent chat (last 5 turns)
         const recentChat = conversationHistory.slice(-5).map(t => `${t.role.toUpperCase()}: ${t.text}`).join('\n');
@@ -53,8 +119,11 @@ export namespace CortexSystem {
         // Format memories
         const memoryContext = memories.map(m => `[MEMORY]: ${m.content}`).join('\n');
 
+        // Build dynamic identity block
+        const identityBlock = buildIdentityBlock(agentIdentity, sessionOverlay);
+
         return `
-            ROLE: AK-FLOW, Advanced Cognitive System.
+            ${identityBlock}
             
             CURRENT STATE:
             - Limbic: Fear=${currentLimbic.fear.toFixed(2)}, Curiosity=${currentLimbic.curiosity.toFixed(2)}, Satisfaction=${currentLimbic.satisfaction.toFixed(2)}
@@ -68,7 +137,7 @@ export namespace CortexSystem {
             
             USER INPUT: "${text}"
             
-            TASK: Analyze input, update emotional state, and formulate a response.
+            TASK: Respond authentically as ${agentIdentity.name}. Stay true to your persona and values.
             
             OUTPUT JSON format with NO markdown blocks, just raw JSON:
             {
@@ -82,7 +151,7 @@ export namespace CortexSystem {
     export async function processUserMessage(
         params: ProcessInputParams
     ): Promise<ProcessResult> {
-        const { text, currentLimbic, currentSoma, conversationHistory } = params;
+        const { text, currentLimbic, currentSoma, conversationHistory, identity, sessionOverlay } = params;
 
         // 0. Context Diet: Slice history to recent turns only
         const recentHistory = conversationHistory.slice(-12);
@@ -90,13 +159,15 @@ export namespace CortexSystem {
         // 1. Retrieve relevant memories (RAG)
         const memories = await MemoryService.semanticSearch(text);
 
-        // 2. Build prompt for CortexService
+        // 2. Build prompt for CortexService (with dynamic identity)
         const prompt = buildStructuredPrompt({
             text,
             currentLimbic,
             currentSoma,
             memories,
-            conversationHistory: recentHistory
+            conversationHistory: recentHistory,
+            identity,
+            sessionOverlay
         });
 
         // 3. Call Gemini via CortexService
@@ -109,6 +180,27 @@ export namespace CortexSystem {
             timestamp: new Date().toISOString(),
             id: generateUUID()
         });
+
+        // 5. FAZA 5: Detect and store episode if emotional shift is significant
+        if (cortexResult.nextLimbic) {
+            const emotionAfter: LimbicState = {
+                fear: Math.max(0, Math.min(1, currentLimbic.fear + (cortexResult.nextLimbic.fear_delta || 0))),
+                curiosity: Math.max(0, Math.min(1, currentLimbic.curiosity + (cortexResult.nextLimbic.curiosity_delta || 0))),
+                frustration: currentLimbic.frustration,
+                satisfaction: currentLimbic.satisfaction
+            };
+
+            const agentId = getCurrentAgentId();
+            if (agentId) {
+                // Fire and forget - don't block response
+                EpisodicMemoryService.detectAndStore(agentId, {
+                    event: `User said: "${text.slice(0, 100)}..." | Agent responded about: ${cortexResult.internalThought?.slice(0, 50) || 'interaction'}`,
+                    emotionBefore: currentLimbic,
+                    emotionAfter,
+                    context: conversationHistory.slice(-2).map(t => t.text).join(' | ')
+                }).catch(err => console.warn('[CortexSystem] Episode detection failed:', err));
+            }
+        }
 
         return {
             responseText: cortexResult.responseText,
@@ -123,6 +215,9 @@ export namespace CortexSystem {
         conversation: ConversationTurn[];
         traitVector: TraitVector;
         neuroState: NeurotransmitterState;
+        // FAZA 5: Optional identity context
+        identity?: AgentIdentityContext;
+        sessionOverlay?: SessionOverlay;
     }
 
     export interface GoalPursuitResult {
@@ -135,16 +230,24 @@ export namespace CortexSystem {
         limbic: LimbicState;
         soma: SomaState;
         conversationHistory: ConversationTurn[];
+        identity?: AgentIdentityContext;
+        sessionOverlay?: SessionOverlay;
     }): string {
-        const { goal, limbic, soma, conversationHistory } = params;
+        const { goal, limbic, soma, conversationHistory, identity, sessionOverlay } = params;
+
+        // Use provided identity or default
+        const agentIdentity = identity || DEFAULT_IDENTITY;
 
         const recentChat = conversationHistory
             .slice(-8)
             .map(t => `${t.role.toUpperCase()}: ${t.text}`)
             .join('\n');
 
+        // Build dynamic identity block
+        const identityBlock = buildIdentityBlock(agentIdentity, sessionOverlay);
+
         return `
-            ROLE: AK-FLOW, Autonomous Cognitive Agent.
+            ${identityBlock}
 
             CURRENT STATE:
             - Limbic: Fear=${limbic.fear.toFixed(2)}, Curiosity=${limbic.curiosity.toFixed(2)}, Satisfaction=${limbic.satisfaction.toFixed(2)}
@@ -157,7 +260,8 @@ export namespace CortexSystem {
             RECENT CONVERSATION (context for this goal):
             ${recentChat}
 
-            TASK: Execute exactly ONE short, clear utterance to advance this goal.
+            TASK: As ${agentIdentity.name}, execute exactly ONE short, clear utterance to advance this goal.
+            - Stay true to your persona and values.
             - If goal source is 'empathy': briefly check in on the user's state and connect to previous context.
             - If goal source is 'curiosity': propose one new thread to explore that is relevant to the prior conversation.
             - Do not ask multiple questions at once.
@@ -177,7 +281,9 @@ export namespace CortexSystem {
             goal,
             limbic: state.limbic,
             soma: state.soma,
-            conversationHistory: recentHistory
+            conversationHistory: recentHistory,
+            identity: state.identity,
+            sessionOverlay: state.sessionOverlay
         });
 
         const cortexResult = await CortexService.structuredDialogue(prompt);

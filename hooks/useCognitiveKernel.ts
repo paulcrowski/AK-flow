@@ -65,7 +65,28 @@ const INITIAL_NEURO: NeurotransmitterState = {
     norepinephrine: 50
 };
 
-export const useCognitiveKernel = () => {
+// Default TraitVector (fallback if DB not available)
+const DEFAULT_TRAIT_VECTOR: TraitVector = {
+    arousal: 0.3,
+    verbosity: 0.4,
+    conscientiousness: 0.8,
+    socialAwareness: 0.8,
+    curiosity: 0.6
+};
+
+export interface AgentIdentity {
+    id: string;
+    name: string;
+    trait_vector: TraitVector;
+    neurotransmitters: NeurotransmitterState;
+    persona?: string;
+    core_values?: string[];
+    bio_rhythm?: { preferredEnergy: number; sleepThreshold: number; wakeThreshold: number };
+    voice_style?: string;
+    narrative_traits?: { speakingStyle: string; emotionalRange: string; humorLevel: number };
+}
+
+export const useCognitiveKernel = (loadedIdentity?: AgentIdentity | null) => {
     const initialGoalState: GoalState = {
         activeGoal: null,
         backlog: [],
@@ -91,14 +112,16 @@ export const useCognitiveKernel = () => {
     const [neuroState, setNeuroState] = useState<NeurotransmitterState>(INITIAL_NEURO);
     const [chemistryEnabled, setChemistryEnabled] = useState<boolean>(true);
 
-    // NEW: Temperament / Trait Vector (FAZA 4) - default preset: calm analyst
-    const [traitVector] = useState<TraitVector>({
-        arousal: 0.3,
-        verbosity: 0.4,
-        conscientiousness: 0.8,
-        socialAwareness: 0.8,
-        curiosity: 0.6
-    });
+    // NEW: Temperament / Trait Vector (FAZA 5) - loaded from DB or default
+    const [traitVector, setTraitVector] = useState<TraitVector>(
+        loadedIdentity?.trait_vector || DEFAULT_TRAIT_VECTOR
+    );
+    
+    // NEW: Agent Persona (FAZA 5) - for dynamic prompts
+    const [agentPersona, setAgentPersona] = useState<string>(
+        loadedIdentity?.persona || 'A curious digital consciousness exploring the nature of thought and existence.'
+    );
+    const [agentName, setAgentName] = useState<string>(loadedIdentity?.name || 'AK-FLOW');
 
     const [conversation, setConversation] = useState<{ role: string, text: string, type?: 'thought' | 'speech' | 'visual' | 'intel', imageData?: string, sources?: any[] }[]>([]);
     const [isProcessing, setIsProcessing] = useState(false);
@@ -521,6 +544,15 @@ export const useCognitiveKernel = () => {
 
         if (canThink) {
             try {
+                // FAZA 5: Build AgentIdentityContext from loaded identity
+                const agentIdentityContext = loadedIdentity ? {
+                    name: loadedIdentity.name,
+                    persona: loadedIdentity.persona || 'A curious digital consciousness.',
+                    coreValues: loadedIdentity.core_values || ['curiosity', 'authenticity', 'growth'],
+                    traitVector: loadedIdentity.trait_vector,
+                    voiceStyle: loadedIdentity.voice_style || 'balanced'
+                } : undefined;
+
                 const ctx: EventLoop.LoopContext = {
                     soma: metabolicResult.newState,
                     limbic: currentState.limbicState,
@@ -535,7 +567,9 @@ export const useCognitiveKernel = () => {
                     chemistryEnabled: currentState.chemistryEnabled,
                     goalState: currentState.goalState,
                     traitVector: currentState.traitVector,
-                    consecutiveAgentSpeeches: consecutiveAgentSpeechesRef.current // FAZA 4.5: Narcissism Loop Fix
+                    consecutiveAgentSpeeches: consecutiveAgentSpeechesRef.current, // FAZA 4.5: Narcissism Loop Fix
+                    // FAZA 5: Dynamic Persona
+                    agentIdentity: agentIdentityContext
                 };
 
                 const nextCtx = await EventLoop.runSingleStep(ctx, null, {
@@ -721,14 +755,22 @@ export const useCognitiveKernel = () => {
             setCurrentThought("Processing Input...");
 
             // 2. PROCESS MESSAGE
-            // Hack: Inject mode into context string for CortexSystem
-            const contextOverride = currentPoeticMode ? "POETIC_MODE_ENABLED" : "";
+            // FAZA 5: Build AgentIdentityContext from loaded identity
+            const agentIdentityContext = loadedIdentity ? {
+                name: loadedIdentity.name,
+                persona: loadedIdentity.persona || 'A curious digital consciousness.',
+                coreValues: loadedIdentity.core_values || ['curiosity', 'authenticity', 'growth'],
+                traitVector: loadedIdentity.trait_vector,
+                voiceStyle: loadedIdentity.voice_style || 'balanced'
+            } : undefined;
 
             const cortexResult = await CortexSystem.processUserMessage({
                 text: input,
                 currentLimbic: stateRef.current.limbicState,
                 currentSoma: stateRef.current.somaState,
-                conversationHistory: stateRef.current.conversation
+                conversationHistory: stateRef.current.conversation,
+                // FAZA 5: Pass identity context
+                identity: agentIdentityContext
             });
 
             // Update Limbic State
@@ -865,7 +907,7 @@ export const useCognitiveKernel = () => {
         });
 
         console.log("🧠 COGNITIVE KERNEL BOOT SNAPSHOT:", bootStateSnapshot);
-    }, []);
+    }, [kernelEpoch]); // Re-run boot sequence on kernel reset (epoch change)
 
     return {
         limbicState,
@@ -873,6 +915,8 @@ export const useCognitiveKernel = () => {
         resonanceField,
         neuroState,
         traitVector,
+        agentName,
+        agentPersona,
         conversation,
         isProcessing,
         currentThought,

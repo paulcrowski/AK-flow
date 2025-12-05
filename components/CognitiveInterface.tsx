@@ -1,22 +1,73 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { eventBus } from '../core/EventBus';
 import { AgentType, PacketType } from '../types';
-import { MemoryService, setCurrentAgentId } from '../services/supabase';
+import { setCurrentAgentId } from '../services/supabase';
 import { NeuroMonitor } from './NeuroMonitor';
-import { useCognitiveKernel } from '../hooks/useCognitiveKernel';
+import { useCognitiveKernel, AgentIdentity } from '../hooks/useCognitiveKernel';
 import { ComponentErrorBoundary } from './ComponentErrorBoundary';
-import { useSession } from '../contexts/SessionContext';
+import { useSession, Agent } from '../contexts/SessionContext';
 import { AgentSelector } from './AgentSelector';
 import { Brain, Send, Moon, Sun, Loader2, Zap, Power, AlertTriangle, RefreshCw, EyeOff, Image as ImageIcon, Sparkles, Globe, FileText } from 'lucide-react';
 
+// Convert Agent from SessionContext to AgentIdentity for Kernel
+const agentToIdentity = (agent: Agent | null): AgentIdentity | null => {
+    if (!agent) return null;
+    return {
+        id: agent.id,
+        name: agent.name,
+        trait_vector: agent.trait_vector,
+        neurotransmitters: agent.neurotransmitters,
+        persona: agent.persona,
+        core_values: agent.core_values,
+        bio_rhythm: agent.bio_rhythm,
+        voice_style: agent.voice_style,
+        narrative_traits: agent.narrative_traits
+    };
+};
+
 export function CognitiveInterface() {
     // --- SESSION (Multi-Agent) ---
-    const { userId, agentId } = useSession();
+    const { userId, agentId, currentAgent, getAgentIdentity } = useSession();
+    
+    // FAZA 5: Load full agent identity from DB
+    const [loadedIdentity, setLoadedIdentity] = useState<AgentIdentity | null>(null);
+    const [identityLoading, setIdentityLoading] = useState(true);
 
     // Set agent ID for memory service when it changes
     useEffect(() => {
         setCurrentAgentId(agentId);
     }, [agentId]);
+
+    // FAZA 5: Boot Protocol v2 - Load identity from DB
+    useEffect(() => {
+        const loadIdentity = async () => {
+            if (!agentId) {
+                setLoadedIdentity(null);
+                setIdentityLoading(false);
+                return;
+            }
+            
+            setIdentityLoading(true);
+            try {
+                const identity = await getAgentIdentity(agentId);
+                if (identity) {
+                    console.log('[CognitiveInterface] Loaded agent identity:', identity.name);
+                    setLoadedIdentity(agentToIdentity(identity as Agent));
+                } else {
+                    // Fallback to currentAgent from context
+                    console.log('[CognitiveInterface] Using fallback identity from context');
+                    setLoadedIdentity(agentToIdentity(currentAgent));
+                }
+            } catch (err) {
+                console.error('[CognitiveInterface] Failed to load identity:', err);
+                setLoadedIdentity(agentToIdentity(currentAgent));
+            } finally {
+                setIdentityLoading(false);
+            }
+        };
+        
+        loadIdentity();
+    }, [agentId, currentAgent, getAgentIdentity]);
 
     // --- COGNITIVE KERNEL (The Brain) ---
     const {
@@ -38,7 +89,7 @@ export function CognitiveInterface() {
         injectStateOverride,
         goalState,
         resetKernel
-    } = useCognitiveKernel();
+    } = useCognitiveKernel(loadedIdentity);
 
     const [input, setInput] = useState('');
     const [sessionTokens, setSessionTokens] = useState(0);

@@ -8,6 +8,7 @@
 import { LimbicState, SomaState, NeurotransmitterState, AgentType, PacketType, GoalState, Goal, TraitVector } from '../../types';
 import { LimbicSystem } from './LimbicSystem';
 import { CortexSystem, ConversationTurn } from './CortexSystem';
+import type { CortexSystem as CortexSystemNS } from './CortexSystem';
 import { VolitionSystem, calculatePoeticScore } from './VolitionSystem';
 import { CortexService } from '../../services/gemini';
 import { NeurotransmitterSystem, ActivityType } from './NeurotransmitterSystem';
@@ -34,6 +35,9 @@ export namespace EventLoop {
         traitVector: TraitVector; // NEW: Temperament / personality vector (FAZA 4)
         lastSpeechNovelty?: number; // FAZA 4.5: Novelty of last speech for boredom detection
         consecutiveAgentSpeeches: number; // FAZA 4.5: Narcissism Loop Fix - ile razy agent mówił bez odpowiedzi usera
+        // FAZA 5: Dynamic Persona
+        agentIdentity?: CortexSystemNS.AgentIdentityContext;
+        sessionOverlay?: CortexSystemNS.SessionOverlay;
     }
 
     // Module-level Budget Tracking (counters only, limit is in context)
@@ -76,7 +80,10 @@ export namespace EventLoop {
                 text: input,
                 currentLimbic: ctx.limbic,
                 currentSoma: ctx.soma,
-                conversationHistory: ctx.conversation
+                conversationHistory: ctx.conversation,
+                // FAZA 5: Pass identity context
+                identity: ctx.agentIdentity,
+                sessionOverlay: ctx.sessionOverlay
             });
 
             // SEMANTIC INTENT DETECTION (Bonus 11/10)
@@ -184,7 +191,10 @@ export namespace EventLoop {
                     soma: ctx.soma,
                     conversation: ctx.conversation,
                     traitVector: ctx.traitVector,
-                    neuroState: ctx.neuro
+                    neuroState: ctx.neuro,
+                    // FAZA 5: Pass identity context
+                    identity: ctx.agentIdentity,
+                    sessionOverlay: ctx.sessionOverlay
                 });
 
                 if (result.internalThought) {
