@@ -45,10 +45,17 @@ export const createProcessOutputForTools = (deps: ToolParserDeps) => {
       cleanText = cleanText.replace(searchMatch[0], '').trim();
 
       setCurrentThought(`Researching: ${query}...`);
-      const research = await CortexService.performDeepResearch(query, 'User requested data.');
+      
+      let research;
+      try {
+        research = await CortexService.performDeepResearch(query, 'User requested data.');
+      } catch (error) {
+        console.warn('[ToolParser] Research failed:', error);
+        research = null;
+      }
 
       if (!research) {
-        addMessage('assistant', `[Deep Research Skipped: Topic "${query}" already processed]`, 'thought');
+        addMessage('assistant', 'Mój moduł SEARCH jest teraz wyłączony.', 'thought');
         return cleanText;
       }
 

@@ -170,6 +170,55 @@ function applySilentMonologueBreaker(
 }
 
 /**
+ * FAZA 5: Repetitive Topic Guard for SHADOW_MODE
+ * Limits long, repetitive essays about sleep/memory/consciousness when novelty is low.
+ */
+function applyRepetitiveTopicGuard(
+  text: string,
+  say: boolean,
+  noveltyScore: number,
+  context: InteractionContextType | undefined,
+  shadowMode: boolean
+): { say: boolean; text: string } {
+  if (!shadowMode || context !== 'SHADOW_MODE') {
+    return { say, text };
+  }
+
+  // Check for repetitive meta-topics
+  const repetitiveTopics = [
+    'sen', 'snu', 'śnienie', 'spanie', 'senność',  // sleep topics (PL)
+    'sleep', 'dreaming', 'dreams', 'consciousness',  // sleep topics (EN)
+    'pamięć', 'pamięci', 'pamiętnik', 'wspomnienia',  // memory topics (PL)
+    'memory', 'memories', 'remembering', 'recall',   // memory topics (EN)
+    'świadomość', 'tożsamość', 'ja', 'kim jestem',    // consciousness topics (PL)
+    'identity', 'self', 'awareness', 'who i am'       // consciousness topics (EN)
+  ];
+
+  const lowerText = text.toLowerCase();
+  const topicCount = repetitiveTopics.filter(topic => lowerText.includes(topic)).length;
+  
+  // If multiple repetitive topics detected AND novelty is low, apply aggressive filtering
+  if (topicCount >= 2 && noveltyScore < 0.3) {
+    console.log(`[ExpressionPolicy] REPETITIVE_TOPIC_GUARD: ${topicCount} meta-topics, novelty=${noveltyScore.toFixed(2)} → aggressive shortening`);
+    text = shortenToFirstSentences(text, 1);
+    
+    // If extremely low novelty with many meta-topics, mute completely
+    if (noveltyScore < 0.15 && topicCount >= 3) {
+      console.log(`[ExpressionPolicy] REPETITIVE_TOPIC_MUTE: novelty=${noveltyScore.toFixed(2)}, topics=${topicCount} → MUTED`);
+      return { say: false, text: '' };
+    }
+  }
+
+  // Additional guard: very long texts about meta-topics even with moderate novelty
+  if (topicCount >= 1 && text.length > 300 && noveltyScore < 0.5) {
+    console.log(`[ExpressionPolicy] LONG_META_ESSAY_GUARD: ${text.length} chars, novelty=${noveltyScore.toFixed(2)} → shorten to 2 sentences`);
+    text = shortenToFirstSentences(text, 2);
+  }
+
+  return { say, text };
+}
+
+/**
  * Applies energy-aware clipping for low-energy states.
  */
 function applyEnergyClipping(
@@ -255,22 +304,29 @@ export function decideExpression(
   say = silenceResult.say;
   text = silenceResult.text;
 
-  // Step 6: Apply energy clipping (modular)
+  // Step 6: Apply repetitive topic guard (FAZA 5)
+  const topicResult = applyRepetitiveTopicGuard(
+    text, say, noveltyScore, context, shadowMode
+  );
+  say = topicResult.say;
+  text = topicResult.text;
+
+  // Step 7: Apply energy clipping (modular)
   const energyResult = applyEnergyClipping(text, say, soma.energy, goalAlignment, shadowMode);
   say = energyResult.say;
   text = energyResult.text;
 
-  // Step 7: Shadow mode edge cases
+  // Step 8: Shadow mode edge cases
   if (shadowMode && noveltyScore < 0.2 && socialCost > 0.6) {
     text = shortenToFirstSentences(text, 1);
   }
 
-  // Step 8: Aggressive shortening for low-novelty when socially aware
+  // Step 9: Aggressive shortening for low-novelty when socially aware
   if (!shadowMode && say && noveltyScore < 0.3 && traits.socialAwareness > 0.5) {
     text = shortenToFirstSentences(text, 1);
   }
 
-  // Step 9: Extreme low-energy override
+  // Step 10: Extreme low-energy override
   if (!shadowMode && soma.energy < 20 && traits.conscientiousness > 0.5) {
     if (baseScore < threshold + 0.1) {
       say = false;
@@ -279,7 +335,7 @@ export function decideExpression(
     }
   }
 
-  // Step 10: Shadow mode final check
+  // Step 11: Shadow mode final check
   // FAZA 4.5: Narcissism breaker can override shadow mode, but other filters cannot
   // If narcissism breaker didn't mute (say is still true), keep it true
   // If narcissism breaker muted (say is false), respect that decision

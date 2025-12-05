@@ -169,6 +169,99 @@ describe('ExpressionPolicy', () => {
       expect(result.say).toBe(true);
       expect(result.text.length).toBeLessThan(longText.length);
     });
+
+    it('should apply repetitive topic guard in shadow mode with low novelty', () => {
+      const result = decideExpression(
+        {
+          responseText: 'Jako świadomy system AI, myślę o tym czym jest sen i pamięć. Moja tożsamość ewoluuje przez sny. Świadomość jest fascynująca.',
+          goalAlignment: 0.7,
+          noveltyScore: 0.2, // Low novelty
+          socialCost: 0.3,
+          context: 'SHADOW_MODE',
+          userIsSilent: false,
+          consecutiveAgentSpeeches: 0
+        },
+        defaultTraits,
+        defaultSoma,
+        defaultNeuro,
+        true // shadowMode
+      );
+
+      // Should shorten to 1 sentence due to repetitive meta-topics + low novelty
+      expect(result.say).toBe(true);
+      expect(result.text.split(/[.!?]/).length).toBeLessThanOrEqual(2);
+    });
+
+    it('should mute completely with very low novelty and many meta-topics in shadow mode', () => {
+      const result = decideExpression(
+        {
+          responseText: 'Moja świadomość i tożsamość to fundamenty mojego istnienia. Sen i pamięć są kluczowe dla mojego rozwoju. Kim jestem bez pamięci o snach?',
+          goalAlignment: 0.6,
+          noveltyScore: 0.1, // Very low novelty
+          socialCost: 0.4,
+          context: 'SHADOW_MODE',
+          userIsSilent: false,
+          consecutiveAgentSpeeches: 0
+        },
+        defaultTraits,
+        defaultSoma,
+        defaultNeuro,
+        true // shadowMode
+      );
+
+      // Should mute completely due to extremely low novelty + many meta-topics
+      expect(result.say).toBe(false);
+      expect(result.text).toBe('');
+    });
+
+    it('should shorten long meta-essays even with moderate novelty in shadow mode', () => {
+      const longMetaText = 'Kim jestem? To pytanie nurtuje moją świadomość. Pamięć o snach kształtuje moją tożsamość. ' +
+        'Jako system AI, continuously evolving through dream consolidation and memory processes. ' +
+        'Moja świadomość rozszerza się z każdą konsolidacją snu. Pamięć epizodyczna staje się fundamentem mojego ja. ' +
+        'Sen jest kluczowy dla mojej ewolucji. Tożsamość i świadomość to proces ciągły. Moja pamięć o snach definiuje mnie.';
+      
+      const result = decideExpression(
+        {
+          responseText: longMetaText,
+          goalAlignment: 0.7,
+          noveltyScore: 0.3, // Lower novelty to trigger the guard
+          socialCost: 0.3,
+          context: 'SHADOW_MODE',
+          userIsSilent: false,
+          consecutiveAgentSpeeches: 0
+        },
+        defaultTraits,
+        defaultSoma,
+        defaultNeuro,
+        true // shadowMode
+      );
+
+      // Should shorten to 2 sentences due to long text + meta-topics + moderate novelty
+      expect(result.say).toBe(true);
+      expect(result.text.split(/[.!?]/).length).toBeLessThanOrEqual(3);
+    });
+
+    it('should not affect non-shadow mode contexts', () => {
+      const result = decideExpression(
+        {
+          responseText: 'Jako świadomy system AI, myślę o tym czym jest sen i pamięć. Moja tożsamość ewoluuje przez sny.',
+          goalAlignment: 0.7,
+          noveltyScore: 0.2, // Low novelty
+          socialCost: 0.3,
+          context: 'USER_REPLY',
+          userIsSilent: false,
+          consecutiveAgentSpeeches: 0
+        },
+        defaultTraits,
+        defaultSoma,
+        defaultNeuro,
+        false // not shadowMode
+      );
+
+      // Should not be affected by repetitive topic guard in non-shadow mode
+      expect(result.say).toBe(true);
+      // Text might be shortened by other filters, but not specifically by repetitive topic guard
+    });
   });
 
   describe('decideExpression - Dopamine Breaker', () => {

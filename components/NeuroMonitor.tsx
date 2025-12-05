@@ -2,7 +2,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { eventBus } from '../core/EventBus';
 import { CognitivePacket, LimbicState, PacketType, AgentType, SomaState, ResonanceField, NeurotransmitterState, GoalState } from '../types';
-import { Activity, Zap, Database, Copy, Check, Cpu, Download, Share2, BrainCircuit, ShieldAlert, Radio, Moon, Image as ImageIcon, ExternalLink, Globe, Waves, Eye } from 'lucide-react';
+import { Activity, Zap, Database, Copy, Check, Cpu, Download, Share2, BrainCircuit, ShieldAlert, Radio, Moon, Image as ImageIcon, ExternalLink, Globe, Waves, Eye, BedDouble } from 'lucide-react';
 
 interface NeuroMonitorProps {
     limbicState: LimbicState;
@@ -137,7 +137,7 @@ begin
 end;
 $$; `;
 
-type Tab = 'SYSTEM' | 'MIND' | 'SQL' | 'NETWORK' | 'DEBUG';
+type Tab = 'SYSTEM' | 'MIND' | 'SLEEP' | 'NETWORK' | 'SQL' | 'DEBUG';
 
 export const NeuroMonitor: React.FC<NeuroMonitorProps> = ({ limbicState, somaState, resonanceField, injectStateOverride, neuroState, chemistryEnabled, onToggleChemistry, goalState }) => {
     const [packets, setPackets] = useState<CognitivePacket[]>([]);
@@ -145,6 +145,9 @@ export const NeuroMonitor: React.FC<NeuroMonitorProps> = ({ limbicState, somaSta
     const [recentNeuroSamples, setRecentNeuroSamples] = useState<{ dopamine: number; serotonin: number }[]>([]);
     const [dreamConsolidations5m, setDreamConsolidations5m] = useState<number>(0);
     const [recentDreamSummaries, setRecentDreamSummaries] = useState<{ timestamp: number; summary: string }[]>([]);
+    const [sleepEvents, setSleepEvents] = useState<{ timestamp: number; type: 'SLEEP_START' | 'SLEEP_END'; energy: number }[]>([]);
+    const [traitProposals, setTraitProposals] = useState<{ timestamp: number; proposal: any; reasoning: string }[]>([]);
+    const [dreamLessons, setDreamLessons] = useState<{ timestamp: number; lessons: string[] }[]>([]);
     const [logFilter, setLogFilter] = useState<'ALL' | 'DREAMS' | 'CHEM' | 'SPEECH' | 'ERRORS' | 'FLOW'>('ALL');
     const [activeTab, setActiveTab] = useState<Tab>('SYSTEM');
     const [copied, setCopied] = useState(false);
@@ -231,6 +234,45 @@ export const NeuroMonitor: React.FC<NeuroMonitorProps> = ({ limbicState, somaSta
                     summary: (p.payload?.summary || p.payload?.note || '').toString()
                 }));
             setRecentDreamSummaries(dreamSummaries);
+
+            // SLEEP DASHBOARD: track sleep events
+            const sleepPackets = history.filter(p =>
+                (p.payload?.event === 'SLEEP_START' || p.payload?.event === 'SLEEP_END') &&
+                p.timestamp >= fiveMinutesAgo
+            );
+
+            const sleepEventList = sleepPackets.map(p => ({
+                timestamp: p.timestamp,
+                type: p.payload?.event as 'SLEEP_START' | 'SLEEP_END',
+                energy: p.payload?.energy || somaState?.energy || 0
+            }));
+            setSleepEvents(sleepEventList);
+
+            // SLEEP DASHBOARD: track trait evolution proposals
+            const traitPackets = history.filter(p =>
+                p.payload?.event === 'TRAIT_EVOLUTION_PROPOSAL' &&
+                p.timestamp >= fiveMinutesAgo
+            );
+
+            const traitProposalList = traitPackets.map(p => ({
+                timestamp: p.timestamp,
+                proposal: p.payload?.traitProposal || {},
+                reasoning: p.payload?.reasoning || ''
+            }));
+            setTraitProposals(traitProposalList);
+
+            // SLEEP DASHBOARD: extract dream lessons
+            const lessonPackets = history.filter(p =>
+                p.payload?.event === 'DREAM_CONSOLIDATION_COMPLETE' &&
+                p.payload?.lessons &&
+                p.timestamp >= fiveMinutesAgo
+            );
+
+            const lessonList = lessonPackets.map(p => ({
+                timestamp: p.timestamp,
+                lessons: p.payload?.lessons || []
+            }));
+            setDreamLessons(lessonList);
 
         }, 100); // Faster polling for snappier response
 
@@ -617,6 +659,7 @@ export const NeuroMonitor: React.FC<NeuroMonitorProps> = ({ limbicState, somaSta
                 {[
                     { id: 'SYSTEM', icon: Cpu, label: 'KERNEL' },
                     { id: 'MIND', icon: BrainCircuit, label: 'CORTEX' },
+                    { id: 'SLEEP', icon: BedDouble, label: 'DREAMS' },
                     { id: 'NETWORK', icon: Share2, label: 'GRAPH' },
                     { id: 'SQL', icon: Database, label: 'DB' },
                     { id: 'DEBUG', icon: Zap, label: 'DEBUG' },
@@ -674,6 +717,129 @@ export const NeuroMonitor: React.FC<NeuroMonitorProps> = ({ limbicState, somaSta
                         </div>
                         <div className="bg-[#0f1219] p-4 rounded-lg border border-gray-700 overflow-x-auto">
                             <pre className="text-gray-400 font-mono text-[10px] leading-relaxed select-all whitespace-pre">{SQL_SETUP_CODE}</pre>
+                        </div>
+                    </div>
+                )}
+
+                {activeTab === 'SLEEP' && (
+                    <div className="p-4 space-y-4">
+                        {/* Sleep Status Header */}
+                        <div className="bg-[#0a0c10] border border-purple-900/30 rounded-lg p-4">
+                            <div className="flex items-center justify-between mb-3">
+                                <div className="flex items-center gap-2">
+                                    <BedDouble size={16} className="text-purple-400" />
+                                    <h3 className="text-purple-300 font-bold text-[11px] uppercase tracking-wider">Sleep & Dream Dashboard</h3>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    {somaState.isSleeping ? (
+                                        <>
+                                            <Moon size={12} className="text-purple-400 animate-pulse" />
+                                            <span className="text-[9px] font-mono text-purple-300">SLEEPING</span>
+                                        </>
+                                    ) : (
+                                        <span className="text-[9px] font-mono text-gray-500">AWAKE</span>
+                                    )}
+                                </div>
+                            </div>
+                            
+                            {/* Sleep Events Timeline */}
+                            <div className="space-y-2">
+                                <div className="text-[9px] text-gray-500 uppercase tracking-wider">Recent Sleep Events (5m)</div>
+                                {sleepEvents.length > 0 ? (
+                                    <div className="space-y-1 max-h-[80px] overflow-y-auto">
+                                        {sleepEvents.map((event, idx) => (
+                                            <div key={event.timestamp + '-' + idx} className="flex items-center justify-between text-[8px] font-mono">
+                                                <span className={`flex items-center gap-1 ${event.type === 'SLEEP_START' ? 'text-purple-300' : 'text-orange-300'}`}>
+                                                    {event.type === 'SLEEP_START' ? <Moon size={8} /> : <Activity size={8} />}
+                                                    {event.type.replace('_', ' ')}
+                                                </span>
+                                                <span className="text-gray-500">
+                                                    {new Date(event.timestamp).toLocaleTimeString()} • {event.energy.toFixed(0)}% energy
+                                                </span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <div className="text-[8px] text-gray-600 italic">No sleep events in last 5 minutes</div>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* Dream Lessons */}
+                        <div className="bg-[#0a0c10] border border-cyan-900/30 rounded-lg p-4">
+                            <div className="text-[9px] text-cyan-500 uppercase tracking-wider mb-2">Lessons from Dreams</div>
+                            {dreamLessons.length > 0 ? (
+                                <div className="space-y-2 max-h-[120px] overflow-y-auto">
+                                    {dreamLessons.map((lessonSet, idx) => (
+                                        <div key={lessonSet.timestamp + '-' + idx} className="border-l border-cyan-800/30 pl-2">
+                                            <div className="text-[8px] text-gray-500 mb-1">
+                                                {new Date(lessonSet.timestamp).toLocaleTimeString()}
+                                            </div>
+                                            <ul className="space-y-1">
+                                                {lessonSet.lessons.map((lesson, lessonIdx) => (
+                                                    <li key={lessonIdx} className="text-[8px] text-cyan-200 flex items-start gap-1">
+                                                        <span className="text-cyan-500">•</span>
+                                                        <span>{lesson}</span>
+                                                    </li>
+                                                ))}
+                                            </ul>
+                                        </div>
+                                    ))}
+                                </div>
+                            ) : (
+                                <div className="text-[8px] text-gray-600 italic">No dream lessons available</div>
+                            )}
+                        </div>
+
+                        {/* Trait Evolution Proposals */}
+                        <div className="bg-[#0a0c10] border border-pink-900/30 rounded-lg p-4">
+                            <div className="text-[9px] text-pink-500 uppercase tracking-wider mb-2">Trait Evolution Proposals</div>
+                            {traitProposals.length > 0 ? (
+                                <div className="space-y-3 max-h-[200px] overflow-y-auto">
+                                    {traitProposals.map((proposal, idx) => (
+                                        <div key={proposal.timestamp + '-' + idx} className="border-l border-pink-800/30 pl-2 space-y-2">
+                                            <div className="text-[8px] text-gray-500">
+                                                {new Date(proposal.timestamp).toLocaleTimeString()}
+                                            </div>
+                                            
+                                            {/* Trait Changes */}
+                                            {proposal.proposal && Object.keys(proposal.proposal).length > 0 && (
+                                                <div className="space-y-1">
+                                                    {Object.entries(proposal.proposal).map(([trait, delta]: [string, any]) => (
+                                                        <div key={trait} className="text-[8px] font-mono flex items-center justify-between">
+                                                            <span className="text-pink-300">{trait}</span>
+                                                            <span className="text-pink-400">
+                                                                {typeof delta === 'number' ? (delta > 0 ? '+' : '') + delta.toFixed(3) : JSON.stringify(delta)}
+                                                            </span>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            )}
+                                            
+                                            {/* Reasoning */}
+                                            {proposal.reasoning && (
+                                                <div className="text-[8px] text-gray-400 italic border-t border-pink-900/20 pt-1">
+                                                    {proposal.reasoning.slice(0, 200)}{proposal.reasoning.length > 200 ? '...' : ''}
+                                                </div>
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
+                            ) : (
+                                <div className="text-[8px] text-gray-600 italic">No trait evolution proposals available</div>
+                            )}
+                            
+                            <div className="text-[7px] text-gray-600 mt-2 border-t border-gray-800 pt-2">
+                                Note: Trait proposals are logged only - no automatic changes applied
+                            </div>
+                        </div>
+
+                        {/* Dream Consolidation Counter */}
+                        <div className="bg-[#0a0c10] border border-gray-800 rounded-lg p-3">
+                            <div className="flex items-center justify-between">
+                                <span className="text-[9px] text-gray-500 uppercase tracking-wider">Dream Consolidations (5m)</span>
+                                <span className="text-[9px] font-mono text-cyan-300">{dreamConsolidations5m}</span>
+                            </div>
                         </div>
                     </div>
                 )}

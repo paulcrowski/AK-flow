@@ -411,9 +411,12 @@ export const useCognitiveKernel = (loadedIdentity?: AgentIdentity | null) => {
                 if (result.episodesProcessed > 0) {
                     setCurrentThought(`Dreaming... processed ${result.episodesProcessed} memories, learned ${result.lessonsGenerated.length} lessons`);
                     
-                    // Add dream summary to conversation
+                    // Add dream summary to conversation - DISABLED for silent reporting (Challenge #4)
+                    // if (result.selfSummary) {
+                    //    addMessage('assistant', `[Dream Journal] ${result.selfSummary}`, 'thought');
+                    // }
                     if (result.selfSummary) {
-                        addMessage('assistant', `[Dream Journal] ${result.selfSummary}`, 'thought');
+                         console.log(`[Silent Dream Summary] ${result.selfSummary}`);
                     }
                 } else {
                     setCurrentThought('Resting... no significant memories to process');

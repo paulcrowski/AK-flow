@@ -121,3 +121,46 @@
   - agregacja propozycji z kilku nocy,
   - tabela „jak agent chciałby się zmienić" z możliwością ręcznej akceptacji.
 
+---
+
+## 6. Manifest: SEARCH, VISUALIZE, SEN (prosto)
+
+- **SEARCH**
+  - Agent nie ma wbudowanego "internetu". Ma osobny moduł SEARCH.
+  - SEARCH może być **włączony lub wyłączony**.
+  - Gdy jest włączony, agent może prosić ciało o "Deep Research" / nowe dane.
+  - Gdy jest wyłączony, mówi: *"mój moduł SEARCH jest teraz wyłączony"* (zamiast klasycznego LLM-owego tekstu).
+
+- **VISUALIZE**
+  - Agent może poprosić o obraz (`VISUALIZE`), a potem **sam czyta** opis tego obrazu.
+  - To jest jak wewnętrzna wizualizacja: najpierw rysunek, potem słowny opis, który trafia do pamięci.
+
+- **SEN (DreamConsolidation)**
+  - Sen NIE odpala prawdziwego SEARCH ani VISUALIZE.
+  - Zamiast tego bierze **najmocniejsze epizody z dnia** (w tym te, gdzie był search / wizualizacja) i:
+    - robi z nich "lekcje dnia",
+    - tworzy `[SELF-SUMMARY]` o tym, czego nauczył się o sobie i świecie,
+    - proponuje delikatne zmiany TraitVector (log only).
+
+- **OSOBOWOŚĆ (TraitVector)**
+  - Osobowość decyduje **jak często** agent chce używać SEARCH/VISUALIZE (np. wysoka curiosity → więcej researchu).
+  - Sen zbiera skutki tych działań i robi z nich propozycje zmian osobowości.
+  - Zmiany cech NIE dzieją się automatycznie – wymagają ręcznej akceptacji w przyszłej fazie.
+
+### Challenges (prosty język)
+
+1. **Ujednolicić narrację o SEARCH**  
+   Agent ma mówić: *"mój moduł SEARCH jest teraz wyłączony"*, zamiast mieszać to z klasycznym komunikatem LLM.
+
+2. **Ograniczyć gadanie o sobie bez pytania**  
+   Meta-opisy typu "kim jestem, jak działa moja świadomość" tylko wtedy, gdy user wprost o to pyta.
+
+3. **Włączyć hamulce dla flow**  
+   ExpressionPolicy w SHADOW_MODE ma przycinać długie, powtarzalne eseje (niska novelty, te same tematy: sen/pamięć/świadomość).
+
+4. **Cichy raport ze snu**  
+   Sen generuje `DREAM_SUMMARY` i zapisuje go w pamięci, ale agent opowiada o nim dopiero, gdy user zapyta (zamiast zalewać usera raportem po każdym śnie).
+
+5. **Panel do obserwacji SEARCH / VISUALIZE / SNU**  
+   W NeuroMonitorze pokazać: kiedy działał SEARCH, jakie wizualizacje widział, jakie wnioski trafiły do snu i jak to wpływa na jego samopopis.
+
