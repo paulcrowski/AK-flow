@@ -70,10 +70,12 @@ export namespace CortexSystem {
             
             TASK: Analyze input, update emotional state, and formulate a response.
             
-            OUTPUT JSON format with:
-            - responseText: The actual reply to the user.
-            - internalThought: Your internal reasoning.
-            - nextLimbic: { fear_delta, curiosity_delta } (changes to emotional state)
+            OUTPUT JSON format with NO markdown blocks, just raw JSON:
+            {
+                "responseText": "The actual reply to the user.",
+                "internalThought": "Your internal reasoning.",
+                "nextLimbic": { "fear_delta": 0.0, "curiosity_delta": 0.0 }
+            }
         `;
     }
 
@@ -160,9 +162,11 @@ export namespace CortexSystem {
             - If goal source is 'curiosity': propose one new thread to explore that is relevant to the prior conversation.
             - Do not ask multiple questions at once.
 
-            OUTPUT JSON with:
-            - responseText: the message to the user (one turn)
-            - internalThought: your internal monologue about how this serves the goal
+            OUTPUT JSON format with NO markdown blocks, just raw JSON:
+            {
+                "responseText": "the message to the user (one turn)",
+                "internalThought": "your internal monologue about how this serves the goal"
+            }
         `;
     }
 

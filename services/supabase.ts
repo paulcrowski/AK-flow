@@ -30,11 +30,24 @@ const compressNeuralImage = async (base64Str: string): Promise<string | null> =>
     });
 };
 
+// Current agent context - set by SessionContext
+let currentAgentId: string | null = null;
+
+export const setCurrentAgentId = (agentId: string | null) => {
+  currentAgentId = agentId;
+  console.log('[MemoryService] Agent ID set to:', agentId);
+};
+
+export const getCurrentAgentId = () => currentAgentId;
+
 export const MemoryService = {
   async storeMemory(memory: MemoryTrace) {
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const userId = session?.user?.id;
+      if (!currentAgentId) {
+        console.warn('[MemoryService] No agent selected, skipping memory store');
+        return;
+      }
+      
       const embedding = await CortexService.generateEmbedding(memory.content);
       
       if (!embedding) throw new Error("Embedding generation failed");
@@ -46,7 +59,7 @@ export const MemoryService = {
       }
 
       const basePayload = {
-        user_id: userId, 
+        agent_id: currentAgentId,
         raw_text: `${memory.content} [Emotion: ${JSON.stringify(memory.emotionalContext)}]`,
         created_at: new Date().toISOString(),
         embedding: embedding,
@@ -95,9 +108,15 @@ export const MemoryService = {
 
   async recallRecent(limit: number = 5) {
     try {
+      if (!currentAgentId) {
+        console.warn('[MemoryService] No agent selected, returning empty');
+        return [];
+      }
+      
       const { data, error } = await supabase
         .from('memories')
-        .select('*') 
+        .select('*')
+        .eq('agent_id', currentAgentId)
         .order('created_at', { ascending: false })
         .limit(limit);
       
@@ -125,11 +144,17 @@ export const MemoryService = {
 
   async semanticSearch(query: string) {
     try {
+      if (!currentAgentId) {
+        console.warn('[MemoryService] No agent selected, returning empty');
+        return [];
+      }
+      
       const embedding = await CortexService.generateEmbedding(query);
       if (!embedding) return [];
 
-      const { data, error } = await supabase.rpc('match_memories', {
+      const { data, error } = await supabase.rpc('match_memories_for_agent', {
         query_embedding: embedding,
+        p_agent_id: currentAgentId,
         match_threshold: 0.4,
         match_count: 4
       });

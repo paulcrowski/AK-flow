@@ -14,7 +14,6 @@ export interface NeuroContext {
   temperament: TraitVector; // NEW: Temperament / personality vector (FAZA 4)
   // FAZA 4.5: Narcissism Loop Fix v1.0
   userIsSilent?: boolean;           // true if user hasn't spoken recently
-  speechOccurred?: boolean;         // true if agent just spoke
   novelty?: number;                 // 0-1, how novel was the last speech
   consecutiveAgentSpeeches?: number; // how many times agent spoke without user reply
 }

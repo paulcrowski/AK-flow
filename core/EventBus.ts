@@ -33,6 +33,10 @@ class CognitiveBus {
   getHistory() {
     return this.history;
   }
+
+  clear() {
+    this.history = [];
+  }
 }
 
 export const eventBus = new CognitiveBus();

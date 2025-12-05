@@ -38,27 +38,48 @@ const normalizeError = (e: any): CognitiveError => {
     };
 };
 
+// --- INITIAL BASELINES (Static Constants) ---
+const INITIAL_LIMBIC: LimbicState = {
+    fear: 0.1,
+    curiosity: 0.8, // 11/10 MODE: High curiosity start
+    frustration: 0.0,
+    satisfaction: 0.5
+};
+
+const INITIAL_SOMA: SomaState = {
+    cognitiveLoad: 10,
+    energy: 100,
+    isSleeping: false
+};
+
+const INITIAL_RESONANCE: ResonanceField = {
+    coherence: 1.0,
+    intensity: 0.5,
+    frequency: 1.0,
+    timeDilation: 1.0
+};
+
+const INITIAL_NEURO: NeurotransmitterState = {
+    dopamine: 55,
+    serotonin: 60,
+    norepinephrine: 50
+};
+
 export const useCognitiveKernel = () => {
+    const initialGoalState: GoalState = {
+        activeGoal: null,
+        backlog: [],
+        lastUserInteractionAt: Date.now(),
+        goalsFormedTimestamps: [],
+        lastGoals: []
+    };
+
     // --- STATE ---
-    const [limbicState, setLimbicState] = useState<LimbicState>({
-        fear: 0.1,
-        curiosity: 0.8, // 11/10 MODE: High curiosity start
-        frustration: 0.0,
-        satisfaction: 0.5
-    });
+    const [limbicState, setLimbicState] = useState<LimbicState>(INITIAL_LIMBIC);
 
-    const [somaState, setSomaState] = useState<SomaState>({
-        cognitiveLoad: 10,
-        energy: 100,
-        isSleeping: false
-    });
+    const [somaState, setSomaState] = useState<SomaState>(INITIAL_SOMA);
 
-    const [resonanceField, setResonanceField] = useState<ResonanceField>({
-        coherence: 1.0,
-        intensity: 0.5,
-        frequency: 1.0,
-        timeDilation: 1.0
-    });
+    const [resonanceField, setResonanceField] = useState<ResonanceField>(INITIAL_RESONANCE);
 
     // SECURITY AUDIT FIX: Default Autonomy MUST be false.
     const [autonomousMode, setAutonomousMode] = useState(false);
@@ -67,11 +88,7 @@ export const useCognitiveKernel = () => {
     const [poeticMode, setPoeticMode] = useState(false);
 
     // NEW: Chemical Soul v1
-    const [neuroState, setNeuroState] = useState<NeurotransmitterState>({
-        dopamine: 55,
-        serotonin: 60,
-        norepinephrine: 50
-    });
+    const [neuroState, setNeuroState] = useState<NeurotransmitterState>(INITIAL_NEURO);
     const [chemistryEnabled, setChemistryEnabled] = useState<boolean>(true);
 
     // NEW: Temperament / Trait Vector (FAZA 4) - default preset: calm analyst
@@ -89,13 +106,7 @@ export const useCognitiveKernel = () => {
     const [systemError, setSystemError] = useState<CognitiveError | null>(null);
 
     // Refs
-    const [goalState, setGoalState] = useState<GoalState>({
-        activeGoal: null,
-        backlog: [],
-        lastUserInteractionAt: Date.now(),
-        goalsFormedTimestamps: [],
-        lastGoals: []
-    });
+    const [goalState, setGoalState] = useState<GoalState>(initialGoalState);
 
     const stateRef = useRef({ limbicState, somaState, resonanceField, conversation, autonomousMode, poeticMode, neuroState, chemistryEnabled, goalState, traitVector });
     const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -108,6 +119,7 @@ export const useCognitiveKernel = () => {
     const lastSpeakRef = useRef<number>(0);
     const lastUserInputRef = useRef<string | null>(null);
     const consecutiveAgentSpeechesRef = useRef<number>(0); // FAZA 4.5: Narcissism Loop Fix
+    const [kernelEpoch, setKernelEpoch] = useState(0); // Tracks session resets for logging
 
     // Sync Ref
     useEffect(() => {
@@ -115,6 +127,75 @@ export const useCognitiveKernel = () => {
     }, [limbicState, somaState, resonanceField, conversation, autonomousMode, poeticMode, neuroState, chemistryEnabled, goalState, traitVector]);
 
     // --- ACTIONS ---
+
+    const resetKernel = useCallback(() => {
+        console.log('[CognitiveKernel] RESETTING KERNEL - Full State Reset');
+        // Clear EventBus history for clean session logs
+        eventBus.clear();
+        
+        // Increment epoch to re-trigger boot logs
+        setKernelEpoch(prev => prev + 1);
+
+        // Stop autonomy loop
+        setAutonomousMode(false);
+        if (timeoutRef.current) {
+            clearTimeout(timeoutRef.current);
+            timeoutRef.current = null;
+        }
+        isLoopRunning.current = false;
+
+        // Reset high-level UI state
+        setConversation([]);
+        setIsProcessing(false);
+        setCurrentThought("Initializing Synapses...");
+        setSystemError(null);
+
+        // Reset biological and cognitive state to baselines
+        setLimbicState(INITIAL_LIMBIC);
+        setSomaState(INITIAL_SOMA);
+        setResonanceField(INITIAL_RESONANCE);
+        setNeuroState(INITIAL_NEURO);
+        setChemistryEnabled(true);
+        setPoeticMode(false);
+        setGoalState({
+            activeGoal: null,
+            backlog: [],
+            lastUserInteractionAt: Date.now(),
+            goalsFormedTimestamps: [],
+            lastGoals: []
+        });
+
+        // Reset refs
+        stateRef.current = {
+            limbicState: INITIAL_LIMBIC,
+            somaState: INITIAL_SOMA,
+            resonanceField: INITIAL_RESONANCE,
+            conversation: [],
+            autonomousMode: false,
+            poeticMode: false,
+            neuroState: INITIAL_NEURO,
+            chemistryEnabled: true,
+            goalState: {
+                activeGoal: null,
+                backlog: [],
+                lastUserInteractionAt: Date.now(),
+                goalsFormedTimestamps: [],
+                lastGoals: []
+            },
+            traitVector
+        };
+
+        silenceStartRef.current = Date.now();
+        lastVisualTimestamp.current = 0;
+        visualBingeCountRef.current = 0;
+        thoughtHistoryRef.current = [];
+        lastSpeakRef.current = 0;
+        lastUserInputRef.current = null;
+        consecutiveAgentSpeechesRef.current = 0;
+
+        // Allow fresh boot sequence for new agent
+        hasBootedRef.current = false;
+    }, [traitVector]);
 
     const logPhysiologySnapshot = (context: string) => {
         const snapshot = stateRef.current;
@@ -804,6 +885,7 @@ export const useCognitiveKernel = () => {
         toggleChemistry,
         injectStateOverride,
         goalState,
+        resetKernel,
         retryLastAction,
         handleInput
     };

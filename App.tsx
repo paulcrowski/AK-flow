@@ -2,13 +2,24 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { eventBus } from './core/EventBus';
 import { AgentType, PacketType } from './types';
-import { MemoryService } from './services/supabase';
+import { MemoryService, setCurrentAgentId } from './services/supabase';
 import { NeuroMonitor } from './components/NeuroMonitor';
 import { useCognitiveKernel } from './hooks/useCognitiveKernel';
 import { ComponentErrorBoundary } from './components/ComponentErrorBoundary';
+import { useSession } from './contexts/SessionContext';
+import { LoginScreen } from './components/LoginScreen';
+import { AgentSelector } from './components/AgentSelector';
 import { Brain, Send, Moon, Sun, Loader2, Zap, Power, AlertTriangle, RefreshCw, EyeOff, Image as ImageIcon, Sparkles, Globe, FileText } from 'lucide-react';
 
 function App() {
+    // --- SESSION (Multi-Agent) ---
+    const { userId, agentId, currentAgent, isLoading: sessionLoading } = useSession();
+
+    // Set agent ID for memory service when it changes
+    useEffect(() => {
+        setCurrentAgentId(agentId);
+    }, [agentId]);
+
     // --- COGNITIVE KERNEL (The Brain) ---
     const {
         limbicState,
@@ -27,12 +38,19 @@ function App() {
         chemistryEnabled,
         toggleChemistry,
         injectStateOverride,
-        goalState
+        goalState,
+        resetKernel
     } = useCognitiveKernel();
 
     const [input, setInput] = useState('');
     const [sessionTokens, setSessionTokens] = useState(0);
     const chatEndRef = useRef<HTMLDivElement>(null);
+
+    // --- KERNEL RESET ON SESSION CHANGE ---
+    useEffect(() => {
+        // When user or agent changes, fully reset cognitive kernel state
+        resetKernel();
+    }, [userId, agentId, resetKernel]);
 
     // --- SUBSCRIPTIONS (UI Only) ---
     useEffect(() => {
@@ -62,6 +80,37 @@ function App() {
     const isCritical = somaState.energy < 5;
     const isSleeping = somaState.isSleeping;
 
+    // --- SESSION GUARD ---
+    // Show login screen if no user is logged in
+    if (!userId) {
+        return <LoginScreen />;
+    }
+
+    // Show loading while fetching agents
+    if (sessionLoading) {
+        return (
+            <div className="min-h-screen bg-[#0a0c10] flex items-center justify-center">
+                <div className="flex flex-col items-center gap-4">
+                    <Loader2 className="w-8 h-8 animate-spin text-cyan-400" />
+                    <p className="text-gray-500 text-sm">Ładowanie agentów...</p>
+                </div>
+            </div>
+        );
+    }
+
+    // Show agent selector if no agent selected
+    if (!agentId) {
+        return (
+            <div className="min-h-screen bg-[#0a0c10] flex items-center justify-center">
+                <div className="text-center">
+                    <Brain className="w-16 h-16 text-cyan-400 mx-auto mb-4" />
+                    <h2 className="text-xl text-white mb-4">Wybierz agenta</h2>
+                    <AgentSelector />
+                </div>
+            </div>
+        );
+    }
+
     return (
         <div className={`flex h-screen text-gray-100 font-sans transition-all duration-[2000ms] overflow-hidden 
         ${isSleeping ? 'brightness-50 grayscale-[0.5]' : ''} 
@@ -90,8 +139,9 @@ function App() {
                 `}></div>
                         <h1 className="font-bold text-lg tracking-wider flex items-center gap-2">
                             AK-FLOW
-                            <span className="text-gray-500 text-xs">v3.5 (Secure)</span>
+                            <span className="text-gray-500 text-xs">v4.0</span>
                         </h1>
+                        <AgentSelector />
                     </div>
                     <div className="flex gap-4 text-xs font-mono text-gray-400 items-center">
                         <div className="flex items-center gap-2 opacity-50 hover:opacity-100 transition-opacity">
@@ -100,10 +150,9 @@ function App() {
 
                         <button
                             onClick={toggleAutonomy}
-                            disabled={isCritical}
                             className={`flex items-center gap-2 px-3 py-1 rounded border transition-all 
                         ${autonomousMode ? 'border-green-500 text-green-400 bg-green-900/20' : 'border-gray-600 text-gray-500 hover:bg-gray-800'} 
-                        ${isCritical ? 'opacity-30 cursor-not-allowed' : ''}
+                        ${isCritical ? 'border-red-500/50 text-red-400' : ''}
                     `}
                         >
                             <Power size={12} /> {autonomousMode ? 'AUTONOMY: ON' : 'AUTONOMY: OFF'}

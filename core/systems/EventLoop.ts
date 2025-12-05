@@ -273,7 +273,6 @@ export namespace EventLoop {
                         temperament: ctx.traitVector,
                         // FAZA 4.5: Narcissism Loop Fix v1.0
                         userIsSilent,
-                        speechOccurred: true,
                         novelty: currentNovelty,
                         consecutiveAgentSpeeches: ctx.consecutiveAgentSpeeches
                     });
