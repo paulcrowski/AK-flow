@@ -2,7 +2,8 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { eventBus } from '../core/EventBus';
 import { CognitivePacket, LimbicState, PacketType, AgentType, SomaState, ResonanceField, NeurotransmitterState, GoalState } from '../types';
-import { Activity, Zap, Database, Copy, Check, Cpu, Download, Share2, BrainCircuit, ShieldAlert, Radio, Moon, Image as ImageIcon, ExternalLink, Globe, Waves, Eye, BedDouble } from 'lucide-react';
+import { Activity, Zap, Database, Copy, Check, Cpu, Download, Share2, BrainCircuit, ShieldAlert, Radio, Moon, Image as ImageIcon, ExternalLink, Globe, Waves, Eye, BedDouble, Scale } from 'lucide-react';
+import { ConfessionLog } from './ConfessionLog';
 
 interface NeuroMonitorProps {
     limbicState: LimbicState;
@@ -148,7 +149,7 @@ export const NeuroMonitor: React.FC<NeuroMonitorProps> = ({ limbicState, somaSta
     const [sleepEvents, setSleepEvents] = useState<{ timestamp: number; type: 'SLEEP_START' | 'SLEEP_END'; energy: number }[]>([]);
     const [traitProposals, setTraitProposals] = useState<{ timestamp: number; proposal: any; reasoning: string }[]>([]);
     const [dreamLessons, setDreamLessons] = useState<{ timestamp: number; lessons: string[] }[]>([]);
-    const [logFilter, setLogFilter] = useState<'ALL' | 'DREAMS' | 'CHEM' | 'SPEECH' | 'ERRORS' | 'FLOW'>('ALL');
+    const [logFilter, setLogFilter] = useState<'ALL' | 'DREAMS' | 'CHEM' | 'SPEECH' | 'ERRORS' | 'FLOW' | 'CONFESS'>('ALL');
     const [activeTab, setActiveTab] = useState<Tab>('SYSTEM');
     const [copied, setCopied] = useState(false);
     const [agentActivity, setAgentActivity] = useState<Record<string, number>>({});
@@ -505,6 +506,10 @@ export const NeuroMonitor: React.FC<NeuroMonitorProps> = ({ limbicState, somaSta
                 return isChem || isSpeech;
             }
 
+            if (logFilter === 'CONFESS') {
+                return p.type === PacketType.CONFESSION_REPORT;
+            }
+
             return true;
         }
         return true;
@@ -614,15 +619,14 @@ export const NeuroMonitor: React.FC<NeuroMonitorProps> = ({ limbicState, somaSta
                         </div>
 
                         <div className="flex items-center gap-2 mt-2 flex-wrap">
-                            {['ALL', 'DREAMS', 'CHEM', 'SPEECH', 'ERRORS', 'FLOW'].map(mode => (
+                            {['ALL', 'DREAMS', 'CHEM', 'SPEECH', 'ERRORS', 'FLOW', 'CONFESS'].map(mode => (
                                 <button
                                     key={mode}
                                     onClick={() => setLogFilter(mode as any)}
-                                    className={`px-2 py-1 rounded-full border text-[8px] font-mono tracking-wider transition-all ${
-                                        logFilter === mode
+                                    className={`px-2 py-1 rounded-full border text-[8px] font-mono tracking-wider transition-all ${logFilter === mode
                                             ? 'border-brain-accent text-brain-accent bg-gray-900'
                                             : 'border-gray-800 text-gray-500 hover:text-gray-300 hover:bg-gray-900/60'
-                                    }`}
+                                        }`}
                                 >
                                     {mode}
                                 </button>
@@ -741,7 +745,7 @@ export const NeuroMonitor: React.FC<NeuroMonitorProps> = ({ limbicState, somaSta
                                     )}
                                 </div>
                             </div>
-                            
+
                             {/* Sleep Events Timeline */}
                             <div className="space-y-2">
                                 <div className="text-[9px] text-gray-500 uppercase tracking-wider">Recent Sleep Events (5m)</div>
@@ -801,7 +805,7 @@ export const NeuroMonitor: React.FC<NeuroMonitorProps> = ({ limbicState, somaSta
                                             <div className="text-[8px] text-gray-500">
                                                 {new Date(proposal.timestamp).toLocaleTimeString()}
                                             </div>
-                                            
+
                                             {/* Trait Changes */}
                                             {proposal.proposal && Object.keys(proposal.proposal).length > 0 && (
                                                 <div className="space-y-1">
@@ -815,7 +819,7 @@ export const NeuroMonitor: React.FC<NeuroMonitorProps> = ({ limbicState, somaSta
                                                     ))}
                                                 </div>
                                             )}
-                                            
+
                                             {/* Reasoning */}
                                             {proposal.reasoning && (
                                                 <div className="text-[8px] text-gray-400 italic border-t border-pink-900/20 pt-1">
@@ -828,7 +832,7 @@ export const NeuroMonitor: React.FC<NeuroMonitorProps> = ({ limbicState, somaSta
                             ) : (
                                 <div className="text-[8px] text-gray-600 italic">No trait evolution proposals available</div>
                             )}
-                            
+
                             <div className="text-[7px] text-gray-600 mt-2 border-t border-gray-800 pt-2">
                                 Note: Trait proposals are logged only - no automatic changes applied
                             </div>

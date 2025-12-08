@@ -9,7 +9,7 @@ class CognitiveBus {
       this.listeners[eventType] = [];
     }
     this.listeners[eventType].push(handler);
-    
+
     // Return unsubscribe function
     return () => {
       this.listeners[eventType] = this.listeners[eventType].filter(h => h !== handler);
@@ -27,6 +27,19 @@ class CognitiveBus {
         // Asynchronous execution to simulate distributed processing
         setTimeout(() => handler(packet), 0);
       });
+    }
+  }
+
+  /**
+   * Synchronous publish - useful for testing.
+   * Handlers execute immediately, no setTimeout.
+   */
+  publishSync(packet: CognitivePacket) {
+    this.history.push(packet);
+    if (this.history.length > 1000) this.history.shift();
+
+    if (this.listeners[packet.type]) {
+      this.listeners[packet.type].forEach(handler => handler(packet));
     }
   }
 

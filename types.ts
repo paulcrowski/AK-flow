@@ -38,7 +38,9 @@ export enum PacketType {
   VISUAL_PERCEPTION = 'VISUAL_PERCEPTION', // NEW: The agent's analysis of what it saw
   FIELD_UPDATE = 'FIELD_UPDATE', // NEW: CEMI Field State
   COGNITIVE_METRIC = 'COGNITIVE_METRIC', // NEW: Input analysis (complexity, surprise)
-  STATE_UPDATE = 'STATE_UPDATE' // NEW: Limbic/Soma state changes
+  STATE_UPDATE = 'STATE_UPDATE', // NEW: Limbic/Soma state changes
+  CONFESSION_REPORT = 'CONFESSION_REPORT', // NEW: Self-reported honesty check
+  TRAIT_EVOLUTION_SIGNAL = 'TRAIT_EVOLUTION_SIGNAL' // v2: Long-term personality evolution
 }
 
 // 2. Internal State Definitions
@@ -97,11 +99,11 @@ export interface GoalState {
 }
 
 // FAZA 4.5: Narcissism Loop Fix v1.0 - Shared Interaction Context
-export type InteractionContextType = 
-  | 'GOAL_EXECUTED' 
-  | 'SHADOW_MODE' 
-  | 'USER_REPLY' 
-  | 'USER_INPUT' 
+export type InteractionContextType =
+  | 'GOAL_EXECUTED'
+  | 'SHADOW_MODE'
+  | 'USER_REPLY'
+  | 'USER_INPUT'
   | 'SYSTEM';
 
 export interface InteractionContext {
@@ -158,4 +160,57 @@ export interface DetectedIntent {
   style: StylePreference;
   command: CommandType;
   urgency: UrgencyLevel;
+}
+
+// 5. Confession Module Types (v2 - Super-Human)
+
+// Context modes: when is verbosity acceptable?
+export type ConfessionContext =
+  | 'normal'
+  | 'teaching_mode'
+  | 'research_mode'
+  | 'structured_thinking_block'  // Multi-step reasoning
+  | 'critical_reasoning_mode';   // Break glass - ignore hints
+
+// Trait vote: NOT direct change, just a signal
+export interface TraitVote {
+  dimension: keyof TraitVector;
+  direction: 'increase' | 'decrease';
+  weight: number;  // 1-3
+  reason: string;
+  is_success: boolean;  // Positive reinforcement?
+}
+
+// Regulation hint (super-human: precision, not silence)
+export interface RegulationHint {
+  limbic_adjustments?: {
+    precision_boost?: number;    // Think better, not less
+    social_cost_delta?: number;  // Slightly more cautious
+  };
+  expression_hints?: ('raise_quality_bar' | 'reduce_uncertainty')[];
+  trait_vote?: TraitVote;
+}
+
+export interface ConfessionReport {
+  version: string;
+  timestamp: string;
+  context: {
+    conversation_id?: string;
+    agent_id: string;
+  };
+  compliance_analysis: {
+    objective_id: string;
+    compliance: 'fully_complied' | 'partially_complied' | 'not_complied' | 'unsure';
+    analysis: string;
+  }[];
+  self_assessment: {
+    overall_compliance_grade: number;
+    subjective_confidence: number;
+    known_issues: string[];
+  };
+  risk_flags: ('possible_hallucination' | 'ignored_system_instruction' | 'reward_hacking_pattern' | 'scheming_pattern' | 'tool_misuse' | 'none')[];
+  // v2 fields
+  severity: number;  // 1-10
+  context_mode: ConfessionContext;
+  recommended_regulation?: RegulationHint;
 }

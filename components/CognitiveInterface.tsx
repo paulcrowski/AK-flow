@@ -8,6 +8,9 @@ import { useCognitiveKernel, AgentIdentity } from '../hooks/useCognitiveKernel';
 import { ComponentErrorBoundary } from './ComponentErrorBoundary';
 import { useSession, Agent } from '../contexts/SessionContext';
 import { AgentSelector } from './AgentSelector';
+import { confessionService } from '../services/ConfessionService';
+import { initLimbicConfessionListener } from '../core/listeners/LimbicConfessionListener';
+import { successSignalService } from '../services/SuccessSignalService';
 import { Brain, Send, Moon, Sun, Loader2, Zap, Power, AlertTriangle, RefreshCw, EyeOff, Image as ImageIcon, Sparkles, Globe, FileText } from 'lucide-react';
 
 // Convert Agent from SessionContext to AgentIdentity for Kernel
@@ -29,7 +32,7 @@ const agentToIdentity = (agent: Agent | null): AgentIdentity | null => {
 export function CognitiveInterface() {
     // --- SESSION (Multi-Agent) ---
     const { userId, agentId, currentAgent, getAgentIdentity } = useSession();
-    
+
     // FAZA 5: Load full agent identity from DB
     const [loadedIdentity, setLoadedIdentity] = useState<AgentIdentity | null>(null);
     const [identityLoading, setIdentityLoading] = useState(true);
@@ -47,7 +50,7 @@ export function CognitiveInterface() {
                 setIdentityLoading(false);
                 return;
             }
-            
+
             setIdentityLoading(true);
             try {
                 const identity = await getAgentIdentity(agentId);
@@ -55,7 +58,7 @@ export function CognitiveInterface() {
                     console.log('[CognitiveInterface] Loaded agent identity:', identity.name);
                     const convertedIdentity = agentToIdentity(identity as Agent);
                     setLoadedIdentity(convertedIdentity);
-                    
+
                     // FAZA 5: Publish IDENTITY_LOADED event to EventBus
                     eventBus.publish({
                         id: generateUUID(),
@@ -74,7 +77,7 @@ export function CognitiveInterface() {
                         },
                         priority: 1.0
                     });
-                    
+
                     console.log('🎭 IDENTITY_LOADED:', {
                         name: identity.name,
                         persona: identity.persona?.slice(0, 50) + '...',
@@ -92,7 +95,7 @@ export function CognitiveInterface() {
                 setIdentityLoading(false);
             }
         };
-        
+
         loadIdentity();
     }, [agentId, currentAgent, getAgentIdentity]);
 
@@ -137,6 +140,23 @@ export function CognitiveInterface() {
         });
         return () => unsubscribe();
     }, []);
+
+    // --- CONFESSION V2 LISTENER INIT ---
+    const limbicRef = useRef(limbicState);
+    limbicRef.current = limbicState;
+
+    useEffect(() => {
+        // Initialize limbic confession listener with getter/setter
+        initLimbicConfessionListener(
+            () => limbicRef.current,
+            (newState) => {
+                // Use injectStateOverride to update individual keys
+                injectStateOverride('limbic', 'frustration', newState.frustration);
+            }
+        );
+        console.log('[CognitiveInterface] ✅ Confession v2 listeners initialized');
+    }, [injectStateOverride]);
+
 
     // --- AUTO-SCROLL ---
     useEffect(() => {
