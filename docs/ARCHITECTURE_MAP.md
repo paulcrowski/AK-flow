@@ -1,7 +1,96 @@
 # 🧠 AK-FLOW Architecture Map
 
-> **Wersja:** 4.5 (2025-12-04)
+> **Wersja:** 5.2 (2025-12-08)
 > **Cel:** Prosta mapa jak działa agent i jaki ma flow
+
+---
+
+## 🆕 FAZA 5.2: Persona-Less Cortex (2025-12-08)
+
+### Kluczowa Zmiana Architektoniczna
+
+**Przed (Role-Playing LLM):**
+```
+System Prompt: "Jesteś Alberto, ciekawski agent..."
+     ↓
+   🤖 LLM (zna swoją rolę)
+     ↓
+   Odpowiedź
+```
+
+**Po (Stateless Inference Engine):**
+```
+JSON Payload (CortexState):
+  - core_identity: { name, values }
+  - meta_states: { energy, confidence, stress }
+  - identity_shards: [beliefs, preferences]
+  - user_input: "..."
+     ↓
+   🤖 LLM (NIE wie kim jest, dowiaduje się z danych)
+     ↓
+   JSON Output (CortexOutput)
+```
+
+### Nowe Moduły
+
+```
+core/
+├── types/           # CortexState, CortexOutput, MetaStates, IdentityShard...
+├── config/          # Feature flags (rollback do starego systemu)
+├── prompts/         # MinimalCortexPrompt (stateless)
+├── services/        # MetaStateService, IdentityCoherenceService...
+├── builders/        # MinimalCortexStateBuilder (cache, zero DB)
+└── inference/       # CortexInference (LLM calls)
+```
+
+### Trzy Tryby
+
+| Tryb | Feature Flag | Tokeny |
+|------|--------------|--------|
+| LEGACY | `USE_MINIMAL_CORTEX_PROMPT: false` | ~200 |
+| MVP | `USE_MINIMAL_CORTEX_PROMPT: true` | ~350 |
+| FULL | + `USE_CORTEX_STATE_BUILDER: true` | ~1500 |
+
+---
+
+## 🆕 FAZA 5.1: Confession Module v2.0 (2025-12-08)
+
+### Meta-Cognitive Regulator
+
+Agent ma wewnętrznego "cenzora" który analizuje odpowiedzi i uczy się z błędów BEZ zmieniania osobowości w locie.
+
+```
+Agent Response → ConfessionService (heuristics)
+       ↓
+  CONFESSION_REPORT (severity 1-10, context, hints)
+       ↓
+  ┌────────────────────────────────────────┐
+  │ L1: LimbicConfessionListener           │
+  │     severity ≥ 5 → precision_boost     │
+  │     (frustration +0.05)                │
+  └────────────────────────────────────────┘
+       ↓
+  ┌────────────────────────────────────────┐
+  │ L2: TraitVote Collection               │
+  │     Zbiera głosy przez sesję           │
+  │     (verbosity -1, conscientiousness +1)│
+  └────────────────────────────────────────┘
+       ↓
+  ┌────────────────────────────────────────┐
+  │ L3: TraitEvolutionEngine               │
+  │     Po 3+ dniach → propozycja ±0.01   │
+  │     Clamp [0.3, 0.7]                   │
+  └────────────────────────────────────────┘
+```
+
+### Nowe Moduły
+
+```
+services/ConfessionService.ts      # v2.0 Super-Human heuristics
+services/SuccessSignalService.ts   # Pozytywny feedback detection
+core/listeners/LimbicConfessionListener.ts  # L1 immediate response
+core/systems/TraitEvolutionEngine.ts        # L3 long-term evolution
+```
 
 ---
 

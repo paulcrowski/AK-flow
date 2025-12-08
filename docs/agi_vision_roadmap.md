@@ -1,9 +1,27 @@
 # AK-FLOW: AGI Vision Roadmap
 **30 Advanced Features Across 10 Tiers**  
 **Status Report:** Implementation vs. Vision  
-**Last Updated:** 2025-12-04
+**Last Updated:** 2025-12-08
 
-> **Latest Achievement (2025-12-04):** FAZA 4.5 "Homeostatic Expression" - Agent nauczył się ekonomii mówienia. Dopamina spada przy nudzie, dynamiczny próg ciszy, Silence Breaker. System v4.5 jest stabilny i gotowy do testów.
+> **Latest Achievement (2025-12-08):** FAZA 5.2 "Persona-Less Cortex" - Przejście od "role-playing LLM" do "stateless inference engine" z emergentną tożsamością. LLM nie wie kim jest – dowiaduje się tego z danych w każdym wywołaniu.
+
+### 🆕 Changelog (2025-12-08)
+
+#### FAZA 5.2: Persona-Less Cortex
+- ✅ **Persona-Less Cortex Architecture** - 27 nowych plików w `core/`
+- ✅ **CortexState Contract** - JSON payload zamiast hardcoded promptów
+- ✅ **Identity Cache (RAM-First)** - Zero DB queries w hot path
+- ✅ **Soft Plasticity** - Core shards erodują powoli, nie są odrzucane
+- ✅ **Feature Flags** - Bezpieczny rollback do starego systemu
+- ✅ **Database Migration** - 4 nowe tabele (core_identity, narrative_self, identity_shards, agent_relationships)
+- ✅ **MetaStates Homeostasis** - energy/confidence/stress z EMA smoothing
+
+#### FAZA 5.1: Confession Module v2.0 (Super-Human)
+- ✅ **ConfessionService v2** - Context-aware heuristics (teaching/research/structured)
+- ✅ **3-Tier Regulation** - L1: LimbicConfessionListener, L2: TraitVote, L3: TraitEvolutionEngine
+- ✅ **SuccessSignalService** - Pozytywny feedback → positive trait votes
+- ✅ **TraitEvolutionEngine** - 3-day rule, net score ≥3, max ±0.01, clamp [0.3, 0.7]
+- ✅ **Precision not Silence** - frustration → precision_boost zamiast shutdown
 
 ### 🆕 Changelog (2025-12-04)
 - ✅ **Boredom Decay** - Dopamina spada gdy agent gada do pustki z niską novelty

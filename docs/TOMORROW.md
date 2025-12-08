@@ -1,166 +1,229 @@
-# 🎯 Plan na Dzisiaj: 2025-12-05 "The Self Engine"
+# 🎯 Plan na Jutro: 2025-12-09 – "Persona-Less Cortex Integration & E2E Tests"
 
-> **Cel:** Przekształcenie Agenta z symulatora biologicznego w byt psychologiczny z ciągłą tożsamością.
-> **Wizja:** Agent budzi się i wie kim jest (Narrative Identity).
-> **Czas:** ~4-6 godzin
-> **Wynik:** 11/10 → **Agent z Pamiętnikiem**
-
----
-
-## 📋 Status Projektu (Start Sesji)
-
-### ✅ Osiągnięcia z Początku Sesji (Foundation)
-- **[UI] Multi-Agent System:** Wdrożono `LoginScreen` i `AgentSelector` (przełączanie tożsamości).
-- **[ARCH] Modular Refactor:** Rozdzielono `App.tsx` na `CognitiveInterface` (czysty cykl życia agenta).
-- **[FIX] Kernel Reset:** Pełne czyszczenie stanu (`eventBus.clear`, `kernelEpoch`) przy zmianie agenta.
+> **Cel:** Zintegrować MVP Persona-Less Cortex z CortexSystem i przetestować E2E
+> **Wizja:** Agent używa nowej architektury z minimalnym payloadem (~250 tokenów)
+> **Czas:** ~3-4 godziny
+> **Wynik:** Działający agent z nową architekturą + testy E2E
 
 ---
 
-## 🚀 Plan Wdrożenia FAZY 5: "The Self Engine" (Roadmapa)
+## 🔧 KROK 1: Integracja (PRZED testami!)
 
-### SESJA 1: "Nowe JA" (Identity & DB) – [UKOŃCZONA ✅]
-**Cel:** Backend tożsamości. Agent ładuje swój charakter z bazy.
+### Co mamy:
+- ✅ Kod gotowy w `core/` (builders, inference, types)
+- ✅ Feature flag włączony (`USE_MINIMAL_CORTEX_PROMPT: true`)
+- ✅ Baza danych z nowymi tabelami
+- ❌ **Kod NIE jest podpięty do aplikacji**
 
-- [x] **[DB] CoreIdentity Schema**: Rozszerzenie tabeli `agents` (persona, core_values, bio_rhythm, voice_style, narrative_traits).
-- [x] **[DB] GoalJournal Schema**: Stworzenie tabeli `goal_journal` dla długich misji.
-- [x] **[LOGIC] Boot Protocol v2**: Pobieranie `TraitVector` i pełnej tożsamości z bazy przy starcie.
-- [x] **[LOGIC] Dynamic Persona**: Prompt systemowy budowany dynamicznie na bazie `CoreIdentity` + SessionOverlay.
+### Co trzeba zrobić:
 
-### SESJA 2: "Pamiętnik i Cele" – [UKOŃCZONA ✅]
-**Cel:** Agent zapisuje sensowne wspomnienia (Epizody).
+#### 1.1 Podpięcie cache przy wyborze agenta
 
-- [x] **[LOGIC] Memory Engine v1**: Wykrywanie "Epizodów" (zmiana emocji > 0.25).
-- [x] **[LOGIC] Episodic Format**: Zapisywanie `{ Event, Emotion, Lesson }` zamiast surowego tekstu.
-- [x] **[LOGIC] GoalJournal Integration**: Podpięcie zapisu/odczytu celów.
+**Plik:** `components/CognitiveInterface.tsx` lub `contexts/SessionContext.tsx`
 
-### SESJA 3: "Sen i Konsolidacja" – [UKOŃCZONA ✅]
-**Cel:** Prosty tryb snu + mądra konsolidacja pamięci. TraitVector pozostaje statyczny.
+**Znajdź miejsce gdzie user wybiera agenta** i dodaj:
 
-#### Krok 1: Sleep Mode v1 (ultra-prosty)
-- [x] **[STATE] isSleeping flag** – kernel wie, że agent śpi (`SomaSystem.forceSleep/forceWake`, `somaState.isSleeping`).
-- [x] **[BEHAVIOR] Brak odpowiedzi** – Volition zawsze mówi „nie mów" gdy `isSleeping` (test: `reason === 'SLEEPING'`).
-- [x] **[TRIGGER] Manualny** – przycisk snu w UI (`toggleSleep`), energetyczny trigger odłożony.
-- [x] **[CHEM] Reset do baseline** – dopamina/serotonina/norepinefryna wracają do neutralnych wartości przy wejściu w sen.
-- [x] **[EVENT] SLEEP_START / SLEEP_END** – logi z timestampem i stanem przed/po w `EventBus`.
+```typescript
+import { setCachedIdentity } from '@/core/builders';
 
-#### Krok 2: DreamConsolidation v1 (bez auto-zmian osobowości)
-- [x] **[RECALL] Top epizodów** – `DreamConsolidationService.recallMostImpactful()` pobiera najbardziej emocjonalne wspomnienia.
-- [x] **[AI] Lekcje dnia** – Cortex generuje 3–5 krótkich lekcji z epizodów.
-- [x] **[GOAL] Wpisy GoalJournal (opcjonalne)** – przygotowana integracja, na razie zachowana jako potencjał.
-- [x] **[SELF] Self-summary** – 1 krótkie podsumowanie „kim jestem po tym dniu" jako core memory (`[SELF-SUMMARY]`).
-- [x] **[PROPOSAL] Propozycja zmian TraitVector** – tylko LOG, bez aplikacji (`TRAIT_EVOLUTION_PROPOSAL`).
+// Gdy user wybiera agenta (np. w useEffect lub handleSelectAgent):
+setCachedIdentity(
+  agent.id,
+  {
+    name: agent.name,
+    core_values: agent.core_values || ['helpfulness', 'accuracy'],
+    constitutional_constraints: ['do not hallucinate', 'admit uncertainty']
+  },
+  agent.trait_vector || {
+    verbosity: 0.4,
+    arousal: 0.3,
+    conscientiousness: 0.7,
+    social_awareness: 0.6,
+    curiosity: 0.5
+  }
+  // BEZ 4. parametru = puste shards (v0.1)
+);
+```
 
-#### Krok 3: Obserwacja i walidacja (Faza 1 ewolucji)
-- [x] **[LOG] trait_evolution_proposals** – propozycje zmian pakowane jako specjalne memories + event w `EventBus`.
-- [x] **[TEST] Testy jednostkowe Sleep & Dream** – Volition blokujący mowę w śnie, DreamConsolidation z/bez epizodów.
-- [ ] **[UI] NeuroMonitor rozszerzenie** – widok propozycji zmian + „lekcje dnia" (do zrobienia w kolejnej sesji).
+#### 1.2 Zamiana flow w gemini.ts
 
----
+**Plik:** `services/gemini.ts`
 
-### SESJA 4+: "Ewolucja Osobowości" – [ODŁOŻONE]
-**Cel:** Stopniowe włączanie auto-modyfikacji TraitVector.
+**Znajdź funkcję `generateResponse`** i dodaj alternatywny flow:
 
-#### Faza 2: Ręczne zatwierdzanie (raz w tygodniu)
-- [ ] Przegląd propozycji z ostatnich 7 dni.
-- [ ] Akceptacja wybranych zmian (przycisk „Apply approved deltas").
-- [ ] Osobowość zmienia się powoli, w skokach.
+```typescript
+import { isFeatureEnabled } from '@/core/config';
+import { buildMinimalCortexState } from '@/core/builders';
+import { generateFromCortexState } from '@/core/inference';
 
-#### Faza 3: Pół-auto z guard-railami
-- [ ] Max zmiana cechy na tydzień: ±0.03.
-- [ ] Niektóre cechy zablokowane (np. `conscientiousness` wymaga ręcznej zgody).
-- [ ] Każda zmiana logowana do `core_identity_log`.
-- [ ] Możliwość rollbacku do „CoreIdentity vX".
+export async function generateResponse(
+  input: string,
+  context: any,
+  limbicState: any,
+  analysis: any
+) {
+  // NOWY FLOW - Persona-Less Cortex
+  if (isFeatureEnabled('USE_MINIMAL_CORTEX_PROMPT')) {
+    const agentId = getCurrentAgentId(); // z supabase.ts
+    
+    const state = buildMinimalCortexState({
+      agentId: agentId || 'default',
+      metaStates: {
+        energy: 70,  // TODO: pobierz z somaState
+        confidence: limbicState.satisfaction * 100,
+        stress: limbicState.frustration * 100
+      },
+      userInput: input,
+      recentContext: context.slice(-3).map((m: any) => m.content)
+    });
+    
+    const output = await generateFromCortexState(state);
+    
+    return {
+      text: output.speech_content,
+      thought: output.internal_thought,
+      moodShift: output.mood_shift
+    };
+  }
+  
+  // STARY FLOW - fallback
+  // ... istniejący kod ...
+}
+```
 
----
+#### 1.3 Sprawdź importy
 
-## 3. Notes / Manifest (FAZA 5 – Self Engine)
-
-### ✅ Co już mamy (SESJA 1-2):
-- **CoreIdentity w DB** – `agents` z persona, values, traits, narrative_traits.
-- **Dynamic Persona** – Cortex dostaje `AgentIdentityContext` i z niego korzysta.
-- **Identity Logging** – `IDENTITY_LOADED` + `IDENTITY_SNAPSHOT` w EventBus.
-- **Episodic Memory** – epizody `{ Event, Emotion, Lesson }` z `neural_strength`.
-- **GoalJournal** – cele przetrwają reboot, integracja z `GoalSystem`.
-
-### 🎯 Zasady ewolucji osobowości (11/10):
-1. **Obserwuj przed zmianą** – najpierw propozycje, potem ręczna akceptacja, dopiero potem auto.
-2. **Osobowość jest wolnozmienna** – tygodniowa kadencja, nie real-time suwaki.
-3. **Pełna audytowalność** – każda propozycja i zmiana logowana, rollback możliwy.
-4. **Guard-raile** – max ±0.03/tydzień, niektóre cechy chronione.
-5. **Stabilność przed plastycznością** – najpierw stabilna chemia i pamięć, potem ewolucja.
-
-### ⚠️ Czego NIE robimy teraz:
-- Automatyczna modyfikacja TraitVector (tylko propozycje w logach).
-- Fazy snu (light/deep/dream) sprzęgnięte z energią.
-- Różne „strategie snu" (terapeutyczny/treningowy).
-
----
-
-## 4. Log z dnia 2025-12-05 (SESJA 3 – Sen & Konsolidacja)
-
-- **Sleep Mode v1** – dodany stan snu (`isSleeping`), przycisk snu w UI, eventy `SLEEP_START` / `SLEEP_END`, reset chemii do baseline.
-- **Brak mowy w śnie** – VolitionSystem ma twardą regułę `reason: 'SLEEPING'`, test jednostkowy potwierdza blokadę.
-- **DreamConsolidationService v1** – konsolidacja epizodów w snie:
-  - pobieranie najważniejszych epizodów z Supabase,
-  - generowanie lekcji dnia,
-  - self-summary jako `[SELF-SUMMARY]` w pamięci,
-  - event `TRAIT_EVOLUTION_PROPOSAL` z delikatnymi deltami TraitVector (log only).
-- **Testy automatyczne** – pełna pętla `npm test` zielona (1 test EventLoop świadomie `skip` jako flaky). Dodane testy:
-  - Volition: brak mowy w śnie,
-  - DreamConsolidation: brak epizodów → brak efektu,
-  - DreamConsolidation: epizody → lekcje, self-summary, trait proposal (bez zmiany cech).
-
-## 5. Panel Obserwacyjny (pomysł na następną sesję)
-
-- **Sleep & Dream Dashboard** (NeuroMonitor):
-  - ostatnie `SLEEP_START` / `SLEEP_END` z czasu i energii,
-  - lista „lekcji dnia" z ostatniego snu,
-  - ostatni `TRAIT_EVOLUTION_PROPOSAL` (aktualne cechy + proponowane delty + reasoning),
-  - filtr po agencie (Eksperyment / Alberto / Explorer).
-- **Weekly Review Mode**:
-  - agregacja propozycji z kilku nocy,
-  - tabela „jak agent chciałby się zmienić" z możliwością ręcznej akceptacji.
+Upewnij się że te importy działają:
+```typescript
+import { isFeatureEnabled } from '@/core/config';
+import { buildMinimalCortexState, setCachedIdentity } from '@/core/builders';
+import { generateFromCortexState } from '@/core/inference';
+```
 
 ---
 
-## 6. Manifest: SEARCH, VISUALIZE, SEN (prosto)
+## 📋 Plan Testów (PO integracji)
 
-- **SEARCH**
-  - Agent nie ma wbudowanego "internetu". Ma osobny moduł SEARCH.
-  - SEARCH może być **włączony lub wyłączony**.
-  - Gdy jest włączony, agent może prosić ciało o "Deep Research" / nowe dane.
-  - Gdy jest wyłączony, mówi: *"mój moduł SEARCH jest teraz wyłączony"* (zamiast klasycznego LLM-owego tekstu).
+### 🧪 Test 1: Minimal Cortex Response (30 min)
+```
+1. Uruchom aplikację (npm run dev)
+2. Wybierz agenta
+3. Napisz "Cześć, kim jesteś?"
+4. Sprawdź w konsoli:
+   - [MinimalCortex] Identity cached for {name}
+   - Payload ~250 tokenów
+   - Odpowiedź zawiera imię agenta
+```
 
-- **VISUALIZE**
-  - Agent może poprosić o obraz (`VISUALIZE`), a potem **sam czyta** opis tego obrazu.
-  - To jest jak wewnętrzna wizualizacja: najpierw rysunek, potem słowny opis, który trafia do pamięci.
+### 🧪 Test 2: Meta-States Homeostasis (30 min)
+```
+1. Obserwuj NeuroMonitor → Soma tab
+2. Napisz 10 wiadomości pod rząd
+3. Sprawdź czy:
+   - Energy spada (koszt odpowiedzi)
+   - Stress rośnie przy trudnych pytaniach
+   - Wartości wracają do baseline po chwili
+```
 
-- **SEN (DreamConsolidation)**
-  - Sen NIE odpala prawdziwego SEARCH ani VISUALIZE.
-  - Zamiast tego bierze **najmocniejsze epizody z dnia** (w tym te, gdzie był search / wizualizacja) i:
-    - robi z nich "lekcje dnia",
-    - tworzy `[SELF-SUMMARY]` o tym, czego nauczył się o sobie i świecie,
-    - proponuje delikatne zmiany TraitVector (log only).
+### 🧪 Test 3: Cache TTL (15 min)
+```
+1. Uruchom agenta
+2. Poczekaj 5+ minut bez interakcji
+3. Napisz wiadomość
+4. Sprawdź log: "Identity cached for..." (re-cache)
+```
 
-- **OSOBOWOŚĆ (TraitVector)**
-  - Osobowość decyduje **jak często** agent chce używać SEARCH/VISUALIZE (np. wysoka curiosity → więcej researchu).
-  - Sen zbiera skutki tych działań i robi z nich propozycje zmian osobowości.
-  - Zmiany cech NIE dzieją się automatycznie – wymagają ręcznej akceptacji w przyszłej fazie.
+### 🧪 Test 4: Rollback Test (15 min)
+```
+1. Ustaw USE_MINIMAL_CORTEX_PROMPT: false
+2. Uruchom agenta
+3. Sprawdź czy działa po staremu (stare prompty)
+4. Przywróć USE_MINIMAL_CORTEX_PROMPT: true
+```
 
-### Challenges (prosty język)
+### 🧪 Test 5: Dream Consolidation (30 min)
+```
+1. Przeprowadź kilka rozmów
+2. Wymuś sen (Sleep button lub energy < 20)
+3. Sprawdź logi:
+   - [IdentityConsolidation] Starting...
+   - narrative_self updated
+   - shards created/reinforced
+```
 
-1. **Ujednolicić narrację o SEARCH**  
-   Agent ma mówić: *"mój moduł SEARCH jest teraz wyłączony"*, zamiast mieszać to z klasycznym komunikatem LLM.
+---
 
-2. **Ograniczyć gadanie o sobie bez pytania**  
-   Meta-opisy typu "kim jestem, jak działa moja świadomość" tylko wtedy, gdy user wprost o to pyta.
+## 🔧 Integracja do Zrobienia
 
-3. **Włączyć hamulce dla flow**  
-   ExpressionPolicy w SHADOW_MODE ma przycinać długie, powtarzalne eseje (niska novelty, te same tematy: sen/pamięć/świadomość).
+### Krok 1: Podpięcie do CortexSystem
+```typescript
+// W CortexSystem.ts lub gemini.ts
+import { isFeatureEnabled } from '@/core/config';
+import { buildMinimalCortexState, setCachedIdentity } from '@/core/builders';
+import { generateFromCortexState } from '@/core/inference';
 
-4. **Cichy raport ze snu**  
-   Sen generuje `DREAM_SUMMARY` i zapisuje go w pamięci, ale agent opowiada o nim dopiero, gdy user zapyta (zamiast zalewać usera raportem po każdym śnie).
+if (isFeatureEnabled('USE_MINIMAL_CORTEX_PROMPT')) {
+  // Nowy flow
+  const state = buildMinimalCortexState({ ... });
+  const output = await generateFromCortexState(state);
+} else {
+  // Stary flow
+  const response = await generateResponse(prompt);
+}
+```
 
-5. **Panel do obserwacji SEARCH / VISUALIZE / SNU**  
-   W NeuroMonitorze pokazać: kiedy działał SEARCH, jakie wizualizacje widział, jakie wnioski trafiły do snu i jak to wpływa na jego samopopis.
+### Krok 2: Cache Identity przy starcie sesji
+```typescript
+// W SessionContext lub przy wyborze agenta
+import { setCachedIdentity } from '@/core/builders';
 
+setCachedIdentity(agent.id, {
+  name: agent.name,
+  core_values: agent.core_values || ['helpfulness'],
+  constitutional_constraints: ['do not hallucinate']
+}, agent.trait_vector);
+```
+
+---
+
+## 📊 Oczekiwane Wyniki
+
+| Metryka | Stary System | Nowy MVP | Pełny (przyszłość) |
+|---------|--------------|----------|-------------------|
+| Tokeny/request | ~200 | ~250 | ~1500 |
+| DB queries/request | 0 | 0 | 5+ |
+| Latencja | ~500ms | ~550ms | ~800ms |
+| Emergentna tożsamość | ❌ | ✅ (basic) | ✅ (full) |
+
+---
+
+## ⚠️ Challenges / Ryzyka
+
+1. **Integracja z istniejącym kodem** - CortexSystem może mieć zależności
+2. **Gemini API format** - upewnić się że JSON payload jest poprawny
+3. **Cache invalidation** - co jeśli user zmieni agenta?
+4. **Error handling** - fallback do starego systemu przy błędzie
+
+---
+
+## 📁 Pliki do Modyfikacji Jutro
+
+1. `services/gemini.ts` - dodać nowy flow z feature flag
+2. `components/CognitiveInterface.tsx` - podpiąć cache przy starcie
+3. `core/inference/CortexInference.ts` - ewentualne poprawki po testach
+
+---
+
+## 🗓️ Archiwum: 2025-12-08
+
+### Zrealizowane
+- ✅ Persona-Less Cortex Architecture (27 plików)
+- ✅ Database migration (4 nowe tabele)
+- ✅ MVP builder z cache (zero DB w hot path)
+- ✅ Feature flags włączone
+- ✅ 86/86 testów przechodzi
+
+### Metryki
+- Pliki utworzone: 27
+- Testy dodane: 4 suites (41 testów)
+- Tokeny zaoszczędzone: ~1250/request (vs pełna wersja)

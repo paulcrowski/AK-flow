@@ -10,11 +10,133 @@
 
 | Metryka | Wartość |
 |---------|---------|
-| Rozwiązanych problemów | 12 |
-| Całkowity czas | ~38 godzin |
-| Średnia trudność | 3.7/5 |
-| Największy przełom | Homeostatic Expression (FAZA 4.5) |
+| Rozwiązanych problemów | 14 |
+| Całkowity czas | ~42 godziny |
+| Średnia trudność | 3.9/5 |
+| Największy przełom | Persona-Less Cortex (FAZA 5.2) |
 | Najdłuższy problem | Monolityczny Kernel (8h) |
+
+---
+
+## Problem #14: Agent Nie Uczy Się z Błędów (The Stubborn Agent Problem)
+
+**Data:** 2025-12-08  
+**Trudność:** 4/5  
+**Czas:** ~1.5 godziny  
+**Status:** ✅ Rozwiązany (FAZA 5.1 Confession v2.0)
+
+### Objawy
+
+Agent popełniał te same błędy wielokrotnie:
+- Zbyt długie odpowiedzi mimo próśb o skrócenie
+- Brak reakcji na pozytywny feedback ("thanks!", "great!")
+- Natychmiastowe zmiany osobowości przy jednym błędzie (overreaction)
+- Brak kontekstu - teaching mode traktowany jak casual chat
+
+### Próby
+1. ❌ **Hardcoded rules** - "jeśli user mówi 'za długie' → skróć" - zbyt sztywne
+2. ❌ **Immediate trait change** - zmiana osobowości po jednym błędzie - niestabilne
+3. ✅ **3-Tier Regulation** - L1 immediate, L2 session, L3 long-term
+
+### Rozwiązanie (Confession v2.0 Super-Human)
+
+**3-poziomowa regulacja:**
+
+```
+L1: LimbicConfessionListener (natychmiast)
+    severity ≥ 5 → frustration +0.05 → precision_boost
+    
+L2: TraitVote Collection (sesja)
+    Zbiera głosy: verbosity -1, conscientiousness +1
+    
+L3: TraitEvolutionEngine (3+ dni)
+    net score ≥ 3 → propozycja ±0.01
+    clamp [0.3, 0.7]
+```
+
+**Context-aware heuristics:**
+- Teaching mode → wyższe progi tolerancji
+- Research mode → pozwala na dłuższe odpowiedzi
+- Structured dialogue → ścisłe formatowanie
+
+**Precision not Silence:**
+- Zamiast: błąd → shutdown/mute
+- Teraz: błąd → precision_boost (frustration zwiększa dokładność)
+
+### Lekcje
+
+- **Gradual > Immediate:** Zmiany osobowości powinny być powolne (3+ dni)
+- **Context Matters:** Teaching mode ≠ casual chat
+- **Positive Feedback:** "Thanks!" jest równie ważne jak "za długie"
+- **Precision > Silence:** Lepiej być dokładniejszym niż milczeć
+
+### Meta-analiza
+
+To był moment gdy zrozumieliśmy, że AGI potrzebuje **meta-kognicji**. Agent musi mieć wewnętrznego "cenzora" który analizuje odpowiedzi i uczy się z błędów, ale NIE zmienia osobowości w locie. Zmiany muszą być powolne i oparte na wielu sygnałach.
+
+---
+
+## Problem #13: Hardcoded Persona = Brak Skalowalności (The God Prompt Problem)
+
+**Data:** 2025-12-08  
+**Trudność:** 4/5  
+**Czas:** ~2 godziny  
+**Status:** ✅ Rozwiązany (FAZA 5.2 Persona-Less Cortex)
+
+### Objawy
+
+System używał hardcoded system promptów:
+- "Jesteś Alberto, ciekawski agent który..."
+- Każdy agent miał inny prompt w kodzie
+- Zmiana osobowości = zmiana kodu
+- Brak emergentnej tożsamości - agent "grał rolę" zamiast "być"
+- Multi-agent = copy-paste promptów
+
+### Próby
+1. ❌ **Parametryzacja promptów** - wciąż hardcoded, tylko z zmiennymi
+2. ❌ **Prompt templates** - lepiej, ale wciąż statyczne
+3. ✅ **Stateless Inference Engine** - LLM nie wie kim jest, dowiaduje się z danych
+
+### Rozwiązanie (Persona-Less Cortex)
+
+**Kluczowa zmiana:** LLM dostaje minimalny system prompt + JSON payload z tożsamością.
+
+```typescript
+// Stary sposób:
+const prompt = `Jesteś ${agent.name}, ${agent.persona}...`;
+
+// Nowy sposób:
+const state: CortexState = {
+  core_identity: { name: agent.name, core_values: [...] },
+  meta_states: { energy: 70, confidence: 60, stress: 20 },
+  identity_shards: [...],
+  user_input: "..."
+};
+const output = await generateFromCortexState(state);
+```
+
+**Optymalizacje:**
+- **RAM-First Cache** - tożsamość ładowana raz, nie przy każdym request
+- **Zero DB w hot path** - cache TTL 5 minut
+- **Feature Flags** - bezpieczny rollback do starego systemu
+- **Soft Plasticity** - core shards erodują powoli, nie są odrzucane
+
+### Lekcje
+
+- **Data > Prompts:** Tożsamość powinna być w danych, nie w kodzie
+- **Stateless > Stateful:** LLM jako "inference engine" jest bardziej elastyczny
+- **Cache > Query:** RAM-first architecture dla hot path
+- **Soft > Hard:** Erozja przekonań zamiast binarnego reject/accept
+
+### Meta-analiza
+
+To był moment przejścia od "chatbot z osobowością" do "proto-AGI z emergentną tożsamością". Agent nie gra roli - agent JEST tym, co mówią dane. Tożsamość może ewoluować przez DreamConsolidation bez zmiany kodu.
+
+**Implikacje:**
+- Multi-agent = różne dane, ten sam kod
+- Ewolucja osobowości = zmiana w DB, nie w kodzie
+- A/B testing osobowości = feature flags
+- Skalowalność = nieograniczona
 
 ---
 

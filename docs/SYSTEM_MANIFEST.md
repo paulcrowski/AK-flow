@@ -1,16 +1,96 @@
 # AK-FLOW: Cognitive Agent Architecture Manifest
-**System Version:** 4.5 (Homeostatic Expression + Boredom Decay)  
-**Last Updated:** 2025-12-04  
-**Architecture Type:** Active Inference (Friston) + Global Workspace Theory + Multi-Modal RAG  
-**Status:** Autonomous / Stateful / Modular / Self-Aware / Goal-Driven / Personality-Driven
+**System Version:** 5.2 (Persona-Less Cortex MVP)  
+**Last Updated:** 2025-12-08  
+**Architecture Type:** Active Inference (Friston) + Global Workspace Theory + Multi-Modal RAG + **Stateless Inference Engine**  
+**Status:** Autonomous / Stateful / Modular / Self-Aware / Goal-Driven / Personality-Driven / **Emergent Identity**
 
 ---
 
-## 🆕 What's New in V4.5 (2025-12-04)
+## 🆕 What's New in V5.2 (2025-12-08)
 
-### FAZA 4.3: Refractory Period + Narcissism Filter
-- **GoalSystem:** 3-condition refractory period prevents curiosity goal loops
-- **ExpressionPolicy:** Narcissism filter (15% threshold) penalizes self-focused speech
+### FAZA 5.2: Persona-Less Cortex Architecture (Emergent Identity)
+
+**Kluczowa zmiana:** LLM nie wie kim jest – dowiaduje się tego z danych w każdym wywołaniu.
+
+#### Nowe Moduły (27 plików):
+```
+core/
+├── types/           # 11 atomowych typów
+│   ├── MetaStates.ts      # energia, confidence, stress
+│   ├── TraitVector.ts     # cechy osobowości
+│   ├── CoreIdentity.ts    # stałe: imię, wartości
+│   ├── NarrativeSelf.ts   # dynamiczne: self-summary
+│   ├── IdentityShard.ts   # atomowe przekonania
+│   ├── CortexState.ts     # główny kontrakt wejściowy
+│   └── CortexOutput.ts    # kontrakt wyjściowy
+├── config/featureFlags.ts # flagi do rollback
+├── prompts/MinimalCortexPrompt.ts
+├── services/
+│   ├── MetaStateService.ts        # homeostaza
+│   ├── IdentityCoherenceService.ts # spójność shardów
+│   └── IdentityConsolidationService.ts # konsolidacja snu
+├── builders/
+│   ├── CortexStateBuilder.ts      # pełny (z DB)
+│   └── MinimalCortexStateBuilder.ts # MVP (bez DB)
+└── inference/CortexInference.ts   # wywołania LLM
+```
+
+#### Nowe Tabele w Supabase:
+- `core_identity` - stała tożsamość agenta
+- `narrative_self` - dynamiczny obraz siebie
+- `identity_shards` - atomowe przekonania/preferencje
+- `agent_relationships` - relacje z użytkownikami
+- `memories` rozszerzone o: `emotional_valence`, `style_rating`, `memory_type`
+
+#### Trzy Tryby Systemu:
+
+| Tryb | Feature Flag | Opis | Tokeny/req |
+|------|--------------|------|------------|
+| **LEGACY** | `USE_MINIMAL_CORTEX_PROMPT: false` | Stary system, hardcoded prompty | ~200 |
+| **MVP** | `USE_MINIMAL_CORTEX_PROMPT: true` | Minimalny payload, cache, zero DB | ~250 |
+| **FULL** | `USE_CORTEX_STATE_BUILDER: true` | Pełny payload z DB queries | ~1500 |
+
+#### Jak Przełączać Tryby:
+
+```typescript
+// core/config/featureFlags.ts
+
+// LEGACY (stary system):
+USE_MINIMAL_CORTEX_PROMPT: { enabled: false }
+USE_CORTEX_STATE_BUILDER: { enabled: false }
+
+// MVP (aktualnie włączone):
+USE_MINIMAL_CORTEX_PROMPT: { enabled: true }
+USE_CORTEX_STATE_BUILDER: { enabled: false }
+
+// FULL (przyszłość):
+USE_MINIMAL_CORTEX_PROMPT: { enabled: true }
+USE_CORTEX_STATE_BUILDER: { enabled: true }
+```
+
+#### MVP Optymalizacje:
+- **Zero DB queries w hot path** - tożsamość cachowana przy starcie sesji
+- **Cache TTL 5 minut** - nie odpytujemy DB przy każdym zapytaniu
+- **Separation of paths** - ciężka logika tylko w DreamConsolidation (Cold Path)
+- **~250 tokenów** vs ~1500 w pełnej wersji
+
+---
+
+## 🆕 What's New in V5.1 (2025-12-08)
+
+### FAZA 5.1: Confession Module v2.0 (Meta-Cognitive Regulator)
+- **ConfessionService v2**: Super-human heuristics (context-aware, severity 1-10, precision not silence)
+- **3-Tier Regulation**:
+  - L1: LimbicConfessionListener (immediate precision_boost)
+  - L2: TraitVote collection (session-level)
+  - L3: TraitEvolutionEngine (3-day rule, ±0.01 max, clamp [0.3, 0.7])
+- **SuccessSignalService**: Positive feedback detection → positive trait votes
+- **EventBus.publishSync()**: Synchronous publishing for tests
+
+### Test Infrastructure Reorganization
+- **`__tests__/` directory**: All 45 tests centralized
+- **`__tests__/utils.ts`**: Shared helpers (waitForEventBus, publishAndWait)
+- **Async test pattern**: Proper handling of EventBus setTimeout handlers
 - **ExpressionPolicy:** Dopamine Breaker mutes at dopamine>=95 + novelty<0.5
 
 ### FAZA 4.5 LITE: Boredom Decay + Dynamic Silence
