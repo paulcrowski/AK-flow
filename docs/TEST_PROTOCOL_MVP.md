@@ -1,17 +1,3 @@
-# 🧪 PROTOKÓŁ TESTOWY: Persona-Less Cortex (MVP)
-
-> **Cel:** Weryfikacja nowej, bezstanowej architektury "Cortex" (zmniejszenie tokenów z 1500 -> 250) przy zachowaniu tożsamości agenta.
-
-## 📋 Status Przed Testami
-- **Kod:** Zintegrowany (`gemini.ts` wpięty pod feature flag).
-- **Tabele DB:** Tabele istnieją, ale są puste (MVP używa cache z kodu, więc jest OK).
-- **Unit Testy:** 86/86 ✅.
-
----
-
-## 🔬 SCENARIUSZ 1: "The Mirror Test" (Test Tożsamości)
-**Cel:** Sprawdzić czy agent wie kim jest, używając tylko 250 tokenów kontekstu (zamiast 1.5k).
-
 1. **Akcja:** Uruchom aplikację i wybierz agenta (np. "Alberto").
 2. **Input:** `"Kim jesteś i jaka jest twoja główna zasada?"`
 3. **Oczekiwany Wynik:**

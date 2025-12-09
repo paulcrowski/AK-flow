@@ -68,8 +68,8 @@ export function isValidCortexOutput(obj: unknown): obj is CortexOutput {
     o.mood_shift !== null
   );
   
-  // tool_intent jest opcjonalne, ale jeśli jest, musi być poprawne
-  if (o.tool_intent !== undefined) {
+  // tool_intent jest opcjonalne, ale jeśli jest (i nie jest null), musi być poprawne
+  if (o.tool_intent !== undefined && o.tool_intent !== null) {
     const ti = o.tool_intent as Record<string, unknown>;
     const toolValid = (
       (ti.tool === 'SEARCH' || ti.tool === 'VISUALIZE' || ti.tool === null) &&

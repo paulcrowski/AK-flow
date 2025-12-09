@@ -62,7 +62,8 @@ export const createProcessOutputForTools = (deps: ToolParserDeps) => {
       }
 
       // TAGGED COGNITION: Tool result is separate from action
-      addMessage('assistant', research.synthesis, 'tool_result', undefined, research.sources);
+      // Use 'intel' type for proper cyan styling in CognitiveInterface
+      addMessage('assistant', research.synthesis, 'intel', undefined, research.sources);
 
       eventBus.publish({
         id: generateUUID(),
