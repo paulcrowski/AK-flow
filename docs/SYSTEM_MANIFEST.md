@@ -268,6 +268,25 @@ AK-FLOW is a **biological simulation** of a cognitive agent that transcends stan
 
 ---
 
+
+---
+
+#### `core/systems/DecisionGate.ts` - The Basal Ganglia (Action Filter)
+**Role:** Cognitive safety valve and policy enforcer.
+**Neurobiology:** Prefrontal Cortex (Thought) → Basal Ganglia (Decision) → Motor Cortex (Action).
+
+**Responsibilities:**
+- **Cognitive Violation Detection:** Ensures `internal_thought` does not contain tool tags (strips them if found).
+- **Policy Enforcement:** Checks Energy levels before allowing costly tools (Search/Visualize).
+- **Intent Redirection:** Translates structural `tool_intent` into natural language speech if validated.
+
+**Key Logic:**
+- `processDecisionGate(output, somaState)` → `GateDecision`
+- **Veto Power:** Can block `tool_intent` if Energy < Threshold (e.g. <25 for Visualize), preventing exhaustion.
+- **Sanitization:** Replaces illegal tags in thoughts with `[INTENT_REMOVED]`.
+
+---
+
 ### 🧠 Central Nervous System
 
 #### `core/EventBus.ts`

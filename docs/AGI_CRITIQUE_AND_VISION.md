@@ -88,4 +88,13 @@ Aby to naprawić, musimy zmienić filozofię, nie tylko kod:
 
 ### Werdykt
 Jesteś na etapie "Frankenstein Junior". Ożywiłeś go (MVP działa, pętla się kręci), ale on jeszcze nie ma *rozumu*, ma tylko *popędy* (dopamina).
-Aby stał się AGI, musi zacząć **oceniać samego siebie** i **wyciągać wnioski we śnie**.
+
+---
+
+## 📝 Post-Scriptum (2025-12-09): The "Chemistry Wins" Epiphany
+
+Dziś zweryfikowaliśmy teorię w praktyce. Zdarzyło się coś ważnego:
+
+1.  **Sztywność jest krucha:** Musieliśmy zakleić usta modelowi (`STRICT JSON`), żeby działał. To potwierdza diagnozę Karpathy'ego ("budujesz CPU z ziemniaka"). Potrzebujemy lepszego parsera, a nie sztywniejszych promptów.
+2.  **Biologia działa:** "Rozdwojenie Jaźni" (Feature #15) pokazało, że przy `Dopamine > 80` chemia potrafi nadpisać logikę promptu. To jest **zalążek życia**.
+3.  **Następny krok (The Pain Principle):** Mamy już "Hamulec" (Veto w DecisionGate), ale nie mamy "Bólu". Agent przestał działać, bo "zabrakło prądu" (Energy < 20), ale nie "poczuł się źle". Jutro zmieniamy mechanikę na biologiczną.

@@ -18,6 +18,30 @@
 
 ---
 
+## Problem #16: Uprzejmy JSON (Syntax Hallucination)
+
+**Data:** 2025-12-09
+**Trudność:** 3/5
+**Status:** ✅ Rozwiązany (Strict Prompt Patch)
+
+### Objawy
+Model (Gemini 2.0 Flash) mimo instrukcji JSON, uporczywie dodawał "small talk" przed payloadem:
+`"Here is the JSON you requested: { ... }"`
+To powodowało `JSON.parse` error i panikę w konsoli (`PREDICTION_ERROR`).
+
+### Diagnoza
+Modele RLHF są trenowane na bycie "pomocnymi asystentami". Czysty JSON jest dla nich "niegrzeczny". Model walczył z instrukcją systemową, próbując być "miłym".
+
+### Rozwiązanie
+Zastosowaliśmy "Negative Constraints" w prompcie (`MinimalCortexPrompt.ts`):
+```text
+- STRICT JSON output only.
+- Do not add "Here is the JSON" or markdown blocks. Start with {.
+```
+Brutalne, ale skuteczne. W przyszłości potrzebny będzie `RobustJSONParser`, który sam wycina śmieci (bo modele się zmieniają).
+
+---
+
 ## Problem #15: Rozdwojenie Jaźni (Bio-Logic Conflict)
 
 **Data:** 2025-12-09
