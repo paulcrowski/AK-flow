@@ -104,7 +104,7 @@ function parseResponse(text: string | undefined): CortexOutput {
     return { ...FALLBACK_CORTEX_OUTPUT };
   } catch (error) {
     console.error('[CortexInference] Parse error:', error);
-    
+
     // Log parse failure
     eventBus.publish({
       id: generateUUID(),
@@ -151,20 +151,25 @@ export async function generateFromCortexState(
   config: InferenceConfig = {}
 ): Promise<CortexOutput> {
   const cfg = { ...DEFAULT_CONFIG, ...config };
-  
+
   const stateJson = formatCortexStateForLLM(state);
-  
+
   // Buduj pełny prompt
   const fullPrompt = `${MINIMAL_CORTEX_SYSTEM_PROMPT}
 
 INPUT STATE:
 ${stateJson}
 
-Generate your response as JSON.`;
+INSTRUCTIONS:
+1. Analyze the input state and the user's intent.
+2. Generate your response strictly as a VALID JSON object.
+3. DO NOT include any text before or after the JSON.
+4. DO NOT use markdown code blocks like \`\`\`json.
+5. Just raw JSON.`;
 
   return withRetry(async () => {
     const genAI = getAI();
-    
+
     const response = await genAI.models.generateContent({
       model: cfg.model!,
       contents: fullPrompt,
@@ -206,9 +211,9 @@ export async function generateWithSearch(
   config: InferenceConfig = {}
 ): Promise<CortexOutput & { sources?: Array<{ title: string; uri: string }> }> {
   const cfg = { ...DEFAULT_CONFIG, ...config };
-  
+
   const stateJson = formatCortexStateForLLM(state);
-  
+
   const fullPrompt = `${MINIMAL_CORTEX_SYSTEM_PROMPT}
 
 INPUT STATE:
@@ -220,7 +225,7 @@ Use Google Search to find information, then generate your response as JSON.`;
 
   return withRetry(async () => {
     const genAI = getAI();
-    
+
     const response = await genAI.models.generateContent({
       model: cfg.model!,
       contents: fullPrompt,
@@ -250,7 +255,7 @@ Use Google Search to find information, then generate your response as JSON.`;
     });
 
     logUsage('generateWithSearch', response);
-    
+
     // Extract sources
     const groundingChunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
     const sources = groundingChunks

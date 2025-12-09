@@ -11,6 +11,7 @@ import { AgentSelector } from './AgentSelector';
 import { confessionService } from '../services/ConfessionService';
 import { initLimbicConfessionListener } from '../core/listeners/LimbicConfessionListener';
 import { successSignalService } from '../services/SuccessSignalService';
+import { setCachedIdentity } from '../core/builders';
 import { Brain, Send, Moon, Sun, Loader2, Zap, Power, AlertTriangle, RefreshCw, EyeOff, Image as ImageIcon, Sparkles, Globe, FileText } from 'lucide-react';
 
 // Convert Agent from SessionContext to AgentIdentity for Kernel
@@ -58,6 +59,23 @@ export function CognitiveInterface() {
                     console.log('[CognitiveInterface] Loaded agent identity:', identity.name);
                     const convertedIdentity = agentToIdentity(identity as Agent);
                     setLoadedIdentity(convertedIdentity);
+
+                    // MVP: Cache identity for Cortex
+                    setCachedIdentity(
+                        identity.id,
+                        {
+                            name: identity.name,
+                            core_values: identity.core_values || ['helpfulness', 'accuracy'],
+                            constitutional_constraints: ['do not hallucinate', 'admit uncertainty']
+                        },
+                        identity.trait_vector || {
+                            verbosity: 0.5,
+                            arousal: 0.5,
+                            conscientiousness: 0.5,
+                            social_awareness: 0.5,
+                            curiosity: 0.5
+                        }
+                    );
 
                     // FAZA 5: Publish IDENTITY_LOADED event to EventBus
                     eventBus.publish({

@@ -2,6 +2,10 @@ import { GoogleGenAI, Type } from "@google/genai";
 import { eventBus } from "../core/EventBus";
 import { AgentType, PacketType, CognitiveError, DetectedIntent, StylePreference, CommandType, UrgencyLevel } from "../types";
 import { generateUUID } from "../utils/uuid";
+import { getCurrentAgentId } from "./supabase";
+import { isFeatureEnabled } from "../core/config";
+import { buildMinimalCortexState } from "../core/builders";
+import { generateFromCortexState } from "../core/inference";
 
 // 1. Safe Environment Access & Initialization (Vite)
 const apiKey = import.meta.env.VITE_GEMINI_API_KEY as string | undefined;
@@ -323,6 +327,49 @@ OUTPUT FORMAT:
             predicted_user_reaction: "Confusion",
             mood_shift: { fear_delta: 0, curiosity_delta: 0 }
         };
+
+        // --- NEW FLOW: PERSONA-LESS CORTEX (MVP) ---
+        if (isFeatureEnabled('USE_MINIMAL_CORTEX_PROMPT')) {
+            return withRetry(async () => {
+                const agentId = getCurrentAgentId();
+                if (!agentId) throw new Error("Agent ID missing for Cortex flow");
+
+                // Parse context to array of strings if it's a string
+                // In production this might need better context parsing
+                const contextMock = context.split('\n').slice(-3); // Take last 3 lines as context for MVP
+
+                // Parse analysis safely
+                const limbicState = analysis && typeof analysis === 'object' ? analysis : {
+                    satisfaction: 0.5,
+                    frustration: 0.1
+                };
+
+                const state = await buildMinimalCortexState({
+                    agentId: agentId,
+                    userInput: input,
+                    recentContext: contextMock,
+                    metaStates: {
+                        energy: 70, // TODO: Get direct access to SomaState
+                        confidence: (limbicState.satisfaction || 0.5) * 100,
+                        stress: (limbicState.frustration || 0.1) * 100
+                    }
+                });
+
+                const output = await generateFromCortexState(state);
+
+                // Map CortexOutput to Legacy Return Type
+                return {
+                    text: output.speech_content,
+                    thought: output.internal_thought,
+                    prediction: "User is observing.", // Fallback as CortexOutput doesn't predict reaction yet
+                    moodShift: {
+                        fear_delta: output.mood_shift.stress_delta || 0,
+                        curiosity_delta: output.mood_shift.confidence_delta || 0
+                    }
+                };
+            });
+        }
+        // --------------------------------------------
         return withRetry(async () => {
             const response = await ai.models.generateContent({
                 model: 'gemini-2.5-flash',
