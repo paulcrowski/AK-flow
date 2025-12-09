@@ -1,7 +1,8 @@
-# AK-FLOW AGI Roadmap - Fazy Rozwoju
+# AK-FLOW AGI Roadmap v2.1 - Fazy Rozwoju
 
 > **Wizja**: System poznawczy z prawdziwą chemią, wolą i autonomią.
 > **Styl**: Karpathy-level engineering - minimalne, testowalne, obserwowalne.
+> **Zasada**: Najpierw obserwuj, potem reaguj. Najpierw logi, potem chemia.
 
 ---
 
@@ -50,109 +51,289 @@ eventBus.publish({
 
 ---
 
-## FAZA 2: Goal Feedback Loop (Ten Tydzień)
+## FAZA 2: Goal Feedback + EvaluationBus (Ten Tydzień)
 
 ### Problem
-Agent nie dostaje nagrody za osiągnięcie celu ani kary za porażkę.
-Dopamina jest "płaska" - brak związku z rzeczywistym sukcesem.
+Sukcesy/porażki celów nie są spięte z chemią ani z meta-oceną.
+Confession, GoalFeedback i błędy systemowe dawałyby trzy różne źródła ocen – bez spójnego formatu.
 
-### Rozwiązanie: GoalFeedbackSystem
+---
+
+### 2.1 EvaluationBus – Zamrożone API v1
+
+> **KRYTYCZNE**: Ten interfejs musi być minimalny i stabilny.
+> Nie dodawaj pól bez wyraźnej potrzeby.
+
+```typescript
+// types.ts
+interface EvaluationEvent {
+  source: 'GOAL' | 'CONFESSION' | 'PARSER';  // tylko 3 źródła
+  severity: number;      // 0–1 (jak poważne)
+  valence: 'positive' | 'negative';  // kierunek
+  tags: string[];        // krótkie kody: ['verbosity', 'offtopic', 'hallucination']
+  confidence: number;    // 0–1 (jak bardzo ufamy tej ocenie)
+  attribution?: FailureSource;  // opcjonalne: kto zawinil
+}
+```
+
+**Zasady tagów** (zamknięta lista na start):
+- `verbosity` – za długo
+- `uncertainty` – za dużo "maybe/perhaps"
+- `offtopic` – nie na temat
+- `hallucination` – możliwa konfabulacja
+- `identity_leak` – "as an AI"
+- `goal_success` – cel osiągnięty
+- `goal_failure` – cel nieosiągnięty
+- `parse_error` – błąd JSON
+
+---
+
+### 2.2 GoalFeedbackSystem
 
 **Nowy plik**: `core/systems/GoalFeedbackSystem.ts`
 
 ```typescript
 interface GoalOutcome {
   goalId: string;
+  goalType: 'INSTRUCTION' | 'CURIOSITY' | 'MAINTENANCE';
   success: boolean;
-  completionTime: number;
-  userSatisfaction?: number; // 0-1, z analizy reakcji usera
-}
-
-export function processGoalOutcome(outcome: GoalOutcome, neuro: NeurotransmitterState): NeurotransmitterState {
-  let dopamineDelta = 0;
-  let serotoninDelta = 0;
-
-  if (outcome.success) {
-    // NAGRODA: proporcjonalna do trudności (czas) i satysfakcji usera
-    dopamineDelta = 10 + (outcome.userSatisfaction ?? 0.5) * 10;
-    serotoninDelta = 5;
-    
-    console.log(`[GoalFeedback] SUCCESS: +${dopamineDelta} dopamine`);
-  } else {
-    // KARA: umiarkowana, żeby nie wbić w depresję
-    dopamineDelta = -5;
-    
-    console.log(`[GoalFeedback] FAILURE: ${dopamineDelta} dopamine`);
-  }
-
-  return {
-    dopamine: clampNeuro(neuro.dopamine + dopamineDelta),
-    serotonin: clampNeuro(neuro.serotonin + serotoninDelta),
-    norepinephrine: neuro.norepinephrine
+  difficulty: number; // 0-1
+  userSignal?: {
+    type: 'EXPLICIT' | 'IMPLICIT' | 'TIMEOUT';
+    value: number; // -1.0 do +1.0
   };
 }
 ```
 
-### Integracja z EventLoop
+**Heurystyka userSignal**:
+- `EXPLICIT`: user napisał "super", "dzięki", "nie tak" → sentyment ±1.0
+- `IMPLICIT`: user kontynuuje rozmowę bez korekty → +0.3
+- `TIMEOUT`: brak reakcji > 60s na cel inicjatywy agenta → -0.5
+
+**Konwersja GoalOutcome → EvaluationEvent**:
+```typescript
+function goalToEvaluation(outcome: GoalOutcome): EvaluationEvent {
+  return {
+    source: 'GOAL',
+    severity: outcome.success ? 0.2 : 0.5,  // sukces = niska "severity"
+    valence: outcome.success ? 'positive' : 'negative',
+    tags: outcome.success ? ['goal_success'] : ['goal_failure'],
+    confidence: outcome.userSignal?.type === 'EXPLICIT' ? 0.9 : 0.5
+  };
+}
+```
+
+---
+
+### 2.3 Confession → EvaluationBus (Kontrakt)
+
+> **WAŻNE**: Confession NIE karze za:
+> - tryb teaching/research (już ma redukcję pain ×0.5),
+> - długie odpowiedzi na prośbę usera "rozwiń/wyjaśnij".
+>
+> Confession generuje wysokie severity TYLKO dla:
+> - off-topic,
+> - ignorowanie poleceń,
+> - jawna halucynacja,
+> - identity leak.
 
 ```typescript
-// W EventLoop, po zakończeniu celu:
-eventBus.subscribe(PacketType.GOAL_COMPLETED, (packet) => {
-  ctx.neuro = processGoalOutcome(packet.payload, ctx.neuro);
+function confessionToEvaluation(report: ConfessionReport): EvaluationEvent | null {
+  // Nie emituj dla niskiego pain
+  if (report.pain < 0.2) return null;
+  
+  return {
+    source: 'CONFESSION',
+    severity: report.pain,
+    valence: 'negative',
+    tags: report.self_assessment.known_issues
+      .map(i => issueToTag(i))  // mapowanie issue → tag
+      .filter(Boolean),
+    confidence: 0.7,
+    attribution: report.failure_attribution
+  };
+}
+```
+
+---
+
+### 2.4 Parser → EvaluationBus
+
+```typescript
+// W CortexInference.ts przy CORTEX_PARSE_FAILURE
+eventBus.publish({
+  type: PacketType.EVALUATION_EVENT,
+  payload: {
+    source: 'PARSER',
+    severity: 0.3,  // techniczny błąd, nie "grzech"
+    valence: 'negative',
+    tags: ['parse_error'],
+    confidence: 1.0,  // pewni, że to błąd
+    attribution: 'LLM_MODEL'
+  }
 });
 ```
+
+---
+
+### 2.5 Reguła Anty-Podwójnego Karania
+
+> **PROBLEM**: Jedno zachowanie może wygenerować 3 eventy (Parser + Confession + Goal).
+> Jeśli wszystkie trafią do chemii, dopamina spadnie za mocno.
+
+**Rozwiązanie**: EvaluationAggregator
+
+```typescript
+class EvaluationAggregator {
+  private window: EvaluationEvent[] = [];
+  private readonly WINDOW_MS = 5000;  // 5s okno
+  
+  ingest(ev: EvaluationEvent) {
+    this.window.push(ev);
+    this.pruneOld();
+  }
+  
+  // Zwraca JEDEN zagregowany sygnał dla chemii
+  getAggregatedSignal(): { dopamineDelta: number; confidence: number } {
+    if (this.window.length === 0) return { dopamineDelta: 0, confidence: 0 };
+    
+    // Ważona średnia severity * valence * confidence
+    let sum = 0, totalConf = 0;
+    for (const ev of this.window) {
+      const sign = ev.valence === 'positive' ? 1 : -1;
+      sum += sign * ev.severity * ev.confidence;
+      totalConf += ev.confidence;
+    }
+    
+    const avgSignal = sum / this.window.length;
+    const avgConf = totalConf / this.window.length;
+    
+    // Skalowanie: max ±10 dopaminy na okno
+    const dopamineDelta = avgSignal * 10;
+    
+    return { dopamineDelta, confidence: avgConf };
+  }
+}
+```
+
+---
+
+### 2.6 Dwuetapowe Wdrożenie (KRYTYCZNE)
+
+> **ZASADA**: Najpierw obserwuj, potem reaguj.
+
+**Etap A (pierwszy tydzień)**:
+- [ ] EvaluationBus emituje eventy
+- [ ] Logi + NeuroMonitor pokazują eventy
+- [ ] **Chemia NIE reaguje** (tylko obserwacja)
+- [ ] Zbieramy dane: ile eventów/min, rozkład severity, najczęstsze tagi
+
+**Etap B (po walidacji)**:
+- [ ] Włączamy EvaluationAggregator
+- [ ] Chemia reaguje na zagregowany sygnał
+- [ ] Feature flag: `EVALUATION_AFFECTS_CHEMISTRY = true`
 
 ---
 
 ## FAZA 3: Executive Control (Przyszły Tydzień)
 
 ### Problem
-Cortex nie ma kontroli nad niższymi systemami.
-Limbic i Neurochem działają autonomicznie bez top-down modulation.
+Cortex nie ma globalnego obrazu ocen systemu.
+Bez histerezy i rate-limitu dostaniemy oscylacje (raz gadatliwy, raz lakoniczny).
 
-### Rozwiązanie: ExecutiveControl Module
+### Rozwiązanie: ExecutiveControl z Histerezą
 
 **Nowy plik**: `core/systems/ExecutiveControl.ts`
 
 ```typescript
 interface ExecutiveDirective {
-  type: 'SUPPRESS_EMOTION' | 'BOOST_FOCUS' | 'OVERRIDE_IMPULSE';
-  target: 'limbic' | 'neurochem';
+  type: 'SUPPRESS_EMOTION' | 'BOOST_FOCUS' | 'RAISE_EXPRESSION_BAR';
+  target: 'limbic' | 'neurochem' | 'expression';
   intensity: number; // 0-1
   duration: number;  // ms
   reason: string;
+  trigger: EvaluationEvent[];
 }
 
-// Cortex może wydać dyrektywę:
-// "Czuję strach, ale muszę działać - tłumię go na 30 sekund"
-export function applyExecutiveControl(
-  directive: ExecutiveDirective,
-  limbic: LimbicState,
-  neuro: NeurotransmitterState
-): { limbic: LimbicState; neuro: NeurotransmitterState } {
-  
-  if (directive.type === 'SUPPRESS_EMOTION' && directive.target === 'limbic') {
-    // Tłumienie emocji kosztuje energię i norepinefrynę
-    return {
-      limbic: {
-        ...limbic,
-        fear: limbic.fear * (1 - directive.intensity * 0.5),
-        anger: limbic.anger * (1 - directive.intensity * 0.5)
-      },
-      neuro: {
-        ...neuro,
-        norepinephrine: clampNeuro(neuro.norepinephrine + 10 * directive.intensity)
-      }
-    };
-  }
-  
-  // ... inne dyrektywy
+interface ExecutiveConfig {
+  windowMs: number;           // 30000 (30s)
+  minEventsToAct: number;     // 3
+  maxDeltaPerWindow: number;  // 0.05 (max zmiana progu)
+  cooldownMs: number;         // 60000 (1 min między dyrektywami tego samego typu)
 }
 ```
 
+### Zasady Histerezy (KRYTYCZNE)
+
+> **PROBLEM**: Reagowanie na każde 2–3 eventy = oscylacje.
+
+**Rozwiązanie**:
+
+1. **Okno czasowe**: decyzje tylko na podstawie ostatnich 30–60s eventów
+2. **Minimum eventów**: nie reaguj na pojedyncze eventy, wymagaj ≥3
+3. **Max delta**: RAISE_EXPRESSION_BAR zmienia próg max o ±0.05 na okno
+4. **Cooldown**: ta sama dyrektywa nie częściej niż co 60s
+5. **Twardy clamp**: globalny próg expression w zakresie [0.3, 0.9]
+
+```typescript
+class ExecutiveControl {
+  private lastDirectives: Map<string, number> = new Map();  // type → timestamp
+  private config: ExecutiveConfig = {
+    windowMs: 30000,
+    minEventsToAct: 3,
+    maxDeltaPerWindow: 0.05,
+    cooldownMs: 60000
+  };
+  
+  evaluate(recentEvents: EvaluationEvent[]): ExecutiveDirective | null {
+    // Filtruj do okna
+    const windowEvents = recentEvents.filter(
+      e => Date.now() - e.timestamp < this.config.windowMs
+    );
+    
+    if (windowEvents.length < this.config.minEventsToAct) return null;
+    
+    // Sprawdź dominujący tag
+    const tagCounts = this.countTags(windowEvents);
+    
+    // Przykład: seria 'verbosity' → RAISE_EXPRESSION_BAR
+    if (tagCounts['verbosity'] >= 3) {
+      if (this.canIssue('RAISE_EXPRESSION_BAR')) {
+        return {
+          type: 'RAISE_EXPRESSION_BAR',
+          target: 'expression',
+          intensity: Math.min(tagCounts['verbosity'] * 0.02, this.config.maxDeltaPerWindow),
+          duration: 120000,  // 2 min
+          reason: `${tagCounts['verbosity']} verbosity events in window`,
+          trigger: windowEvents
+        };
+      }
+    }
+    
+    return null;
+  }
+  
+  private canIssue(type: string): boolean {
+    const last = this.lastDirectives.get(type) || 0;
+    return Date.now() - last > this.config.cooldownMs;
+  }
+}
+```
+
+### Przykłady Dyrektyw
+
+| Trigger | Dyrektywa | Efekt |
+|---------|-----------|-------|
+| 3× `verbosity` w 30s | `RAISE_EXPRESSION_BAR` | ExpressionPolicy +0.05 próg |
+| 3× `parse_error` + fear > 0.5 | `SUPPRESS_EMOTION` | fear ×0.7 na 30s, norepinefryna +5 |
+| 3× `goal_success` | `BOOST_FOCUS` | curiosity +0.1 na 60s |
+
 ---
 
-## FAZA 4: Nowe Narzędzia (Następny Sprint)
+## FAZA 4: Nowe Narzędzia (Opcjonalny Sprint)
+
+Narzędzia są ważne dla UX i mocy poznawczej, ale nie rozwiązują podstawowych patologii
+(brak sprzężenia zwrotnego, brak hamulca). Dlatego mają **niższy priorytet** niż Faza 2-3.
 
 ### 4.1 NOTES Tool - Pamięć Robocza
 
@@ -199,46 +380,36 @@ interface LearnFromTool {
 
 ---
 
-## FAZA 5: Confession & Self-Reflection (Miesiąc)
+## FAZA 5: Konsolidacja Refleksji (Później)
 
-### Problem
-Agent nie ma mechanizmu autorefleksji.
-Nie wie, że popełnia błędy (JSON_PARSE_FAILURE) ani dlaczego.
+Confession v2.1 już pełni rolę lekkiego InternalObservera.
+Faza 5 to nie nowy system, tylko **spięcie istniejących modułów**:
 
-### Rozwiązanie: ConfessionSystem Enhancement
+- Confession (pain + failure_attribution)
+- EvaluationBus (historia ocen)
+- DreamConsolidation (senna analiza epizodów)
 
-```typescript
-// Rozszerzenie istniejącego ConfessionSystem
-interface EnhancedConfession {
-  // Istniejące
-  type: 'CONFESSION_REPORT';
-  
-  // Nowe
-  selfDiagnosis: {
-    recentErrors: string[];
-    emotionalPattern: string;
-    suggestedFix?: string;
-  };
-  
-  // Agent sam proponuje jak się naprawić
-  selfCorrection?: {
-    behavior: string;
-    reason: string;
-  };
-}
-```
+Cel: długoterminowe raporty typu:
+
+- "W ostatnich 7 dniach moje największe źródła bólu to: verbose+uncertain",
+- "Obniżyłem `verbosity` z 0.62 do 0.58, pain spadł o 20%".
+
+Ta faza jest bardziej analityczna/raportowa niż infrastrukturalna.
 
 ---
 
 ## Metryki Sukcesu
 
-| Faza | Metryka | Cel |
-|------|---------|-----|
-| 1 | Dopamine variance | σ > 10 (nie płaska linia) |
-| 2 | Goal completion rate | > 60% |
-| 3 | Fear suppression success | Agent działa mimo strachu |
-| 4 | Tool usage diversity | Wszystkie narzędzia użyte |
-| 5 | Self-correction rate | Agent sam naprawia błędy |
+| Faza | Metryka | Cel | Jak mierzyć |
+|------|---------|-----|-------------|
+| 1 / 1.5 | Dopamine variance | σ > 10 | Histogram w NeuroMonitor |
+| 2A | EvaluationBus coverage | 100% zdarzeń ma event | Logi: GOAL/CONFESSION/PARSER |
+| 2B | Goal-linked dopamine | Korelacja > 0.5 | Po włączeniu chemii |
+| 2B | Brak podwójnego karania | Max 1 korekta/5s | EvaluationAggregator logi |
+| 3 | Brak oscylacji | Próg expression zmienia się < 3×/min | ExecutiveControl logi |
+| 3 | Effective control | Agent działa mimo strachu | Obserwacja behawioralna |
+| 4 | Tool ROI | Narzędzia → goal_success | Korelacja tool_use ↔ outcome |
+| 5 | Pain trend | Spadek avg pain w 7 dni | ConfessionLog agregat |
 
 ---
 
@@ -263,12 +434,13 @@ interface EnhancedConfession {
   - [x] ConfessionService v2.1 - funkcja kosztu (pain) zamiast progów
   - [x] FailureSource type - atrybucja błędów (LLM_MODEL, PROMPT, SELF)
   - [x] Attribution w DOPAMINE_PENALTY events
-- [ ] FAZA 2: Nie rozpoczęta
-- [ ] FAZA 3: Nie rozpoczęta
-- [ ] FAZA 4: Nie rozpoczęta
-- [ ] FAZA 5: ConfessionSystem rozszerzony (pain + attribution)
+- [ ] FAZA 2A: EvaluationBus + GoalFeedback (tylko logi, bez chemii)
+- [ ] FAZA 2B: Włączenie chemii po walidacji logów
+- [ ] FAZA 3: ExecutiveControl z histerezą
+- [ ] FAZA 4: Nowe narzędzia (NOTES / READ_FILE / LEARN_FROM)
+- [ ] FAZA 5: Konsolidacja Refleksji (Confession + Dreams + Evaluation)
 
 ---
 
-*Ostatnia aktualizacja: 2024-12-09*
+*Ostatnia aktualizacja: 2024-12-09 v2.1*
 *Autor: AK-FLOW Engineering Team*

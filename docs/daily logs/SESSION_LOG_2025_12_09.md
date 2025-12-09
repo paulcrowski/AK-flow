@@ -16,21 +16,6 @@ Wprowadziliśmy fundamentalną zmianę w sposobie "myślenia" agenta. Zamiast p�
 
 **Dlaczego to ważne?**
 Wcześniej agent "halucynował sprawczość" – myślał, że coś zrobił, tylko dlatego, że o tym pomyślał. Teraz musi wykonać *Explicit Action* w warstwie mowy.
-
-### 2. 🧠 Persona-Less Cortex Integration
-Uruchomiliśmy nowy, lekki silnik wnioskowania (`MinimalCortexStateBuilder`).
-*   **Wynik:** Agent buduje swoją tożsamość *per request* z cache'owanych danych, zamiast trzymać ją hardcoded w kodzie.
-*   **Efekt:** Drastyczna redukcja kosztu tokenów (~250 vs ~1500) przy zachowaniu spójności.
-
-### 3. 🧪 E2E Tests & Fixes
-*   Naprawiliśmy parsowanie JSON w Gemini (ostrzejszy prompt).
-*   Rozwiązaliśmy konflikt typów TypeScript w `CortexSystem.ts` (namespace hell).
-*   Zidentyfikowaliśmy i zaakceptowaliśmy "Błąd Rozdwojenia Jaźni" (patrz niżej).
-
----
-
-## 🧗 Challenges (Wyzwania)
-
 ### Problem #15: "Chemistry Wins" (The Split Personality)
 Podczas testów zauważyliśmy fascynujące zjawisko. Przy bardzo wysokiej dopaminie (>80), agent zaczął "krzyczeć" i używać Caps Locka w warstwie *Speech*, mimo że w warstwie *Thought* pisał "muszę być spokojny".
 
