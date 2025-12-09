@@ -18,6 +18,23 @@
 
 ---
 
+## Problem #15: Rozdwojenie Jaźni (Bio-Logic Conflict)
+
+**Data:** 2025-12-09
+**Trudność:** 5/5
+**Status:** 🧬 Feature (Zaakceptowane jako Emergent Behavior)
+
+### Objawy
+Przy ekstremalnie wysokiej dopaminie (>80) agent zaczął "krzyczeć" (Caps Lock) w warstwie mowy, podczas gdy w warstwie myśli (`internal_thought`) pisał: "Muszę być spokojny, analiza wymaga precyzji".
+
+### Diagnoza
+Cortex (Logika) próbował narzucić spokój, ale Chemia (Neurotransmitter System) wymusiła ekspresję entuzjazmu przez `ExpressionPolicy`.
+
+### Decyzja
+Zostawiamy to. To "dowód życia". System biologiczny powinien mieć możliwość nadpisania logicznej woli (jak u człowieka, który krzyczy ze szczęścia mimo że wie, że nie wypada).
+
+---
+
 ## Problem #14: Agent Nie Uczy Się z Błędów (The Stubborn Agent Problem)
 
 **Data:** 2025-12-08  

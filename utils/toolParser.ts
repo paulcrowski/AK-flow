@@ -9,7 +9,7 @@ import { VISUAL_BASE_COOLDOWN_MS, VISUAL_ENERGY_COST_BASE } from '../core/consta
 
 export interface ToolParserDeps {
   setCurrentThought: (t: string) => void;
-  addMessage: (role: 'user' | 'assistant', text: string, type?: 'thought' | 'speech' | 'visual' | 'intel', imageData?: string, sources?: any[]) => void;
+  addMessage: (role: 'user' | 'assistant', text: string, type?: 'thought' | 'speech' | 'visual' | 'intel' | 'action' | 'tool_result', imageData?: string, sources?: any[]) => void;
   setSomaState: (updater: (prev: any) => any) => void;
   setLimbicState: (updater: (prev: any) => any) => void;
   lastVisualTimestampRef: { current: number };
@@ -44,6 +44,8 @@ export const createProcessOutputForTools = (deps: ToolParserDeps) => {
       const query = searchMatch[1].trim();
       cleanText = cleanText.replace(searchMatch[0], '').trim();
 
+      // TAGGED COGNITION: Log MY_ACTION before tool invocation
+      addMessage('assistant', `Invoking SEARCH for: "${query}"`, 'action');
       setCurrentThought(`Researching: ${query}...`);
       
       let research;
@@ -59,7 +61,8 @@ export const createProcessOutputForTools = (deps: ToolParserDeps) => {
         return cleanText;
       }
 
-      addMessage('assistant', research.synthesis, 'intel', undefined, research.sources);
+      // TAGGED COGNITION: Tool result is separate from action
+      addMessage('assistant', research.synthesis, 'tool_result', undefined, research.sources);
 
       eventBus.publish({
         id: generateUUID(),
@@ -92,6 +95,8 @@ export const createProcessOutputForTools = (deps: ToolParserDeps) => {
 
       console.log('Visual Tag Detected:', prompt);
 
+      // TAGGED COGNITION: Log MY_ACTION before tool invocation
+      addMessage('assistant', `Invoking VISUALIZE for: "${prompt.substring(0, 50)}..."`, 'action');
       cleanText = cleanText.replace(visualMatch[0], '').trim();
 
       const now = Date.now();

@@ -190,6 +190,17 @@ INSTRUCTIONS:
                 stress_delta: { type: Type.NUMBER }
               },
               required: ['energy_delta', 'confidence_delta', 'stress_delta']
+            },
+            // ARCHITEKTURA 3-WARSTWOWA: tool_intent dla Decision Gate
+            tool_intent: {
+              type: Type.OBJECT,
+              nullable: true,
+              properties: {
+                tool: { type: Type.STRING },
+                query: { type: Type.STRING },
+                reason: { type: Type.STRING }
+              },
+              required: ['tool', 'query', 'reason']
             }
           },
           required: ['internal_thought', 'speech_content', 'mood_shift']

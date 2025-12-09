@@ -76,6 +76,13 @@ USE_CORTEX_STATE_BUILDER: { enabled: true }
 
 ---
 
+#### Tagged Cognition (Three Layers of Truth)
+- **Layer 1: [INTERNAL_THOUGHT]** - Private cognition (planning, doubts).
+- **Layer 2: [TOOL_INTENT]** - Decision gate before action.
+- **Layer 3: [SPEECH_CONTENT]** - Public output.
+
+---
+
 ## 🆕 What's New in V5.1 (2025-12-08)
 
 ### FAZA 5.1: Confession Module v2.0 (Meta-Cognitive Regulator)

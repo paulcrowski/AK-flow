@@ -124,7 +124,7 @@ export const useCognitiveKernel = (loadedIdentity?: AgentIdentity | null) => {
     );
     const [agentName, setAgentName] = useState<string>(loadedIdentity?.name || 'AK-FLOW');
 
-    const [conversation, setConversation] = useState<{ role: string, text: string, type?: 'thought' | 'speech' | 'visual' | 'intel', imageData?: string, sources?: any[] }[]>([]);
+    const [conversation, setConversation] = useState<{ role: string, text: string, type?: 'thought' | 'speech' | 'visual' | 'intel' | 'action' | 'tool_result', imageData?: string, sources?: any[] }[]>([]);
     const [isProcessing, setIsProcessing] = useState(false);
     const [currentThought, setCurrentThought] = useState<string>("Initializing Synapses...");
     const [systemError, setSystemError] = useState<CognitiveError | null>(null);
@@ -309,7 +309,7 @@ export const useCognitiveKernel = (loadedIdentity?: AgentIdentity | null) => {
         setChemistryEnabled(prev => !prev);
     };
 
-    const addMessage = (role: 'user' | 'assistant', text: string, type: 'thought' | 'speech' | 'visual' | 'intel' = 'speech', imageData?: string, sources?: any[]) => {
+    const addMessage = (role: 'user' | 'assistant', text: string, type: 'thought' | 'speech' | 'visual' | 'intel' | 'action' | 'tool_result' = 'speech', imageData?: string, sources?: any[]) => {
         setConversation(prev => [...prev, { role, text, type, imageData, sources }]);
         silenceStartRef.current = Date.now();
 

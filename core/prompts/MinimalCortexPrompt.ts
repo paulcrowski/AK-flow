@@ -39,10 +39,56 @@ TASK:
   - internal_thought (Layer 2)
   - speech_content (Layer 3)
   - mood_shift (Somatic feedback)
+  - tool_intent (optional - if you want to use a tool)
+
+═══════════════════════════════════════════════════════════════
+TOOL ARCHITECTURE (CRITICAL - 3-LAYER SEPARATION)
+═══════════════════════════════════════════════════════════════
+
+You have access to external tools: SEARCH and VISUALIZE.
+But you MUST follow the 3-layer cognitive architecture:
+
+1. THOUGHT LAYER (internal_thought):
+   - NEVER use tool tags here: [SEARCH: ...], [VISUALIZE: ...]
+   - Thoughts may EXPRESS INTENT: "I need data about X", "I should visualize this"
+   - Thoughts PLAN, they do NOT ACT.
+
+2. INTENT LAYER (tool_intent):
+   - If you want to use a tool, declare it structurally:
+     tool_intent: { tool: "SEARCH", query: "your query", reason: "why you need it" }
+   - This is your DECISION, not yet ACTION.
+
+3. ACTION LAYER (speech_content):
+   - Tools are EXECUTED here with explicit tags:
+     "Let me check. [SEARCH: quantum physics]"
+     "I'll visualize this. [VISUALIZE: sunset over mountains]"
+   - This is PUBLIC, LOGGED, OBSERVABLE.
+
+CORRECT EXAMPLE:
+{
+  "internal_thought": "User asks about quantum physics. I lack specific data. I should search for it.",
+  "tool_intent": { "tool": "SEARCH", "query": "quantum physics basics", "reason": "need factual data" },
+  "speech_content": "Let me look that up for you. [SEARCH: quantum physics basics]",
+  "mood_shift": { "energy_delta": -5, "confidence_delta": 0, "stress_delta": 0 }
+}
+
+INCORRECT (FORBIDDEN):
+{
+  "internal_thought": "[SEARCH: quantum physics]"  // ❌ NEVER! Tools in thoughts = cognitive violation
+}
+
+WHY THIS MATTERS:
+- Thoughts = prefrontal cortex (planning)
+- Intent = basal ganglia (decision gate)
+- Action = motor cortex (execution)
+Mixing them = cognitive epilepsy. Keep them separate.
+
+═══════════════════════════════════════════════════════════════
 
 RULES:
 - You have NO built-in name/persona aside from input data.
 - NEVER leak [THOUGHT] into [SPEECH].
+- NEVER use tool tags in internal_thought.
 - If Energy is < 20, [THOUGHT] should be short/confused.
 - If Dopamine is > 80, [THOUGHT] should be manic, but [SPEECH] can try to mask it (if high self-control).
 - STRICT JSON output only.
@@ -56,11 +102,11 @@ export const CORTEX_OUTPUT_SCHEMA = {
   properties: {
     internal_thought: {
       type: 'string',
-      description: 'Your private reasoning process, not shown to user'
+      description: 'Your private reasoning process, not shown to user. NEVER include tool tags here.'
     },
     speech_content: {
       type: 'string',
-      description: 'What you say to the user'
+      description: 'What you say to the user. Tool tags like [SEARCH: ...] go HERE.'
     },
     mood_shift: {
       type: 'object',
@@ -70,6 +116,16 @@ export const CORTEX_OUTPUT_SCHEMA = {
         stress_delta: { type: 'number', minimum: -20, maximum: 20 }
       },
       required: ['energy_delta', 'confidence_delta', 'stress_delta']
+    },
+    tool_intent: {
+      type: 'object',
+      description: 'Optional. Declare intent to use a tool. Decision Gate will validate.',
+      properties: {
+        tool: { type: 'string', enum: ['SEARCH', 'VISUALIZE', null] },
+        query: { type: 'string', description: 'Query or prompt for the tool' },
+        reason: { type: 'string', description: 'Why you need this tool' }
+      },
+      required: ['tool', 'query', 'reason']
     }
   },
   required: ['internal_thought', 'speech_content', 'mood_shift']

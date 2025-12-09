@@ -17,11 +17,12 @@ import { buildMinimalCortexState } from '../builders';
 import { generateFromCortexState } from '../inference';
 import { isFeatureEnabled } from '../config';
 import { eventBus } from '../EventBus';
+import { processDecisionGate, resetTurnState } from './DecisionGate';
 
 export interface ConversationTurn {
     role: string;
     text: string;
-    type?: 'thought' | 'speech' | 'visual' | 'intel';
+    type?: 'thought' | 'speech' | 'visual' | 'intel' | 'action' | 'tool_result';
 }
 
 export namespace CortexSystem {
@@ -30,12 +31,32 @@ export namespace CortexSystem {
     const completedTopics = new Set<string>();
 
     // Helper to format history for Tagged Cognition
+    // THOUGHT PRUNING: Keep only N most recent thoughts (they age faster than speech)
+    const THOUGHT_HISTORY_LIMIT = 3;
+    const SPEECH_HISTORY_LIMIT = 10;
+
+    function pruneHistory(history: ConversationTurn[]): ConversationTurn[] {
+        const thoughts = history.filter(t => t.type === 'thought');
+        const speeches = history.filter(t => t.type === 'speech');
+        const others = history.filter(t => t.type !== 'thought' && t.type !== 'speech');
+
+        const prunedThoughts = thoughts.slice(-THOUGHT_HISTORY_LIMIT);
+        const prunedSpeeches = speeches.slice(-SPEECH_HISTORY_LIMIT);
+
+        // Reconstruct in original order (approximate by keeping recent)
+        return [...others, ...prunedThoughts, ...prunedSpeeches]
+            .sort((a, b) => history.indexOf(a) - history.indexOf(b));
+    }
+
     function formatHistoryForCortex(history: ConversationTurn[]): string[] {
-        return history.map(t => {
+        const pruned = pruneHistory(history);
+        return pruned.map(t => {
             if (t.type === 'thought') return `[INTERNAL_THOUGHT]: ${t.text}`;
             if (t.type === 'speech') return `[ASSISTANT_SAID]: ${t.text}`;
             if (t.type === 'visual') return `[VISUAL_CORTEX]: ${t.text}`;
-            if (t.type === 'intel') return `[INTEL_BRIEF]: ${t.text}`;
+            if (t.type === 'intel') return `[TOOL_RESULT]: ${t.text}`;
+            if (t.type === 'action') return `[MY_ACTION]: ${t.text}`;
+            if (t.type === 'tool_result') return `[TOOL_RESULT]: ${t.text}`;
             return `[USER]: ${t.text}`;
         });
     }
@@ -198,9 +219,22 @@ export namespace CortexSystem {
                     }
                 });
 
-                const output = await generateFromCortexState(state);
+                const rawOutput = await generateFromCortexState(state);
 
-                // CortexInference handles logging
+                // ARCHITEKTURA 3-WARSTWOWA: Decision Gate
+                // Myśl → Decyzja → Akcja
+                resetTurnState();
+                const gateResult = processDecisionGate(rawOutput, currentSoma);
+                const output = gateResult.modifiedOutput;
+
+                // Log telemetry
+                if (gateResult.telemetry.violation) {
+                    console.warn('[CortexSystem] Cognitive violation detected and corrected');
+                }
+                if (gateResult.telemetry.intentDetected) {
+                    console.log('[CortexSystem] Tool intent:', 
+                        gateResult.telemetry.intentExecuted ? 'EXECUTED' : 'BLOCKED');
+                }
 
                 // 4. Persist interaction (Legacy style for now)
                 await MemoryService.storeMemory({

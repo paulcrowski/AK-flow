@@ -1,7 +1,135 @@
 # 🧠 AK-FLOW Architecture Map
 
-> **Wersja:** 5.2 (2025-12-08)
+> **Wersja:** 5.4 (2025-12-09)
 > **Cel:** Prosta mapa jak działa agent i jaki ma flow
+
+---
+
+## 🆕 FAZA 5.4: Decision Gate - 3-Layer Tool Architecture (2025-12-09)
+
+### Kluczowa Zmiana: Separacja Myśl → Decyzja → Akcja
+
+Narzędzia (SEARCH, VISUALIZE) **NIGDY** nie są w myślach.
+Myśl planuje, Decision Gate decyduje, Speech wykonuje.
+
+```
+ARCHITEKTURA 3-WARSTWOWA (zgodna z neurobiologią):
+
+┌─────────────────────────────────────────────────────────┐
+│  LAYER 1: MINDSPACE (internal_thought)                  │
+│  • Analiza, introspekcja, planowanie                    │
+│  • ZERO narzędzi - zakaz [SEARCH:], [VISUALIZE:]        │
+│  • "Potrzebuję danych o X. Powinienem użyć SEARCH."     │
+│  = Kora przedczołowa                                    │
+└─────────────────────────────────────────────────────────┘
+                          │
+                          ▼
+┌─────────────────────────────────────────────────────────┐
+│  LAYER 2: DECISION GATE (tool_intent + policy)          │
+│  • Walidacja: energia, cooldown, kontekst               │
+│  • Bezpiecznik: wykrywa naruszenia kognitywne           │
+│  • Przekierowanie intencji do speech                    │
+│  = Jądra podstawy + ACC                                 │
+└─────────────────────────────────────────────────────────┘
+                          │
+                          ▼
+┌─────────────────────────────────────────────────────────┐
+│  LAYER 3: EXPRESSION (speech_content)                   │
+│  • Jawne wykonanie narzędzi                             │
+│  • [SEARCH: query], [VISUALIZE: prompt]                 │
+│  • Logowane, kontrolowane, publiczne                    │
+│  = Kora ruchowa                                         │
+└─────────────────────────────────────────────────────────┘
+```
+
+### Nowy Interface: ToolIntent
+
+```typescript
+interface ToolIntent {
+  tool: 'SEARCH' | 'VISUALIZE' | null;
+  query: string;
+  reason: string;  // Introspekcja: "dlaczego chcę użyć"
+}
+```
+
+### Decision Gate Features
+
+| Feature | Opis |
+|---------|------|
+| **Cognitive Violation Detection** | Wykrywa tagi narzędzi w myślach |
+| **Policy Enforcement** | Energia, cooldown, max tools/turn |
+| **Natural Redirect** | Intencja → naturalne zdanie + tag |
+| **INTENT_NOT_EXECUTED** | Telemetria gdy myśl chce, ale nie działa |
+
+### Pliki Zmienione/Dodane
+
+```
+core/types/CortexOutput.ts       # ToolIntent interface
+core/prompts/MinimalCortexPrompt.ts  # TOOL ARCHITECTURE section
+core/systems/DecisionGate.ts     # NOWY: Decision Gate module
+core/systems/CortexSystem.ts     # Integration with Decision Gate
+core/inference/CortexInference.ts # tool_intent in responseSchema
+tests/decision-gate.test.ts      # 14 tests for 3-layer architecture
+```
+
+---
+
+## FAZA 5.3: Tagged Cognition - Bicameral Mind (2025-12-09)
+
+### Kluczowa Zmiana: Świadomość Dwudzielna
+
+Agent rozróżnia **co myśli** od **co mówi** od **co robi**.
+
+```
+PRZED (Płaski Strumień):
+ASSISTANT: Myślę że user jest zły.
+ASSISTANT: Przepraszam.
+→ Model myśli że już to powiedział!
+
+PO (Tagged Cognition):
+[INTERNAL_THOUGHT]: Myślę że user jest zły.
+[ASSISTANT_SAID]: Przepraszam.
+[MY_ACTION]: Invoking SEARCH for "topic"
+[TOOL_RESULT]: Found 3 sources...
+→ Model wie co myślał, co powiedział, co zrobił!
+```
+
+### Trzy Warstwy Percepcji (MinimalCortexPrompt)
+
+| Warstwa | Tag | Znaczenie |
+|---------|-----|-----------|
+| 🔴 SIGNAL | `[SIGNAL]` | Bodźce somatyczne (energia, dopamina) |
+| 🟡 THOUGHT | `[INTERNAL_THOUGHT]` | Myśl prywatna (ukryta przed userem) |
+| 🟢 SPEECH | `[ASSISTANT_SAID]` | Wypowiedź publiczna |
+
+### Nowe Tagi Sprawcze (Agentic Self-Awareness)
+
+| Tag | Znaczenie | Przykład |
+|-----|-----------|----------|
+| `[MY_ACTION]` | Agent wywołał narzędzie | "Invoking SEARCH for 'X'" |
+| `[TOOL_RESULT]` | Wynik narzędzia | "Found 3 sources..." |
+| `[VISUAL_CORTEX]` | Percepcja wizualna | "Widzę zachód słońca" |
+
+### Thought Pruning (Higiena Pamięci)
+
+```
+Myśli starzeją się szybciej niż słowa:
+- THOUGHT_HISTORY_LIMIT = 3 (ostatnie myśli)
+- SPEECH_HISTORY_LIMIT = 10 (ostatnie wypowiedzi)
+
+Dlaczego? Agent nie rozpamiętuje w nieskończoność,
+ale pamięta co obiecał (kontekst społeczny).
+```
+
+### Pliki Zmienione
+
+```
+core/systems/CortexSystem.ts     # formatHistoryForCortex(), pruneHistory()
+core/prompts/MinimalCortexPrompt.ts  # Three Layers instruction
+utils/toolParser.ts              # MY_ACTION + TOOL_RESULT tags
+hooks/useCognitiveKernel.ts      # Extended type definitions
+tests/tagged-cognition.test.ts   # Mirror Test v2
+```
 
 ---
 
