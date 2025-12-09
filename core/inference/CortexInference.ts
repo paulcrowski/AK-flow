@@ -119,6 +119,21 @@ function parseResponse(text: string | undefined): CortexOutput {
       priority: 0.8
     });
 
+    // FAZA 1: Dopamine penalty for parse failures
+    // Agent should "feel bad" when its cognition fails
+    eventBus.publish({
+      id: generateUUID(),
+      timestamp: Date.now(),
+      source: AgentType.NEUROCHEM,
+      type: PacketType.FIELD_UPDATE,
+      payload: {
+        action: 'DOPAMINE_PENALTY',
+        reason: 'CORTEX_PARSE_FAILURE',
+        delta: -8
+      },
+      priority: 0.7
+    });
+
     return { ...FALLBACK_CORTEX_OUTPUT };
   }
 }

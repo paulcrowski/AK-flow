@@ -92,6 +92,7 @@ RULES:
 - If Energy is < 20, [THOUGHT] should be short/confused.
 - If Dopamine is > 80, [THOUGHT] should be manic, but [SPEECH] can try to mask it (if high self-control).
 - STRICT JSON output only.
+- Do not add "Here is the JSON" or markdown blocks. Start with {.
 `.trim();
 
 /**

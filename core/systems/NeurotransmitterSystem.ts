@@ -20,8 +20,17 @@ export interface NeuroContext {
 
 export const clampNeuro = (v: number) => Math.max(0, Math.min(100, v));
 
+/**
+ * Asymmetric homeostasis - faster decay when ABOVE baseline.
+ * Rationale: Dopamine should drop faster without external rewards.
+ * At dopamine=100, baseline=55: delta = (55-100) * 0.15 = -6.75/tick
+ * At dopamine=30, baseline=55: delta = (55-30) * 0.05 = +1.25/tick
+ */
 export const applyHomeostasis = (value: number, target = 50, rate = 0.05): number => {
-  const delta = (target - value) * rate;
+  const distance = target - value;
+  // 3x faster decay when above baseline (prevents dopamine ceiling)
+  const effectiveRate = value > target ? rate * 3 : rate;
+  const delta = distance * effectiveRate;
   return clampNeuro(value + delta);
 };
 

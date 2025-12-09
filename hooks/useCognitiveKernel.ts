@@ -150,6 +150,21 @@ export const useCognitiveKernel = (loadedIdentity?: AgentIdentity | null) => {
         stateRef.current = { limbicState, somaState, resonanceField, conversation, autonomousMode, poeticMode, neuroState, chemistryEnabled, goalState, traitVector };
     }, [limbicState, somaState, resonanceField, conversation, autonomousMode, poeticMode, neuroState, chemistryEnabled, goalState, traitVector]);
 
+    // FAZA 1: Subscribe to DOPAMINE_PENALTY events from CortexInference
+    useEffect(() => {
+        const unsubscribe = eventBus.subscribe(PacketType.FIELD_UPDATE, (packet) => {
+            if (packet.source === AgentType.NEUROCHEM && packet.payload?.action === 'DOPAMINE_PENALTY') {
+                const delta = packet.payload.delta || 0;
+                setNeuroState(prev => ({
+                    ...prev,
+                    dopamine: Math.max(0, Math.min(100, prev.dopamine + delta))
+                }));
+                console.log(`[CognitiveKernel] DOPAMINE_PENALTY applied: ${delta} (reason: ${packet.payload.reason})`);
+            }
+        });
+        return () => unsubscribe();
+    }, []);
+
     // --- ACTIONS ---
 
     const resetKernel = useCallback(() => {
