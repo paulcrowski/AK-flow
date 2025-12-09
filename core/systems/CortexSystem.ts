@@ -13,6 +13,9 @@ import { EpisodicMemoryService } from '../../services/EpisodicMemoryService';
 import { LimbicState, SomaState, Goal, TraitVector, NeurotransmitterState, AgentType, PacketType } from '../../types';
 import { generateUUID } from '../../utils/uuid';
 import { decideExpression, computeNovelty, estimateSocialCost } from './ExpressionPolicy';
+import { buildMinimalCortexState } from '../builders';
+import { generateFromCortexState } from '../inference';
+import { isFeatureEnabled } from '../config';
 import { eventBus } from '../EventBus';
 
 export interface ConversationTurn {
@@ -25,6 +28,17 @@ export namespace CortexSystem {
     // DeepResearch Caches (Module-level state)
     const inFlightTopics = new Set<string>();
     const completedTopics = new Set<string>();
+
+    // Helper to format history for Tagged Cognition
+    function formatHistoryForCortex(history: ConversationTurn[]): string[] {
+        return history.map(t => {
+            if (t.type === 'thought') return `[INTERNAL_THOUGHT]: ${t.text}`;
+            if (t.type === 'speech') return `[ASSISTANT_SAID]: ${t.text}`;
+            if (t.type === 'visual') return `[VISUAL_CORTEX]: ${t.text}`;
+            if (t.type === 'intel') return `[INTEL_BRIEF]: ${t.text}`;
+            return `[USER]: ${t.text}`;
+        });
+    }
 
     // ============================================================
     // FAZA 5: Agent Identity for Dynamic Persona
@@ -148,6 +162,8 @@ export namespace CortexSystem {
         `;
     }
 
+
+
     export async function processUserMessage(
         params: ProcessInputParams
     ): Promise<ProcessResult> {
@@ -159,7 +175,55 @@ export namespace CortexSystem {
         // 1. Retrieve relevant memories (RAG)
         const memories = await MemoryService.semanticSearch(text);
 
-        // 2. Build prompt for CortexService (with dynamic identity)
+        // --- NEW FLOW: PERSONA-LESS CORTEX (TAGGED COGNITION) ---
+        if (isFeatureEnabled('USE_MINIMAL_CORTEX_PROMPT')) {
+            const agentId = getCurrentAgentId();
+            if (agentId) {
+                const formattedHistory = formatHistoryForCortex(recentHistory);
+
+                // Inject Retrieval Augmented Generation (RAG) into history as system context
+                if (memories.length > 0) {
+                    const ragContext = memories.map(m => `[MEMORY_RECALL]: ${m.content}`).join('\n');
+                    formattedHistory.push(ragContext);
+                }
+
+                const state = buildMinimalCortexState({
+                    agentId,
+                    userInput: text,
+                    recentContext: formattedHistory,
+                    metaStates: {
+                        energy: currentSoma.energy,
+                        confidence: currentLimbic.satisfaction * 100,
+                        stress: currentLimbic.fear * 100 // Map fear to stress for MVP
+                    }
+                });
+
+                const output = await generateFromCortexState(state);
+
+                // CortexInference handles logging
+
+                // 4. Persist interaction (Legacy style for now)
+                await MemoryService.storeMemory({
+                    content: `User: ${text} | Agent: ${output.speech_content}`,
+                    emotionalContext: currentLimbic,
+                    timestamp: new Date().toISOString(),
+                    id: generateUUID()
+                });
+
+                // Episode detection logic could be reused here or moved to event bus
+
+                return {
+                    responseText: output.speech_content,
+                    internalThought: output.internal_thought,
+                    moodShift: {
+                        fear_delta: output.mood_shift.stress_delta || 0,
+                        curiosity_delta: output.mood_shift.confidence_delta || 0
+                    }
+                };
+            }
+        }
+
+        // 2. Build prompt for CortexService (with dynamic identity) - LEGACY FALLBACK
         const prompt = buildStructuredPrompt({
             text,
             currentLimbic,
