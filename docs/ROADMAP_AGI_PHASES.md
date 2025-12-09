@@ -258,10 +258,15 @@ interface EnhancedConfession {
   - [x] Asymetryczny decay (3x szybszy spadek powyżej baseline)
   - [x] DOPAMINE_PENALTY za JSON_PARSE_FAILURE (-8 dopaminy)
   - [x] Subskrypcja w useCognitiveKernel
+- [x] FAZA 1.5: ✅ DONE (Karpathy Refactor)
+  - [x] TraitEvolutionEngine v2.0 - homeostaza zamiast if-ów
+  - [x] ConfessionService v2.1 - funkcja kosztu (pain) zamiast progów
+  - [x] FailureSource type - atrybucja błędów (LLM_MODEL, PROMPT, SELF)
+  - [x] Attribution w DOPAMINE_PENALTY events
 - [ ] FAZA 2: Nie rozpoczęta
 - [ ] FAZA 3: Nie rozpoczęta
 - [ ] FAZA 4: Nie rozpoczęta
-- [ ] FAZA 5: ConfessionSystem istnieje, wymaga rozszerzenia
+- [ ] FAZA 5: ConfessionSystem rozszerzony (pain + attribution)
 
 ---
 

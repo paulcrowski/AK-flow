@@ -121,6 +121,7 @@ function parseResponse(text: string | undefined): CortexOutput {
 
     // FAZA 1: Dopamine penalty for parse failures
     // Agent should "feel bad" when its cognition fails
+    // FAZA 1.5: Attribution - this is LLM_MODEL failure, not agent's fault
     eventBus.publish({
       id: generateUUID(),
       timestamp: Date.now(),
@@ -129,7 +130,8 @@ function parseResponse(text: string | undefined): CortexOutput {
       payload: {
         action: 'DOPAMINE_PENALTY',
         reason: 'CORTEX_PARSE_FAILURE',
-        delta: -8
+        delta: -8,
+        attribution: 'LLM_MODEL'  // Not agent's moral fault, but still affects confidence
       },
       priority: 0.7
     });

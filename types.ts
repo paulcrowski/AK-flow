@@ -164,6 +164,15 @@ export interface DetectedIntent {
 
 // 5. Confession Module Types (v2 - Super-Human)
 
+// NEW: Failure Attribution (FAZA 1.5 - Karpathy Principle)
+// "Agent should know WHO caused the failure, not just THAT it failed"
+export type FailureSource =
+  | 'LLM_MODEL'      // Gemini/LLM returned garbage
+  | 'PROMPT'         // Our prompt was unclear
+  | 'ENVIRONMENT'    // Network, timeout, rate limit
+  | 'SELF'           // Agent made a logical error
+  | 'UNKNOWN';       // Cannot determine
+
 // Context modes: when is verbosity acceptable?
 export type ConfessionContext =
   | 'normal'
@@ -213,4 +222,7 @@ export interface ConfessionReport {
   severity: number;  // 1-10
   context_mode: ConfessionContext;
   recommended_regulation?: RegulationHint;
+  // v2.1 fields (FAZA 1.5 - Attribution Layer)
+  pain?: number;  // 0-1, calculated from severity + neuro state
+  failure_attribution?: FailureSource;  // WHO caused the failure
 }
