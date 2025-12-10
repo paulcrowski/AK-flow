@@ -146,12 +146,19 @@ export const useCognitiveKernel = (loadedIdentity?: AgentIdentity | null) => {
     const lastSpeakRef = useRef<number>(0);
     const lastUserInputRef = useRef<string | null>(null);
     const consecutiveAgentSpeechesRef = useRef<number>(0); // FAZA 4.5: Narcissism Loop Fix
+    const loadedIdentityRef = useRef<AgentIdentity | null | undefined>(loadedIdentity); // IDENTITY-LITE: Ref for stale closure fix
     const [kernelEpoch, setKernelEpoch] = useState(0); // Tracks session resets for logging
 
     // Sync Ref
     useEffect(() => {
         stateRef.current = { limbicState, somaState, resonanceField, conversation, autonomousMode, poeticMode, neuroState, chemistryEnabled, goalState, traitVector };
     }, [limbicState, somaState, resonanceField, conversation, autonomousMode, poeticMode, neuroState, chemistryEnabled, goalState, traitVector]);
+
+    // IDENTITY-LITE: Sync loadedIdentity to ref (fixes stale closure in tick loop)
+    useEffect(() => {
+        loadedIdentityRef.current = loadedIdentity;
+        console.log('🧬 [IdentityRef] Updated:', { hasIdentity: !!loadedIdentity, id: loadedIdentity?.id });
+    }, [loadedIdentity]);
 
     // FAZA 1: Subscribe to DOPAMINE_PENALTY events from CortexInference
     useEffect(() => {
@@ -641,42 +648,8 @@ export const useCognitiveKernel = (loadedIdentity?: AgentIdentity | null) => {
                     priority: 0.5
                 });
 
-                // ═══════════════════════════════════════════════════════════════
-                // IDENTITY-LITE: Apply trait homeostasis on AUTO-WAKE (energy >= 95)
-                // Same logic as toggleSleep() but for automatic waking
-                // ═══════════════════════════════════════════════════════════════
-                if (loadedIdentity?.id && loadedIdentity?.trait_vector) {
-                    (async () => {
-                        try {
-                            const traitEngine = new TraitEvolutionEngine();
-                            const traitsBefore = { ...stateRef.current.traitVector };
-                            const evolvedTraits = traitEngine.applyTraitHomeostasis(
-                                stateRef.current.traitVector,
-                                stateRef.current.neuroState
-                            );
-
-                            // Update local state
-                            setTraitVector(evolvedTraits);
-
-                            // Save to database
-                            await updateAgentTraitVector(loadedIdentity.id, evolvedTraits);
-
-                            // Log evolution (always, no flags)
-                            await logIdentityEvolution({
-                                agentId: loadedIdentity.id,
-                                component: 'trait_vector',
-                                stateBefore: traitsBefore,
-                                stateAfter: evolvedTraits,
-                                trigger: 'homeostasis',
-                                reason: 'auto_wake_cycle_homeostasis'
-                            });
-
-                            console.log('🧬 [AutoWake] Trait evolution applied:', evolvedTraits);
-                        } catch (traitError) {
-                            console.error('🧬 [AutoWake] Trait evolution error:', traitError);
-                        }
-                    })();
-                }
+                // NOTE: Auto-wake homeostasis moved OUTSIDE this block (see below)
+                // because shouldWake already sets isSleeping=false in calculateMetabolicState()
             } else {
                 // REM Sleep Visuals (Occasional)
                 if (Math.random() > 0.7) {
@@ -700,6 +673,71 @@ export const useCognitiveKernel = (loadedIdentity?: AgentIdentity | null) => {
         } else {
             // Awake: Apply energy drain
             setSomaState(metabolicResult.newState);
+        }
+
+        // ═══════════════════════════════════════════════════════════════
+        // IDENTITY-LITE: Apply trait homeostasis on AUTO-WAKE
+        // This runs AFTER the sleep/wake block because shouldWake sets isSleeping=false
+        // USES loadedIdentityRef.current to avoid stale closure!
+        // ═══════════════════════════════════════════════════════════════
+        const currentIdentity = loadedIdentityRef.current; // Get fresh value from ref
+        if (metabolicResult.shouldWake) {
+            console.log('🔍 [DEBUG] shouldWake=true, checking identity...', {
+                hasLoadedIdentity: !!currentIdentity,
+                hasId: !!currentIdentity?.id,
+                hasTraitVector: !!currentIdentity?.trait_vector
+            });
+        }
+        if (metabolicResult.shouldWake && currentIdentity?.id && currentIdentity?.trait_vector) {
+            (async () => {
+                try {
+                    const traitEngine = new TraitEvolutionEngine();
+                    const traitsBefore = { ...stateRef.current.traitVector };
+                    const evolvedTraits = traitEngine.applyTraitHomeostasis(
+                        stateRef.current.traitVector,
+                        stateRef.current.neuroState
+                    );
+
+                    // Update local state
+                    setTraitVector(evolvedTraits);
+
+                    // Save to database
+                    await updateAgentTraitVector(currentIdentity.id, evolvedTraits);
+
+                    // Log evolution
+                    await logIdentityEvolution({
+                        agentId: currentIdentity.id,
+                        component: 'trait_vector',
+                        stateBefore: traitsBefore,
+                        stateAfter: evolvedTraits,
+                        trigger: 'homeostasis',
+                        reason: 'auto_wake_cycle_homeostasis'
+                    });
+
+                    console.log('🧬 [AutoWake] Trait evolution applied:', evolvedTraits);
+
+                    // ═══════════════════════════════════════════════════════════════
+                    // SYNC FIX: Run full DreamConsolidation on auto-wake
+                    // Same process as force sleep: lessons, identity, shards
+                    // ═══════════════════════════════════════════════════════════════
+                    try {
+                        const consolidationResult = await DreamConsolidationService.consolidate(
+                            stateRef.current.limbicState,
+                            evolvedTraits,
+                            currentIdentity.name || 'AK-FLOW'
+                        );
+                        console.log('💤 [AutoWake] Dream consolidation complete:', {
+                            episodes: consolidationResult.episodesProcessed,
+                            lessons: consolidationResult.lessonsGenerated.length,
+                            identity: consolidationResult.identityConsolidation
+                        });
+                    } catch (consolidationError) {
+                        console.error('💤 [AutoWake] Dream consolidation error:', consolidationError);
+                    }
+                } catch (traitError) {
+                    console.error('🧬 [AutoWake] Trait evolution error:', traitError);
+                }
+            })();
         }
 
         // 3. EVENT LOOP (Cognition)

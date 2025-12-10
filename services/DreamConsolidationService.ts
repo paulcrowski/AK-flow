@@ -19,6 +19,7 @@ import { eventBus } from '../core/EventBus';
 import { AgentType, PacketType, LimbicState, TraitVector } from '../types';
 import { generateUUID } from '../utils/uuid';
 import { EpisodicMemoryService } from './EpisodicMemoryService';
+import { extractSummary } from '../utils/AIResponseParser';
 // IDENTITY-LITE: Import consolidateIdentity for dream-based identity evolution
 import { consolidateIdentity } from '../core/services/IdentityConsolidationService';
 
@@ -233,17 +234,18 @@ export const DreamConsolidationService = {
             }
 
             // Convert to ConsolidationEpisode format
+            // NOTE: memories table uses 'raw_text' column, not 'content'
             return (data || []).map(m => ({
                 id: m.id,
-                timestamp: m.created_at,
-                event: m.content,
+                timestamp: m.created_at || new Date().toISOString(),
+                event: m.raw_text || '[No content]', // Column is raw_text in memories table
                 emotionAfter: {
                     fear: m.emotional_context?.fear || 0,
                     curiosity: m.emotional_context?.curiosity || 0,
                     frustration: m.emotional_context?.frustration || 0,
                     satisfaction: m.emotional_context?.satisfaction || 0
                 },
-                emotionalDelta: m.neural_strength || 0.5, // Use neural_strength as proxy for emotional impact
+                emotionalDelta: typeof m.neural_strength === 'number' ? m.neural_strength : 0.5,
                 lesson: m.lesson || '',
                 tags: m.tags || []
             }));
@@ -260,9 +262,11 @@ export const DreamConsolidationService = {
     async generateLessons(episodes: ConsolidationEpisode[], agentName: string): Promise<string[]> {
         if (episodes.length === 0) return [];
 
-        const episodeSummaries = episodes.map((ep, i) =>
-            `${i + 1}. [Impact: ${ep.emotionalDelta.toFixed(2)}] ${ep.event.slice(0, 200)}...`
-        ).join('\n');
+        const episodeSummaries = episodes.map((ep, i) => {
+            const eventText = ep.event || '[No event]';
+            const delta = typeof ep.emotionalDelta === 'number' ? ep.emotionalDelta.toFixed(2) : '0.00';
+            return `${i + 1}. [Impact: ${delta}] ${eventText.slice(0, 200)}...`;
+        }).join('\n');
 
         const prompt = `You are ${agentName}, reflecting on your day before sleep.
 

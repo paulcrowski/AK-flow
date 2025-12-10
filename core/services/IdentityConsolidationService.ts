@@ -11,6 +11,7 @@ import { CortexService } from '@/services/gemini';
 import { eventBus } from '../EventBus';
 import { AgentType, PacketType } from '../../types';
 import { generateUUID } from '../../utils/uuid';
+import { extractJSON, extractSummary } from '../../utils/AIResponseParser';
 
 import type { NarrativeSelf } from '../types/NarrativeSelf';
 import type { IdentityShard, IdentityShardWithId, ShardKind } from '../types/IdentityShard';
@@ -128,7 +129,7 @@ export async function consolidateIdentity(
 
 async function updateNarrativeSelf(input: ConsolidationInput): Promise<boolean> {
   const current = await fetchNarrativeSelf(input.agentId);
-  
+
   // Build prompt for self-summary update
   const episodeSummary = input.episodes
     .slice(0, 5)
@@ -149,23 +150,46 @@ LESSONS LEARNED:
 ${lessonsSummary}
 
 TASK: Write a new self-summary (2-3 sentences) that incorporates today's growth.
-Also suggest 1-3 persona tags that describe you.
-Also describe your current mood in one phrase.
 
-OUTPUT JSON:
+CRITICAL: You MUST respond with ONLY a valid JSON object. No text before or after.
+Do NOT include any explanation, greeting, or prose. ONLY the JSON object.
+
+REQUIRED JSON FORMAT:
 {
-  "self_summary": "...",
-  "persona_tags": ["tag1", "tag2"],
-  "current_mood_narrative": "..."
+  "self_summary": "I am [name], [2-3 sentences about who I am after today]",
+  "persona_tags": ["tag1", "tag2", "tag3"],
+  "current_mood_narrative": "one phrase describing current mood"
 }`;
 
   try {
     const response = await CortexService.structuredDialogue(prompt);
-    const parsed = JSON.parse(response.responseText);
+    const responseText = response.responseText;
+
+    // Use AIResponseParser for robust JSON extraction
+    interface NarrativeUpdate {
+      self_summary?: string;
+      persona_tags?: string[];
+      current_mood_narrative?: string;
+    }
+
+    const parsed = extractJSON<NarrativeUpdate>(responseText, {
+      logWarnings: true
+    });
+
+    if (!parsed) {
+      console.warn('[IdentityConsolidation] No JSON found, using text as summary');
+      // Fallback: use raw response text as self_summary
+      const updated: NarrativeSelf = {
+        self_summary: extractSummary(responseText, 500) || current.self_summary,
+        persona_tags: current.persona_tags || ['adaptive', 'learning'],
+        current_mood_narrative: 'reflective after consolidation'
+      };
+      return await upsertNarrativeSelf(input.agentId, updated);
+    }
 
     const updated: NarrativeSelf = {
       self_summary: parsed.self_summary || current.self_summary,
-      persona_tags: (parsed.persona_tags || current.persona_tags).slice(0, 5),
+      persona_tags: (parsed.persona_tags || current.persona_tags || []).slice(0, 5),
       current_mood_narrative: parsed.current_mood_narrative || 'reflective after consolidation'
     };
 
@@ -195,7 +219,7 @@ async function processLessonsIntoShards(
 
     // Check for existing similar shard
     const similar = findSimilarShard(shardCandidate.content, existingShards);
-    
+
     if (similar) {
       // Reinforce existing shard
       const newStrength = Math.min(100, similar.strength + 5);
@@ -205,14 +229,14 @@ async function processLessonsIntoShards(
       // Check coherence before adding
       const shardForCheck = { ...shardCandidate, is_core: false };
       const coherenceResult = quickCoherenceCheck(shardForCheck, existingShards);
-      
+
       if (coherenceResult === null) {
         // Need full LLM check
         const prompt = buildCoherencePrompt({ newShard: shardForCheck, existingShards });
         try {
           const response = await CortexService.structuredDialogue(prompt);
           const fullResult = parseCoherenceResponse(response.responseText, existingShards);
-          
+
           if (fullResult.action === 'accept') {
             await insertIdentityShard(input.agentId, {
               ...shardCandidate,
@@ -284,20 +308,29 @@ LESSON: "${lesson}"
 
 TASK: Extract a core belief, preference, or constraint from this lesson.
 
-OUTPUT JSON:
-{
-  "kind": "belief" | "preference" | "constraint",
-  "content": "I believe/prefer/must..."
-}
+CRITICAL: Respond with ONLY a valid JSON object. No text before or after.
 
-If the lesson doesn't translate to a clear identity shard, return:
-{ "kind": null, "content": null }`;
+If the lesson translates to a clear identity shard:
+{"kind": "belief", "content": "I believe..."}
+OR
+{"kind": "preference", "content": "I prefer..."}
+OR
+{"kind": "constraint", "content": "I must..."}
+
+If the lesson doesn't translate to a clear identity shard:
+{"kind": null, "content": null}`;
 
   try {
     const response = await CortexService.structuredDialogue(prompt);
-    const parsed = JSON.parse(response.responseText);
     
-    if (!parsed.kind || !parsed.content) return null;
+    // Use extractJSON for robust parsing (handles text before/after JSON)
+    interface ShardResponse {
+      kind: string | null;
+      content: string | null;
+    }
+    const parsed = extractJSON<ShardResponse>(response.responseText, { logWarnings: false });
+
+    if (!parsed || !parsed.kind || !parsed.content) return null;
     if (!['belief', 'preference', 'constraint'].includes(parsed.kind)) return null;
 
     return {
@@ -318,15 +351,15 @@ function findSimilarShard(
 
   for (const shard of existingShards) {
     const shardLower = shard.content.toLowerCase();
-    
+
     // Exact match
     if (shardLower === contentLower) return shard;
-    
+
     // High word overlap (>60%)
     const shardWords = new Set(shardLower.split(/\s+/).filter(w => w.length > 3));
     const intersection = [...contentWords].filter(w => shardWords.has(w));
     const overlap = intersection.length / Math.max(contentWords.size, shardWords.size);
-    
+
     if (overlap > 0.6) return shard;
   }
 
@@ -344,21 +377,21 @@ async function decayWeakShards(agentId: string): Promise<number> {
   for (const shard of shards) {
     // Skip core shards
     if (shard.is_core) continue;
-    
+
     // Check if not reinforced recently (>7 days)
     if (shard.last_reinforced_at) {
       const lastReinforced = new Date(shard.last_reinforced_at).getTime();
       const daysSince = (Date.now() - lastReinforced) / (1000 * 60 * 60 * 24);
-      
+
       if (daysSince > 7 && shard.strength > 20) {
         // Decay by 5 points
         const newStrength = Math.max(1, shard.strength - 5);
-        
+
         // Core shards don't go below minimum
         if (shard.is_core && newStrength < CORE_SHARD_MIN_STRENGTH) {
           continue;
         }
-        
+
         await updateShardStrength(shard.id, newStrength);
         decayed++;
       }

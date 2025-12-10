@@ -26,7 +26,7 @@ export async function fetchCoreIdentity(agentId: string): Promise<CoreIdentity> 
     .from('core_identity')
     .select('name, core_values, constitutional_constraints')
     .eq('agent_id', agentId)
-    .single();
+    .maybeSingle(); // Avoid 406 when no row exists
 
   if (error || !data) {
     console.warn('[IdentityData] No core_identity found, using default');
@@ -70,7 +70,7 @@ export async function fetchNarrativeSelf(agentId: string): Promise<NarrativeSelf
     .from('narrative_self')
     .select('self_summary, persona_tags, current_mood_narrative')
     .eq('agent_id', agentId)
-    .single();
+    .maybeSingle(); // Use maybeSingle to avoid 406 when no row exists
 
   if (error || !data) {
     console.warn('[IdentityData] No narrative_self found, using default');
@@ -204,7 +204,7 @@ export async function fetchRelationship(
     .select('trust_level, stage')
     .eq('agent_id', agentId)
     .eq('user_id', userId)
-    .single();
+    .maybeSingle(); // Avoid 406 when no relationship exists
 
   if (error || !data) {
     return { ...DEFAULT_RELATIONSHIP };
