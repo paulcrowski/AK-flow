@@ -9,15 +9,15 @@ export function LoginScreen() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     const trimmed = email.trim().toLowerCase();
-    
+
     // Basic validation
     if (!trimmed) {
       setError('Podaj email');
       return;
     }
-    
+
     if (!trimmed.includes('@')) {
       setError('Nieprawidłowy format email');
       return;
@@ -82,13 +82,19 @@ export function LoginScreen() {
               onClick={() => { setEmail('test1@local.dev'); }}
               className="px-3 py-1 text-xs bg-[#12141a] border border-gray-800 rounded-full text-gray-400 hover:text-gray-300 hover:border-gray-700 transition-colors"
             >
-              TestBot-A
+              Jesse
             </button>
             <button
               onClick={() => { setEmail('test2@local.dev'); }}
               className="px-3 py-1 text-xs bg-[#12141a] border border-gray-800 rounded-full text-gray-400 hover:text-gray-300 hover:border-gray-700 transition-colors"
             >
-              TestBot-B
+              Crejzi
+            </button>
+            <button
+              onClick={() => { setEmail('nova@local.dev'); }}
+              className="px-3 py-1 text-xs bg-[#12141a] border border-gray-800 rounded-full text-gray-400 hover:text-cyan-400 hover:border-cyan-500/50 transition-colors"
+            >
+              Nova
             </button>
           </div>
         </div>
