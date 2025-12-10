@@ -16,9 +16,8 @@ import { CortexSystem } from '../core/systems/CortexSystem';
 import { EventLoop } from '../core/systems/EventLoop';
 import { createProcessOutputForTools } from '../utils/toolParser';
 import { DreamConsolidationService, BASELINE_NEURO } from '../services/DreamConsolidationService';
-// IDENTITY-LITE: Import TraitEvolutionEngine for homeostatic trait evolution on wake
-import { TraitEvolutionEngine } from '../core/systems/TraitEvolutionEngine';
-import { updateAgentTraitVector, logIdentityEvolution } from '../core/services/IdentityDataService';
+// REFACTOR: Single WakeService for all wake logic (DRY principle)
+import { executeWakeProcess } from '../core/services/WakeService';
 
 // Helper for delays
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
@@ -299,31 +298,18 @@ export const useCognitiveKernel = (loadedIdentity?: AgentIdentity | null) => {
         });
     };
 
-    const dreamConsolidation = async () => {
+    // REFACTOR: Use DreamConsolidationService (Single Source of Truth)
+    // Removed legacy dreamConsolidation() - was duplicating logic
+    const runDreamConsolidation = async () => {
         try {
-            const recentMemories = await MemoryService.recallRecent(50);
-            const summary = await CortexService.consolidateMemories(recentMemories);
-
-            await MemoryService.storeMemory({
-                content: `DREAM CONSOLIDATION: ${summary}`,
-                emotionalContext: limbicState,
-                timestamp: new Date().toISOString(),
-                id: generateUUID(),
-                neuralStrength: 100,
-                isCoreMemory: true
-            } as any);
-
-            eventBus.publish({
-                id: generateUUID(),
-                timestamp: Date.now(),
-                source: AgentType.MEMORY_EPISODIC,
-                type: PacketType.SYSTEM_ALERT,
-                payload: {
-                    event: 'DREAM_CONSOLIDATION_COMPLETE',
-                    note: 'Core memory stored from sleep cycle.',
-                    summary
-                },
-                priority: 0.7
+            const result = await DreamConsolidationService.consolidate(
+                stateRef.current.limbicState,
+                stateRef.current.traitVector,
+                loadedIdentityRef.current?.name || 'AK-FLOW'
+            );
+            console.log('💤 [REM] Dream consolidation:', {
+                episodes: result.episodesProcessed,
+                lessons: result.lessonsGenerated.length
             });
         } catch (e) {
             console.warn('Dream Consolidation Error (non-critical)', e);
@@ -396,37 +382,20 @@ export const useCognitiveKernel = (loadedIdentity?: AgentIdentity | null) => {
             setCurrentThought('Waking up... processing night insights...');
 
             // ═══════════════════════════════════════════════════════════════
-            // IDENTITY-LITE: Apply trait homeostasis on wake
-            // Traits evolve slightly with each wake cycle based on accumulated signals
+            // REFACTOR: Use WakeService (Single Source of Truth)
+            // All wake logic in one place - DRY principle
             // ═══════════════════════════════════════════════════════════════
             if (loadedIdentity?.id && loadedIdentity?.trait_vector) {
-                try {
-                    const traitEngine = new TraitEvolutionEngine();
-                    const traitsBefore = { ...stateRef.current.traitVector };
-                    const evolvedTraits = traitEngine.applyTraitHomeostasis(
-                        stateRef.current.traitVector,
-                        stateRef.current.neuroState
-                    );
+                const wakeResult = await executeWakeProcess({
+                    agentId: loadedIdentity.id,
+                    agentName: loadedIdentity.name || 'AK-FLOW',
+                    currentTraits: stateRef.current.traitVector,
+                    currentLimbic: stateRef.current.limbicState,
+                    currentNeuro: stateRef.current.neuroState
+                });
 
-                    // Update local state
-                    setTraitVector(evolvedTraits);
-
-                    // Save to database
-                    await updateAgentTraitVector(loadedIdentity.id, evolvedTraits);
-
-                    // Log evolution (always, no flags)
-                    await logIdentityEvolution({
-                        agentId: loadedIdentity.id,
-                        component: 'trait_vector',
-                        stateBefore: traitsBefore,
-                        stateAfter: evolvedTraits,
-                        trigger: 'homeostasis',
-                        reason: 'wake_cycle_homeostasis'
-                    });
-
-                    console.log('🧬 [Wake] Trait evolution applied:', evolvedTraits);
-                } catch (traitError) {
-                    console.error('🧬 [Wake] Trait evolution error:', traitError);
+                if (wakeResult.evolvedTraits) {
+                    setTraitVector(wakeResult.evolvedTraits);
                 }
             }
 
@@ -666,7 +635,7 @@ export const useCognitiveKernel = (loadedIdentity?: AgentIdentity | null) => {
                 // DREAM CONSOLIDATION (FAZA 2) - occasional during sleep, fire-and-forget
                 if (Math.random() > 0.5) {
                     (async () => {
-                        await dreamConsolidation();
+                        await runDreamConsolidation();
                     })();
                 }
             }
@@ -676,66 +645,22 @@ export const useCognitiveKernel = (loadedIdentity?: AgentIdentity | null) => {
         }
 
         // ═══════════════════════════════════════════════════════════════
-        // IDENTITY-LITE: Apply trait homeostasis on AUTO-WAKE
-        // This runs AFTER the sleep/wake block because shouldWake sets isSleeping=false
-        // USES loadedIdentityRef.current to avoid stale closure!
+        // REFACTOR: Use WakeService (Single Source of Truth) for AUTO-WAKE
+        // Same code path as force wake - DRY principle
         // ═══════════════════════════════════════════════════════════════
-        const currentIdentity = loadedIdentityRef.current; // Get fresh value from ref
-        if (metabolicResult.shouldWake) {
-            console.log('🔍 [DEBUG] shouldWake=true, checking identity...', {
-                hasLoadedIdentity: !!currentIdentity,
-                hasId: !!currentIdentity?.id,
-                hasTraitVector: !!currentIdentity?.trait_vector
-            });
-        }
+        const currentIdentity = loadedIdentityRef.current;
         if (metabolicResult.shouldWake && currentIdentity?.id && currentIdentity?.trait_vector) {
             (async () => {
-                try {
-                    const traitEngine = new TraitEvolutionEngine();
-                    const traitsBefore = { ...stateRef.current.traitVector };
-                    const evolvedTraits = traitEngine.applyTraitHomeostasis(
-                        stateRef.current.traitVector,
-                        stateRef.current.neuroState
-                    );
+                const wakeResult = await executeWakeProcess({
+                    agentId: currentIdentity.id,
+                    agentName: currentIdentity.name || 'AK-FLOW',
+                    currentTraits: stateRef.current.traitVector,
+                    currentLimbic: stateRef.current.limbicState,
+                    currentNeuro: stateRef.current.neuroState
+                });
 
-                    // Update local state
-                    setTraitVector(evolvedTraits);
-
-                    // Save to database
-                    await updateAgentTraitVector(currentIdentity.id, evolvedTraits);
-
-                    // Log evolution
-                    await logIdentityEvolution({
-                        agentId: currentIdentity.id,
-                        component: 'trait_vector',
-                        stateBefore: traitsBefore,
-                        stateAfter: evolvedTraits,
-                        trigger: 'homeostasis',
-                        reason: 'auto_wake_cycle_homeostasis'
-                    });
-
-                    console.log('🧬 [AutoWake] Trait evolution applied:', evolvedTraits);
-
-                    // ═══════════════════════════════════════════════════════════════
-                    // SYNC FIX: Run full DreamConsolidation on auto-wake
-                    // Same process as force sleep: lessons, identity, shards
-                    // ═══════════════════════════════════════════════════════════════
-                    try {
-                        const consolidationResult = await DreamConsolidationService.consolidate(
-                            stateRef.current.limbicState,
-                            evolvedTraits,
-                            currentIdentity.name || 'AK-FLOW'
-                        );
-                        console.log('💤 [AutoWake] Dream consolidation complete:', {
-                            episodes: consolidationResult.episodesProcessed,
-                            lessons: consolidationResult.lessonsGenerated.length,
-                            identity: consolidationResult.identityConsolidation
-                        });
-                    } catch (consolidationError) {
-                        console.error('💤 [AutoWake] Dream consolidation error:', consolidationError);
-                    }
-                } catch (traitError) {
-                    console.error('🧬 [AutoWake] Trait evolution error:', traitError);
+                if (wakeResult.evolvedTraits) {
+                    setTraitVector(wakeResult.evolvedTraits);
                 }
             })();
         }
