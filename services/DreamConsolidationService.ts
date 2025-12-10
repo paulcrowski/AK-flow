@@ -62,7 +62,7 @@ export interface TraitVectorProposal {
 // --- CONSTANTS ---
 
 const MAX_EPISODES_TO_PROCESS = 5;
-const MIN_NEURAL_STRENGTH_FOR_CONSOLIDATION = 0.3;
+const MIN_NEURAL_STRENGTH_FOR_CONSOLIDATION = 30; // Integer 0-100 (percentage)
 
 // --- BASELINE CHEMISTRY (for reset during sleep) ---
 
