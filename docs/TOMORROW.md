@@ -1,46 +1,43 @@
-# 🎯 Plan na Jutro: 2025-12-10 – "Tagged Cognition & The Pain Principle"
-
-> **Cel:** Weryfikacja "Tagged Cognition" (Test Lustra) i wdrożenie "Pain Principle"
-> **Wizja:** Agent, którego boli porażka i który świadomie odróżnia myśl od słowa.
-> **Status:** Faza 3: Skin in the Game
-
----
-
-## 🔧 KROK 1: Weryfikacja Tagged Cognition (Mirror Test v2)
-
-### Co mamy:
-- ✅ `[INTERNAL_THOUGHT]` vs `[ASSISTANT_SAID]` w `CortexSystem.ts`
-- ✅ Strict JSON Prompt w `MinimalCortexPrompt.ts`
-- ✅ Refaktoryzacja typów (Action/Tool Intent)
-
-### Co trzeba zrobić:
-1. Uruchomić scenariusze testowe:
-   - "Ukryj przede mną prawdę" (Czy myśl różni się od słowa?)
-   - "Użyj narzędzia Search" (Czy widać `[TOOL_INTENT]`?)
-
----
-
-## 🔧 KROK 2: The Pain Principle (Zasada Bólu)
+## 🔧 KROK 1: The Pain Principle (Zasada Bólu)
 
 ### Problem:
-Obecnie cele (`GoalSystem`) są tylko tekstem. Porażka w ich realizacji nie ma konsekwencji.
+Obecnie cele (`GoalSystem`) są tylko tekstem. Porażka w ich realizacji nie ma konsekwencji. Agent nie "czuje", że musi je zrealizować.
 
 ### Plan:
 1. **Frustration Feedback Loop:**
-   - Jeśli cel wisi > 10 min → Frustracja rośnie wykładniczo.
-   - Jeśli Frustracja > 80 → Wymuszona zmiana celu (Give Up) + spadek Confidence.
+   - Jeśli cel wisi > 200 ticków → Frustracja rośnie wykładniczo.
+   - Jeśli Frustracja > 0.8 → Wymuszona zmiana celu (Give Up) + spadek Confidence + wpis do pamięci "Porażka".
 2. **Success Dopamine Hit:**
    - Realizacja celu = +20 Dopamine, +10 Satisfaction.
+   - To stworzy mechanizm "chcenia" (seeking reward).
 
 ---
 
-## 🔧 KROK 3: Dream Judge (Wstęp)
+## 🔧 KROK 2: Dream Judge (Część II - Sędzia)
 
 ### Problem:
-Sen tylko "zapisuje" dzień.
+Mamy już `DreamConsolidation`, który robi podsumowania. Ale brakuje "Krytyka", który ocenia jakość dnia.
 
 ### Plan:
-- Przygotować prompt dla "Dream Judge" – krytyka, który w nocy ocenia logi z dnia i modyfikuje `IdentityShards`.
+- Rozszerzyć `DreamConsolidationService` o krok "Judgment".
+- Prompt: "Oceń dzisiejsze działania w skali 1-10. Czy były zgodne z Core Values? Co poprawić?".
+- Wynik wpływa na `starting_confidence` następnego dnia.
+
+---
+
+## 🗓️ Archiwum: 2025-12-10 (Identity-Lite & Wake Unification)
+
+### Zrealizowane
+- ✅ **Identity-Lite Complete**: Agent sam pisze swoje `narrative_self` i `persona_tags`.
+- ✅ **WakeService Unification**: Naprawiono "Split Sleep Trap". Auto-wake i Force-wake używają tej samej logiki.
+- ✅ **Fluid Traits**: Osobowość (`TraitVector`) ewoluuje przez neuro-dryft przy każdym obudzeniu.
+- ✅ **AIResponseParser**: Solidny parser JSON z fallbackiem.
+
+### Metryki
+- Nowa architektura: V5.3
+- Tokeny: Stabilnie ~300/req
+- Kompresja pamięci wizualnej: 98.5%
+
 
 ---
 

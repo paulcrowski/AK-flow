@@ -6,6 +6,22 @@
 
 ---
 
+## 🆕 What's New in V5.3 (2025-12-10)
+
+### FAZA 5.3: Identity-Lite & Unified Wake Process
+**Kluczowa zmiana:** Fluid Identity (Narrative Self + Trait Homeostasis) & Single Source of Wake Truth.
+
+#### Nowe Moduły:
+- `core/services/WakeService.ts` – Unifikuje logikę "Wstawania" (Auto vs Force). Odpowiada za sny, ewolucję i logi.
+- `utils/AIResponseParser.ts` – Robust JSON extraction z AI (obsługuje "Here is the JSON..." i inne śmieci).
+
+#### Zmiany Architektoniczne:
+- **Unified Wake Loop:** Auto-Wake i Force-Wake używają *tej samej* ścieżki kodu. Nie ma już "pustych przebudzeń" bez snów.
+- **Identity Evolution:** Agent sam pisze `narrative_self` co noc. Kod definiuje tylko *mechanikę zmiany*, nie docelową osobowość.
+- **Trait Homeostasis:** Cechy (TraitVector) podlegają ciągłemu dryftowi (neuro-drift) przy każdym cyklu snu.
+
+---
+
 ## 🆕 What's New in V5.2 (2025-12-08)
 
 ### FAZA 5.2: Persona-Less Cortex Architecture (Emergent Identity)

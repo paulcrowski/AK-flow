@@ -16,9 +16,33 @@
 | Największy przełom | Persona-Less Cortex (FAZA 5.2) |
 | Najdłuższy problem | Monolityczny Kernel (8h) |
 
----
+## Problem #17: Pulapka Rozdzielonej Logiki (The Split Sleep Trap)
 
-## Problem #16: Uprzejmy JSON (Syntax Hallucination)
+**Data:** 2025-12-10
+**Trudność:** 4/5
+**Status:** ✅ Rozwiązany (WakeService Unification)
+
+### Objawy
+Agent miał dwie procedury obudzenia:
+1. `Auto-Wake` (gdy energia > 95%): tylko przywracał flagę `isSleeping=false`.
+2. `Force-Wake` (przycisk): uruchamiał pełną procedurę snu (sny, konsolidacja, ewolucja).
+
+Efekt: Gdy agent spał "naturalnie", nic mu się nie śniło. Był tylko wypoczęty, ale głupi (brak lekcji z dnia).
+
+### Diagnoza
+Logika biznesowa ("co się dzieje jak wstaję") wyciekła do warstwy UI/Hooka (`useCognitiveKernel`). Hook miał dwie różne ścieżki kodu dla tego samego zdarzenia biznesowego.
+
+### Rozwiązanie (WakeService)
+Stworzyliśmy `executeWakeProcess` – **Single Source of Truth**.
+Niezależnie od tego, CZYM agent został obudzony (przycisk czy metabolizm), wykonuje się ta sama funkcja:
+1. Ewolucja cech (Homeostaza)
+2. Konsolidacja snów
+3. Logowanie zmian
+
+### Lekcja
+**Nie ufaj Hookom w logice biznesowej.** Hooki są do UI i cyklu życia Reacta. Logika "Procesu" (jak sen, śmierć, narodziny) musi być w czystym serwisie TypeScript.
+
+---
 
 **Data:** 2025-12-09
 **Trudność:** 3/5
