@@ -19,6 +19,8 @@ import { eventBus } from '../core/EventBus';
 import { AgentType, PacketType, LimbicState, TraitVector } from '../types';
 import { generateUUID } from '../utils/uuid';
 import { EpisodicMemoryService } from './EpisodicMemoryService';
+// IDENTITY-LITE: Import consolidateIdentity for dream-based identity evolution
+import { consolidateIdentity } from '../core/services/IdentityConsolidationService';
 
 // --- TYPES ---
 
@@ -39,6 +41,13 @@ export interface DreamConsolidationResult {
     selfSummary: string;
     traitProposal: TraitVectorProposal | null;
     goalsCreated: number;
+    // IDENTITY-LITE: Track identity consolidation results
+    identityConsolidation?: {
+        narrativeSelfUpdated: boolean;
+        shardsCreated: number;
+        shardsReinforced: number;
+        shardsWeakened: number;
+    };
 }
 
 export interface TraitVectorProposal {
@@ -115,6 +124,35 @@ export const DreamConsolidationService = {
             // Step 4: Store self-summary as core memory
             await this.storeSelfSummary(selfSummary, currentLimbic);
 
+            // ═══════════════════════════════════════════════════════════════
+            // IDENTITY-LITE: Consolidate identity (narrative_self + shards)
+            // This is the CRITICAL connection between dreams and identity evolution
+            // ═══════════════════════════════════════════════════════════════
+            let identityResult = {
+                narrativeSelfUpdated: false,
+                shardsCreated: 0,
+                shardsReinforced: 0,
+                shardsWeakened: 0
+            };
+
+            if (agentId) {
+                try {
+                    identityResult = await consolidateIdentity({
+                        agentId,
+                        agentName,
+                        episodes: episodes.map(e => ({
+                            content: e.event,
+                            emotionalImpact: e.emotionalDelta,
+                            tags: e.tags
+                        })),
+                        lessons
+                    });
+                    console.log(`🧬 [DreamConsolidation] Identity consolidated:`, identityResult);
+                } catch (identityError) {
+                    console.error('🧬 [DreamConsolidation] Identity consolidation failed:', identityError);
+                }
+            }
+
             // Step 5: Generate trait proposal (LOG ONLY, no application)
             const traitProposal = await this.proposeTraitChanges(
                 episodes,
@@ -133,7 +171,9 @@ export const DreamConsolidationService = {
                 lessonsGenerated: lessons,
                 selfSummary,
                 traitProposal,
-                goalsCreated
+                goalsCreated,
+                // IDENTITY-LITE: Include identity consolidation results
+                identityConsolidation: identityResult
             };
 
             eventBus.publish({
@@ -220,7 +260,7 @@ export const DreamConsolidationService = {
     async generateLessons(episodes: ConsolidationEpisode[], agentName: string): Promise<string[]> {
         if (episodes.length === 0) return [];
 
-        const episodeSummaries = episodes.map((ep, i) => 
+        const episodeSummaries = episodes.map((ep, i) =>
             `${i + 1}. [Impact: ${ep.emotionalDelta.toFixed(2)}] ${ep.event.slice(0, 200)}...`
         ).join('\n');
 
@@ -242,7 +282,7 @@ Format: One lesson per line, no numbering.`;
                 .split('\n')
                 .map(l => l.trim())
                 .filter(l => l.length > 10 && l.length < 200);
-            
+
             return lessons.slice(0, 5);
         } catch (err) {
             console.error('[DreamConsolidation] Lesson generation failed:', err);

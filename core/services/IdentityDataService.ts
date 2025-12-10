@@ -41,7 +41,7 @@ export async function fetchCoreIdentity(agentId: string): Promise<CoreIdentity> 
 }
 
 export async function upsertCoreIdentity(
-  agentId: string, 
+  agentId: string,
   identity: CoreIdentity
 ): Promise<boolean> {
   const { error } = await supabase
@@ -85,7 +85,7 @@ export async function fetchNarrativeSelf(agentId: string): Promise<NarrativeSelf
 }
 
 export async function upsertNarrativeSelf(
-  agentId: string, 
+  agentId: string,
   narrative: NarrativeSelf
 ): Promise<boolean> {
   const { error } = await supabase
@@ -160,12 +160,12 @@ export async function insertIdentityShard(
 }
 
 export async function updateShardStrength(
-  shardId: string, 
+  shardId: string,
   newStrength: number
 ): Promise<boolean> {
   const { error } = await supabase
     .from('identity_shards')
-    .update({ 
+    .update({
       strength: Math.max(1, Math.min(100, newStrength)),
       last_reinforced_at: new Date().toISOString()
     })
@@ -196,7 +196,7 @@ export async function deleteIdentityShard(shardId: string): Promise<boolean> {
 // ═══════════════════════════════════════════════════════════════
 
 export async function fetchRelationship(
-  agentId: string, 
+  agentId: string,
   userId: string
 ): Promise<Relationship> {
   const { data, error } = await supabase
@@ -236,4 +236,103 @@ export async function upsertRelationship(
     return false;
   }
   return true;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// IDENTITY-LITE: TRAIT VECTOR & EVOLUTION LOGGING
+// ═══════════════════════════════════════════════════════════════
+
+import type { TraitVector } from '../../types';
+
+/**
+ * Update agent's trait_vector in the database.
+ * Called after TraitEvolutionEngine.applyTraitHomeostasis()
+ */
+export async function updateAgentTraitVector(
+  agentId: string,
+  traitVector: TraitVector
+): Promise<boolean> {
+  const { error } = await supabase
+    .from('agents')
+    .update({ trait_vector: traitVector })
+    .eq('id', agentId);
+
+  if (error) {
+    console.error('[IdentityData] Update trait_vector error:', error);
+    return false;
+  }
+  return true;
+}
+
+/**
+ * Log identity evolution event to identity_evolution_log.
+ * CRITICAL: Always log, no flags. This is the "tensorboard for soul".
+ */
+export async function logIdentityEvolution(params: {
+  agentId: string;
+  component: 'trait_vector' | 'narrative_self' | 'identity_shards';
+  stateBefore: unknown;
+  stateAfter: unknown;
+  trigger: 'dream_consolidation' | 'homeostasis' | 'user_review' | 'shard_erosion';
+  reason?: string;
+  sessionId?: string;
+  confidence?: number;
+}): Promise<boolean> {
+  // Compute delta
+  const delta = computeDelta(params.stateBefore, params.stateAfter);
+
+  const { error } = await supabase
+    .from('identity_evolution_log')
+    .insert({
+      agent_id: params.agentId,
+      component: params.component,
+      state_before: params.stateBefore,
+      state_after: params.stateAfter,
+      delta,
+      trigger: params.trigger,
+      reason: params.reason,
+      session_id: params.sessionId,
+      confidence: params.confidence
+    });
+
+  if (error) {
+    // Log error but don't throw - logging should never break the app
+    console.error('[IdentityData] Log evolution error:', error);
+    return false;
+  }
+
+  console.log(`📊 [IdentityEvolutionLog] ${params.component} changed via ${params.trigger}`);
+  return true;
+}
+
+/**
+ * Compute delta between two states.
+ * Returns null if states are identical.
+ */
+function computeDelta(before: unknown, after: unknown): unknown {
+  if (typeof before !== 'object' || typeof after !== 'object') {
+    return before === after ? null : { from: before, to: after };
+  }
+
+  if (before === null || after === null) {
+    return { from: before, to: after };
+  }
+
+  const delta: Record<string, unknown> = {};
+  const beforeObj = before as Record<string, unknown>;
+  const afterObj = after as Record<string, unknown>;
+
+  // Find changed keys
+  const allKeys = new Set([...Object.keys(beforeObj), ...Object.keys(afterObj)]);
+
+  for (const key of allKeys) {
+    if (beforeObj[key] !== afterObj[key]) {
+      delta[key] = {
+        from: beforeObj[key],
+        to: afterObj[key]
+      };
+    }
+  }
+
+  return Object.keys(delta).length > 0 ? delta : null;
 }

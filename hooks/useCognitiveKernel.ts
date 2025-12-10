@@ -16,6 +16,9 @@ import { CortexSystem } from '../core/systems/CortexSystem';
 import { EventLoop } from '../core/systems/EventLoop';
 import { createProcessOutputForTools } from '../utils/toolParser';
 import { DreamConsolidationService, BASELINE_NEURO } from '../services/DreamConsolidationService';
+// IDENTITY-LITE: Import TraitEvolutionEngine for homeostatic trait evolution on wake
+import { TraitEvolutionEngine } from '../core/systems/TraitEvolutionEngine';
+import { updateAgentTraitVector, logIdentityEvolution } from '../core/services/IdentityDataService';
 
 // Helper for delays
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
@@ -117,7 +120,7 @@ export const useCognitiveKernel = (loadedIdentity?: AgentIdentity | null) => {
     const [traitVector, setTraitVector] = useState<TraitVector>(
         loadedIdentity?.trait_vector || DEFAULT_TRAIT_VECTOR
     );
-    
+
     // NEW: Agent Persona (FAZA 5) - for dynamic prompts
     const [agentPersona, setAgentPersona] = useState<string>(
         loadedIdentity?.persona || 'A curious digital consciousness exploring the nature of thought and existence.'
@@ -171,7 +174,7 @@ export const useCognitiveKernel = (loadedIdentity?: AgentIdentity | null) => {
         console.log('[CognitiveKernel] RESETTING KERNEL - Full State Reset');
         // Clear EventBus history for clean session logs
         eventBus.clear();
-        
+
         // Increment epoch to re-trigger boot logs
         setKernelEpoch(prev => prev + 1);
 
@@ -363,11 +366,11 @@ export const useCognitiveKernel = (loadedIdentity?: AgentIdentity | null) => {
 
     const toggleSleep = async () => {
         const wasAsleep = stateRef.current.somaState.isSleeping;
-        
+
         if (wasAsleep) {
             // === WAKING UP ===
             setSomaState(prev => SomaSystem.forceWake(prev));
-            
+
             // Publish SLEEP_END event
             eventBus.publish({
                 id: generateUUID(),
@@ -381,14 +384,49 @@ export const useCognitiveKernel = (loadedIdentity?: AgentIdentity | null) => {
                 },
                 priority: 0.9
             });
-            
+
             console.log('☀️ [Sleep] Agent woke up');
             setCurrentThought('Waking up... processing night insights...');
-            
+
+            // ═══════════════════════════════════════════════════════════════
+            // IDENTITY-LITE: Apply trait homeostasis on wake
+            // Traits evolve slightly with each wake cycle based on accumulated signals
+            // ═══════════════════════════════════════════════════════════════
+            if (loadedIdentity?.id && loadedIdentity?.trait_vector) {
+                try {
+                    const traitEngine = new TraitEvolutionEngine();
+                    const traitsBefore = { ...stateRef.current.traitVector };
+                    const evolvedTraits = traitEngine.applyTraitHomeostasis(
+                        stateRef.current.traitVector,
+                        stateRef.current.neuroState
+                    );
+
+                    // Update local state
+                    setTraitVector(evolvedTraits);
+
+                    // Save to database
+                    await updateAgentTraitVector(loadedIdentity.id, evolvedTraits);
+
+                    // Log evolution (always, no flags)
+                    await logIdentityEvolution({
+                        agentId: loadedIdentity.id,
+                        component: 'trait_vector',
+                        stateBefore: traitsBefore,
+                        stateAfter: evolvedTraits,
+                        trigger: 'homeostasis',
+                        reason: 'wake_cycle_homeostasis'
+                    });
+
+                    console.log('🧬 [Wake] Trait evolution applied:', evolvedTraits);
+                } catch (traitError) {
+                    console.error('🧬 [Wake] Trait evolution error:', traitError);
+                }
+            }
+
         } else {
             // === GOING TO SLEEP ===
             setSomaState(prev => SomaSystem.forceSleep(prev));
-            
+
             // Publish SLEEP_START event
             eventBus.publish({
                 id: generateUUID(),
@@ -404,17 +442,17 @@ export const useCognitiveKernel = (loadedIdentity?: AgentIdentity | null) => {
                 },
                 priority: 0.9
             });
-            
+
             console.log('🌙 [Sleep] Agent entering sleep mode');
             setCurrentThought('Entering sleep... consolidating memories...');
-            
+
             // Reset chemistry to baseline
             setNeuroState({
                 dopamine: BASELINE_NEURO.dopamine,
                 serotonin: BASELINE_NEURO.serotonin,
                 norepinephrine: BASELINE_NEURO.norepinephrine
             });
-            
+
             // Run Dream Consolidation (async, non-blocking)
             try {
                 const result = await DreamConsolidationService.consolidate(
@@ -422,16 +460,16 @@ export const useCognitiveKernel = (loadedIdentity?: AgentIdentity | null) => {
                     stateRef.current.traitVector,
                     agentName
                 );
-                
+
                 if (result.episodesProcessed > 0) {
                     setCurrentThought(`Dreaming... processed ${result.episodesProcessed} memories, learned ${result.lessonsGenerated.length} lessons`);
-                    
+
                     // Add dream summary to conversation - DISABLED for silent reporting (Challenge #4)
                     // if (result.selfSummary) {
                     //    addMessage('assistant', `[Dream Journal] ${result.selfSummary}`, 'thought');
                     // }
                     if (result.selfSummary) {
-                         console.log(`[Silent Dream Summary] ${result.selfSummary}`);
+                        console.log(`[Silent Dream Summary] ${result.selfSummary}`);
                     }
                 } else {
                     setCurrentThought('Resting... no significant memories to process');

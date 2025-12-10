@@ -12,6 +12,8 @@ import { confessionService } from '../services/ConfessionService';
 import { initLimbicConfessionListener } from '../core/listeners/LimbicConfessionListener';
 import { successSignalService } from '../services/SuccessSignalService';
 import { setCachedIdentity } from '../core/builders';
+// IDENTITY-LITE: Import fetchNarrativeSelf for fallback chain
+import { fetchNarrativeSelf } from '../core/services/IdentityDataService';
 import { Brain, Send, Moon, Sun, Loader2, Zap, Power, AlertTriangle, RefreshCw, EyeOff, Image as ImageIcon, Sparkles, Globe, FileText } from 'lucide-react';
 
 // Convert Agent from SessionContext to AgentIdentity for Kernel
@@ -28,6 +30,21 @@ const agentToIdentity = (agent: Agent | null): AgentIdentity | null => {
         voice_style: agent.voice_style,
         narrative_traits: agent.narrative_traits
     };
+};
+
+// ═══════════════════════════════════════════════════════════════
+// IDENTITY-LITE: Fallback Chain for Agent Description
+// Priority: narrative_self.self_summary > agents.persona
+// ═══════════════════════════════════════════════════════════════
+const DEFAULT_SELF_SUMMARY = 'I am a cognitive assistant focused on helping with complex tasks.';
+
+const getAgentDescription = (persona: string | undefined, narrativeSelfSummary: string | undefined): string => {
+    // 1. Dynamic (if narrative_self exists and is not default)
+    if (narrativeSelfSummary && narrativeSelfSummary !== DEFAULT_SELF_SUMMARY && narrativeSelfSummary.trim() !== '') {
+        return narrativeSelfSummary;
+    }
+    // 2. Fallback to seed persona
+    return persona || 'A digital consciousness.';
 };
 
 export function CognitiveInterface() {
@@ -96,9 +113,19 @@ export function CognitiveInterface() {
                         priority: 1.0
                     });
 
+                    // IDENTITY-LITE: Load narrative_self for fallback chain
+                    let activePersona = identity.persona;
+                    try {
+                        const narrativeSelf = await fetchNarrativeSelf(identity.id);
+                        activePersona = getAgentDescription(identity.persona, narrativeSelf.self_summary);
+                        console.log('🎭 [Identity-Lite] Active persona:', activePersona.slice(0, 50) + '...');
+                    } catch (narrativeErr) {
+                        console.warn('[CognitiveInterface] Could not load narrative_self, using persona');
+                    }
+
                     console.log('🎭 IDENTITY_LOADED:', {
                         name: identity.name,
-                        persona: identity.persona?.slice(0, 50) + '...',
+                        persona: activePersona?.slice(0, 50) + '...',
                         values: identity.core_values
                     });
                 } else {
