@@ -6,6 +6,7 @@ import { getCurrentAgentId } from "./supabase";
 import { isFeatureEnabled } from "../core/config";
 import { buildMinimalCortexState } from "../core/builders";
 import { generateFromCortexState } from "../core/inference";
+import { guardLegacyResponse, isPrismEnabled } from "../core/systems/PrismPipeline";
 
 // 1. Safe Environment Access & Initialization (Vite)
 const apiKey = import.meta.env.VITE_GEMINI_API_KEY as string | undefined;
@@ -358,15 +359,25 @@ OUTPUT FORMAT:
                 const output = await generateFromCortexState(state);
 
                 // Map CortexOutput to Legacy Return Type
-                return {
+                const legacyResponse = {
                     text: output.speech_content,
                     thought: output.internal_thought,
-                    prediction: "User is observing.", // Fallback as CortexOutput doesn't predict reaction yet
+                    prediction: "User is observing.",
                     moodShift: {
                         fear_delta: output.mood_shift.stress_delta || 0,
                         curiosity_delta: output.mood_shift.confidence_delta || 0
                     }
                 };
+
+                // PRISM PIPELINE: Guard speech content (Phase 3)
+                if (isPrismEnabled()) {
+                    const guarded = guardLegacyResponse(legacyResponse, {
+                        agentName: state.core_identity?.name || 'Jesse'
+                    });
+                    return guarded.output;
+                }
+
+                return legacyResponse;
             });
         }
         // --------------------------------------------

@@ -226,3 +226,169 @@ export interface ConfessionReport {
   pain?: number;  // 0-1, calculated from severity + neuro state
   failure_attribution?: FailureSource;  // WHO caused the failure
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// PRISM ARCHITECTURE v7.0 (13/10) - EvaluationBus Types
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * EvaluationEvent - Unified learning signal format
+ * 
+ * CRITICAL: This interface is FROZEN. Do not add fields without explicit need.
+ * All learning signals (goals, confessions, parser errors, guard alerts) 
+ * must be converted to this format before feeding Chemistry/Executive/Traits.
+ */
+export interface EvaluationEvent {
+  id: string;
+  timestamp: number;
+  
+  // WHO generated this signal
+  source: EvaluationSource;
+  
+  // WHERE in the pipeline did the issue occur (13/10 upgrade)
+  stage: EvaluationStage;
+  
+  // HOW severe (0-1)
+  severity: number;
+  
+  // WHICH direction
+  valence: 'positive' | 'negative';
+  
+  // WHAT happened (closed list)
+  tags: EvaluationTag[];
+  
+  // HOW confident are we (0-1)
+  confidence: number;
+  
+  // Optional: WHO caused the failure
+  attribution?: FailureSource;
+  
+  // Optional: context for debugging
+  context?: {
+    input?: string;
+    output?: string;
+    hardFacts?: Record<string, unknown>;
+  };
+}
+
+export type EvaluationSource = 'GOAL' | 'CONFESSION' | 'PARSER' | 'GUARD' | 'USER';
+
+/**
+ * EvaluationStage - WHERE in the pipeline the issue occurred
+ * 
+ * CRITICAL for 13/10: Different stages get different punishment weights.
+ * - TOOL error = minimal agent punishment (not agent's fault)
+ * - PRISM error = normal punishment (LLM changed facts)
+ * - GUARD error = medium punishment (persona drift)
+ * - USER error = high weight (user unhappy)
+ */
+export type EvaluationStage = 'TOOL' | 'ROUTER' | 'PRISM' | 'GUARD' | 'USER';
+
+/**
+ * EvaluationTag - Closed list of what happened
+ * 
+ * FROZEN: Do not add tags without updating all consumers.
+ */
+export type EvaluationTag =
+  | 'verbosity'           // Response too long
+  | 'uncertainty'         // Too many "maybe/perhaps"
+  | 'offtopic'            // Not on topic
+  | 'hallucination'       // Possible confabulation
+  | 'identity_leak'       // "as an AI", "I'm a language model"
+  | 'fact_mutation'       // HARD_FACT was changed (13/10)
+  | 'fact_approximation'  // HARD_FACT was approximated without literal (13/10)
+  | 'fact_conflict'       // Multiple sources disagree (13/10)
+  | 'persona_drift'       // Character break
+  | 'goal_success'        // Goal achieved
+  | 'goal_failure'        // Goal failed
+  | 'goal_timeout'        // Goal timed out
+  | 'parse_error'         // JSON parse failed
+  | 'retry_triggered'     // Guard triggered retry
+  | 'soft_fail';          // Guard gave up after max retries
+
+// ═══════════════════════════════════════════════════════════════════════════
+// PRISM ARCHITECTURE - Hard Facts & Verified Data Types
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * VerifiedFact - A fact from a trusted source with TTL
+ * 
+ * Only WORLD_VERIFIED facts can become HARD_FACTS.
+ * WORLD_RAW (training data) is always SOFT.
+ */
+export interface VerifiedFact {
+  value: string | number | boolean;
+  source: string;           // "system", "binance_api", "supabase", "search_tool"
+  timestamp: number;        // Unix timestamp
+  ttl_ms: number;           // Time-to-live in ms (0 = never expires)
+  confidence: number;       // 0-1
+}
+
+/**
+ * FactSnapshot - All facts valid for a session/turn
+ * 
+ * Ensures consistency: agent can't say "BTC 97500" then "BTC ~90k" 
+ * without a new WORLD_VERIFIED update.
+ */
+export interface FactSnapshot {
+  snapshot_id: string;
+  created_at: number;
+  valid_until: number;
+  facts: Record<string, VerifiedFact>;
+}
+
+/**
+ * HardFacts - Immutable facts for current turn
+ * LLM can COMMENT on these but NEVER CHANGE them.
+ */
+export interface HardFacts {
+  time?: string;
+  energy?: number;
+  dopamine?: number;
+  serotonin?: number;
+  norepinephrine?: number;
+  btc_price?: number;
+  [key: string]: string | number | undefined;
+}
+
+/**
+ * SoftState - Personality context for interpretation
+ * LLM uses this as a FILTER, not as facts.
+ */
+export interface SoftState {
+  mood?: string;
+  traits?: TraitVector;
+  goals?: Goal[];
+  narrative_self?: string;
+}
+
+/**
+ * PrismContext - Combined input for LLM inference
+ */
+export interface PrismContext {
+  hardFacts: HardFacts;
+  softState: SoftState;
+  userInput: string;
+  conversationHistory?: Array<{ role: string; content: string }>;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// PERSONA GUARD Types
+// ═══════════════════════════════════════════════════════════════════════════
+
+export type GuardAction = 'PASS' | 'RETRY' | 'SOFT_FAIL' | 'HARD_FAIL';
+
+export interface GuardResult {
+  action: GuardAction;
+  issues: GuardIssue[];
+  retryCount: number;
+  correctedResponse?: string;
+}
+
+export interface GuardIssue {
+  type: 'fact_mutation' | 'fact_approximation' | 'persona_drift' | 'identity_leak';
+  field?: string;
+  expected?: string | number;
+  actual?: string;
+  severity: number;
+}

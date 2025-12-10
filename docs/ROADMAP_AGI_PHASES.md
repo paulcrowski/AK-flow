@@ -51,28 +51,73 @@ eventBus.publish({
 
 ---
 
-## FAZA 2: Goal Feedback + EvaluationBus (Ten Tydzień)
+## FAZA 2: Goal Feedback + EvaluationBus (Ten Tydzień) ✅ IMPLEMENTED
 
 ### Problem
 Sukcesy/porażki celów nie są spięte z chemią ani z meta-oceną.
 Confession, GoalFeedback i błędy systemowe dawałyby trzy różne źródła ocen – bez spójnego formatu.
 
+### ✅ ZAIMPLEMENTOWANO (2025-12-10)
+
+**Phase 1 - Observation:**
+- `core/systems/EvaluationBus.ts` - Unified learning signal system
+- `core/systems/PersonaGuard.ts` - Fact & Persona integrity guard
+- `__tests__/EvaluationBus.test.ts` - 25 testów
+- `__tests__/PersonaGuard.test.ts` - 25 testów
+
+**Phase 2 - Integration (2025-12-10):**
+- `core/systems/HardFactsBuilder.ts` - Builds HardFacts/SoftState from system state
+- `core/systems/PrismIntegration.ts` - Integrates PersonaGuard into LLM pipeline
+- `__tests__/HardFactsBuilder.test.ts` - 15 testów
+- `__tests__/PrismIntegration.test.ts` - 12 testów
+
+**Phase 3 - Production (2025-12-10):**
+- `core/systems/PrismPipeline.ts` - Production wrapper for LLM inference
+- `services/gemini.ts` - Minimal change: import + 1 guard call
+- `__tests__/PrismPipeline.test.ts` - 10 testów
+
+**Phase 4 - Chemistry Bridge (2025-12-10):**
+- `core/systems/ChemistryBridge.ts` - Connects EvaluationBus to NeurotransmitterSystem
+- `__tests__/ChemistryBridge.test.ts` - 18 testów
+- Feature flag: `CHEMISTRY_BRIDGE_CONFIG.ENABLED` (default: false)
+
+**Nowe typy w `types.ts`:**
+- `EvaluationEvent` - z polem `stage` (13/10 upgrade)
+- `EvaluationSource`, `EvaluationStage`, `EvaluationTag`
+- `VerifiedFact`, `FactSnapshot`, `HardFacts`, `SoftState`
+- `PrismContext`, `GuardResult`, `GuardIssue`
+
 ---
 
-### 2.1 EvaluationBus – Zamrożone API v1
+### 2.1 EvaluationBus – Zamrożone API v1.1 (13/10 Upgrade)
 
-> **KRYTYCZNE**: Ten interfejs musi być minimalny i stabilny.
-> Nie dodawaj pól bez wyraźnej potrzeby.
+> **KRYTYCZNE**: Ten interfejs jest ZAMROŻONY. Nie dodawaj pól bez wyraźnej potrzeby.
+> **UPGRADE 13/10**: Dodano pole `stage` dla stage-aware punishment.
 
 ```typescript
-// types.ts
+// types.ts - ZAIMPLEMENTOWANE
 interface EvaluationEvent {
-  source: 'GOAL' | 'CONFESSION' | 'PARSER';  // tylko 3 źródła
+  id: string;
+  timestamp: number;
+  source: 'GOAL' | 'CONFESSION' | 'PARSER' | 'GUARD' | 'USER';
+  stage: 'TOOL' | 'ROUTER' | 'PRISM' | 'GUARD' | 'USER';  // 13/10: WHERE in pipeline
   severity: number;      // 0–1 (jak poważne)
   valence: 'positive' | 'negative';  // kierunek
-  tags: string[];        // krótkie kody: ['verbosity', 'offtopic', 'hallucination']
+  tags: EvaluationTag[];  // zamknięta lista
   confidence: number;    // 0–1 (jak bardzo ufamy tej ocenie)
-  attribution?: FailureSource;  // opcjonalne: kto zawinil
+  attribution?: FailureSource;  // opcjonalne: kto zawinił
+  context?: { input?: string; output?: string; hardFacts?: Record<string, unknown> };
+}
+```
+
+**Stage-aware punishment weights:**
+```typescript
+STAGE_WEIGHTS = {
+  'TOOL': 0.02,    // Tool error = minimal agent punishment
+  'ROUTER': 0.03,  // Router conflict = low punishment
+  'PRISM': 0.10,   // LLM changed fact = normal punishment
+  'GUARD': 0.05,   // Persona drift = medium punishment
+  'USER': 0.15     // User unhappy = high punishment
 }
 ```
 
@@ -82,9 +127,16 @@ interface EvaluationEvent {
 - `offtopic` – nie na temat
 - `hallucination` – możliwa konfabulacja
 - `identity_leak` – "as an AI"
+- `fact_mutation` – HARD_FACT został zmieniony (13/10)
+- `fact_approximation` – HARD_FACT przybliżony bez literału (13/10)
+- `fact_conflict` – źródła się kłócą (13/10)
+- `persona_drift` – złamanie charakteru
 - `goal_success` – cel osiągnięty
 - `goal_failure` – cel nieosiągnięty
+- `goal_timeout` – cel wygasł
 - `parse_error` – błąd JSON
+- `retry_triggered` – Guard wywołał retry
+- `soft_fail` – Guard poddał się po max retries
 
 ---
 
@@ -157,7 +209,42 @@ function confessionToEvaluation(report: ConfessionReport): EvaluationEvent | nul
 
 ---
 
-### 2.4 Parser → EvaluationBus
+### 2.4 PersonaGuard (13/10) ✅ IMPLEMENTED
+
+**Plik**: `core/systems/PersonaGuard.ts`
+
+PersonaGuard siedzi między LLM output a user-facing response.
+Zapewnia:
+1. HARD_FACTS są zachowane (nie zmutowane)
+2. Persona pozostaje w charakterze (brak "as an AI" leaks)
+3. Fakty są literalne, nie przybliżone bez oryginalnej wartości
+
+```typescript
+// Konfiguracja
+const GUARD_CONFIG = {
+  MAX_RETRIES: 2,
+  RETRY_TEMPERATURE_DECAY: 0.1,
+  IDENTITY_LEAK_PATTERNS: [
+    /\bas an? AI\b/i,
+    /\bI'?m a language model\b/i,
+    // ... więcej wzorców
+  ]
+};
+
+// Użycie
+const result = personaGuard.check(response, hardFacts, 'Jesse');
+// result.action: 'PASS' | 'RETRY' | 'SOFT_FAIL' | 'HARD_FAIL'
+// result.issues: GuardIssue[]
+```
+
+**Zasada FACT vs APPROX:**
+- `energy: 23` → "23%" ✅ (literał)
+- `energy: 23` → "23% - to mało" ✅ (literał + komentarz)
+- `energy: 23` → "mało energii" ❌ (brak literału = MUTATION)
+
+---
+
+### 2.5 Parser → EvaluationBus
 
 ```typescript
 // W CortexInference.ts przy CORTEX_PARSE_FAILURE
