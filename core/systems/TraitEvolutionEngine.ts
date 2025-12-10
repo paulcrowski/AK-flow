@@ -94,32 +94,70 @@ export class TraitEvolutionEngine {
     ): TraitVector {
         const last7Days = this.getSignalsFromDays(7);
         const grouped = this.groupByDimension(last7Days);
-        
+
         const updatedTraits = { ...currentTraits };
-        
+
+        // ═══════════════════════════════════════════════════════════════
+        // IDENTITY-LITE FALLBACK: If no signals, derive drift from neuroState
+        // This ensures evolution happens even without explicit trait signals
+        // ═══════════════════════════════════════════════════════════════
+        const hasSignals = Object.keys(grouped).length > 0;
+
+        if (!hasSignals && neuro) {
+            // Micro-drift based on neurochemistry (very subtle, ~0.001-0.005)
+            const NEURO_DRIFT_RATE = 0.002;
+
+            // High dopamine → slightly more curiosity & arousal
+            if (neuro.dopamine > 65) {
+                updatedTraits.curiosity = this.clamp(currentTraits.curiosity + NEURO_DRIFT_RATE);
+                updatedTraits.arousal = this.clamp(currentTraits.arousal + NEURO_DRIFT_RATE * 0.5);
+            } else if (neuro.dopamine < 50) {
+                updatedTraits.curiosity = this.clamp(currentTraits.curiosity - NEURO_DRIFT_RATE * 0.5);
+            }
+
+            // High serotonin → slightly more conscientiousness & social awareness
+            if (neuro.serotonin > 65) {
+                updatedTraits.conscientiousness = this.clamp(currentTraits.conscientiousness + NEURO_DRIFT_RATE * 0.5);
+                updatedTraits.socialAwareness = this.clamp(currentTraits.socialAwareness + NEURO_DRIFT_RATE * 0.5);
+            }
+
+            // High norepinephrine → slightly more verbosity (alert = more talkative)
+            if (neuro.norepinephrine > 60) {
+                updatedTraits.verbosity = this.clamp(currentTraits.verbosity + NEURO_DRIFT_RATE * 0.3);
+            }
+
+            console.log(
+                `[TraitEvolution] Neuro-drift applied (no signals). ` +
+                `Dopamine=${neuro.dopamine.toFixed(1)}, Serotonin=${neuro.serotonin.toFixed(1)}`
+            );
+
+            return updatedTraits;
+        }
+
+        // Original signal-based logic
         for (const [dimension, signals] of Object.entries(grouped)) {
             if (signals.length === 0) continue;
-            
+
             const dimKey = dimension as keyof TraitVector;
             const current = currentTraits[dimKey] || 0.5;
-            
+
             // Calculate target from signals (weighted average)
             const targetSignal = this.calculateTargetSignal(signals, current);
-            
+
             // Calculate confidence (more signals + more days = higher confidence)
             const confidence = this.calculateConfidence(signals);
-            
+
             // Dopamine modulation: high dopamine = faster learning (more plastic)
             const dopamineFactor = neuro ? 0.5 + (neuro.dopamine / 200) : 1.0; // 0.5-1.0
-            
+
             // Learning rate: base * confidence * dopamine
             // Base rate is very small (0.001) to ensure slow evolution
             const α = this.BASE_LEARNING_RATE * confidence * dopamineFactor;
-            
+
             // Homeostatic update: trait drifts toward target
             const newValue = current * (1 - α) + targetSignal * α;
             updatedTraits[dimKey] = this.clamp(newValue);
-            
+
             // Log significant changes
             const delta = newValue - current;
             if (Math.abs(delta) > 0.0001) {
@@ -129,10 +167,10 @@ export class TraitEvolutionEngine {
                 );
             }
         }
-        
+
         return updatedTraits;
     }
-    
+
     /**
      * Calculate target signal value from recent signals.
      * Success signals push toward increase, failure toward decrease.
@@ -140,21 +178,21 @@ export class TraitEvolutionEngine {
     private calculateTargetSignal(signals: TraitEvolutionSignal[], current: number): number {
         let weightedSum = 0;
         let totalWeight = 0;
-        
+
         for (const signal of signals) {
             const weight = signal.strength;
             // Success = push toward 0.7, Failure = push toward 0.3
-            const target = signal.is_success 
+            const target = signal.is_success
                 ? (signal.direction === 'increase' ? 0.7 : 0.3)
                 : (signal.direction === 'increase' ? 0.3 : 0.7);
-            
+
             weightedSum += target * weight;
             totalWeight += weight;
         }
-        
+
         return totalWeight > 0 ? weightedSum / totalWeight : current;
     }
-    
+
     /**
      * Calculate confidence based on signal count and unique days.
      * More signals over more days = higher confidence = faster learning.
@@ -162,13 +200,13 @@ export class TraitEvolutionEngine {
     private calculateConfidence(signals: TraitEvolutionSignal[]): number {
         const uniqueDays = new Set(signals.map(s => s.date)).size;
         const signalCount = signals.length;
-        
+
         // Confidence formula: sqrt(days) * log(signals + 1) / 10
         // At 1 day, 1 signal: ~0.0
         // At 3 days, 5 signals: ~0.31
         // At 7 days, 10 signals: ~0.63
         const confidence = Math.sqrt(uniqueDays) * Math.log(signalCount + 1) / 10;
-        
+
         return Math.min(1.0, confidence);
     }
 

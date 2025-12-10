@@ -173,8 +173,10 @@ export function CognitiveInterface() {
     // --- KERNEL RESET ON SESSION CHANGE ---
     useEffect(() => {
         // When user or agent changes, fully reset cognitive kernel state
+        // NOTE: resetKernel intentionally excluded from deps - we only want to reset on ID changes
         resetKernel();
-    }, [userId, agentId, resetKernel]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [userId, agentId]);
 
     // --- SUBSCRIPTIONS (UI Only) ---
     useEffect(() => {
