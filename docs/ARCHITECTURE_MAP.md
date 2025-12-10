@@ -1,7 +1,78 @@
 # 🧠 AK-FLOW Architecture Map
 
-> **Wersja:** 5.4 (2025-12-09)
+> **Wersja:** 6.0 (2025-12-10)
 > **Cel:** Prosta mapa jak działa agent i jaki ma flow
+
+---
+
+## 🆕 FAZA 6.0: PRISM Architecture - FactEcho Guard (2025-12-10)
+
+### Kluczowa Zmiana: JSON Guard zamiast Regex
+
+Agent MUSI echować fakty które użył. Guard porównuje JSON, nie tekst.
+
+```
+PRZED (Regex Hell):
+LLM: "Mam dwadzieścia trzy procent energii"
+Guard: if (!response.includes("23")) → MUTATION!  ❌ False positives
+
+PO (FactEcho 13/10):
+LLM: { speech: "Mam dwadzieścia trzy...", fact_echo: { energy: 23 } }
+Guard: fact_echo.energy === hardFacts.energy → PASS  ✅ Precyzyjne
+```
+
+### Nowe Moduły
+
+```
+core/systems/
+├── EvaluationBus.ts        # Centralna magistrala sygnałów uczenia
+├── FactEchoGuard.ts        # JSON-based fact validation (NO REGEX!)
+├── FactEchoPipeline.ts     # Production wrapper
+├── ChemistryBridge.ts      # EvaluationBus → Dopamine/Serotonin
+├── PrismMetrics.ts         # TrustIndex, daily caps, architecture issues
+├── HardFactsBuilder.ts     # Builds HardFacts from system state
+└── PersonaGuard.ts         # ⚠️ DEPRECATED (regex-based)
+```
+
+### Flow Diagram
+
+```
+USER INPUT
+    ↓
+[FACT ROUTER] → HardFacts (energy, time, prices)
+    ↓
+[LLM INFERENCE] → CortexOutput + fact_echo
+    ↓
+[FACT ECHO GUARD] → Compare fact_echo vs HardFacts (JSON!)
+    ↓
+[EVALUATION BUS] → Log event (stage-aware)
+    ↓
+[CHEMISTRY BRIDGE] → Dopamine delta (when enabled)
+    ↓
+USER OUTPUT
+```
+
+### Key Metrics
+
+| Metryka | Cel | Alert |
+|---------|-----|-------|
+| TrustIndex | >0.95 | <0.90 |
+| fact_mutation_rate | <1% | >5% |
+| retry_rate | <10% | >20% |
+| soft_fail_rate | <1% | >5% |
+
+### Feature Flags
+
+```typescript
+// FactEcho pipeline (default: ON)
+enableFactEchoPipeline() / disableFactEchoPipeline()
+
+// Chemistry reactions (default: OFF - observation mode)
+enableChemistryBridge() / disableChemistryBridge()
+
+// Strict mode - require all facts echoed
+setDefaultStrictMode(true/false)
+```
 
 ---
 

@@ -525,24 +525,45 @@ Ta faza jest bardziej analityczna/raportowa niż infrastrukturalna.
 
 ---
 
-## Status
+## Status (2025-12-10)
 
-- [x] FAZA 1: ✅ DONE
-  - [x] Asymetryczny decay (3x szybszy spadek powyżej baseline)
-  - [x] DOPAMINE_PENALTY za JSON_PARSE_FAILURE (-8 dopaminy)
-  - [x] Subskrypcja w useCognitiveKernel
-- [x] FAZA 1.5: ✅ DONE (Karpathy Refactor)
-  - [x] TraitEvolutionEngine v2.0 - homeostaza zamiast if-ów
-  - [x] ConfessionService v2.1 - funkcja kosztu (pain) zamiast progów
-  - [x] FailureSource type - atrybucja błędów (LLM_MODEL, PROMPT, SELF)
-  - [x] Attribution w DOPAMINE_PENALTY events
-- [ ] FAZA 2A: EvaluationBus + GoalFeedback (tylko logi, bez chemii)
-- [ ] FAZA 2B: Włączenie chemii po walidacji logów
-- [ ] FAZA 3: ExecutiveControl z histerezą
-- [ ] FAZA 4: Nowe narzędzia (NOTES / READ_FILE / LEARN_FROM)
-- [ ] FAZA 5: Konsolidacja Refleksji (Confession + Dreams + Evaluation)
+### ✅ ZROBIONE:
+
+- [x] **FAZA 1:** Asymetryczny decay, DOPAMINE_PENALTY
+- [x] **FAZA 1.5:** TraitEvolutionEngine, ConfessionService, FailureSource
+- [x] **FAZA 2 (PRISM Phase 1-6):**
+  - [x] EvaluationBus - centralna magistrala sygnałów
+  - [x] PersonaGuard - regex guard (deprecated)
+  - [x] FactEchoGuard - JSON guard (13/10)
+  - [x] FactEchoPipeline - production wrapper
+  - [x] ChemistryBridge - most do chemii (disabled)
+  - [x] PrismMetrics - TrustIndex, daily caps
+  - [x] HardFactsBuilder - budowanie faktów
+  - [x] 152 nowych testów
+
+### 🔄 W TRAKCIE (LITE):
+
+- [ ] **ChemistryBridge** - kod gotowy, `ENABLED: false`, czeka na obserwację
+- [ ] **Fact Snapshot** - typy zdefiniowane, logika nie zaimplementowana
+
+### ❌ DO ZROBIENIA:
+
+- [ ] **GoalFeedbackSystem** - cele → EvaluationBus (PRIORYTET!)
+- [ ] **Dashboard TrustIndex** - metryki w NeuroMonitor
+- [ ] **FAZA 3:** ExecutiveControl z histerezą
+- [ ] **FAZA 4:** Nowe narzędzia (NOTES / READ_FILE / LEARN_FROM)
+- [ ] **FAZA 5:** Konsolidacja Refleksji
+
+### 📊 METRYKI:
+
+| Metryka | Wartość |
+|---------|---------|
+| Testy | 285 passing |
+| Nowe pliki | 10 modułów |
+| Regex w fact checking | ZERO |
+| Build | ✅ OK |
 
 ---
 
-*Ostatnia aktualizacja: 2024-12-09 v2.1*
+*Ostatnia aktualizacja: 2025-12-10 v3.0*
 *Autor: AK-FLOW Engineering Team*

@@ -10,11 +10,64 @@
 
 | Metryka | Wartość |
 |---------|---------|
-| Rozwiązanych problemów | 14 |
-| Całkowity czas | ~42 godziny |
+| Rozwiązanych problemów | 15 |
+| Całkowity czas | ~48 godzin |
 | Średnia trudność | 3.9/5 |
-| Największy przełom | Persona-Less Cortex (FAZA 5.2) |
+| Największy przełom | FactEcho Guard (FAZA 6.0) |
 | Najdłuższy problem | Monolityczny Kernel (8h) |
+
+---
+
+## Problem #18: Regex Hell (The Fact Validation Nightmare)
+
+**Data:** 2025-12-10
+**Trudność:** 5/5
+**Status:** ✅ Rozwiązany (FactEcho Architecture 13/10)
+
+### Objawy
+PersonaGuard używał regexów do walidacji faktów:
+- "23" vs "23%" vs "dwadzieścia trzy" vs "około 23"
+- Wszystkie są poprawne semantycznie, ale regex tego nie ogarnie
+- False positives przy każdej odpowiedzi w naturalnym języku
+
+### Diagnoza
+Walidacja faktów na podstawie tekstu naturalnego jest **niemożliwa** do zrobienia dobrze.
+Potrzebowalibyśmy:
+- Setki reguł regex
+- Lub drugiego LLM do walidacji (wolne ×2)
+- Lub karania agenta za poprawne odpowiedzi
+
+### Rozwiązanie (FactEcho Architecture)
+LLM MUSI zwrócić `fact_echo` jako osobne pole JSON:
+```typescript
+{
+  speech_content: "Mam dwadzieścia trzy procent energii...",
+  fact_echo: { energy: 23 }  // ← Guard porównuje TO
+}
+```
+
+Guard sprawdza: `fact_echo.energy === hardFacts.energy`
+**ZERO regexów. Czyste porównanie JSON.**
+
+### Pliki
+- `core/systems/FactEchoGuard.ts` - JSON-based guard
+- `core/systems/FactEchoPipeline.ts` - Production wrapper
+- `core/types/CortexOutput.ts` - FactEcho interface
+- `core/prompts/MinimalCortexPrompt.ts` - FACT ECHO ARCHITECTURE section
+
+### Lekcje
+- **Structured Output > Natural Language:** Wymuś JSON tam gdzie potrzebujesz precyzji
+- **LLM Echo > LLM Parse:** Łatwiej kazać LLM powtórzyć fakt niż parsować jego odpowiedź
+- **Separation of Concerns:** speech_content dla człowieka, fact_echo dla maszyny
+
+### Meta-analiza
+To był moment gdy zrozumieliśmy, że AGI potrzebuje **dwóch kanałów komunikacji**:
+1. Kanał dla człowieka (naturalny język, emocje, styl)
+2. Kanał dla systemu (JSON, fakty, metryki)
+
+Guard nie dotyka polszczyzny - porównuje liczby. To jest 13/10.
+
+---
 
 ## Problem #17: Pulapka Rozdzielonej Logiki (The Split Sleep Trap)
 

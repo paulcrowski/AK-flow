@@ -1,27 +1,92 @@
-## 🔧 KROK 1: The Pain Principle (Zasada Bólu)
+## 🎯 PRIORYTETY NA 2025-12-11
 
-### Problem:
-Obecnie cele (`GoalSystem`) są tylko tekstem. Porażka w ich realizacji nie ma konsekwencji. Agent nie "czuje", że musi je zrealizować.
+### P0 (KRYTYCZNE - zrób najpierw):
 
-### Plan:
-1. **Frustration Feedback Loop:**
-   - Jeśli cel wisi > 200 ticków → Frustracja rośnie wykładniczo.
-   - Jeśli Frustracja > 0.8 → Wymuszona zmiana celu (Give Up) + spadek Confidence + wpis do pamięci "Porażka".
-2. **Success Dopamine Hit:**
-   - Realizacja celu = +20 Dopamine, +10 Satisfaction.
-   - To stworzy mechanizm "chcenia" (seeking reward).
+#### 1. Test manualny FactEcho
+**Co:** Sprawdź czy LLM faktycznie zwraca `fact_echo` w odpowiedzi.
+**Jak:**
+1. Uruchom agenta
+2. Zapytaj "Ile masz energii?"
+3. Sprawdź logi `[FactEchoPipeline]`
+4. Jeśli brak fact_echo → popraw prompt
+
+#### 2. GoalFeedbackSystem
+**Co:** Podłączyć cele do EvaluationBus.
+**Gdzie:** `core/systems/GoalFeedbackSystem.ts` (nowy plik)
+**Logika:**
+```typescript
+// Gdy cel osiągnięty:
+evaluationBus.emit({
+  source: 'GOAL',
+  stage: 'USER',
+  valence: 'positive',
+  tags: ['goal_success']
+});
+// Gdy cel nieudany:
+evaluationBus.emit({
+  source: 'GOAL',
+  stage: 'USER',
+  valence: 'negative',
+  tags: ['goal_failure']
+});
+```
 
 ---
 
-## 🔧 KROK 2: Dream Judge (Część II - Sędzia)
+### P1 (WAŻNE - zrób po P0):
 
-### Problem:
-Mamy już `DreamConsolidation`, który robi podsumowania. Ale brakuje "Krytyka", który ocenia jakość dnia.
+#### 3. Dashboard TrustIndex
+**Co:** Pokazać TrustIndex w NeuroMonitor.
+**Gdzie:** `components/NeuroMonitor.tsx`
+**Dane:** `getPrismDashboard()` z PrismMetrics
 
-### Plan:
-- Rozszerzyć `DreamConsolidationService` o krok "Judgment".
-- Prompt: "Oceń dzisiejsze działania w skali 1-10. Czy były zgodne z Core Values? Co poprawić?".
-- Wynik wpływa na `starting_confidence` następnego dnia.
+#### 4. Włączyć ChemistryBridge
+**Co:** Po zebraniu danych z EvaluationBus, włączyć reakcje chemii.
+**Jak:** `enableChemistryBridge()` w konfiguracji
+**Warunek:** Minimum 50 eventów w EvaluationBus
+
+---
+
+### P2 (NICE TO HAVE):
+
+#### 5. Usunąć PersonaGuard (legacy)
+**Co:** Oznaczyć jako @deprecated lub usunąć
+**Dlaczego:** Zastąpiony przez FactEchoGuard
+
+#### 6. Fact Snapshot per session
+**Co:** Implementacja FactSnapshot z TTL
+**Gdzie:** HardFactsBuilder lub nowy moduł
+
+---
+
+## 🔧 STARE PRIORYTETY (przeniesione)
+
+### The Pain Principle (Zasada Bólu)
+**Status:** Częściowo zaimplementowane przez EvaluationBus
+**Co zostało:** GoalFeedbackSystem (P0.2)
+
+### Dream Judge
+**Status:** Niezaimplementowane
+**Priorytet:** NISKI (po GoalFeedback)
+
+---
+
+## 🗓️ Archiwum: 2025-12-10 (PRISM Architecture)
+
+### Zrealizowane
+- ✅ **EvaluationBus** - Centralna magistrala sygnałów uczenia
+- ✅ **PersonaGuard** - Regex-based guard (deprecated)
+- ✅ **FactEchoGuard** - JSON-based guard (13/10)
+- ✅ **FactEchoPipeline** - Production wrapper
+- ✅ **ChemistryBridge** - Most do chemii (disabled)
+- ✅ **PrismMetrics** - TrustIndex, daily caps
+- ✅ **HardFactsBuilder** - Budowanie faktów
+- ✅ **152 nowych testów**
+
+### Metryki
+- Nowa architektura: V6.0
+- Testy: 285 passing
+- Regex w fact checking: ZERO
 
 ---
 
