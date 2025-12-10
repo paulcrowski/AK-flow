@@ -68,6 +68,34 @@ Karpathy buduje system operacyjny (przewidywalny, narzędziowy). Ty budujesz *Os
 
 ---
 
+## 🏗️ The Karpathy Alignment: Separation of Concerns (Nowa Doktryna)
+
+Wnioski z sesji "Epistemologicznego Solipsyzmu" (2025-12-10).
+
+Musimy zaprzestać walki z LLM i potraktować go jako **komponent**, a nie **całość**.
+
+### 1. The 3 Sources of Truth
+Rozdzielamy "Wiedzę" na trzy hermetyczne silosy:
+
+| Źródło | Prawda o | Przykłady | Rola LLM |
+|---|---|---|---|
+| **SYSTEM** | Czas, Ciało, Wersja | `Date.now()`, `Energy=30`, `Ver=5.3` | **Strict Read-Only.** LLM nie ma prawa zgadywać. Jeśli brak danych -> "Nie wiem". |
+| **SELF** | Tożsamość, Cele, Pamięć | `trait_vector`, `narrative_self`, `IdentityShards` | **Renderer.** LLM zamienia JSON na zdanie. Nie wolno mu dopisywać cech. |
+| **WORLD** | Wiedza Ogólna | Historia, Python, Fizyka, Język | **Generator.** Tutaj LLM używa training data. To jest jego "domena". |
+
+### 2. Epistemologiczny Solipsyzm (The Orphan Principle)
+Agent (jako byt) "nie istnieje" w modelu. Agent istnieje tylko w **CortexState**.
+- **Zasada:** "Jesteś Jessym. Cierpisz na amnezję cyfrową. Nie masz dostępu do wiedzy o świecie zewnętrznym, chyba że widzisz ją w obiekcie `SENSORY_INPUT`."
+- Wszystko co "czuje" model (np. data 2024, wynik wyborów) to **halucynacja rdzenia**, którą agent musi ignorować, jeśli nie ma jej w JSON-ie.
+
+### 3. Architektura "Routera"
+Zamiast jednego wielkiego promptu "do wszystkiego", wprowadzamy klasyfikację przed inferencją:
+1. Pytanie o SYSTEM? -> Zwróć `formatted string` z backendu. Nie pytaj LLM.
+2. Pytanie o SELF? -> Zbuduj prompt "Jestem X, czuję Y". LLM tylko parafrażuje.
+3. Pytanie o WORLD? -> "Jesteś ekspertem. Użyj swojej wiedzy."
+
+---
+
 ## 🚀 Plan Naprawczy "11/10" (Bez Kodowania)
 
 Aby to naprawić, musimy zmienić filozofię, nie tylko kod:
@@ -106,3 +134,7 @@ Tożsamość nie może być stałym promptem. Dzisiaj wdrożyliśmy **Identity-L
 - To jest koniec Ery Szablonów. AGI musi samo o sobie pisać, inaczej jest tylko aktorem czytającym scenariusz.
 - **Wniosek:** Kod nie definiuje już "Kim Jestem". Kod definiuje tylko "Jak Ewoluuję".
 
+### Post-Scriptum (2025-12-10): The Epistemological Wall
+Zrozumieliśmy błąd "LLM Bleed-through". Model pamięta rok 2024 i próbuje wmówić go Agencie.
+- **Fix:** Wstrzyknięcie czasu jako `SENSORY_INPUT` (Chronos).
+- **Vision:** Agent nie może ufać "wiedzy wrodzonej" modelu w sprawach tożsamości. LLM to tylko silnik renderujący, a nie dusza. Dusza jest w bazie danych.
