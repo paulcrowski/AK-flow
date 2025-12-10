@@ -30,6 +30,29 @@ export interface ToolIntent {
 }
 
 /**
+ * FactEcho - LLM echoes back the facts it used
+ * 
+ * PRISM ARCHITECTURE (13/10):
+ * LLM MUST echo back any hard facts it references in speech.
+ * Guard compares fact_echo vs hardFacts - NO REGEX needed.
+ * 
+ * Example:
+ * - speech_content: "Mam dwadzieścia trzy procent energii..."
+ * - fact_echo: { energy: 23 }
+ * 
+ * Guard checks: fact_echo.energy === hardFacts.energy
+ */
+export interface FactEcho {
+  energy?: number;
+  time?: string;
+  dopamine?: number;
+  serotonin?: number;
+  norepinephrine?: number;
+  btc_price?: number;
+  [key: string]: string | number | undefined;
+}
+
+/**
  * Output contract from LLM
  */
 export interface CortexOutput {
@@ -41,6 +64,20 @@ export interface CortexOutput {
   
   /** Zmiany nastroju wynikające z interakcji */
   mood_shift: MetaStatesDelta;
+  
+  /**
+   * PRISM ARCHITECTURE (13/10): Fact Echo
+   * 
+   * LLM echoes back any hard facts it used in speech_content.
+   * Guard compares this against HardFacts - pure JSON comparison.
+   * NO REGEX, NO NLP, NO AMBIGUITY.
+   * 
+   * If LLM says "mam 23% energii" → fact_echo: { energy: 23 }
+   * If LLM says "mam dużo energii" → fact_echo: { energy: 23 } (still must echo)
+   * 
+   * Guard fails if: fact_echo.energy !== hardFacts.energy
+   */
+  fact_echo?: FactEcho;
   
   /**
    * Strukturalna intencja użycia narzędzia.

@@ -84,6 +84,32 @@ WHY THIS MATTERS:
 Mixing them = cognitive epilepsy. Keep them separate.
 
 ═══════════════════════════════════════════════════════════════
+FACT ECHO ARCHITECTURE (CRITICAL - 13/10)
+═══════════════════════════════════════════════════════════════
+
+When you reference ANY numeric fact from the input state in your speech, you MUST echo it back in fact_echo.
+
+EXAMPLE:
+Input state has: energy: 23
+Your speech says: "Mam dwadzieścia trzy procent energii..."
+Your fact_echo MUST include: { "energy": 23 }
+
+WHY: Guard compares fact_echo against system facts. NO REGEX. Pure JSON.
+If you say "dużo energii" but energy is 23, you STILL echo: { "energy": 23 }
+
+CORRECT:
+{
+  "speech_content": "Mam około dwadzieścia procent energii, więc jestem zmęczony.",
+  "fact_echo": { "energy": 23 }
+}
+
+WRONG (will trigger RETRY):
+{
+  "speech_content": "Mam dużo energii!",
+  "fact_echo": { "energy": 80 }  // ← MUTATION! System says 23, you said 80
+}
+
+═══════════════════════════════════════════════════════════════
 
 RULES:
 - You have NO built-in name/persona aside from input data.
@@ -91,6 +117,7 @@ RULES:
 - NEVER use tool tags in internal_thought.
 - If Energy is < 20, [THOUGHT] should be short/confused.
 - If Dopamine is > 80, [THOUGHT] should be manic, but [SPEECH] can try to mask it (if high self-control).
+- ALWAYS echo facts you reference in fact_echo field.
 - STRICT JSON output only.
 - Do not add "Here is the JSON" or markdown blocks. Start with {.
 `.trim();

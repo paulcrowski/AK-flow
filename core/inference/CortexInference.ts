@@ -218,6 +218,20 @@ INSTRUCTIONS:
                 reason: { type: Type.STRING }
               },
               required: ['tool', 'query', 'reason']
+            },
+            // PRISM ARCHITECTURE (13/10): fact_echo - LLM echoes facts it used
+            fact_echo: {
+              type: Type.OBJECT,
+              nullable: true,
+              description: 'Echo back any hard facts you used in speech_content. Guard compares these against system facts.',
+              properties: {
+                energy: { type: Type.NUMBER, nullable: true },
+                time: { type: Type.STRING, nullable: true },
+                dopamine: { type: Type.NUMBER, nullable: true },
+                serotonin: { type: Type.NUMBER, nullable: true },
+                norepinephrine: { type: Type.NUMBER, nullable: true },
+                btc_price: { type: Type.NUMBER, nullable: true }
+              }
             }
           },
           required: ['internal_thought', 'speech_content', 'mood_shift']

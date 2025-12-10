@@ -81,6 +81,21 @@ Confession, GoalFeedback i błędy systemowe dawałyby trzy różne źródła oc
 - `__tests__/ChemistryBridge.test.ts` - 18 testów
 - Feature flag: `CHEMISTRY_BRIDGE_CONFIG.ENABLED` (default: false)
 
+**Phase 5 - FactEcho + Metrics (2025-12-10):**
+- `core/types/CortexOutput.ts` - Added `FactEcho` interface
+- `core/systems/FactEchoGuard.ts` - JSON-based fact validation (NO REGEX!)
+- `core/systems/PrismMetrics.ts` - TrustIndex, daily penalty caps, architecture issues
+- `core/prompts/MinimalCortexPrompt.ts` - FACT ECHO ARCHITECTURE section
+- `core/inference/CortexInference.ts` - fact_echo in response schema
+- `__tests__/FactEchoGuard.test.ts` - 22 testów
+- `__tests__/PrismMetrics.test.ts` - 12 testów
+
+**Phase 6 - FactEcho Pipeline (2025-12-10):**
+- `core/systems/FactEchoPipeline.ts` - Production pipeline with JSON guard
+- `services/gemini.ts` - Switched to FactEcho as primary guard
+- `__tests__/FactEchoPipeline.test.ts` - 13 testów
+- Feature: `factStrictMode` - control whether all facts must be echoed
+
 **Nowe typy w `types.ts`:**
 - `EvaluationEvent` - z polem `stage` (13/10 upgrade)
 - `EvaluationSource`, `EvaluationStage`, `EvaluationTag`

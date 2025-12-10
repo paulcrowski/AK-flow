@@ -7,6 +7,7 @@ import { isFeatureEnabled } from "../core/config";
 import { buildMinimalCortexState } from "../core/builders";
 import { generateFromCortexState } from "../core/inference";
 import { guardLegacyResponse, isPrismEnabled } from "../core/systems/PrismPipeline";
+import { guardLegacyWithFactEcho, isFactEchoPipelineEnabled } from "../core/systems/FactEchoPipeline";
 
 // 1. Safe Environment Access & Initialization (Vite)
 const apiKey = import.meta.env.VITE_GEMINI_API_KEY as string | undefined;
@@ -369,7 +370,17 @@ OUTPUT FORMAT:
                     }
                 };
 
-                // PRISM PIPELINE: Guard speech content (Phase 3)
+                // PRISM PIPELINE (13/10): FactEcho guard (Phase 6) - NO REGEX
+                if (isFactEchoPipelineEnabled()) {
+                    const guarded = guardLegacyWithFactEcho(
+                        legacyResponse,
+                        output.fact_echo,  // LLM echoes facts it used
+                        { agentName: state.core_identity?.name || 'Jesse' }
+                    );
+                    return guarded.output;
+                }
+                
+                // Legacy fallback: regex-based guard (deprecated)
                 if (isPrismEnabled()) {
                     const guarded = guardLegacyResponse(legacyResponse, {
                         agentName: state.core_identity?.name || 'Jesse'
