@@ -613,5 +613,34 @@ OUTPUT FORMAT:
             // logUsage('detectIntent', response); // Optional: don't spam logs with micro-transactions
             return cleanJSON(response.text, safeDefault);
         }, 1, 500); // Fast retry, short timeout
+    },
+
+    /**
+     * Generate JSON response with custom schema.
+     * Use this for identity consolidation and other structured outputs.
+     * 
+     * @param prompt - The prompt to send
+     * @param schema - Gemini responseSchema object
+     * @param defaultValue - Fallback if parsing fails
+     */
+    async generateJSON<T>(
+        prompt: string,
+        schema: Record<string, unknown>,
+        defaultValue: T
+    ): Promise<T> {
+        return withRetry(async () => {
+            const response = await ai.models.generateContent({
+                model: 'gemini-2.5-flash',
+                contents: prompt,
+                config: {
+                    temperature: 0.3, // Low temperature for structured output
+                    maxOutputTokens: 2048,
+                    responseMimeType: 'application/json',
+                    responseSchema: schema
+                }
+            });
+            logUsage('generateJSON', response);
+            return cleanJSON(response.text, defaultValue);
+        }, 2, 2000);
     }
 };

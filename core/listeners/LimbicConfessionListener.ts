@@ -6,12 +6,24 @@ import { PacketType, ConfessionReport, LimbicState } from '../../types';
  * 
  * Listens for CONFESSION_REPORT and applies limbic adjustments.
  * Super-human principle: frustration → precision, NOT shutdown.
+ * 
+ * SINGLETON: Only initializes once per app lifecycle.
  */
+
+// Track if already initialized to prevent duplicate subscriptions
+let isInitialized = false;
+
 export function initLimbicConfessionListener(
     getLimbic: () => LimbicState,
     setLimbic: (state: LimbicState) => void
-) {
-    eventBus.subscribe(PacketType.CONFESSION_REPORT, (packet) => {
+): () => void {
+    // Prevent duplicate initialization
+    if (isInitialized) {
+        return () => {}; // Return no-op cleanup
+    }
+    isInitialized = true;
+
+    const unsubscribe = eventBus.subscribe(PacketType.CONFESSION_REPORT, (packet) => {
         const report = packet.payload as ConfessionReport;
         const hint = report.recommended_regulation?.limbic_adjustments;
 
@@ -33,4 +45,10 @@ export function initLimbicConfessionListener(
     });
 
     console.log('[LimbicConfessionListener] Initialized.');
+
+    // Return cleanup function
+    return () => {
+        unsubscribe();
+        isInitialized = false;
+    };
 }

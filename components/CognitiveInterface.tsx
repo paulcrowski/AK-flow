@@ -194,7 +194,8 @@ export function CognitiveInterface() {
 
     useEffect(() => {
         // Initialize limbic confession listener with getter/setter
-        initLimbicConfessionListener(
+        // Returns cleanup function, singleton guard prevents duplicates
+        const cleanup = initLimbicConfessionListener(
             () => limbicRef.current,
             (newState) => {
                 // Use injectStateOverride to update individual keys
@@ -202,7 +203,10 @@ export function CognitiveInterface() {
             }
         );
         console.log('[CognitiveInterface] ✅ Confession v2 listeners initialized');
-    }, [injectStateOverride]);
+        
+        return cleanup;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []); // Empty deps - singleton, only init once
 
 
     // --- AUTO-SCROLL ---

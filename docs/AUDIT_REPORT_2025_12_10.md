@@ -85,9 +85,30 @@
 
 ---
 
+## DODATKOWE NAPRAWY (Sesja 2)
+
+### 4. ✅ AI zwracał tekst zamiast JSON w IdentityConsolidation
+**Problem**: `structuredDialogue` ma hardcoded schema, nie pasuje do identity.
+
+**Rozwiązanie**: Dodano `CortexService.generateJSON<T>(prompt, schema, default)` z `responseMimeType: 'application/json'` - Gemini API gwarantuje JSON.
+
+### 5. ✅ TraitEvolutionEngine tworzony przy każdym wake (HMR)
+**Problem**: Moduł był przeładowywany przez HMR, resetując singleton.
+
+**Rozwiązanie**: Użyto `window.__TRAIT_ENGINE__` jako storage który przetrwa HMR.
+
+### 6. ✅ LimbicConfessionListener inicjalizowany wielokrotnie
+**Problem**: `useEffect` z dependency na `injectStateOverride` + brak cleanup.
+
+**Rozwiązanie**: 
+- Dodano `isInitialized` guard w listenerze
+- Zwracana funkcja cleanup z `unsubscribe()`
+- Pusta dependency array `[]` w useEffect
+
+---
+
 ## REKOMENDACJE NA PRZYSZŁOŚĆ
 
 1. **Dodać testy** dla `WakeService`
 2. **Usunąć** `evaluateEvolution()` po pełnej migracji
 3. **Rozważyć** wydzielenie `SleepService` analogicznie do `WakeService`
-4. **Monitorować** czy singleton TraitEvolutionEngine zachowuje sygnały poprawnie

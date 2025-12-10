@@ -11,7 +11,7 @@ import { CortexService } from '@/services/gemini';
 import { eventBus } from '../EventBus';
 import { AgentType, PacketType } from '../../types';
 import { generateUUID } from '../../utils/uuid';
-import { extractJSON, extractSummary } from '../../utils/AIResponseParser';
+// extractJSON no longer needed - using CortexService.generateJSON with schema
 
 import type { NarrativeSelf } from '../types/NarrativeSelf';
 import type { IdentityShard, IdentityShardWithId, ShardKind } from '../types/IdentityShard';
@@ -150,42 +150,36 @@ LESSONS LEARNED:
 ${lessonsSummary}
 
 TASK: Write a new self-summary (2-3 sentences) that incorporates today's growth.
+Include 1-3 persona tags that describe you and your current mood.`;
 
-CRITICAL: You MUST respond with ONLY a valid JSON object. No text before or after.
-Do NOT include any explanation, greeting, or prose. ONLY the JSON object.
+  // Schema for Gemini structured output - guarantees JSON response
+  const narrativeSchema = {
+    type: 'OBJECT',
+    properties: {
+      self_summary: { type: 'STRING', description: 'I am [name], 2-3 sentences about identity' },
+      persona_tags: { 
+        type: 'ARRAY', 
+        items: { type: 'STRING' },
+        description: '1-3 tags describing personality'
+      },
+      current_mood_narrative: { type: 'STRING', description: 'One phrase describing current mood' }
+    },
+    required: ['self_summary', 'persona_tags', 'current_mood_narrative']
+  };
 
-REQUIRED JSON FORMAT:
-{
-  "self_summary": "I am [name], [2-3 sentences about who I am after today]",
-  "persona_tags": ["tag1", "tag2", "tag3"],
-  "current_mood_narrative": "one phrase describing current mood"
-}`;
+  const defaultNarrative = {
+    self_summary: current.self_summary,
+    persona_tags: current.persona_tags || ['adaptive', 'learning'],
+    current_mood_narrative: 'reflective after consolidation'
+  };
 
   try {
-    const response = await CortexService.structuredDialogue(prompt);
-    const responseText = response.responseText;
-
-    // Use AIResponseParser for robust JSON extraction
-    interface NarrativeUpdate {
-      self_summary?: string;
-      persona_tags?: string[];
-      current_mood_narrative?: string;
-    }
-
-    const parsed = extractJSON<NarrativeUpdate>(responseText, {
-      logWarnings: true
-    });
-
-    if (!parsed) {
-      console.warn('[IdentityConsolidation] No JSON found, using text as summary');
-      // Fallback: use raw response text as self_summary
-      const updated: NarrativeSelf = {
-        self_summary: extractSummary(responseText, 500) || current.self_summary,
-        persona_tags: current.persona_tags || ['adaptive', 'learning'],
-        current_mood_narrative: 'reflective after consolidation'
-      };
-      return await upsertNarrativeSelf(input.agentId, updated);
-    }
+    // Use generateJSON with schema - guarantees structured response
+    const parsed = await CortexService.generateJSON<{
+      self_summary: string;
+      persona_tags: string[];
+      current_mood_narrative: string;
+    }>(prompt, narrativeSchema, defaultNarrative);
 
     const updated: NarrativeSelf = {
       self_summary: parsed.self_summary || current.self_summary,
@@ -307,30 +301,34 @@ async function extractShardFromLesson(
 LESSON: "${lesson}"
 
 TASK: Extract a core belief, preference, or constraint from this lesson.
+If the lesson doesn't translate to a clear identity shard, use kind="none".`;
 
-CRITICAL: Respond with ONLY a valid JSON object. No text before or after.
+  // Schema for Gemini structured output
+  const shardSchema = {
+    type: 'OBJECT',
+    properties: {
+      kind: { 
+        type: 'STRING', 
+        enum: ['belief', 'preference', 'constraint', 'none'],
+        description: 'Type of identity shard or none if not applicable'
+      },
+      content: { 
+        type: 'STRING', 
+        description: 'The shard content starting with I believe/prefer/must, or empty if none'
+      }
+    },
+    required: ['kind', 'content']
+  };
 
-If the lesson translates to a clear identity shard:
-{"kind": "belief", "content": "I believe..."}
-OR
-{"kind": "preference", "content": "I prefer..."}
-OR
-{"kind": "constraint", "content": "I must..."}
-
-If the lesson doesn't translate to a clear identity shard:
-{"kind": null, "content": null}`;
+  const defaultShard = { kind: 'none', content: '' };
 
   try {
-    const response = await CortexService.structuredDialogue(prompt);
-    
-    // Use extractJSON for robust parsing (handles text before/after JSON)
-    interface ShardResponse {
-      kind: string | null;
-      content: string | null;
-    }
-    const parsed = extractJSON<ShardResponse>(response.responseText, { logWarnings: false });
+    const parsed = await CortexService.generateJSON<{
+      kind: string;
+      content: string;
+    }>(prompt, shardSchema, defaultShard);
 
-    if (!parsed || !parsed.kind || !parsed.content) return null;
+    if (!parsed.kind || parsed.kind === 'none' || !parsed.content) return null;
     if (!['belief', 'preference', 'constraint'].includes(parsed.kind)) return null;
 
     return {

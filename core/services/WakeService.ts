@@ -22,15 +22,27 @@ import type { TraitVector, LimbicState, NeurotransmitterState } from '../../type
 
 // ═══════════════════════════════════════════════════════════════
 // SINGLETON: One TraitEvolutionEngine instance for entire app
-// Preserves signals across wake cycles
+// Uses window.__TRAIT_ENGINE__ to survive HMR in development
 // ═══════════════════════════════════════════════════════════════
-let traitEngineInstance: TraitEvolutionEngine | null = null;
+
+// Extend Window interface for TypeScript
+declare global {
+    interface Window {
+        __TRAIT_ENGINE__?: TraitEvolutionEngine;
+    }
+}
 
 function getTraitEngine(): TraitEvolutionEngine {
-    if (!traitEngineInstance) {
-        traitEngineInstance = new TraitEvolutionEngine();
+    // Use window storage to survive HMR reloads
+    if (typeof window !== 'undefined') {
+        if (!window.__TRAIT_ENGINE__) {
+            window.__TRAIT_ENGINE__ = new TraitEvolutionEngine();
+            console.log('🧬 [WakeService] TraitEvolutionEngine singleton created (HMR-safe)');
+        }
+        return window.__TRAIT_ENGINE__;
     }
-    return traitEngineInstance;
+    // Fallback for SSR/tests
+    return new TraitEvolutionEngine();
 }
 
 // ═══════════════════════════════════════════════════════════════
