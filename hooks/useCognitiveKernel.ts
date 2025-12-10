@@ -640,6 +640,43 @@ export const useCognitiveKernel = (loadedIdentity?: AgentIdentity | null) => {
                     payload: { msg: "ENERGY RESTORED. WAKING UP." },
                     priority: 0.5
                 });
+
+                // ═══════════════════════════════════════════════════════════════
+                // IDENTITY-LITE: Apply trait homeostasis on AUTO-WAKE (energy >= 95)
+                // Same logic as toggleSleep() but for automatic waking
+                // ═══════════════════════════════════════════════════════════════
+                if (loadedIdentity?.id && loadedIdentity?.trait_vector) {
+                    (async () => {
+                        try {
+                            const traitEngine = new TraitEvolutionEngine();
+                            const traitsBefore = { ...stateRef.current.traitVector };
+                            const evolvedTraits = traitEngine.applyTraitHomeostasis(
+                                stateRef.current.traitVector,
+                                stateRef.current.neuroState
+                            );
+
+                            // Update local state
+                            setTraitVector(evolvedTraits);
+
+                            // Save to database
+                            await updateAgentTraitVector(loadedIdentity.id, evolvedTraits);
+
+                            // Log evolution (always, no flags)
+                            await logIdentityEvolution({
+                                agentId: loadedIdentity.id,
+                                component: 'trait_vector',
+                                stateBefore: traitsBefore,
+                                stateAfter: evolvedTraits,
+                                trigger: 'homeostasis',
+                                reason: 'auto_wake_cycle_homeostasis'
+                            });
+
+                            console.log('🧬 [AutoWake] Trait evolution applied:', evolvedTraits);
+                        } catch (traitError) {
+                            console.error('🧬 [AutoWake] Trait evolution error:', traitError);
+                        }
+                    })();
+                }
             } else {
                 // REM Sleep Visuals (Occasional)
                 if (Math.random() > 0.7) {
