@@ -1,14 +1,48 @@
 # 🎛️ AK-FLOW Feature Flags & Configuration
 
 > **ALARM 3 AUDIT** - Pełna dokumentacja wszystkich przełączników w systemie.
-> Ostatnia aktualizacja: 2025-12-12
+> Ostatnia aktualizacja: 2025-12-12 (v2 - CENTRALIZED)
+
+## 🎯 SINGLE SOURCE OF TRUTH
+
+**WSZYSTKIE przełączniki są teraz w jednym pliku:**
+
+```
+core/config/systemConfig.ts
+```
+
+**NIGDY** nie definiuj nowych przełączników w innych plikach!
 
 ## 📋 Spis Treści
 
-1. [Główne Feature Flags](#główne-feature-flags)
-2. [Konfiguracje Modułów](#konfiguracje-modułów)
-3. [Runtime Flags](#runtime-flags)
-4. [Jak Dodać Nowy Flag](#jak-dodać-nowy-flag)
+1. [Jak Edytować Konfigurację](#jak-edytować-konfigurację)
+2. [Główne Feature Flags](#główne-feature-flags)
+3. [Konfiguracje Modułów](#konfiguracje-modułów)
+4. [Runtime Flags](#runtime-flags)
+5. [Jak Dodać Nowy Flag](#jak-dodać-nowy-flag)
+
+---
+
+## 🔧 Jak Edytować Konfigurację
+
+1. **Otwórz `core/config/systemConfig.ts`**
+2. **Znajdź odpowiednią sekcję** (features, prism, factEcho, etc.)
+3. **Zmień wartość**
+4. **Zapisz** - zmiany są natychmiast aktywne
+
+```typescript
+// core/config/systemConfig.ts
+export const SYSTEM_CONFIG = {
+  features: {
+    USE_MINIMAL_CORTEX_PROMPT: true,  // ← ZMIEŃ TUTAJ
+    // ...
+  },
+  prism: {
+    guardEnabled: true,  // ← LUB TUTAJ
+    // ...
+  }
+};
+```
 
 ---
 

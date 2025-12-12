@@ -18,12 +18,14 @@ import { clampNeuro } from './NeurotransmitterSystem';
 // Configuration
 // ═══════════════════════════════════════════════════════════════════════════
 
+import { SYSTEM_CONFIG } from '../config/systemConfig';
+
+// DEPRECATED: Use SYSTEM_CONFIG.chemistryBridge instead
 export const CHEMISTRY_BRIDGE_CONFIG = {
-  // Feature flag: Enable chemistry reactions to EvaluationBus
-  ENABLED: false,  // Phase 4: Start with false, enable after observation
+  get ENABLED() { return SYSTEM_CONFIG.chemistryBridge.enabled; },
+  set ENABLED(v: boolean) { (SYSTEM_CONFIG.chemistryBridge as any).enabled = v; },
   
-  // Max delta per aggregation window
-  MAX_DOPAMINE_DELTA: 10,
+  get MAX_DOPAMINE_DELTA() { return SYSTEM_CONFIG.chemistryBridge.maxDopamineDelta; },
   MAX_SEROTONIN_DELTA: 5,
   
   // Stage-aware weights (from 13/10 spec)

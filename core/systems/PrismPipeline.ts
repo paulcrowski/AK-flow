@@ -19,12 +19,15 @@ import { personaGuard } from './PersonaGuard';
 // Configuration
 // ═══════════════════════════════════════════════════════════════════════════
 
+import { SYSTEM_CONFIG } from '../config/systemConfig';
+
+// DEPRECATED: Use SYSTEM_CONFIG.prismPipeline instead
 export const PIPELINE_CONFIG = {
-  // Feature flag: Enable Prism pipeline
-  ENABLED: true,
+  get ENABLED() { return SYSTEM_CONFIG.prismPipeline.enabled; },
+  set ENABLED(v: boolean) { (SYSTEM_CONFIG.prismPipeline as any).enabled = v; },
   
-  // Log pipeline activity
-  LOG_ENABLED: true
+  get LOG_ENABLED() { return SYSTEM_CONFIG.prismPipeline.logEnabled; },
+  set LOG_ENABLED(v: boolean) { (SYSTEM_CONFIG.prismPipeline as any).logEnabled = v; }
 };
 
 // ═══════════════════════════════════════════════════════════════════════════

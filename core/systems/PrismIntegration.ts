@@ -21,15 +21,22 @@ import { evaluationBus, createGuardEvent } from './EvaluationBus';
 // Configuration
 // ═══════════════════════════════════════════════════════════════════════════
 
+import { SYSTEM_CONFIG } from '../config/systemConfig';
+
+// DEPRECATED: Use SYSTEM_CONFIG.prism instead
+// This is kept for backward compatibility but reads from central config
 export const PRISM_CONFIG = {
   // Feature flag: Enable PersonaGuard checking
-  GUARD_ENABLED: true,
+  get GUARD_ENABLED() { return SYSTEM_CONFIG.prism.guardEnabled; },
+  set GUARD_ENABLED(v: boolean) { (SYSTEM_CONFIG.prism as any).guardEnabled = v; },
   
   // Feature flag: Enable retry on guard failure
-  RETRY_ENABLED: true,
+  get RETRY_ENABLED() { return SYSTEM_CONFIG.prism.retryEnabled; },
+  set RETRY_ENABLED(v: boolean) { (SYSTEM_CONFIG.prism as any).retryEnabled = v; },
   
   // Log all guard checks (for Phase 1 observation)
-  LOG_ALL_CHECKS: true
+  get LOG_ALL_CHECKS() { return SYSTEM_CONFIG.prism.logAllChecks; },
+  set LOG_ALL_CHECKS(v: boolean) { (SYSTEM_CONFIG.prism as any).logAllChecks = v; }
 };
 
 // ═══════════════════════════════════════════════════════════════════════════

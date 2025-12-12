@@ -20,15 +20,18 @@ import { canApplyPenalty, recordPenalty, logArchitectureIssue } from './PrismMet
 // Configuration
 // ═══════════════════════════════════════════════════════════════════════════
 
+import { SYSTEM_CONFIG } from '../config/systemConfig';
+
+// DEPRECATED: Use SYSTEM_CONFIG.factEcho instead
 export const FACT_ECHO_PIPELINE_CONFIG = {
-  // Feature flag: Enable FactEcho pipeline
-  ENABLED: true,
+  get ENABLED() { return SYSTEM_CONFIG.factEcho.enabled; },
+  set ENABLED(v: boolean) { (SYSTEM_CONFIG.factEcho as any).enabled = v; },
   
-  // Default strict mode (require all facts to be echoed)
-  DEFAULT_STRICT_MODE: false,
+  get DEFAULT_STRICT_MODE() { return SYSTEM_CONFIG.factEcho.strictMode; },
+  set DEFAULT_STRICT_MODE(v: boolean) { (SYSTEM_CONFIG.factEcho as any).strictMode = v; },
   
-  // Log all checks
-  LOG_ENABLED: true
+  get LOG_ENABLED() { return SYSTEM_CONFIG.factEcho.logEnabled; },
+  set LOG_ENABLED(v: boolean) { (SYSTEM_CONFIG.factEcho as any).logEnabled = v; }
 };
 
 // ═══════════════════════════════════════════════════════════════════════════
