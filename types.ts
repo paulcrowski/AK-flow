@@ -386,7 +386,7 @@ export interface GuardResult {
 }
 
 export interface GuardIssue {
-  type: 'fact_mutation' | 'fact_approximation' | 'persona_drift' | 'identity_leak';
+  type: 'fact_mutation' | 'fact_approximation' | 'persona_drift' | 'identity_leak' | 'identity_contradiction';
   field?: string;
   expected?: string | number;
   actual?: string;

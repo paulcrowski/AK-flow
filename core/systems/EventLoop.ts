@@ -324,11 +324,25 @@ export namespace EventLoop {
 
                 // Decide to speak
                 let voicePressure = volition.voice_pressure;
-                if (ctx.chemistryEnabled && ctx.neuro.dopamine > 70) {
-                    const biased = Math.min(1, voicePressure + 0.15); // Single Lever v1
-
-                    if (biased !== voicePressure) {
-                        // Emit explicit log event so we can see chemistry influencing voice
+                
+                // FAZA 5.1: voice_pressure SATURATION + HABITUATION
+                // Problem: high dopamine → voicePressure always near 1 → endless monologue
+                // Solution: 
+                // 1. Sigmoid saturation (diminishing returns at high dopamine)
+                // 2. Habituation (decay with consecutive speeches without user reply)
+                
+                if (ctx.chemistryEnabled) {
+                    // Sigmoid saturation: dopamine boost has diminishing returns
+                    // At dopamine=70: boost ~0.1, at dopamine=90: boost ~0.13, at dopamine=100: boost ~0.14
+                    const dopaBias = 0.15 * (1 - Math.exp(-(ctx.neuro.dopamine - 55) / 30));
+                    const baseBiased = Math.min(1, voicePressure + Math.max(0, dopaBias));
+                    
+                    // Habituation: each consecutive speech without user reply reduces pressure
+                    // This is biological: repeating the same action without reward = less motivation
+                    const habituationDecay = 0.1 * ctx.consecutiveAgentSpeeches;
+                    const finalPressure = Math.max(0.2, baseBiased - habituationDecay);
+                    
+                    if (finalPressure !== voicePressure) {
                         eventBus.publish({
                             id: `chem-voice-bias-${Date.now()}`,
                             timestamp: Date.now(),
@@ -338,13 +352,15 @@ export namespace EventLoop {
                                 event: 'DOPAMINE_VOICE_BIAS',
                                 dopamine: ctx.neuro.dopamine,
                                 base_voice_pressure: voicePressure,
-                                biased_voice_pressure: biased
+                                biased_voice_pressure: finalPressure,
+                                habituation_decay: habituationDecay,
+                                consecutive_speeches: ctx.consecutiveAgentSpeeches
                             },
                             priority: 0.6
                         });
                     }
 
-                    voicePressure = biased;
+                    voicePressure = finalPressure;
                 }
                 const decision = VolitionSystem.shouldSpeak(
                     volition.internal_monologue,

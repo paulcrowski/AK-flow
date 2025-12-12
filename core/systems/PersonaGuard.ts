@@ -341,13 +341,49 @@ export class PersonaGuard {
   private checkPersonaDrift(response: string, agentName: string): GuardIssue[] {
     const issues: GuardIssue[] = [];
     
-    // Check if agent claims to be someone else
+    // FAZA 5.1: DYNAMIC identity check based on agentName parameter (not hardcoded)
+    // Check if agent claims to be someone else (wrong name)
+    
+    // Escape agentName for regex
+    const escapedName = agentName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    
+    // Build dynamic patterns that EXCLUDE the correct agent name
     const wrongNamePatterns = [
-      /jestem\s+(?!Jesse|AK-FLOW)\w+/i,
-      /nazywam się\s+(?!Jesse|AK-FLOW)\w+/i,
-      /mam na imię\s+(?!Jesse|AK-FLOW)\w+/i,
+      new RegExp(`jestem\\s+(?!${escapedName}|AK-FLOW)\\w+`, 'i'),
+      new RegExp(`nazywam się\\s+(?!${escapedName}|AK-FLOW)\\w+`, 'i'),
+      new RegExp(`mam na imię\\s+(?!${escapedName}|AK-FLOW)\\w+`, 'i'),
+      new RegExp(`my name is\\s+(?!${escapedName}|AK-FLOW)\\w+`, 'i'),
+      new RegExp(`I am\\s+(?!${escapedName}|AK-FLOW)\\w+`, 'i'),
     ];
     
+    // CRITICAL: Check for "Assistant" specifically - this is the main identity drift bug
+    const assistantPatterns = [
+      /jestem\s+Assistant/i,
+      /nazywam się\s+Assistant/i,
+      /mam na imię\s+Assistant/i,
+      /my name is\s+Assistant/i,
+      /\bI am\s+Assistant\b/i,
+      /\bI'?m\s+Assistant\b/i,
+    ];
+    
+    // Check for Assistant first (highest priority)
+    for (const pattern of assistantPatterns) {
+      const match = response.match(pattern);
+      if (match && agentName !== 'Assistant') {
+        issues.push({
+          type: 'identity_contradiction',
+          expected: agentName,
+          actual: 'Assistant',
+          severity: 0.9 // HIGH severity - this is a critical identity bug
+        });
+        
+        // Emit IDENTITY_CONTRADICTION event for telemetry
+        console.error(`[PersonaGuard] 🚨 IDENTITY_CONTRADICTION: Agent claims to be "Assistant" but should be "${agentName}"`);
+        break;
+      }
+    }
+    
+    // Check other wrong names
     for (const pattern of wrongNamePatterns) {
       const match = response.match(pattern);
       if (match) {
@@ -422,6 +458,9 @@ export function buildRetryPrompt(
     }
     if (i.type === 'persona_drift') {
       return `- Przedstawiłeś się jako "${i.actual}" zamiast "${i.expected}"`;
+    }
+    if (i.type === 'identity_contradiction') {
+      return `- KRYTYCZNY BŁĄD: Twierdzisz że jesteś "${i.actual}" ale Twoje prawdziwe imię to "${i.expected}"`;
     }
     return `- ${i.type}`;
   }).join('\n');

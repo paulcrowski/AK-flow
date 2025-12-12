@@ -16,6 +16,9 @@ export interface NeuroContext {
   userIsSilent?: boolean;           // true if user hasn't spoken recently
   novelty?: number;                 // 0-1, how novel was the last speech
   consecutiveAgentSpeeches?: number; // how many times agent spoke without user reply
+  // FAZA 5.1: RPE (Reward Prediction Error) based decay
+  hadExternalReward?: boolean;      // true if user replied, tool succeeded, or goal completed
+  ticksSinceLastReward?: number;    // how many ticks since last external reward
 }
 
 export const clampNeuro = (v: number) => Math.max(0, Math.min(100, v));
@@ -68,6 +71,29 @@ export const NeurotransmitterSystem = {
             `[NeurotransmitterSystem] BOREDOM_DECAY: ${prevDopa.toFixed(1)} → ${dopamine.toFixed(1)} ` +
             `(decay=${decay.toFixed(1)}, novelty=${novelty.toFixed(2)}, speeches=${consecutiveSpeeches})`
         );
+    }
+    
+    // =========================================================================
+    // FAZA 5.1: RPE (Reward Prediction Error) - "talking to yourself is not rewarding"
+    // If no external reward (user reply, tool success, goal completion) for N ticks,
+    // dopamine decays progressively. This is biological: no feedback = no reward signal.
+    // =========================================================================
+    const ticksSinceReward = ctx.ticksSinceLastReward ?? 0;
+    const hadReward = ctx.hadExternalReward ?? false;
+    
+    if (!hadReward && ticksSinceReward > 2) {
+        // Progressive RPE decay: the longer without reward, the faster decay
+        // tick 3: decay 2, tick 4: decay 3, tick 5+: decay 4
+        const rpeDecay = Math.min(4, ticksSinceReward - 1);
+        const prevDopa = dopamine;
+        dopamine = Math.max(DOPAMINE_FLOOR, dopamine - rpeDecay);
+        
+        if (rpeDecay > 0 && prevDopa !== dopamine) {
+            console.log(
+                `[NeurotransmitterSystem] RPE_DECAY: ${prevDopa.toFixed(1)} → ${dopamine.toFixed(1)} ` +
+                `(ticks_since_reward=${ticksSinceReward}, decay=${rpeDecay})`
+            );
+        }
     }
 
     // Base homeostasis toward mid-levels (no punishments, only gentle pull to baseline)

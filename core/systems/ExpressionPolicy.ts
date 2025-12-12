@@ -282,9 +282,19 @@ export function decideExpression(
   let say = baseScore > threshold;
   let text = responseText;
 
-  // Step 3.5: Shadow mode baseline - start with say=true (will be overridden by narcissism breaker if needed)
+  // Step 3.5: Shadow mode baseline
+  // FAZA 5.1 FIX: Don't unconditionally set say=true!
+  // Instead, use a lower threshold but still require SOME novelty
   if (shadowMode) {
-    say = true;
+    // Shadow mode has lower bar, but NOT zero bar
+    // If novelty is near-zero, don't force speech
+    if (noveltyScore > 0.1) {
+      say = true;
+    } else {
+      // Very low novelty in shadow mode = probably repetitive loop
+      // Let the narcissism breaker handle it, but don't force say=true
+      say = baseScore > (threshold * 0.5); // Lower threshold, but not zero
+    }
   }
 
   // Step 4: Apply dopamine breaker (modular)

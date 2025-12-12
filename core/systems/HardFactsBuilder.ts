@@ -36,16 +36,32 @@ export function buildHardFacts(options: {
   soma?: SomaState;
   neuro?: NeurotransmitterState;
   worldFacts?: Record<string, string | number>;
+  // IDENTITY SINGLE SOURCE OF TRUTH (13/10)
+  agentName?: string;
 }): HardFacts {
-  const { soma, neuro, worldFacts } = options;
+  const { soma, neuro, worldFacts, agentName } = options;
   
   const facts: HardFacts = {};
   
   // SYSTEM facts - always from JS, never from LLM
-  facts.time = new Date().toLocaleTimeString('pl-PL', { 
+  const now = new Date();
+  facts.time = now.toLocaleTimeString('pl-PL', { 
     hour: '2-digit', 
     minute: '2-digit' 
   });
+  
+  // DATE as hard fact (prevents hallucination like "October 6th" when it's December 12th)
+  facts.date = now.toLocaleDateString('pl-PL', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  });
+  
+  // IDENTITY as hard fact - LLM MUST preserve this literally
+  // This is THE single source of truth for "who am I"
+  if (agentName) {
+    facts.agentName = agentName;
+  }
   
   // Soma facts
   if (soma) {
@@ -163,7 +179,9 @@ export function buildPrismContext(options: {
   const hardFacts = buildHardFacts({
     soma: options.soma,
     neuro: options.neuro,
-    worldFacts: options.worldFacts
+    worldFacts: options.worldFacts,
+    // IDENTITY SINGLE SOURCE OF TRUTH - agentName is now HARD FACT
+    agentName: options.agentName
   });
   
   const softState = buildSoftState({

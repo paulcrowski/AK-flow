@@ -3,7 +3,7 @@
 **Status Report:** Implementation vs. Vision  
 **Last Updated:** 2025-12-08
 
-> **Latest Achievement (2025-12-08):** FAZA 5.2 "Persona-Less Cortex" - Przejście od "role-playing LLM" do "stateless inference engine" z emergentną tożsamością. LLM nie wie kim jest – dowiaduje się tego z danych w każdym wywołaniu.
+> **Latest Achievement (2025-12-10):** FAZA 6.0 "The Prism Architecture" - Epistemologiczna ściana między faktami a osobowością. Agent nie może halucynować stanu systemu (FactEchoGuard), a jego osobowość jest emergentnym filtrem na rzeczywistość, a nie sztywnym skryptem.
 
 ### 🆕 Changelog (2025-12-08)
 
@@ -29,7 +29,15 @@
 - ✅ **Silence Breaker** - Dopamine Breaker rozszerzony na USER_REPLY + userIsSilent
 - ✅ **Refractory Period** - 3 warunki blokady pętli curiosity w GoalSystem
 - ✅ **Narcissism Filter** - Próg 15%, skalowana kara socialCost
+- ✅ **Simulated Resonance** - Time dilation structure exists (Phase 4 foundation)
 - ✅ **ARCHITECTURE_MAP.md** - Pełna mapa flow agenta
+
+#### FAZA 6.0: The Prism Architecture (2025-12-10)
+- ✅ **Infrastructure** - EvaluationBus, FactEchoGuard, FactEchoPipeline
+- ✅ **Fact Integrity** - JSON-based FactEcho (No Regex)
+- ✅ **Epistemological Wall** - Strict separation of System (Hard Facts) vs Prism (Soft State) vs World
+- ✅ **Safety** - Stage-aware punishment weights, Observation Mode default
+
 
 ---
 
@@ -409,7 +417,9 @@ Load last emotional state from database on boot, implement mood trend analysis
 - EventBus can log learning events
 
 **Upgrade Path:**
-Implement Self-Edit Module to generate "learning notes" after tasks, then evolve to micro-SFT
+**Upgrade Path:**
+Implement Self-Edit Module to generate "learning notes" after tasks, then evolve to micro-SFT.
+*CRITICAL UPDATE 2025-12-10:* `EvaluationBus` now collects learning signals. Next step: `EducationSystem` that consumes these signals to modify `TraitVector`.
 
 ---
 
@@ -672,8 +682,10 @@ Store predictions explicitly, track accuracy, implement forecasting models
 
 **Current State:**
 - Emotional state changes dynamically
+- Emotional state changes dynamically
 - No long-term personality evolution
 - No personality trait tracking
+- *UPDATE 2025-12-10:* `TrajectoryService` (concept) needed to steer traits based on `EvaluationBus` history.
 
 **Required:**
 - Personality trait representation

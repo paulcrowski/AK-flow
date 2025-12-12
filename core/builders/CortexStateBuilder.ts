@@ -120,16 +120,20 @@ function mapInteractionToStyleContext(
 /**
  * Buduje minimalny CortexState bez danych z DB
  * Używane jako fallback lub dla nowych agentów
+ * 
+ * IMPORTANT: agentName parameter is REQUIRED to prevent identity drift.
+ * DO NOT hardcode a name here - it must come from the identity system.
  */
 export function buildMinimalCortexState(
   userInput: string,
-  metaStates: MetaStates
+  metaStates: MetaStates,
+  agentName: string = 'UNINITIALIZED_AGENT' // Explicit fallback - should trigger IDENTITY_CONTRADICTION if seen
 ): CortexState {
   return {
     meta_states: metaStates,
     trait_vector: DEFAULT_TRAIT_VECTOR,
     core_identity: {
-      name: 'Assistant',
+      name: agentName, // NEVER hardcode 'Assistant' - use passed identity
       core_values: ['helpfulness', 'accuracy'],
       constitutional_constraints: ['do not hallucinate']
     },
