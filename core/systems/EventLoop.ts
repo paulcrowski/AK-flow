@@ -38,6 +38,9 @@ export namespace EventLoop {
         // FAZA 5: Dynamic Persona
         agentIdentity?: CortexSystemNS.AgentIdentityContext;
         sessionOverlay?: CortexSystemNS.SessionOverlay;
+        // FAZA 5.1: RPE (Reward Prediction Error) tracking
+        ticksSinceLastReward: number;
+        hadExternalRewardThisTick: boolean;
     }
 
     // Module-level Budget Tracking (counters only, limit is in context)
@@ -126,6 +129,10 @@ export namespace EventLoop {
             
             // FAZA 4.5: Reset consecutive agent speeches counter (user spoke!)
             ctx.consecutiveAgentSpeeches = 0;
+            
+            // FAZA 5.1: User input = EXTERNAL REWARD (world responded!)
+            ctx.hadExternalRewardThisTick = true;
+            ctx.ticksSinceLastReward = 0;
         }
 
         // 3. Autonomous Volition (only if autonomousMode is ON)
@@ -277,6 +284,11 @@ export namespace EventLoop {
                 // NEUROTRANSMITTER UPDATE (Chemical Soul v1, Silent Influence)
                 if (ctx.chemistryEnabled) {
                     const prevDopamine = ctx.neuro.dopamine;
+                    // FAZA 5.1: Track ticks since last reward
+                    if (!ctx.hadExternalRewardThisTick) {
+                        ctx.ticksSinceLastReward = (ctx.ticksSinceLastReward ?? 0) + 1;
+                    }
+                    
                     const updatedNeuro = NeurotransmitterSystem.updateNeuroState(ctx.neuro, {
                         soma: ctx.soma,
                         activity,
@@ -284,8 +296,14 @@ export namespace EventLoop {
                         // FAZA 4.5: Narcissism Loop Fix v1.0
                         userIsSilent,
                         novelty: currentNovelty,
-                        consecutiveAgentSpeeches: ctx.consecutiveAgentSpeeches
+                        consecutiveAgentSpeeches: ctx.consecutiveAgentSpeeches,
+                        // FAZA 5.1: RPE parameters - CRITICAL for dopamine decay!
+                        hadExternalReward: ctx.hadExternalRewardThisTick,
+                        ticksSinceLastReward: ctx.ticksSinceLastReward
                     });
+                    
+                    // Reset reward flag for next tick
+                    ctx.hadExternalRewardThisTick = false;
 
                     const wasFlow = prevDopamine > 70;
                     const isFlow = updatedNeuro.dopamine > 70;

@@ -14,6 +14,7 @@ import type { CoreIdentity } from '../types/CoreIdentity';
 import { DEFAULT_TRAIT_VECTOR } from '../types/TraitVector';
 import { DEFAULT_INTERACTION_MODE } from '../types/InteractionMode';
 import { DEFAULT_RELATIONSHIP } from '../types/Relationship';
+import { buildHardFacts } from '../systems/HardFactsBuilder';
 
 // ═══════════════════════════════════════════════════════════════
 // CACHE - Tożsamość ładowana RAZ, nie przy każdym zapytaniu
@@ -115,12 +116,19 @@ export function buildMinimalCortexState(
 ): CortexState {
   const cached = getCachedIdentity(input.agentId);
   
-  // Fallback jeśli brak cache
+  // CRITICAL FIX: Fallback MUST NOT be 'Assistant'!
+  // If cache is missing, use UNINITIALIZED_AGENT to flag the problem.
+  // This should trigger IDENTITY_CONTRADICTION if PersonaGuard sees it.
   const coreIdentity: CoreIdentity = cached?.coreIdentity ?? {
-    name: 'Assistant',
+    name: 'UNINITIALIZED_AGENT', // NEVER 'Assistant' - that causes identity drift!
     core_values: ['helpfulness', 'accuracy'],
     constitutional_constraints: ['do not hallucinate']
   };
+  
+  // Log warning if using fallback identity
+  if (!cached?.coreIdentity) {
+    console.warn(`[MinimalCortexStateBuilder] ⚠️ IDENTITY_FALLBACK: No cached identity for agent ${input.agentId}. Using UNINITIALIZED_AGENT.`);
+  }
   
   const traitVector = cached?.traitVector ?? DEFAULT_TRAIT_VECTOR;
   
@@ -153,7 +161,14 @@ export function buildMinimalCortexState(
     relationship: DEFAULT_RELATIONSHIP,
     
     user_input: input.userInput,
-    last_agent_output: input.lastAgentOutput
+    last_agent_output: input.lastAgentOutput,
+    
+    // CRITICAL: HardFacts are THE single source of truth for identity and time
+    // LLM MUST read these, not hallucinate dates or names
+    hard_facts: buildHardFacts({
+      agentName: coreIdentity.name
+      // Note: soma/neuro not available here, will be added by caller if needed
+    })
   };
 }
 

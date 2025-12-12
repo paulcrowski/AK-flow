@@ -171,6 +171,20 @@ export async function generateFromCortexState(
 
   const stateJson = formatCortexStateForLLM(state);
 
+  // DIAGNOSTIC LOG: Prove HardFacts are in the prompt (ChatGPT suggestion)
+  // This log should appear before every LLM call - if you don't see it, HardFacts are dead
+  const hf = state.hard_facts;
+  console.log(`[CortexInference] PROMPT_HARDFACTS: ` +
+    `agentName="${hf?.agentName ?? 'MISSING'}", ` +
+    `date="${hf?.date ?? 'MISSING'}", ` +
+    `time="${hf?.time ?? 'MISSING'}", ` +
+    `core_identity.name="${state.core_identity?.name ?? 'MISSING'}"`);
+  
+  // INVARIANT CHECK: hard_facts.agentName MUST match core_identity.name
+  if (hf?.agentName && state.core_identity?.name && hf.agentName !== state.core_identity.name) {
+    console.error(`[CortexInference] 🚨 IDENTITY_MISMATCH: hard_facts.agentName="${hf.agentName}" but core_identity.name="${state.core_identity.name}"`);
+  }
+
   // Buduj pełny prompt
   const fullPrompt = `${MINIMAL_CORTEX_SYSTEM_PROMPT}
 

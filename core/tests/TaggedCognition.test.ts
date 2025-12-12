@@ -47,14 +47,15 @@ describe('Tagged Cognition & Persona-Less Cortex', () => {
             expect(state.narrative_self.self_summary).toContain('TestAgent');
         });
 
-        it('should fallback to default if no cache (Amnesia Check)', () => {
+        it('should fallback to UNINITIALIZED_AGENT if no cache (Amnesia Check)', () => {
+            // FAZA 5.1: Fallback is now UNINITIALIZED_AGENT (not Assistant) to flag identity issues
             const state = buildMinimalCortexState({
                 agentId: 'unknown-agent',
                 metaStates: { energy: 100, stress: 0, confidence: 100, dopamine: 50 },
                 userInput: 'Who are you?'
             });
 
-            expect(state.core_identity?.name).toBe('Assistant'); // Default fallback
+            expect(state.core_identity?.name).toBe('UNINITIALIZED_AGENT'); // Explicit fallback - flags identity issue
         });
     });
 

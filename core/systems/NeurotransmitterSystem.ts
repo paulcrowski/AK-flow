@@ -95,6 +95,16 @@ export const NeurotransmitterSystem = {
             );
         }
     }
+    
+    // TELEMETRY: DOPAMINE_DECAY_TICK (ChatGPT suggestion for debugging)
+    // Always log dopamine changes for observability
+    const dopaAfterDecay = dopamine;
+    console.log(
+        `[NeurotransmitterSystem] DOPAMINE_TICK: prev=${prev.dopamine.toFixed(1)}, ` +
+        `afterDecay=${dopaAfterDecay.toFixed(1)}, ` +
+        `hadReward=${hadReward}, ticksSinceReward=${ticksSinceReward}, ` +
+        `activity=${ctx.activity}, userSilent=${ctx.userIsSilent}`
+    );
 
     // Base homeostasis toward mid-levels (no punishments, only gentle pull to baseline)
     dopamine = applyHomeostasis(dopamine, DOPAMINE_BASELINE);      // slight optimistic bias
@@ -121,16 +131,22 @@ export const NeurotransmitterSystem = {
         serotonin += 1.5 * energyFactor * serMult;
       }
     } else if (ctx.activity === 'CREATIVE') {
-      // Curiosity and arousal amplify creative boosts
-      // BUT: reduced reward if user is silent (no audience = less dopamine)
-      const dopMult = 0.5 + curiosity;           // 0.5 - 1.5
+      // FAZA 5.1: CREATIVE = exploration = COST, not reward!
+      // ChatGPT/Karpathy insight: "Dopamine rewards being useful to the world, not being smart to yourself"
+      // CREATIVE activity raises arousal/norepinephrine (alertness), but does NOT give dopamine.
+      // Dopamine only comes from EXTERNAL confirmation (user reply, tool success).
+      
       const neMult = 0.75 + 0.5 * arousal;       // 0.75 - 1.25
-      const silencePenalty = ctx.userIsSilent ? 0.3 : 1.0; // 70% less dopamine if talking to empty room
-      dopamine += 3 * energyFactor * dopMult * silencePenalty;
       norepinephrine += 2 * energyFactor * neMult;
       
-      if (ctx.userIsSilent && silencePenalty < 1) {
-        console.log(`[NeurotransmitterSystem] CREATIVE_SILENCE_PENALTY: dopamine boost reduced by ${((1-silencePenalty)*100).toFixed(0)}%`);
+      // Only give dopamine if user is NOT silent (external audience = real reward)
+      if (!ctx.userIsSilent) {
+        const dopMult = 0.5 + curiosity;         // 0.5 - 1.5
+        dopamine += 2 * energyFactor * dopMult;  // Reduced from 3 to 2
+        console.log(`[NeurotransmitterSystem] CREATIVE_WITH_AUDIENCE: dopamine boost +${(2 * energyFactor * dopMult).toFixed(1)}`);
+      } else {
+        // No dopamine for talking to yourself!
+        console.log(`[NeurotransmitterSystem] CREATIVE_NO_AUDIENCE: NO dopamine boost (user silent)`);
       }
     } else if (ctx.activity === 'REPETITIVE') {
       // High conscientiousness: less reward for repetition (but still non-negative)

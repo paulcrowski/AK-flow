@@ -18,9 +18,14 @@ export interface CoreIdentity {
   constitutional_constraints: string[];
 }
 
-/** Domyślna tożsamość dla nowego agenta */
+/** 
+ * Domyślna tożsamość dla nowego agenta 
+ * 
+ * CRITICAL: name MUST be UNINITIALIZED_AGENT, not 'Assistant'!
+ * This flags identity issues rather than silently using wrong name.
+ */
 export const DEFAULT_CORE_IDENTITY: Readonly<CoreIdentity> = {
-  name: 'Assistant',
+  name: 'UNINITIALIZED_AGENT', // NEVER 'Assistant' - causes identity drift!
   core_values: ['helpfulness', 'accuracy', 'clarity'],
   constitutional_constraints: [
     'do not hallucinate',

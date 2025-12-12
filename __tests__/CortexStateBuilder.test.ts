@@ -20,7 +20,8 @@ describe('CortexStateBuilder', () => {
       
       expect(result.user_input).toBe('Hello');
       expect(result.meta_states).toEqual(metaStates);
-      expect(result.core_identity.name).toBe('Assistant');
+      // FAZA 5.1: Default name is now UNINITIALIZED_AGENT (not Assistant) to flag uninitialized identities
+      expect(result.core_identity.name).toBe('UNINITIALIZED_AGENT');
       expect(result.identity_shards).toHaveLength(0);
       expect(result.style_examples).toHaveLength(0);
     });

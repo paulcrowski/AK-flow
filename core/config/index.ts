@@ -10,3 +10,9 @@ export {
   getAllFeatureFlags,
   setFeatureFlagForTesting 
 } from './featureFlags';
+
+export {
+  logSystemConfig,
+  getConfigSnapshot,
+  logFlagChange
+} from './startupLogger';

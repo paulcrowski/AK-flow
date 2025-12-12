@@ -90,12 +90,14 @@ describe('ExpressionPolicy', () => {
     });
 
     describe('decideExpression', () => {
-        it('speaks in shadow mode when user is active', () => {
+        it('speaks in shadow mode when user is active and novelty is sufficient', () => {
+            // FAZA 5.1: Shadow mode no longer unconditionally says=true
+            // It requires novelty > 0.1 OR passes a reduced threshold
             const result = decideExpression(
                 {
                     responseText: 'Any text',
                     goalAlignment: 0,
-                    noveltyScore: 0,
+                    noveltyScore: 0.2, // Must be > 0.1 to trigger shadow mode speech
                     socialCost: 1,
                     context: 'USER_REPLY',
                     userIsSilent: false

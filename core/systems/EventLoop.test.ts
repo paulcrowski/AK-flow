@@ -74,7 +74,10 @@ describe('EventLoop', () => {
                 socialAwareness: 0.8,
                 curiosity: 0.6
             },
-            consecutiveAgentSpeeches: 0
+            consecutiveAgentSpeeches: 0,
+            // FAZA 5.1: RPE tracking
+            ticksSinceLastReward: 0,
+            hadExternalRewardThisTick: false
         };
 
         mockCallbacks = {

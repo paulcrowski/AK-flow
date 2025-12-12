@@ -18,6 +18,7 @@ import { generateFromCortexState } from '../inference';
 import { isFeatureEnabled } from '../config';
 import { eventBus } from '../EventBus';
 import { processDecisionGate, resetTurnState } from './DecisionGate';
+import { guardCortexOutput, isPrismEnabled } from './PrismPipeline';
 
 export interface ConversationTurn {
     role: string;
@@ -221,10 +222,29 @@ export namespace CortexSystem {
 
                 const rawOutput = await generateFromCortexState(state);
 
+                // PRISM ARCHITECTURE: Guard output before processing
+                // This catches identity drift, fact mutations, persona leaks
+                let guardedOutput = rawOutput;
+                if (isPrismEnabled()) {
+                    const agentName = state.core_identity?.name || 
+                        (state.hard_facts?.agentName as string | undefined) || 
+                        'UNINITIALIZED_AGENT';
+                    
+                    const guardResult = guardCortexOutput(rawOutput, {
+                        soma: currentSoma,
+                        agentName
+                    });
+                    guardedOutput = guardResult.output;
+                    
+                    if (!guardResult.guardPassed) {
+                        console.warn(`[CortexSystem] PersonaGuard check FAILED - response was modified`);
+                    }
+                }
+
                 // ARCHITEKTURA 3-WARSTWOWA: Decision Gate
                 // Myśl → Decyzja → Akcja
                 resetTurnState();
-                const gateResult = processDecisionGate(rawOutput, currentSoma);
+                const gateResult = processDecisionGate(guardedOutput, currentSoma);
                 const output = gateResult.modifiedOutput;
 
                 // Log telemetry

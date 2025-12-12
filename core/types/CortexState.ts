@@ -15,6 +15,7 @@ import type { IdentityShard } from './IdentityShard';
 import type { StyleExample } from './StyleExample';
 import type { InteractionMode } from './InteractionMode';
 import type { Relationship } from './Relationship';
+import type { HardFacts } from '../../types';
 
 /**
  * Główny kontrakt - to idzie do LLM jako JSON
@@ -55,6 +56,13 @@ export interface CortexState {
   
   /** Ostatnia odpowiedź agenta (opcjonalnie) */
   last_agent_output?: string;
+  
+  /** 
+   * HARD FACTS - Immutable facts from kernel (PRISM Architecture 13/10)
+   * LLM MUST preserve these literally. Includes: time, date, agentName, energy, etc.
+   * This is THE single source of truth for identity and temporal facts.
+   */
+  hard_facts?: HardFacts;
 }
 
 /** Maksymalny rozmiar payload w znakach (safety limit) */

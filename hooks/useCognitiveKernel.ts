@@ -145,6 +145,7 @@ export const useCognitiveKernel = (loadedIdentity?: AgentIdentity | null) => {
     const lastSpeakRef = useRef<number>(0);
     const lastUserInputRef = useRef<string | null>(null);
     const consecutiveAgentSpeechesRef = useRef<number>(0); // FAZA 4.5: Narcissism Loop Fix
+    const ticksSinceLastRewardRef = useRef<number>(0); // FAZA 5.1: RPE tracking
     const loadedIdentityRef = useRef<AgentIdentity | null | undefined>(loadedIdentity); // IDENTITY-LITE: Ref for stale closure fix
     const [kernelEpoch, setKernelEpoch] = useState(0); // Tracks session resets for logging
 
@@ -240,6 +241,7 @@ export const useCognitiveKernel = (loadedIdentity?: AgentIdentity | null) => {
         lastSpeakRef.current = 0;
         lastUserInputRef.current = null;
         consecutiveAgentSpeechesRef.current = 0;
+        ticksSinceLastRewardRef.current = 0; // FAZA 5.1: Reset RPE counter
 
         // Allow fresh boot sequence for new agent
         hasBootedRef.current = false;
@@ -694,6 +696,9 @@ export const useCognitiveKernel = (loadedIdentity?: AgentIdentity | null) => {
                     goalState: currentState.goalState,
                     traitVector: currentState.traitVector,
                     consecutiveAgentSpeeches: consecutiveAgentSpeechesRef.current, // FAZA 4.5: Narcissism Loop Fix
+                    // FAZA 5.1: RPE (Reward Prediction Error) tracking
+                    ticksSinceLastReward: ticksSinceLastRewardRef.current,
+                    hadExternalRewardThisTick: false, // Will be set by EventLoop on user input
                     // FAZA 5: Dynamic Persona
                     agentIdentity: agentIdentityContext
                 };
@@ -744,6 +749,7 @@ export const useCognitiveKernel = (loadedIdentity?: AgentIdentity | null) => {
                 lastSpeakRef.current = nextCtx.lastSpeakTimestamp;
                 thoughtHistoryRef.current = nextCtx.thoughtHistory;
                 consecutiveAgentSpeechesRef.current = nextCtx.consecutiveAgentSpeeches; // FAZA 4.5: Sync counter
+                ticksSinceLastRewardRef.current = nextCtx.ticksSinceLastReward; // FAZA 5.1: Sync RPE counter
             } catch (e) {
                 console.warn("EventLoop Error", e);
             } finally {
@@ -854,6 +860,9 @@ export const useCognitiveKernel = (loadedIdentity?: AgentIdentity | null) => {
 
         // FAZA 4.5: Reset consecutive agent speeches (user spoke!)
         consecutiveAgentSpeechesRef.current = 0;
+        
+        // FAZA 5.1: User input = EXTERNAL REWARD (reset RPE counter)
+        ticksSinceLastRewardRef.current = 0;
 
         if (somaState.isSleeping) {
             setSomaState(prev => SomaSystem.forceWake(prev));

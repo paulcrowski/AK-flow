@@ -82,7 +82,9 @@ export function guardCortexOutputWithFactEcho(
   const hardFacts = buildHardFacts({
     soma: context.soma,
     neuro: context.neuro,
-    worldFacts: context.worldFacts
+    worldFacts: context.worldFacts,
+    // CRITICAL FIX: agentName MUST be in HardFacts for identity preservation
+    agentName: context.agentName
   });
   
   const factStrictMode = context.factStrictMode ?? FACT_ECHO_PIPELINE_CONFIG.DEFAULT_STRICT_MODE;
@@ -157,7 +159,9 @@ export function guardLegacyWithFactEcho<T extends { text: string }>(
   const hardFacts = buildHardFacts({
     soma: context.soma,
     neuro: context.neuro,
-    worldFacts: context.worldFacts
+    worldFacts: context.worldFacts,
+    // CRITICAL FIX: agentName MUST be in HardFacts for identity preservation
+    agentName: context.agentName
   });
   
   const factStrictMode = context.factStrictMode ?? FACT_ECHO_PIPELINE_CONFIG.DEFAULT_STRICT_MODE;
