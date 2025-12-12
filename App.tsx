@@ -6,11 +6,20 @@ import { AgentSelector } from './components/AgentSelector';
 import { CognitiveInterface } from './components/CognitiveInterface';
 import { Brain, Loader2 } from 'lucide-react';
 import { setCurrentAgentId } from './services/supabase';
-import { logSystemConfig } from './core/config';
+import { logSystemConfig, validateWiring } from './core/config';
 
-// ALARM 3: Log system config at startup - always know what's enabled
+// ALARM 3: Log system config and validate wiring at startup
 // This runs ONCE when the module is loaded
 logSystemConfig();
+
+// Validate critical systems are wired correctly
+// This catches "plumbing errors" before they cause runtime issues
+validateWiring().then(result => {
+  if (!result.allPassed) {
+    console.error('🚨 CRITICAL: Some systems are not properly wired!');
+    console.error('Failed systems:', result.criticalFailures);
+  }
+});
 
 function App() {
     const { userId, agentId, isLoading } = useSession();

@@ -31,3 +31,15 @@ export {
   setConfigOverride,
   clearConfigOverrides
 } from './systemConfig';
+
+// WIRING VALIDATOR - ALARM 3 STANDARD
+export {
+  CRITICAL_SYSTEMS,
+  validateWiring,
+  validateWiringStrict,
+  printDeploymentChecklist,
+  printNewFeatureProcedure,
+  NEW_FEATURE_PROCEDURE,
+  type WiringCheckResult,
+  type WiringValidationResult
+} from './wiringValidator';

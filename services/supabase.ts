@@ -1,7 +1,8 @@
 
 import { createClient } from '@supabase/supabase-js';
 import { MemoryTrace } from '../types';
-import { CortexService } from './gemini'; 
+import { CortexService } from './gemini';
+import { RLSDiagnostics } from './RLSDiagnostics';
 
 const getEnv = (key: string) => typeof process !== 'undefined' ? process.env[key] : undefined;
 const SUPABASE_URL = getEnv('SUPABASE_URL') || 'https://qgnpsfoauhvddbxsoikj.supabase.co';
@@ -113,19 +114,27 @@ export const MemoryService = {
         return [];
       }
       
-      const { data, error } = await supabase
+      // Use RLS diagnostics wrapper
+      const result = await supabase
         .from('memories')
         .select('*')
         .eq('agent_id', currentAgentId)
         .order('created_at', { ascending: false })
-        .limit(limit);
+        .limit(limit)
+        .withRLSDiagnostics('recallRecent');
       
-      if (error) {
-          console.warn("Recall Error (ignoring):", error.message);
+      if (result.error) {
+          console.warn("Recall Error (ignoring):", result.error.message);
           return [];
       }
+      
+      // Check for RLS issues
+      if (result.isRLSIssue) {
+          console.warn("RLS DIAGNOSTIC:", result.rlsMessage);
+          // You could add user feedback here or trigger a re-authentication flow
+      }
 
-      return (data || []).map(item => ({
+      return (result.data || []).map(item => ({
         id: item.id,
         content: item.raw_text,
         timestamp: item.created_at,
@@ -152,19 +161,33 @@ export const MemoryService = {
       const embedding = await CortexService.generateEmbedding(query);
       if (!embedding) return [];
 
-      const { data, error } = await supabase.rpc('match_memories_for_agent', {
+      // Use RLS diagnostics for RPC calls
+      const result = await supabase.rpc('match_memories_for_agent', {
         query_embedding: embedding,
         p_agent_id: currentAgentId,
         match_threshold: 0.4,
         match_count: 4
       });
       
-      if (error) {
-           console.warn("Semantic Search Error (ignoring):", error.message);
+      // Apply RLS diagnostics to RPC result
+      const diagnosedResult = RLSDiagnostics.diagnoseQuery(
+        Promise.resolve(result),
+        'semanticSearch'
+      );
+      
+      const diagnosed = await diagnosedResult;
+      
+      if (diagnosed.error) {
+           console.warn("Semantic Search Error (ignoring):", diagnosed.error.message);
            return [];
       }
+      
+      // Check for RLS issues
+      if (diagnosed.isRLSIssue) {
+          console.warn("RLS DIAGNOSTIC:", diagnosed.rlsMessage);
+      }
 
-      return (data || []).map((item: any) => ({
+      return (diagnosed.data || []).map((item: any) => ({
         id: item.id,
         content: item.raw_text,
         timestamp: new Date().toISOString(),

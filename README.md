@@ -15,6 +15,7 @@ npm run dev
 - [AGI Vision Roadmap](docs/agi_vision_roadmap.md) - Development roadmap and feature status
 - [Daily Reports](docs/daily_reports/) - Development progress logs
 - [Architecture](docs/architecture/) - Technical architecture documentation
+- [RLS Diagnostics Guide](docs/engineering/RLS_DIAGNOSTICS_GUIDE.md) - Supabase RLS troubleshooting
 
 ## 🧠 Core Systems
 
@@ -27,6 +28,17 @@ npm run dev
 ## 🗄️ Database
 
 Database schemas and migrations are in the `database/` directory.
+
+## 🔍 RLS Diagnostics
+
+The system now includes comprehensive RLS (Row-Level Security) diagnostics for Supabase:
+
+- **Automatic detection** of authorization issues vs logical errors
+- **Query wrapping** with `.withRLSDiagnostics()` method
+- **Comprehensive reports** with `RLSDiagnostics.generateDiagnosticReport()`
+- **User role detection** and table access testing
+
+See the [RLS Diagnostics Guide](docs/engineering/RLS_DIAGNOSTICS_GUIDE.md) for detailed usage.
 
 ## 🧪 Testing
 

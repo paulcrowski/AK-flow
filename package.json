@@ -7,7 +7,15 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "test": "vitest run"
+    "test": "vitest run --config vitest.config.ts",
+    "test:watch": "vitest watch --config vitest.config.ts",
+    "test:coverage": "vitest run --config vitest.config.ts --coverage",
+    "test:ci": "vitest run --config vitest.config.ts --reporter=verbose",
+    "test:unit": "node scripts/test-runner.js run unit",
+    "test:integration": "node scripts/test-runner.js run integration",
+    "test:e2e": "node scripts/test-runner.js run e2e",
+    "test:list": "node scripts/test-runner.js list",
+    "test:analyze": "node scripts/test-runner.js analyze"
   },
   "dependencies": {
     "@google/genai": "^1.30.0",

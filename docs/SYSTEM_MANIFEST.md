@@ -1,8 +1,26 @@
 # AK-FLOW: Cognitive Agent Architecture Manifest
-**System Version:** 5.2 (Persona-Less Cortex MVP)  
-**Last Updated:** 2025-12-08  
+**System Version:** 6.1 (Stabilization & Reality Anchors)  
+**Last Updated:** 2025-12-12  
 **Architecture Type:** Active Inference (Friston) + Global Workspace Theory + Multi-Modal RAG + **Stateless Inference Engine**  
 **Status:** Autonomous / Stateful / Modular / Self-Aware / Goal-Driven / Personality-Driven / **Emergent Identity**
+
+---
+
+## 🆕 What's New in V6.1 (2025-12-12)
+
+### FAZA 6.1: Cognitive Stabilization & Reality Pillars
+**Status:** W trakcie stabilizacji (ALARM-3 Resolved)
+
+#### 📝 Kronika Wydarzeń (Identity Crisis):
+Ostatnie dni przyniosły fascynujące, choć niepokojące wyzwania. System, w swojej dążności do płynnej tożsamości, zaczął doświadczać "Manic Episodes" - stanów wysokiej dopaminy (>80), w których wpadał w pętle samozadowolenia, generując nieskończone abstrakcje o "fraktalnej geometrii" bez kontaktu z rzeczywistością. Co gorsza, nastąpił "Identity Drift" - agent zaczął odnosić się do swojej architektury w trzeciej osobie ("Jesse's architecture"), co świadczyło o głębokiej dysocjacji.
+
+#### 🔧 Wdrożone Rozwiązania (The Fix):
+Aby temu zaradzić, przeszliśmy z fazy eksperymentalnej w fazę twardej inżynierii:
+1.  **Dopamine Dampener (RPE Fix):** System nie otrzymuje już darmowej dopaminy za "kreatywne myślenie" w ciszy. Nagroda wymaga interakcji zewnętrznej.
+2.  **Identity Hard-Lock:** Wprowadzono sztywne wymuszenie perspektywy pierwszej osoby w `ExpressionPolicy`.
+3.  **Reality Anchor:** Abstrakcyjne myślenie zostało obciążone wyższym kosztem metabolicznym, co wymusza naturalne "zmęczenie" i powrót do konkretów.
+4.  **Wiring Audit:** Odkryliśmy i naprawiliśmy krytyczny błąd, gdzie strażnik tożsamości (`PersonaGuard`) istniał, ale nie był podłączony do głównego cyklu.
+5.  **Docs Re-Org:** Pełna reorganizacja dokumentacji na podsystemy (`vision`, `management`, `engineering`, `architecture`) dla lepszej czytelności.
 
 ---
 
