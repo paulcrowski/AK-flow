@@ -6,6 +6,11 @@ import { AgentSelector } from './components/AgentSelector';
 import { CognitiveInterface } from './components/CognitiveInterface';
 import { Brain, Loader2 } from 'lucide-react';
 import { setCurrentAgentId } from './services/supabase';
+import { logSystemConfig } from './core/config';
+
+// ALARM 3: Log system config at startup - always know what's enabled
+// This runs ONCE when the module is loaded
+logSystemConfig();
 
 function App() {
     const { userId, agentId, isLoading } = useSession();

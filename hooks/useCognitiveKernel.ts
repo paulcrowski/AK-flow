@@ -332,6 +332,14 @@ export const useCognitiveKernel = (loadedIdentity?: AgentIdentity | null) => {
                 lastUserInteractionAt: Date.now()
             }));
         }
+        
+        // FAZA 5.1: TOOL RESULT = EXTERNAL REWARD
+        // ChatGPT suggestion: "reward powinien być resetowany także przy TOOL_SUCCESS/TOOL_FAILURE"
+        // When tool returns result (intel/tool_result), the world has responded - that's a reward signal
+        if (type === 'intel' || type === 'tool_result') {
+            ticksSinceLastRewardRef.current = 0;
+            console.log(`[useCognitiveKernel] TOOL_REWARD: Tool result received, resetting ticksSinceLastReward`);
+        }
 
         // RESTORED LOGGING: Publish speech/output to EventBus
         if (role === 'assistant' && type === 'speech') {
