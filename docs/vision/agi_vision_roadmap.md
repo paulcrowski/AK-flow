@@ -1,13 +1,19 @@
 # AK-FLOW: AGI Vision Roadmap
 **30 Advanced Features Across 10 Tiers**  
 **Status Report:** Implementation vs. Vision  
-**Last Updated:** 2025-12-12
+**Last Updated:** 2025-12-13
 
-> **Latest Achievement (2025-12-12):** FAZA 6.1 "Cognitive Stabilization" - Wdrożenie "Reality Anchor" i naprawa pętli dopaminowych (Manic Episodes). Reorganizacja dokumentacji.
+> **Latest Achievement (2025-12-13):** FAZA 6.2 "Kernel Stabilization" - Finalizacja maszyny stanów (KernelEngine), naprawa "Śmierci Ego" (Identity Cache Refresh) i eliminacja cyklicznych zależności.
 
-### 🆕 Changelog (2025-12-12)
+### 🆕 Changelog (2025-12-13)
 
-#### FAZA 6.1: Stabilization
+#### FAZA 6.2: Kernel Stabilization & Identity Persistence
+- ✅ **KernelEngine** - Pure Reducer State Machine (100% test coverage)
+- ✅ **Identity Anchor** - Active Cache Refresh (No more "5-minute panic")
+- ✅ **Architectural Integrity** - Circular Dependencies Resolved (Supabase/Types)
+- ✅ **Event Purity** - StrictMode double-invocation guards
+
+#### FAZA 6.1: Stabilization (2025-12-12)
 - ✅ **Reality Anchor** - Energetyczny koszt abstrakcji
 - 🟡 **Dopamine Dampener** - (In Progress) Penalizacja pętli
 - ✅ **Docs Structure** - Podział na `vision`, `engineering`, `management`

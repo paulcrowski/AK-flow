@@ -9,6 +9,7 @@
 
 import { LimbicState } from '../../types';
 import { SPEECH_REFRACTORY_MS, SILENCE_BONUS_MAX, SILENCE_BONUS_FULL_SECONDS } from '../constants';
+import { getVolitionConfig } from '../config/systemConfig';
 
 export interface VolitionDecision {
     shouldSpeak: boolean;
@@ -75,21 +76,20 @@ export const VolitionSystem = {
         }
 
         // 3. Threshold logic with silence bonus and limbic gating
-        let threshold = 0.5;
+        const config = getVolitionConfig();
+        let threshold = config.baseVoicePressureThreshold;
 
         // POETIC PENALTY (Soft Regulation)
         // If not in poetic mode, high-entropy language costs more "pressure" to speak
         const poeticScore = calculatePoeticScore(thought);
         if (!poeticMode && poeticScore > 0) {
             // Soft penalty: reduce effective pressure, making it harder to reach threshold
-            // User requested 0.1 per point
-            const penalty = poeticScore * 0.1;
+            const penalty = poeticScore * config.poeticPenaltyPerPoint;
             voicePressure = Math.max(0, voicePressure - penalty);
-            // console.log(`Poetic Penalty Applied: -${penalty.toFixed(2)} (Score: ${poeticScore})`);
         }
 
         // Fear increases inhibition (higher threshold)
-        if (limbic.fear > 0.8) threshold += 0.2;
+        if (limbic.fear > config.fearInhibitionTrigger) threshold += config.fearInhibitionBonus;
 
         // Silence reduces inhibition (bonus to pressure)
         // Max bonus after configured full duration

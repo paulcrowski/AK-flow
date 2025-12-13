@@ -160,6 +160,52 @@ export const SYSTEM_CONFIG = {
     
     /** Consecutive speeches before narcissism breaker */
     narcissismBreakerThreshold: 4,
+    
+    /** Base threshold for speaking (normal mode) */
+    baseThreshold: 0.3,
+    
+    /** Base threshold for speaking (shadow mode - higher = harder to speak) */
+    shadowModeBaseThreshold: 0.9,
+    
+    /** Narcissism penalty threshold (15% self-reference = boring) */
+    narcissismPenaltyThreshold: 0.15,
+  },
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // VOLITION SYSTEM
+  // ─────────────────────────────────────────────────────────────────────────
+  volition: {
+    /** Base voice pressure threshold for speaking */
+    baseVoicePressureThreshold: 0.5,
+    
+    /** Additional threshold when fear is high (> 0.8) */
+    fearInhibitionBonus: 0.2,
+    
+    /** Fear level that triggers inhibition */
+    fearInhibitionTrigger: 0.8,
+    
+    /** Poetic penalty per score point (when not in poetic mode) */
+    poeticPenaltyPerPoint: 0.1,
+  },
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // LIMBIC SYSTEM (Biological Emotional Regulation)
+  // ─────────────────────────────────────────────────────────────────────────
+  limbic: {
+    /** Max emotional delta per tick - fallback safety net */
+    maxMoodShiftDelta: 0.3,
+    
+    /** Homeostasis decay factor (0.995 = slow, 0.9 = fast) */
+    homeostasisDecayFactor: 0.995,
+    
+    /** EMA smoothing alpha (0.4 = 40% new signal, 60% previous) */
+    emaSmoothingAlpha: 0.4,
+    
+    /** Refractory period in ms (neurons need time to recharge) */
+    refractoryPeriodMs: 2000,
+    
+    /** Habituation decay per consecutive same-direction shift */
+    habituationDecayRate: 0.2,
   },
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -188,6 +234,9 @@ export type FactEchoConfig = typeof SYSTEM_CONFIG.factEcho;
 export type ChemistryConfig = typeof SYSTEM_CONFIG.chemistryBridge;
 export type GoalsConfig = typeof SYSTEM_CONFIG.goals;
 export type RPEConfig = typeof SYSTEM_CONFIG.rpe;
+export type ExpressionConfig = typeof SYSTEM_CONFIG.expression;
+export type VolitionConfig = typeof SYSTEM_CONFIG.volition;
+export type LimbicConfig = typeof SYSTEM_CONFIG.limbic;
 
 // ═══════════════════════════════════════════════════════════════════════════
 // ACCESSOR FUNCTIONS (Type-safe getters)
@@ -233,6 +282,27 @@ export function getGoalsConfig(): GoalsConfig {
  */
 export function getRPEConfig(): RPEConfig {
   return SYSTEM_CONFIG.rpe;
+}
+
+/**
+ * Get expression policy config
+ */
+export function getExpressionConfig(): ExpressionConfig {
+  return SYSTEM_CONFIG.expression;
+}
+
+/**
+ * Get volition system config
+ */
+export function getVolitionConfig(): VolitionConfig {
+  return SYSTEM_CONFIG.volition;
+}
+
+/**
+ * Get limbic system config
+ */
+export function getLimbicConfig(): LimbicConfig {
+  return SYSTEM_CONFIG.limbic;
 }
 
 /**

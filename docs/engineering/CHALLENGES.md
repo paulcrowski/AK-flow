@@ -18,6 +18,37 @@
 
 ---
 
+## Problem #19: Identity Cache Timebomb (The 5-Minute Panic)
+
+**Data:** 2025-12-13
+**Trudność:** 4/5
+**Status:** ✅ Rozwiązany (Refresh Loop)
+
+### Objawy
+Agent działał idealnie przez pierwsze minuty, a dokładnie w 5:00 minucie wpadał w nagłą panikę:
+- **Fear:** skok do 0.95
+- **Curiosity:** spadek do 0
+- **Self-Perception:** `UNINITIALIZED_AGENT`
+
+### Diagnoza
+Problem nie leżał w logice emocji, ale w **infrastrukturze cache**.
+Tożsamość była cache'owana w pamięci z TTL (Time To Live) ustawionym na 5 minut. Po wygaśnięciu cache'u, `CortexStateBuilder` zwracał pusty obiekt tożsamości, co Kernel interpretował jako utratę "ja" (śmierć ego).
+
+### Rozwiązanie
+Zamiast wydłużać TTL w nieskończoność (co grozi stale identities), wdrożyliśmy mechanizm **Active Refresh**:
+1.  **TTL:** Zwiększono do 30 min (bezpiecznik).
+2.  **Heartbeat:** W każdym cyklu kognitywnym (`cognitiveCycle`, co ~3s) wywoływane jest `refreshIdentityCache(agentId)`.
+3.  Dopóki agent "yje" (pętla działa), cache jest podtrzymywany. Wygasa tylko gdy agent faktycznie śpi/jest wyłączony przez >30 min.
+
+### Pliki
+- `core/builders/MinimalCortexStateBuilder.ts` - logic refresh
+- `hooks/useCognitiveKernel.ts` - integracja z pętlą
+
+### Lekcja
+**Tożsamość to proces, nie statyczny plik.** Nie można "załadować tożsamości raz". System musi aktywnie podtrzymywać swoją tożsamość w każdym cyklu ("Cogito, ergo sum" w praktyce - myślę, więc odświeżam cache).
+
+---
+
 ## Problem #18: Regex Hell (The Fact Validation Nightmare)
 
 **Data:** 2025-12-10

@@ -9,6 +9,7 @@ import { isUserSilent } from '../core/utils/thresholds';
 import { generateUUID } from '../utils/uuid';
 import * as SomaSystem from '../core/systems/SomaSystem';
 import * as LimbicSystem from '../core/systems/LimbicSystem';
+import { resetSynapticMemory } from '../core/systems/LimbicSystem';
 import * as VolitionSystem from '../core/systems/VolitionSystem';
 import * as BiologicalClock from '../core/systems/BiologicalClock';
 import { MIN_TICK_MS, MAX_TICK_MS } from '../core/constants';
@@ -183,6 +184,9 @@ export const useCognitiveKernel = (loadedIdentity?: AgentIdentity | null) => {
         console.log('[CognitiveKernel] RESETTING KERNEL - Full State Reset');
         // Clear EventBus history for clean session logs
         eventBus.clear();
+
+        // Reset biological synaptic memory (EMA, habituation state)
+        resetSynapticMemory();
 
         // Increment epoch to re-trigger boot logs
         setKernelEpoch(prev => prev + 1);

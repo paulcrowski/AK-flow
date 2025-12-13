@@ -1,4 +1,5 @@
 import { TraitVector, NeurotransmitterState, SomaState, InteractionContextType } from '../../types';
+import { getExpressionConfig } from '../config/systemConfig';
 
 export interface ExpressionInput {
   internalThought?: string;
@@ -46,10 +47,11 @@ function applyNarcissismFilter(
   }
   
   const narcissism = calculateNarcissismScore(text);
+  const config = getExpressionConfig();
   
-  // Threshold 15% - agent should feel that self-talk is "boring"
-  if (narcissism > 0.15) {
-    const penalty = Math.min(0.5, (narcissism - 0.15) * 2); // 0-0.5
+  // Threshold from config - agent should feel that self-talk is "boring"
+  if (narcissism > config.narcissismPenaltyThreshold) {
+    const penalty = Math.min(0.5, (narcissism - config.narcissismPenaltyThreshold) * 2); // 0-0.5
     socialCost += penalty;
     noveltyScore -= penalty * 0.5;
     console.log(`[ExpressionPolicy] Narcissism detected: ${(narcissism * 100).toFixed(1)}% → socialCost +${penalty.toFixed(2)}`);
@@ -274,9 +276,10 @@ export function decideExpression(
     wSocial * clamp01(socialCost);
 
   // Step 3: Calculate threshold based on energy and arousal
+  const config = getExpressionConfig();
   const energyFactor = soma.energy / 100; // 0-1
   const arousal = clamp01(traits.arousal);
-  const baseThreshold = shadowMode ? 0.9 : 0.3; // SHADOW: almost everything passes
+  const baseThreshold = shadowMode ? config.shadowModeBaseThreshold : config.baseThreshold;
   const threshold = baseThreshold + (0.2 * (1 - energyFactor)) - (0.1 * arousal);
 
   let say = baseScore > threshold;
@@ -288,7 +291,7 @@ export function decideExpression(
   if (shadowMode) {
     // Shadow mode has lower bar, but NOT zero bar
     // If novelty is near-zero, don't force speech
-    if (noveltyScore > 0.1) {
+    if (noveltyScore > config.shadowModeNoveltyThreshold) {
       say = true;
     } else {
       // Very low novelty in shadow mode = probably repetitive loop
