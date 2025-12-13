@@ -13,8 +13,10 @@ import { EpisodicMemoryService } from '../../services/EpisodicMemoryService';
 import { LimbicState, SomaState, Goal, TraitVector, NeurotransmitterState, AgentType, PacketType } from '../../types';
 import { generateUUID } from '../../utils/uuid';
 import { decideExpression, computeNovelty, estimateSocialCost } from './ExpressionPolicy';
+// REFACTOR: Import LimbicSystem for centralized emotion calculations
+import * as LimbicSystem from './LimbicSystem';
 import { buildMinimalCortexState } from '../builders';
-import { generateFromCortexState } from '../inference';
+import { generateFromCortexState, mapCortexOutputToLegacy } from '../inference';
 import { isFeatureEnabled } from '../config';
 import { eventBus } from '../EventBus';
 import { processDecisionGate, resetTurnState } from './DecisionGate';
@@ -266,13 +268,12 @@ export namespace CortexSystem {
 
                 // Episode detection logic could be reused here or moved to event bus
 
+                // Use CENTRALIZED mapping function (prevents shotgun surgery)
+                const legacy = mapCortexOutputToLegacy(output);
                 return {
-                    responseText: output.speech_content,
-                    internalThought: output.internal_thought,
-                    moodShift: {
-                        fear_delta: output.mood_shift.stress_delta || 0,
-                        curiosity_delta: output.mood_shift.confidence_delta || 0
-                    }
+                    responseText: legacy.text,
+                    internalThought: legacy.thought,
+                    moodShift: legacy.moodShift
                 };
             }
         }
@@ -300,13 +301,12 @@ export namespace CortexSystem {
         });
 
         // 5. FAZA 5: Detect and store episode if emotional shift is significant
+        // REFACTOR: Use LimbicSystem instead of manual calculation (Single Source of Truth)
         if (cortexResult.nextLimbic) {
-            const emotionAfter: LimbicState = {
-                fear: Math.max(0, Math.min(1, currentLimbic.fear + (cortexResult.nextLimbic.fear_delta || 0))),
-                curiosity: Math.max(0, Math.min(1, currentLimbic.curiosity + (cortexResult.nextLimbic.curiosity_delta || 0))),
-                frustration: currentLimbic.frustration,
-                satisfaction: currentLimbic.satisfaction
-            };
+            const emotionAfter = LimbicSystem.updateEmotionalState(currentLimbic, {
+                fear_delta: cortexResult.nextLimbic.fear_delta,
+                curiosity_delta: cortexResult.nextLimbic.curiosity_delta
+            });
 
             const agentId = getCurrentAgentId();
             if (agentId) {

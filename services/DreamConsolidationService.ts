@@ -22,6 +22,8 @@ import { EpisodicMemoryService } from './EpisodicMemoryService';
 import { extractSummary } from '../utils/AIResponseParser';
 // IDENTITY-LITE: Import consolidateIdentity for dream-based identity evolution
 import { consolidateIdentity } from '../core/services/IdentityConsolidationService';
+// REFACTOR: Import from centralized source (Single Source of Truth)
+import { INITIAL_LIMBIC } from '../core/kernel/initialState';
 
 // --- TYPES ---
 
@@ -433,7 +435,7 @@ Write in first person, reflecting on who you are after today's experiences.`;
             await MemoryService.storeMemory({
                 id: generateUUID(),
                 content: `[TRAIT_PROPOSAL] ${proposal.reasoning}\nDeltas: ${JSON.stringify(proposal.proposedDeltas)}`,
-                emotionalContext: { fear: 0, curiosity: 0.5, frustration: 0, satisfaction: 0.5 },
+                emotionalContext: { ...INITIAL_LIMBIC, curiosity: 0.5 }, // Neutral baseline for storage
                 timestamp: proposal.timestamp
             });
         } catch (err) {

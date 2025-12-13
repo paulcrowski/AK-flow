@@ -5,7 +5,7 @@ import { generateUUID } from "../utils/uuid";
 import { getCurrentAgentId } from "./supabase";
 import { isFeatureEnabled } from "../core/config";
 import { buildMinimalCortexState } from "../core/builders";
-import { generateFromCortexState } from "../core/inference";
+import { generateFromCortexState, mapCortexOutputToLegacy } from "../core/inference";
 import { guardLegacyResponse, isPrismEnabled } from "../core/systems/PrismPipeline";
 import { guardLegacyWithFactEcho, isFactEchoPipelineEnabled } from "../core/systems/FactEchoPipeline";
 
@@ -359,16 +359,8 @@ OUTPUT FORMAT:
 
                 const output = await generateFromCortexState(state);
 
-                // Map CortexOutput to Legacy Return Type
-                const legacyResponse = {
-                    text: output.speech_content,
-                    thought: output.internal_thought,
-                    prediction: "User is observing.",
-                    moodShift: {
-                        fear_delta: output.mood_shift.stress_delta || 0,
-                        curiosity_delta: output.mood_shift.confidence_delta || 0
-                    }
-                };
+                // Use CENTRALIZED mapping function (prevents shotgun surgery)
+                const legacyResponse = mapCortexOutputToLegacy(output);
 
                 // PRISM PIPELINE (13/10): FactEcho guard (Phase 6) - NO REGEX
                 if (isFactEchoPipelineEnabled()) {

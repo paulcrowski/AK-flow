@@ -11,6 +11,8 @@ import {
     LimbicState,
     NeurotransmitterState
 } from '../types';
+// REFACTOR: Import from centralized source (Single Source of Truth)
+import { INITIAL_LIMBIC, INITIAL_NEURO } from '../core/kernel/initialState';
 
 /**
  * ConfessionService v2.1 - Pain-Based Self-Regulation
@@ -42,8 +44,9 @@ export class ConfessionService {
     }
 
     // Neurochemical state for pain calculation (updated via eventBus)
-    private neuroState: NeurotransmitterState = { dopamine: 55, serotonin: 60, norepinephrine: 50 };
-    private limbicState: LimbicState = { fear: 0.1, curiosity: 0.5, frustration: 0.0, satisfaction: 0.5 };
+    // REFACTOR: Use centralized baselines (Single Source of Truth)
+    private neuroState: NeurotransmitterState = { ...INITIAL_NEURO };
+    private limbicState: LimbicState = { ...INITIAL_LIMBIC };
 
     private initialize() {
         eventBus.subscribe(PacketType.MOTOR_COMMAND, (packet: CognitivePacket) => {

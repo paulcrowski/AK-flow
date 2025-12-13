@@ -258,6 +258,53 @@ INSTRUCTIONS:
   }, cfg.retries!, cfg.retryDelayMs!);
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// LEGACY MAPPING (Centralized - prevents shotgun surgery)
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Legacy response format for backward compatibility
+ */
+export interface LegacyMoodShift {
+  fear_delta: number;
+  curiosity_delta: number;
+}
+
+export interface LegacyCortexResponse {
+  text: string;
+  thought: string;
+  prediction: string;
+  moodShift: LegacyMoodShift;
+}
+
+/**
+ * CENTRAL MAPPING FUNCTION
+ * 
+ * Converts CortexOutput (stress_delta: -20..+20) to Legacy format (fear_delta: -1..+1)
+ * 
+ * WHY THIS EXISTS:
+ * - LLM returns stress_delta in -20 to +20 scale (UI-friendly)
+ * - Limbic system uses 0 to 1 scale (normalized)
+ * - This is the SINGLE POINT of conversion - no duplication
+ * 
+ * RULE: If you need CortexOutput → Legacy format, use THIS function.
+ */
+export function mapCortexOutputToLegacy(output: CortexOutput): LegacyCortexResponse {
+  // CRITICAL: Normalize -20..+20 to -1..+1 scale for limbic system
+  const normalizedFearDelta = (output.mood_shift.stress_delta || 0) / 20;
+  const normalizedCuriosityDelta = (output.mood_shift.confidence_delta || 0) / 20;
+  
+  return {
+    text: output.speech_content,
+    thought: output.internal_thought,
+    prediction: "User is observing.",
+    moodShift: {
+      fear_delta: normalizedFearDelta,
+      curiosity_delta: normalizedCuriosityDelta
+    }
+  };
+}
+
 /**
  * Wersja z Google Search tool (dla SEARCH command)
  */

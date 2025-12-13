@@ -16,7 +16,9 @@ import { MIN_TICK_MS, MAX_TICK_MS } from '../core/constants';
 import { CortexSystem } from '../core/systems/CortexSystem';
 import { EventLoop } from '../core/systems/EventLoop';
 import { createProcessOutputForTools } from '../utils/toolParser';
-import { DreamConsolidationService, BASELINE_NEURO } from '../services/DreamConsolidationService';
+import { DreamConsolidationService } from '../services/DreamConsolidationService';
+// REFACTOR: Import from centralized source (Single Source of Truth)
+import { INITIAL_LIMBIC, INITIAL_SOMA, INITIAL_NEURO, INITIAL_RESONANCE, DEFAULT_TRAIT_VECTOR, BASELINE_NEURO } from '../core/kernel/initialState';
 // REFACTOR: Single WakeService for all wake logic (DRY principle)
 import { executeWakeProcess } from '../core/services/WakeService';
 import { refreshIdentityCache } from '../core/builders';
@@ -43,41 +45,9 @@ const normalizeError = (e: any): CognitiveError => {
     };
 };
 
-// --- INITIAL BASELINES (Static Constants) ---
-const INITIAL_LIMBIC: LimbicState = {
-    fear: 0.1,
-    curiosity: 0.8, // 11/10 MODE: High curiosity start
-    frustration: 0.0,
-    satisfaction: 0.5
-};
-
-const INITIAL_SOMA: SomaState = {
-    cognitiveLoad: 10,
-    energy: 100,
-    isSleeping: false
-};
-
-const INITIAL_RESONANCE: ResonanceField = {
-    coherence: 1.0,
-    intensity: 0.5,
-    frequency: 1.0,
-    timeDilation: 1.0
-};
-
-const INITIAL_NEURO: NeurotransmitterState = {
-    dopamine: 55,
-    serotonin: 60,
-    norepinephrine: 50
-};
-
-// Default TraitVector (fallback if DB not available)
-const DEFAULT_TRAIT_VECTOR: TraitVector = {
-    arousal: 0.3,
-    verbosity: 0.4,
-    conscientiousness: 0.8,
-    socialAwareness: 0.8,
-    curiosity: 0.6
-};
+// --- INITIAL BASELINES ---
+// REFACTOR: Removed local duplicates - now imported from core/kernel/initialState.ts
+// This ensures Single Source of Truth for all biological baselines
 
 export interface AgentIdentity {
     id: string;
