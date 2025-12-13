@@ -54,6 +54,7 @@ export function CognitiveInterface() {
     // FAZA 5: Load full agent identity from DB
     const [loadedIdentity, setLoadedIdentity] = useState<AgentIdentity | null>(null);
     const [identityLoading, setIdentityLoading] = useState(true);
+    const lastLoadedAgentIdRef = useRef<string | null>(null); // Guard against StrictMode double-fire
 
     // Set agent ID for memory service when it changes
     useEffect(() => {
@@ -66,8 +67,17 @@ export function CognitiveInterface() {
             if (!agentId) {
                 setLoadedIdentity(null);
                 setIdentityLoading(false);
+                lastLoadedAgentIdRef.current = null;
                 return;
             }
+
+            // Guard: Skip if already loading/loaded this agent (StrictMode protection)
+            if (lastLoadedAgentIdRef.current === agentId) {
+                setIdentityLoading(false);
+                return;
+            }
+            // Mark IMMEDIATELY to prevent race condition with StrictMode double-invoke
+            lastLoadedAgentIdRef.current = agentId;
 
             setIdentityLoading(true);
             try {
@@ -169,11 +179,16 @@ export function CognitiveInterface() {
     const [input, setInput] = useState('');
     const [sessionTokens, setSessionTokens] = useState(0);
     const chatEndRef = useRef<HTMLDivElement>(null);
+    const lastResetSessionRef = useRef<string | null>(null); // Guard against StrictMode double-reset
 
     // --- KERNEL RESET ON SESSION CHANGE ---
     useEffect(() => {
+        const sessionKey = `${userId}-${agentId}`;
+        // Guard: Skip if already reset for this session (StrictMode protection)
+        if (lastResetSessionRef.current === sessionKey) return;
+        lastResetSessionRef.current = sessionKey;
+        
         // When user or agent changes, fully reset cognitive kernel state
-        // NOTE: resetKernel intentionally excluded from deps - we only want to reset on ID changes
         resetKernel();
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [userId, agentId]);

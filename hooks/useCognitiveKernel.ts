@@ -147,6 +147,7 @@ export const useCognitiveKernel = (loadedIdentity?: AgentIdentity | null) => {
     const consecutiveAgentSpeechesRef = useRef<number>(0); // FAZA 4.5: Narcissism Loop Fix
     const ticksSinceLastRewardRef = useRef<number>(0); // FAZA 5.1: RPE tracking
     const loadedIdentityRef = useRef<AgentIdentity | null | undefined>(loadedIdentity); // IDENTITY-LITE: Ref for stale closure fix
+    const lastPublishedIdentityIdRef = useRef<string | null>(null); // Guard against StrictMode double-fire
     const [kernelEpoch, setKernelEpoch] = useState(0); // Tracks session resets for logging
 
     // Sync Ref
@@ -242,6 +243,7 @@ export const useCognitiveKernel = (loadedIdentity?: AgentIdentity | null) => {
         lastUserInputRef.current = null;
         consecutiveAgentSpeechesRef.current = 0;
         ticksSinceLastRewardRef.current = 0; // FAZA 5.1: Reset RPE counter
+        lastPublishedIdentityIdRef.current = null; // Allow re-publishing identity after reset
 
         // Allow fresh boot sequence for new agent
         hasBootedRef.current = false;
@@ -1056,6 +1058,10 @@ export const useCognitiveKernel = (loadedIdentity?: AgentIdentity | null) => {
     useEffect(() => {
         // Only publish when we have a real identity from DB
         if (!loadedIdentity) return;
+        
+        // Guard: Skip if already published for this identity (StrictMode protection)
+        if (lastPublishedIdentityIdRef.current === loadedIdentity.id) return;
+        lastPublishedIdentityIdRef.current = loadedIdentity.id;
 
         eventBus.publish({
             id: generateUUID(),
