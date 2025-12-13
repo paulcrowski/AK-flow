@@ -15,6 +15,7 @@ import * as BiologicalClock from '../core/systems/BiologicalClock';
 import { MIN_TICK_MS, MAX_TICK_MS } from '../core/constants';
 import { CortexSystem } from '../core/systems/CortexSystem';
 import { EventLoop } from '../core/systems/EventLoop';
+import { ExecutiveGate } from '../core/systems/ExecutiveGate';
 import { createProcessOutputForTools } from '../utils/toolParser';
 import { DreamConsolidationService } from '../services/DreamConsolidationService';
 // REFACTOR: Import from centralized source (Single Source of Truth)
@@ -906,13 +907,67 @@ export const useCognitiveKernel = (loadedIdentity?: AgentIdentity | null) => {
             // UI Feedback
             if (cortexResult.internalThought) {
                 addMessage('assistant', cortexResult.internalThought, 'thought');
+                
+                // HEMISPHERE LOG: Reactive thought origin tracking
+                eventBus.publish({
+                    id: generateUUID(),
+                    timestamp: Date.now(),
+                    source: AgentType.CORTEX_FLOW,
+                    type: PacketType.THOUGHT_CANDIDATE,
+                    payload: {
+                        hemisphere: 'reactive',
+                        internal_monologue: cortexResult.internalThought,
+                        status: 'THINKING'
+                    },
+                    priority: 0.5
+                });
             }
 
             // Process tools in response text (Search/Visualize)
             const cleanSpeech = await processOutputForTools(cortexResult.responseText);
 
+            // ═══════════════════════════════════════════════════════════════════
+            // EXECUTIVE GATE: Reactive path (13/10 PIONEER ARCHITECTURE)
+            // Reactive responses have HARD VETO - always win, but we route through
+            // gate for observability and architectural consistency
+            // ═══════════════════════════════════════════════════════════════════
             if (cleanSpeech.trim()) {
-                addMessage('assistant', cleanSpeech, 'speech');
+                // Create reactive candidate (highest priority)
+                const reactiveCandidate = ExecutiveGate.createReactiveCandidate(
+                    cleanSpeech,
+                    cortexResult.internalThought || '',
+                    `reactive-user-${Date.now()}`
+                );
+                
+                // Get gate context
+                const gateContext = ExecutiveGate.getDefaultContext(
+                    stateRef.current.limbicState,
+                    0  // timeSinceLastUserInteraction = 0 (user just spoke)
+                );
+                
+                // Route through ExecutiveGate (reactive always wins)
+                const gateDecision = ExecutiveGate.decide([reactiveCandidate], gateContext);
+                
+                // Log for observability
+                eventBus.publish({
+                    id: `executive-gate-reactive-${Date.now()}`,
+                    timestamp: Date.now(),
+                    source: AgentType.CORTEX_FLOW,
+                    type: PacketType.SYSTEM_ALERT,
+                    payload: {
+                        event: 'EXECUTIVE_GATE_DECISION',
+                        hemisphere: 'reactive',
+                        should_speak: gateDecision.should_speak,
+                        reason: gateDecision.reason,
+                        candidate_type: 'reactive'
+                    },
+                    priority: 0.5
+                });
+                
+                // Reactive always speaks (HARD VETO)
+                if (gateDecision.should_speak && gateDecision.winner) {
+                    addMessage('assistant', gateDecision.winner.speech_content, 'speech');
+                }
             }
 
             // Update Refs

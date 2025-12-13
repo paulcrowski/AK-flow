@@ -33,9 +33,21 @@ const cleanJSON = <T>(text: string | undefined, defaultVal: T, validator?: (data
     if (!text) return defaultVal;
     try {
         let parsed: any;
+        
+        // 0. Pre-clean: Remove common LLM prefixes that break JSON parsing
+        // Models sometimes say "Here is the JSON requested" or similar before actual JSON
+        let cleaned = text
+            .replace(/^[\s\S]*?(?=\{)/m, '')  // Remove everything before first {
+            .trim();
+        
+        // If no { found, try original text
+        if (!cleaned.startsWith('{')) {
+            cleaned = text;
+        }
+        
         // 1. Try direct parse first
         try {
-            parsed = JSON.parse(text);
+            parsed = JSON.parse(cleaned);
         } catch (e) {
             // 2. Extract JSON block using regex
             const match = text.match(/\{[\s\S]*\}/);

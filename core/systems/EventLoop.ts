@@ -226,6 +226,21 @@ export namespace EventLoop {
                 // ExecutiveGate decides for goal-driven speech
                 const goalGateDecision = ExecutiveGate.decide([goalCandidate], gateContext);
                 
+                // HEMISPHERE LOG: Goal-driven thought origin tracking
+                eventBus.publish({
+                    id: `thought-goal-${Date.now()}`,
+                    timestamp: Date.now(),
+                    source: AgentType.CORTEX_FLOW,
+                    type: PacketType.THOUGHT_CANDIDATE,
+                    payload: {
+                        hemisphere: 'goal_driven',
+                        goal_id: goal.id,
+                        internal_monologue: result.internalThought || '',
+                        status: 'THINKING'
+                    },
+                    priority: 0.5
+                });
+                
                 if (result.internalThought) {
                     callbacks.onMessage('assistant', result.internalThought, 'thought');
                 }
@@ -288,6 +303,22 @@ export namespace EventLoop {
                 );
 
                 callbacks.onThought(volition.internal_monologue);
+
+                // ═══════════════════════════════════════════════════════════════════
+                // HEMISPHERE LOG: Autonomous thought origin tracking
+                // ═══════════════════════════════════════════════════════════════════
+                eventBus.publish({
+                    id: `thought-autonomous-${Date.now()}`,
+                    timestamp: Date.now(),
+                    source: AgentType.CORTEX_FLOW,
+                    type: PacketType.THOUGHT_CANDIDATE,
+                    payload: {
+                        hemisphere: 'autonomous',
+                        internal_monologue: volition.internal_monologue,
+                        status: 'THINKING'
+                    },
+                    priority: 0.5
+                });
 
                 // POETIC COST (Soft Regulation)
                 // Apply energy/satisfaction penalty for high-entropy thoughts
@@ -437,6 +468,7 @@ export namespace EventLoop {
                     type: PacketType.SYSTEM_ALERT,
                     payload: {
                         event: 'EXECUTIVE_GATE_DECISION',
+                        hemisphere: 'autonomous',
                         should_speak: gateDecision.should_speak,
                         reason: gateDecision.reason,
                         voice_pressure: gateDecision.debug?.voice_pressure,
