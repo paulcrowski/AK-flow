@@ -138,6 +138,14 @@ export namespace EventLoop {
         // 3. Autonomous Volition (only if autonomousMode is ON)
         if (ctx.autonomousMode && !input) {
             const silenceDuration = (Date.now() - ctx.silenceStart) / 1000;
+            
+            // RACE CONDITION GUARD: Don't trigger autonomous volition if user JUST spoke
+            // This prevents double responses when processUserInput and cognitiveCycle overlap
+            const timeSinceLastUserInteraction = Date.now() - (ctx.goalState.lastUserInteractionAt || 0);
+            if (timeSinceLastUserInteraction < 3000) {
+                // User spoke less than 3s ago - skip autonomous volition to avoid double response
+                return ctx;
+            }
 
             // ACTIVITY TYPE DETECTION (v1 heuristic)
             let activity: ActivityType = 'IDLE';

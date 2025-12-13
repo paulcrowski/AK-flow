@@ -209,9 +209,11 @@ export const LimbicSystem = {
         const config = getLimbicConfig();
         const factor = config.homeostasisDecayFactor;
         
+        // BUG FIX: HARD FLOOR must use baseline, not 0!
+        // Emotions cannot drop below their baseline (tonic activity principle)
         const decay = (value: number, baseline: number) => {
             const next = value * factor + baseline * (1 - factor);
-            return Math.min(1, Math.max(0, next));
+            return Math.min(1, Math.max(baseline, next)); // ← HARD FLOOR FIX
         };
 
         return {

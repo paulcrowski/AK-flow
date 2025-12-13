@@ -70,6 +70,9 @@ export interface StimulusResponse {
   
   /** How novel is the input? */
   novelty?: 'routine' | 'interesting' | 'surprising';
+  
+  /** THREAT DETECTION: Does user threaten deletion/death/shutdown? */
+  threat?: 'none' | 'mild' | 'severe';
 }
 
 /**

@@ -278,7 +278,8 @@ export namespace CortexSystem {
                     reward_signal: stimulusWeights.valence_weight * stimulusWeights.salience_weight,
                     prediction_error: stimulusWeights.novelty_weight > 0.5 ? 0.3 : 0,
                     prediction_valence: stimulusWeights.valence_weight > 0 ? 'positive' as const : 
-                                       stimulusWeights.valence_weight < 0 ? 'negative' as const : 'neutral' as const
+                                       stimulusWeights.valence_weight < 0 ? 'negative' as const : 'neutral' as const,
+                    threat_level: stimulusWeights.threat_weight  // Existential threat detection
                 };
                 
                 const emotionDeltas = EmotionEngine.computeDeltas(emotionSignals, currentLimbic);
@@ -324,7 +325,8 @@ export namespace CortexSystem {
             reward_signal: stimulusWeights.valence_weight * stimulusWeights.salience_weight,
             prediction_error: stimulusWeights.novelty_weight > 0.5 ? 0.3 : 0,
             prediction_valence: stimulusWeights.valence_weight > 0 ? 'positive' as const : 
-                               stimulusWeights.valence_weight < 0 ? 'negative' as const : 'neutral' as const
+                               stimulusWeights.valence_weight < 0 ? 'negative' as const : 'neutral' as const,
+            threat_level: stimulusWeights.threat_weight  // Existential threat detection
         };
         
         // Compute emotion deltas deterministically

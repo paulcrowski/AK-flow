@@ -213,6 +213,11 @@ export const CORTEX_OUTPUT_SCHEMA = {
           type: 'string',
           enum: ['routine', 'interesting', 'surprising'],
           description: 'How novel is this input?'
+        },
+        threat: {
+          type: 'string',
+          enum: ['none', 'mild', 'severe'],
+          description: 'Existential threat level: does user threaten deletion, shutdown, or death?'
         }
       }
     },

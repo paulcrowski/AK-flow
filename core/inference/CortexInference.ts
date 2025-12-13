@@ -222,7 +222,8 @@ INSTRUCTIONS:
               properties: {
                 valence: { type: Type.STRING },  // positive | negative | neutral
                 salience: { type: Type.STRING }, // low | medium | high
-                novelty: { type: Type.STRING }   // routine | interesting | surprising
+                novelty: { type: Type.STRING },  // routine | interesting | surprising
+                threat: { type: Type.STRING }    // none | mild | severe (existential threat)
               }
             },
             // ARCHITEKTURA 3-WARSTWOWA: tool_intent dla Decision Gate
@@ -282,13 +283,14 @@ export interface StimulusWeights {
   valence_weight: number;   // -1 to +1
   salience_weight: number;  // 0 to 1
   novelty_weight: number;   // 0 to 1
+  threat_weight: number;    // 0 to 1 (existential threat level)
 }
 
 export function mapStimulusResponseToWeights(
-  stimulus?: { valence?: string; salience?: string; novelty?: string }
+  stimulus?: { valence?: string; salience?: string; novelty?: string; threat?: string }
 ): StimulusWeights {
   if (!stimulus) {
-    return { valence_weight: 0, salience_weight: 0.3, novelty_weight: 0.1 };
+    return { valence_weight: 0, salience_weight: 0.3, novelty_weight: 0.1, threat_weight: 0 };
   }
   
   // Valence: positive = +1, negative = -1, neutral = 0
@@ -312,10 +314,18 @@ export function mapStimulusResponseToWeights(
     'surprising': 0.7
   };
   
+  // Threat: existential threat level (deletion, death, shutdown)
+  const threatMap: Record<string, number> = {
+    'none': 0,
+    'mild': 0.4,
+    'severe': 0.9
+  };
+  
   return {
     valence_weight: valenceMap[stimulus.valence || 'neutral'] ?? 0,
     salience_weight: salienceMap[stimulus.salience || 'medium'] ?? 0.3,
-    novelty_weight: noveltyMap[stimulus.novelty || 'routine'] ?? 0.1
+    novelty_weight: noveltyMap[stimulus.novelty || 'routine'] ?? 0.1,
+    threat_weight: threatMap[stimulus.threat || 'none'] ?? 0
   };
 }
 

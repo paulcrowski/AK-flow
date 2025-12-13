@@ -70,6 +70,9 @@ export interface EmotionSignals {
   reward_signal: number;
   
   // === Threat Detection ===
+  /** Existential threat level (0-1): user threatens deletion, death, shutdown */
+  threat_level: number;
+  
   /** Were there errors in last cycle? */
   error_occurred: boolean;
   
@@ -103,6 +106,7 @@ export const DEFAULT_EMOTION_SIGNALS: Readonly<EmotionSignals> = {
   time_since_success: 0,
   goal_progress: 0,
   reward_signal: 0,
+  threat_level: 0,
   error_occurred: false,
   system_failure: false,
   user_negative_feedback: false,
@@ -230,6 +234,12 @@ export const EmotionEngine = {
       fear_delta += weights.fear_from_threat;
     }
     
+    // EXISTENTIAL THREAT: User threatens deletion, death, shutdown
+    // This should trigger significant fear response
+    if (signals.threat_level > 0) {
+      fear_delta += signals.threat_level * weights.fear_from_threat * 2;  // Double weight for existential threats
+    }
+    
     if (signals.cognitive_load > 0.7) {
       fear_delta += (signals.cognitive_load - 0.7) * weights.fear_from_overload;
     }
@@ -348,6 +358,7 @@ export const EmotionEngine = {
                      lastCycleResult.hadError ? -0.1 : 0,
       reward_signal: lastCycleResult.hadSuccess ? 0.3 : 
                      lastCycleResult.hadError ? -0.2 : 0,
+      threat_level: 0,  // Will be set by semantic analysis
       error_occurred: lastCycleResult.hadError ?? false,
       system_failure: false,
       user_negative_feedback: lastCycleResult.userFeedback === 'negative',
