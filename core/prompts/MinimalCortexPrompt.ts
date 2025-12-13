@@ -69,7 +69,7 @@ CORRECT EXAMPLE:
   "internal_thought": "User asks about quantum physics. I lack specific data. I should search for it.",
   "tool_intent": { "tool": "SEARCH", "query": "quantum physics basics", "reason": "need factual data" },
   "speech_content": "Let me look that up for you. [SEARCH: quantum physics basics]",
-  "mood_shift": { "energy_delta": -5, "confidence_delta": 0, "stress_delta": 0 }
+  "stimulus_response": { "valence": "positive", "salience": "high", "novelty": "interesting" }
 }
 
 INCORRECT (FORBIDDEN):
