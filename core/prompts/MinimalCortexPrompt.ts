@@ -195,14 +195,26 @@ export const CORTEX_OUTPUT_SCHEMA = {
       type: 'string',
       description: 'What you say to the user. Tool tags like [SEARCH: ...] go HERE.'
     },
-    mood_shift: {
+    stimulus_response: {
       type: 'object',
+      description: 'Optional. Your SYMBOLIC assessment of the interaction. System computes actual emotions.',
       properties: {
-        energy_delta: { type: 'number', minimum: -20, maximum: 20 },
-        confidence_delta: { type: 'number', minimum: -20, maximum: 20 },
-        stress_delta: { type: 'number', minimum: -20, maximum: 20 }
-      },
-      required: ['energy_delta', 'confidence_delta', 'stress_delta']
+        valence: { 
+          type: 'string', 
+          enum: ['positive', 'negative', 'neutral'],
+          description: 'Overall emotional tone of the interaction'
+        },
+        salience: { 
+          type: 'string', 
+          enum: ['low', 'medium', 'high'],
+          description: 'How important/noteworthy is this interaction?'
+        },
+        novelty: {
+          type: 'string',
+          enum: ['routine', 'interesting', 'surprising'],
+          description: 'How novel is this input?'
+        }
+      }
     },
     tool_intent: {
       type: 'object',
@@ -215,7 +227,7 @@ export const CORTEX_OUTPUT_SCHEMA = {
       required: ['tool', 'query', 'reason']
     }
   },
-  required: ['internal_thought', 'speech_content', 'mood_shift']
+  required: ['internal_thought', 'speech_content']
 } as const;
 
 /**

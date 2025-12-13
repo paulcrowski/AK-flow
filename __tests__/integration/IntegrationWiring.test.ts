@@ -280,7 +280,7 @@ describe('FactEcho Wiring', () => {
       {
         internal_thought: 'test',
         speech_content: 'Mam 50% energii.',
-        mood_shift: { energy_delta: 0, confidence_delta: 0, stress_delta: 0 }
+        stimulus_response: { valence: 'neutral', salience: 'medium', novelty: 'routine' }
       },
       {
         soma: { energy: 50, cognitiveLoad: 0, isSleeping: false },

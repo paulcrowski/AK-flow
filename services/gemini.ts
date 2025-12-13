@@ -5,7 +5,7 @@ import { generateUUID } from "../utils/uuid";
 import { getCurrentAgentId } from "./supabase";
 import { isFeatureEnabled } from "../core/config";
 import { buildMinimalCortexState } from "../core/builders";
-import { generateFromCortexState, mapCortexOutputToLegacy } from "../core/inference";
+import { generateFromCortexState } from "../core/inference";
 import { guardLegacyResponse, isPrismEnabled } from "../core/systems/PrismPipeline";
 import { guardLegacyWithFactEcho, isFactEchoPipelineEnabled } from "../core/systems/FactEchoPipeline";
 
@@ -359,8 +359,13 @@ OUTPUT FORMAT:
 
                 const output = await generateFromCortexState(state);
 
-                // Use CENTRALIZED mapping function (prevents shotgun surgery)
-                const legacyResponse = mapCortexOutputToLegacy(output);
+                // PIONEER ARCHITECTURE: Direct mapping (no more LLM-controlled emotions)
+                const legacyResponse = {
+                    text: output.speech_content,
+                    thought: output.internal_thought,
+                    prediction: "User is observing.",
+                    moodShift: { fear_delta: 0, curiosity_delta: 0 }  // EmotionEngine handles this now
+                };
 
                 // PRISM PIPELINE (13/10): FactEcho guard (Phase 6) - NO REGEX
                 if (isFactEchoPipelineEnabled()) {
@@ -535,15 +540,17 @@ OUTPUT FORMAT:
         }, 1, 3000);
     },
 
+    // PIONEER ARCHITECTURE (13/10): LLM no longer returns emotion deltas
+    // EmotionEngine computes emotions from system signals, not LLM guessing
     async structuredDialogue(prompt: string): Promise<{
         responseText: string;
         internalThought: string;
-        nextLimbic: { fear_delta: number; curiosity_delta: number };
+        stimulus_response?: { valence?: string; salience?: string; novelty?: string };
     }> {
         const safeDefault = {
             responseText: "I am processing...",
             internalThought: "Analyzing input structure...",
-            nextLimbic: { fear_delta: 0, curiosity_delta: 0 }
+            stimulus_response: { valence: 'neutral', salience: 'medium', novelty: 'routine' }
         };
 
         return withRetry(async () => {
@@ -559,16 +566,18 @@ OUTPUT FORMAT:
                         properties: {
                             responseText: { type: Type.STRING },
                             internalThought: { type: Type.STRING },
-                            nextLimbic: {
+                            // PIONEER: Symbolic classification only, no numeric deltas
+                            stimulus_response: {
                                 type: Type.OBJECT,
+                                nullable: true,
                                 properties: {
-                                    fear_delta: { type: Type.NUMBER },
-                                    curiosity_delta: { type: Type.NUMBER }
-                                },
-                                required: ["fear_delta", "curiosity_delta"]
+                                    valence: { type: Type.STRING },
+                                    salience: { type: Type.STRING },
+                                    novelty: { type: Type.STRING }
+                                }
                             }
                         },
-                        required: ["responseText", "internalThought", "nextLimbic"]
+                        required: ["responseText", "internalThought"]
                     }
                 }
             });

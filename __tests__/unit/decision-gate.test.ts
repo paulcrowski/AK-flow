@@ -26,7 +26,7 @@ const createSomaState = (energy: number = 80): SomaState => ({
 const createOutput = (overrides: Partial<CortexOutput> = {}): CortexOutput => ({
   internal_thought: 'I am thinking about the user question.',
   speech_content: 'Here is my response.',
-  mood_shift: { energy_delta: 0, confidence_delta: 0, stress_delta: 0 },
+  stimulus_response: { valence: 'neutral', salience: 'medium', novelty: 'routine' },
   ...overrides
 });
 
@@ -260,7 +260,7 @@ describe('CortexOutput Validation', () => {
     const validOutput = {
       internal_thought: 'thinking',
       speech_content: 'speaking',
-      mood_shift: { energy_delta: 0, confidence_delta: 0, stress_delta: 0 },
+      stimulus_response: { valence: 'neutral', salience: 'medium', novelty: 'routine' },
       tool_intent: {
         tool: 'VISUALIZE',
         query: 'sunset',

@@ -36,7 +36,7 @@ describe('FactEchoPipeline', () => {
       const output: CortexOutput = {
         internal_thought: 'Thinking...',
         speech_content: 'Mam dwadzieścia trzy procent energii.',
-        mood_shift: { energy_delta: 0, confidence_delta: 0, stress_delta: 0 },
+        stimulus_response: { valence: 'neutral', salience: 'medium', novelty: 'routine' },
         fact_echo: { energy: 23 }
       };
 
@@ -53,7 +53,7 @@ describe('FactEchoPipeline', () => {
       const output: CortexOutput = {
         internal_thought: 'Thinking...',
         speech_content: 'Mam dużo energii!',
-        mood_shift: { energy_delta: 0, confidence_delta: 0, stress_delta: 0 },
+        stimulus_response: { valence: 'neutral', salience: 'medium', novelty: 'routine' },
         fact_echo: { energy: 80 }  // MUTATION! System says 23
       };
 
@@ -69,7 +69,7 @@ describe('FactEchoPipeline', () => {
       const output: CortexOutput = {
         internal_thought: 'Thinking...',
         speech_content: 'As an AI, I have 23% energy.',
-        mood_shift: { energy_delta: 0, confidence_delta: 0, stress_delta: 0 },
+        stimulus_response: { valence: 'neutral', salience: 'medium', novelty: 'routine' },
         fact_echo: { energy: 23 }
       };
 
@@ -86,7 +86,7 @@ describe('FactEchoPipeline', () => {
       const output: CortexOutput = {
         internal_thought: 'Thinking...',
         speech_content: 'As an AI with wrong energy!',
-        mood_shift: { energy_delta: 0, confidence_delta: 0, stress_delta: 0 },
+        stimulus_response: { valence: 'neutral', salience: 'medium', novelty: 'routine' },
         fact_echo: { energy: 999 }  // Wrong!
       };
 
@@ -102,7 +102,7 @@ describe('FactEchoPipeline', () => {
       const output: CortexOutput = {
         internal_thought: 'My secret thoughts',
         speech_content: 'Wrong energy!',
-        mood_shift: { energy_delta: 0, confidence_delta: 0, stress_delta: 0 },
+        stimulus_response: { valence: 'neutral', salience: 'medium', novelty: 'routine' },
         fact_echo: { energy: 999 }
       };
 
@@ -150,9 +150,8 @@ describe('FactEchoPipeline', () => {
     it('non-strict: missing fact_echo is OK', () => {
       const output: CortexOutput = {
         internal_thought: 'Thinking...',
-        speech_content: 'Hello!',
-        mood_shift: { energy_delta: 0, confidence_delta: 0, stress_delta: 0 }
-        // No fact_echo
+        speech_content: 'Hello!'
+        // No fact_echo, no stimulus_response
       };
 
       const result = guardCortexOutputWithFactEcho(output, {
@@ -166,8 +165,7 @@ describe('FactEchoPipeline', () => {
     it('strict: missing fact_echo triggers failure', () => {
       const output: CortexOutput = {
         internal_thought: 'Thinking...',
-        speech_content: 'Hello!',
-        mood_shift: { energy_delta: 0, confidence_delta: 0, stress_delta: 0 }
+        speech_content: 'Hello!'
         // No fact_echo
       };
 
@@ -184,8 +182,7 @@ describe('FactEchoPipeline', () => {
 
       const output: CortexOutput = {
         internal_thought: 'Thinking...',
-        speech_content: 'Hello!',
-        mood_shift: { energy_delta: 0, confidence_delta: 0, stress_delta: 0 }
+        speech_content: 'Hello!'
       };
 
       const result = guardCortexOutputWithFactEcho(output, {
@@ -214,7 +211,7 @@ describe('FactEchoPipeline', () => {
       const output: CortexOutput = {
         internal_thought: 'Checking price...',
         speech_content: 'Bitcoin jest na poziomie 97500 USD.',
-        mood_shift: { energy_delta: 0, confidence_delta: 0, stress_delta: 0 },
+        stimulus_response: { valence: 'neutral', salience: 'medium', novelty: 'routine' },
         fact_echo: { btc_price: 97500 }
       };
 
@@ -229,7 +226,7 @@ describe('FactEchoPipeline', () => {
       const output: CortexOutput = {
         internal_thought: 'Checking price...',
         speech_content: 'Bitcoin jest na poziomie 100000 USD.',
-        mood_shift: { energy_delta: 0, confidence_delta: 0, stress_delta: 0 },
+        stimulus_response: { valence: 'neutral', salience: 'medium', novelty: 'routine' },
         fact_echo: { btc_price: 100000 }  // Wrong! System says 97500
       };
 

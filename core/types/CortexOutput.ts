@@ -7,7 +7,7 @@
  * @module core/types/CortexOutput
  */
 
-import type { MetaStatesDelta } from './MetaStates';
+// MetaStatesDelta removed - emotions computed by EmotionEngine, not LLM
 
 /**
  * Tool Intent - Strukturalna intencja użycia narzędzia
@@ -53,7 +53,31 @@ export interface FactEcho {
 }
 
 /**
+ * StimulusResponse - LLM's SYMBOLIC assessment (not numeric!)
+ * 
+ * PIONEER ARCHITECTURE (13/10):
+ * LLM classifies the interaction symbolically.
+ * EmotionEngine computes actual emotion deltas.
+ * 
+ * This prevents LLM from controlling system dynamics.
+ */
+export interface StimulusResponse {
+  /** Overall emotional tone */
+  valence?: 'positive' | 'negative' | 'neutral';
+  
+  /** How important is this interaction? */
+  salience?: 'low' | 'medium' | 'high';
+  
+  /** How novel is the input? */
+  novelty?: 'routine' | 'interesting' | 'surprising';
+}
+
+/**
  * Output contract from LLM
+ * 
+ * ARCHITECTURE CHANGE (13/10):
+ * - REMOVED: mood_shift (numeric deltas) - LLM cannot control emotions
+ * - ADDED: stimulus_response (symbolic) - LLM can classify, not compute
  */
 export interface CortexOutput {
   /** Wewnętrzna myśl agenta (nie pokazywana userowi) */
@@ -62,8 +86,8 @@ export interface CortexOutput {
   /** Treść do wypowiedzenia (pokazywana userowi) */
   speech_content: string;
   
-  /** Zmiany nastroju wynikające z interakcji */
-  mood_shift: MetaStatesDelta;
+  /** SYMBOLIC assessment of interaction (optional) */
+  stimulus_response?: StimulusResponse;
   
   /**
    * PRISM ARCHITECTURE (13/10): Fact Echo
@@ -100,9 +124,7 @@ export function isValidCortexOutput(obj: unknown): obj is CortexOutput {
   
   const baseValid = (
     typeof o.internal_thought === 'string' &&
-    typeof o.speech_content === 'string' &&
-    typeof o.mood_shift === 'object' &&
-    o.mood_shift !== null
+    typeof o.speech_content === 'string'
   );
   
   // tool_intent jest opcjonalne, ale jeśli jest (i nie jest null), musi być poprawne
@@ -136,9 +158,9 @@ export function isValidToolIntent(intent: unknown): intent is ToolIntent {
 export const FALLBACK_CORTEX_OUTPUT: Readonly<CortexOutput> = {
   internal_thought: 'Parse error - using fallback',
   speech_content: 'I encountered an issue processing that. Could you rephrase?',
-  mood_shift: {
-    energy_delta: -5,
-    confidence_delta: -10,
-    stress_delta: 5
+  stimulus_response: {
+    valence: 'negative',
+    salience: 'low',
+    novelty: 'routine'
   }
 } as const;

@@ -70,7 +70,7 @@ describe('PrismPipeline', () => {
       const output = {
         internal_thought: 'As an AI, I should think...',  // Should NOT be checked
         speech_content: 'Mam 50% energii.',
-        mood_shift: { energy_delta: 0, confidence_delta: 0, stress_delta: 0 }
+        stimulus_response: { valence: 'neutral', salience: 'medium', novelty: 'routine' }
       };
 
       const result = guardCortexOutput(output, {
@@ -86,7 +86,7 @@ describe('PrismPipeline', () => {
       const output = {
         internal_thought: 'Thinking...',
         speech_content: 'As an AI, I have 50% energy.',
-        mood_shift: { energy_delta: 0, confidence_delta: 0, stress_delta: 0 }
+        stimulus_response: { valence: 'neutral', salience: 'medium', novelty: 'routine' }
       };
 
       const result = guardCortexOutput(output, {

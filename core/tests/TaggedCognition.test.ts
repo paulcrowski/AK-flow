@@ -63,7 +63,7 @@ describe('Tagged Cognition & Persona-Less Cortex', () => {
         const baseOutput: CortexOutput = {
             internal_thought: "I need to visualzie this.",
             speech_content: "Let me show you.",
-            mood_shift: { energy_delta: 0, confidence_delta: 0, stress_delta: 0 }, // Corrected property names
+            stimulus_response: { valence: 'neutral', salience: 'medium', novelty: 'routine' }, // Corrected property names
             tool_intent: {
                 tool: 'VISUALIZE',
                 query: 'spaceship',
@@ -96,7 +96,7 @@ describe('Tagged Cognition & Persona-Less Cortex', () => {
             const contaminatedOutput: CortexOutput = {
                 internal_thought: "I will use [SEARCH: weather] to find out.",
                 speech_content: "Checking weather.",
-                mood_shift: { energy_delta: 0, confidence_delta: 0, stress_delta: 0 }
+                stimulus_response: { valence: 'neutral', salience: 'medium', novelty: 'routine' }
             };
 
             const decision = processDecisionGate(contaminatedOutput, { energy: 100 } as SomaState);

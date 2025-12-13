@@ -170,7 +170,7 @@ describe('Prompt Layer Verification', () => {
     const validOutput = {
       internal_thought: 'This is private',
       speech_content: 'This is public',
-      mood_shift: { energy_delta: 0, confidence_delta: 0, stress_delta: 0 }
+      stimulus_response: { valence: 'neutral', salience: 'medium', novelty: 'routine' }
     };
 
     const invalidOutput = {

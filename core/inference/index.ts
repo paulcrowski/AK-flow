@@ -7,8 +7,7 @@
 export {
   generateFromCortexState,
   generateWithSearch,
-  mapCortexOutputToLegacy,
+  mapStimulusResponseToWeights,
   type InferenceConfig,
-  type LegacyCortexResponse,
-  type LegacyMoodShift
+  type StimulusWeights
 } from './CortexInference';

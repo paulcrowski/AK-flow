@@ -30,16 +30,20 @@ export interface EmotionalStimulus {
 interface SynapticMemory {
     lastFearDelta: number;
     lastCuriosityDelta: number;
+    lastSatisfactionDelta: number;
+    lastFrustrationDelta: number;
     lastShiftTime: number;
-    consecutiveSameDirection: { fear: number; curiosity: number };
+    consecutiveSameDirection: { fear: number; curiosity: number; satisfaction: number; frustration: number };
 }
 
 // Module-level synaptic memory (like long-term potentiation state)
 let synapticMemory: SynapticMemory = {
     lastFearDelta: 0,
     lastCuriosityDelta: 0,
+    lastSatisfactionDelta: 0,
+    lastFrustrationDelta: 0,
     lastShiftTime: 0,
-    consecutiveSameDirection: { fear: 0, curiosity: 0 }
+    consecutiveSameDirection: { fear: 0, curiosity: 0, satisfaction: 0, frustration: 0 }
 };
 
 /**
@@ -49,9 +53,37 @@ export function resetSynapticMemory(): void {
     synapticMemory = {
         lastFearDelta: 0,
         lastCuriosityDelta: 0,
+        lastSatisfactionDelta: 0,
+        lastFrustrationDelta: 0,
         lastShiftTime: 0,
-        consecutiveSameDirection: { fear: 0, curiosity: 0 }
+        consecutiveSameDirection: { fear: 0, curiosity: 0, satisfaction: 0, frustration: 0 }
     };
+}
+
+type EmotionDimension = 'fear' | 'curiosity' | 'satisfaction' | 'frustration';
+
+/**
+ * Get last delta for a given emotion dimension
+ */
+function getLastDelta(dimension: EmotionDimension): number {
+    switch (dimension) {
+        case 'fear': return synapticMemory.lastFearDelta;
+        case 'curiosity': return synapticMemory.lastCuriosityDelta;
+        case 'satisfaction': return synapticMemory.lastSatisfactionDelta;
+        case 'frustration': return synapticMemory.lastFrustrationDelta;
+    }
+}
+
+/**
+ * Set last delta for a given emotion dimension
+ */
+function setLastDelta(dimension: EmotionDimension, value: number): void {
+    switch (dimension) {
+        case 'fear': synapticMemory.lastFearDelta = value; break;
+        case 'curiosity': synapticMemory.lastCuriosityDelta = value; break;
+        case 'satisfaction': synapticMemory.lastSatisfactionDelta = value; break;
+        case 'frustration': synapticMemory.lastFrustrationDelta = value; break;
+    }
 }
 
 /**
@@ -62,20 +94,18 @@ export function resetSynapticMemory(): void {
  * 2. Refractory Period - recent shifts reduce sensitivity (neuron recharge)
  * 3. Habituation - same-direction shifts have diminishing returns
  * 
- * @param rawDelta - Raw delta from LLM
- * @param dimension - 'fear' or 'curiosity'
+ * @param rawDelta - Raw delta from EmotionEngine
+ * @param dimension - emotion dimension
  * @returns Biologically damped delta
  */
-function biologicalDamping(rawDelta: number, dimension: 'fear' | 'curiosity'): number {
+function biologicalDamping(rawDelta: number, dimension: EmotionDimension): number {
     const config = getLimbicConfig();
     const now = Date.now();
     
     // 1. EMA SMOOTHING (α = 0.4 → 40% new, 60% old)
     // Like synaptic integration - signals blend over time
     const alpha = config.emaSmoothingAlpha ?? 0.4;
-    const lastDelta = dimension === 'fear' 
-        ? synapticMemory.lastFearDelta 
-        : synapticMemory.lastCuriosityDelta;
+    const lastDelta = getLastDelta(dimension);
     const smoothedDelta = alpha * rawDelta + (1 - alpha) * lastDelta;
     
     // 2. REFRACTORY PERIOD
@@ -97,11 +127,7 @@ function biologicalDamping(rawDelta: number, dimension: 'fear' | 'curiosity'): n
     const dampedDelta = smoothedDelta * refractoryFactor * habituationFactor;
     
     // Update synaptic memory
-    if (dimension === 'fear') {
-        synapticMemory.lastFearDelta = smoothedDelta;
-    } else {
-        synapticMemory.lastCuriosityDelta = smoothedDelta;
-    }
+    setLastDelta(dimension, smoothedDelta);
     
     // Track same-direction shifts for habituation
     const sameDirection = (rawDelta > 0 && lastDelta > 0) || (rawDelta < 0 && lastDelta < 0);
@@ -154,12 +180,14 @@ export const LimbicSystem = {
             frustration += stimulus.frustration_delta;
         }
 
-        // Clamp all values to [0, 1]
+        // HARD FLOOR: Emotions cannot drop below baseline (tonic activity)
+        // This is the neurobiological principle that neurons are NEVER truly "off"
+        const config = getLimbicConfig();
         return {
-            fear: Math.max(0, Math.min(1, fear)),
-            curiosity: Math.max(0, Math.min(1, curiosity)),
-            satisfaction: Math.max(0, Math.min(1, satisfaction)),
-            frustration: Math.max(0, Math.min(1, frustration))
+            fear: Math.max(config.fearBaseline, Math.min(1, fear)),
+            curiosity: Math.max(config.curiosityBaseline, Math.min(1, curiosity)),
+            satisfaction: Math.max(config.satisfactionBaseline, Math.min(1, satisfaction)),
+            frustration: Math.max(config.frustrationBaseline, Math.min(1, frustration))
         };
     },
 
@@ -205,13 +233,20 @@ export const LimbicSystem = {
      */
     applyMoodShift(
         currentLimbic: LimbicState,
-        moodShift: { fear_delta?: number; curiosity_delta?: number }
+        moodShift: { 
+            fear_delta?: number; 
+            curiosity_delta?: number;
+            satisfaction_delta?: number;
+            frustration_delta?: number;
+        }
     ): LimbicState {
         const config = getLimbicConfig();
         
-        // Apply biological damping to raw LLM deltas
+        // Apply biological damping to raw deltas
         let dampedFear: number | undefined;
         let dampedCuriosity: number | undefined;
+        let dampedSatisfaction: number | undefined;
+        let dampedFrustration: number | undefined;
         
         if (moodShift.fear_delta !== undefined) {
             dampedFear = biologicalDamping(moodShift.fear_delta, 'fear');
@@ -232,6 +267,15 @@ export const LimbicSystem = {
             }
         }
         
+        // PIONEER: Apply damping to satisfaction and frustration too
+        if (moodShift.satisfaction_delta !== undefined) {
+            dampedSatisfaction = biologicalDamping(moodShift.satisfaction_delta, 'satisfaction');
+        }
+        
+        if (moodShift.frustration_delta !== undefined) {
+            dampedFrustration = biologicalDamping(moodShift.frustration_delta, 'frustration');
+        }
+        
         // Safety net: final clamp (should rarely trigger with biological damping)
         const MAX_DELTA = config.maxMoodShiftDelta;
         const safeClamp = (delta: number | undefined): number | undefined => {
@@ -245,7 +289,9 @@ export const LimbicSystem = {
         
         return LimbicSystem.updateEmotionalState(currentLimbic, {
             fear_delta: safeClamp(dampedFear),
-            curiosity_delta: safeClamp(dampedCuriosity)
+            curiosity_delta: safeClamp(dampedCuriosity),
+            satisfaction_delta: safeClamp(dampedSatisfaction),
+            frustration_delta: safeClamp(dampedFrustration)
         });
     },
 

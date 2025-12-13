@@ -213,14 +213,17 @@ INSTRUCTIONS:
           properties: {
             internal_thought: { type: Type.STRING },
             speech_content: { type: Type.STRING },
-            mood_shift: {
+            // PIONEER ARCHITECTURE (13/10): stimulus_response replaces mood_shift
+            // LLM classifies SYMBOLICALLY, EmotionEngine computes NUMERICALLY
+            stimulus_response: {
               type: Type.OBJECT,
+              nullable: true,
+              description: 'Your SYMBOLIC assessment. System computes actual emotions.',
               properties: {
-                energy_delta: { type: Type.NUMBER },
-                confidence_delta: { type: Type.NUMBER },
-                stress_delta: { type: Type.NUMBER }
-              },
-              required: ['energy_delta', 'confidence_delta', 'stress_delta']
+                valence: { type: Type.STRING },  // positive | negative | neutral
+                salience: { type: Type.STRING }, // low | medium | high
+                novelty: { type: Type.STRING }   // routine | interesting | surprising
+              }
             },
             // ARCHITEKTURA 3-WARSTWOWA: tool_intent dla Decision Gate
             tool_intent: {
@@ -248,7 +251,7 @@ INSTRUCTIONS:
               }
             }
           },
-          required: ['internal_thought', 'speech_content', 'mood_shift']
+          required: ['internal_thought', 'speech_content']
         }
       }
     });
@@ -259,49 +262,60 @@ INSTRUCTIONS:
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// LEGACY MAPPING (Centralized - prevents shotgun surgery)
+// STIMULUS RESPONSE MAPPING (PIONEER ARCHITECTURE 13/10)
 // ═══════════════════════════════════════════════════════════════════════════
 
 /**
- * Legacy response format for backward compatibility
+ * Map LLM's symbolic stimulus_response to EmotionEngine signals
+ * 
+ * ARCHITECTURE:
+ * - LLM outputs SYMBOLIC classification (valence, salience, novelty)
+ * - This function converts symbols to numeric weights for EmotionEngine
+ * - EmotionEngine then computes actual emotion deltas
+ * 
+ * WHY NOT NUMERIC FROM LLM?
+ * - LLM cannot maintain system invariants
+ * - LLM doesn't know emotional trajectory
+ * - Symbolic = bounded, safe, testable
  */
-export interface LegacyMoodShift {
-  fear_delta: number;
-  curiosity_delta: number;
+export interface StimulusWeights {
+  valence_weight: number;   // -1 to +1
+  salience_weight: number;  // 0 to 1
+  novelty_weight: number;   // 0 to 1
 }
 
-export interface LegacyCortexResponse {
-  text: string;
-  thought: string;
-  prediction: string;
-  moodShift: LegacyMoodShift;
-}
-
-/**
- * CENTRAL MAPPING FUNCTION
- * 
- * Converts CortexOutput (stress_delta: -20..+20) to Legacy format (fear_delta: -1..+1)
- * 
- * WHY THIS EXISTS:
- * - LLM returns stress_delta in -20 to +20 scale (UI-friendly)
- * - Limbic system uses 0 to 1 scale (normalized)
- * - This is the SINGLE POINT of conversion - no duplication
- * 
- * RULE: If you need CortexOutput → Legacy format, use THIS function.
- */
-export function mapCortexOutputToLegacy(output: CortexOutput): LegacyCortexResponse {
-  // CRITICAL: Normalize -20..+20 to -1..+1 scale for limbic system
-  const normalizedFearDelta = (output.mood_shift.stress_delta || 0) / 20;
-  const normalizedCuriosityDelta = (output.mood_shift.confidence_delta || 0) / 20;
+export function mapStimulusResponseToWeights(
+  stimulus?: { valence?: string; salience?: string; novelty?: string }
+): StimulusWeights {
+  if (!stimulus) {
+    return { valence_weight: 0, salience_weight: 0.3, novelty_weight: 0.1 };
+  }
+  
+  // Valence: positive = +1, negative = -1, neutral = 0
+  const valenceMap: Record<string, number> = {
+    'positive': 0.5,
+    'negative': -0.5,
+    'neutral': 0
+  };
+  
+  // Salience: how much to amplify the effect
+  const salienceMap: Record<string, number> = {
+    'low': 0.2,
+    'medium': 0.5,
+    'high': 0.8
+  };
+  
+  // Novelty: contributes to curiosity
+  const noveltyMap: Record<string, number> = {
+    'routine': 0.1,
+    'interesting': 0.4,
+    'surprising': 0.7
+  };
   
   return {
-    text: output.speech_content,
-    thought: output.internal_thought,
-    prediction: "User is observing.",
-    moodShift: {
-      fear_delta: normalizedFearDelta,
-      curiosity_delta: normalizedCuriosityDelta
-    }
+    valence_weight: valenceMap[stimulus.valence || 'neutral'] ?? 0,
+    salience_weight: salienceMap[stimulus.salience || 'medium'] ?? 0.3,
+    novelty_weight: noveltyMap[stimulus.novelty || 'routine'] ?? 0.1
   };
 }
 
@@ -342,17 +356,18 @@ Use Google Search to find information, then generate your response as JSON.`;
           properties: {
             internal_thought: { type: Type.STRING },
             speech_content: { type: Type.STRING },
-            mood_shift: {
+            // PIONEER ARCHITECTURE: stimulus_response (symbolic, not numeric)
+            stimulus_response: {
               type: Type.OBJECT,
+              nullable: true,
               properties: {
-                energy_delta: { type: Type.NUMBER },
-                confidence_delta: { type: Type.NUMBER },
-                stress_delta: { type: Type.NUMBER }
-              },
-              required: ['energy_delta', 'confidence_delta', 'stress_delta']
+                valence: { type: Type.STRING },
+                salience: { type: Type.STRING },
+                novelty: { type: Type.STRING }
+              }
             }
           },
-          required: ['internal_thought', 'speech_content', 'mood_shift']
+          required: ['internal_thought', 'speech_content']
         }
       }
     });

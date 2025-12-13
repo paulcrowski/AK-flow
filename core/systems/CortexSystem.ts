@@ -15,8 +15,11 @@ import { generateUUID } from '../../utils/uuid';
 import { decideExpression, computeNovelty, estimateSocialCost } from './ExpressionPolicy';
 // REFACTOR: Import LimbicSystem for centralized emotion calculations
 import * as LimbicSystem from './LimbicSystem';
+// PIONEER ARCHITECTURE (13/10): EmotionEngine computes emotions from signals, not LLM
+import { EmotionEngine } from './EmotionEngine';
+import { mapStimulusResponseToWeights } from '../inference/CortexInference';
 import { buildMinimalCortexState } from '../builders';
-import { generateFromCortexState, mapCortexOutputToLegacy } from '../inference';
+import { generateFromCortexState } from '../inference';
 import { isFeatureEnabled } from '../config';
 import { eventBus } from '../EventBus';
 import { processDecisionGate, resetTurnState } from './DecisionGate';
@@ -266,14 +269,24 @@ export namespace CortexSystem {
                     id: generateUUID()
                 });
 
-                // Episode detection logic could be reused here or moved to event bus
-
-                // Use CENTRALIZED mapping function (prevents shotgun surgery)
-                const legacy = mapCortexOutputToLegacy(output);
+                // PIONEER ARCHITECTURE: Compute emotions from signals, not LLM
+                const stimulusWeights = mapStimulusResponseToWeights(output.stimulus_response);
+                
+                const emotionSignals = {
+                    ...EmotionEngine.createIdleSignals(currentSoma.cognitiveLoad, 0),
+                    novelty: stimulusWeights.novelty_weight,
+                    reward_signal: stimulusWeights.valence_weight * stimulusWeights.salience_weight,
+                    prediction_error: stimulusWeights.novelty_weight > 0.5 ? 0.3 : 0,
+                    prediction_valence: stimulusWeights.valence_weight > 0 ? 'positive' as const : 
+                                       stimulusWeights.valence_weight < 0 ? 'negative' as const : 'neutral' as const
+                };
+                
+                const emotionDeltas = EmotionEngine.computeDeltas(emotionSignals, currentLimbic);
+                
                 return {
-                    responseText: legacy.text,
-                    internalThought: legacy.thought,
-                    moodShift: legacy.moodShift
+                    responseText: output.speech_content,
+                    internalThought: output.internal_thought,
+                    moodShift: emotionDeltas  // Computed by EmotionEngine
                 };
             }
         }
@@ -300,30 +313,41 @@ export namespace CortexSystem {
             id: generateUUID()
         });
 
-        // 5. FAZA 5: Detect and store episode if emotional shift is significant
-        // REFACTOR: Use LimbicSystem instead of manual calculation (Single Source of Truth)
-        if (cortexResult.nextLimbic) {
-            const emotionAfter = LimbicSystem.updateEmotionalState(currentLimbic, {
-                fear_delta: cortexResult.nextLimbic.fear_delta,
-                curiosity_delta: cortexResult.nextLimbic.curiosity_delta
-            });
+        // 5. PIONEER ARCHITECTURE (13/10): Compute emotions from signals, not LLM
+        // LLM provides symbolic classification, EmotionEngine computes actual deltas
+        const stimulusWeights = mapStimulusResponseToWeights(cortexResult.stimulus_response);
+        
+        // Build emotion signals from system state + LLM classification
+        const emotionSignals = {
+            ...EmotionEngine.createIdleSignals(currentSoma.cognitiveLoad, 0),
+            novelty: stimulusWeights.novelty_weight,
+            reward_signal: stimulusWeights.valence_weight * stimulusWeights.salience_weight,
+            prediction_error: stimulusWeights.novelty_weight > 0.5 ? 0.3 : 0,
+            prediction_valence: stimulusWeights.valence_weight > 0 ? 'positive' as const : 
+                               stimulusWeights.valence_weight < 0 ? 'negative' as const : 'neutral' as const
+        };
+        
+        // Compute emotion deltas deterministically
+        const emotionDeltas = EmotionEngine.computeDeltas(emotionSignals, currentLimbic);
+        
+        // Apply deltas via LimbicSystem (with EMA, refractory, etc.)
+        const emotionAfter = LimbicSystem.updateEmotionalState(currentLimbic, emotionDeltas);
 
-            const agentId = getCurrentAgentId();
-            if (agentId) {
-                // Fire and forget - don't block response
-                EpisodicMemoryService.detectAndStore(agentId, {
-                    event: `User said: "${text.slice(0, 100)}..." | Agent responded about: ${cortexResult.internalThought?.slice(0, 50) || 'interaction'}`,
-                    emotionBefore: currentLimbic,
-                    emotionAfter,
-                    context: conversationHistory.slice(-2).map(t => t.text).join(' | ')
-                }).catch(err => console.warn('[CortexSystem] Episode detection failed:', err));
-            }
+        const agentId = getCurrentAgentId();
+        if (agentId) {
+            // Fire and forget - don't block response
+            EpisodicMemoryService.detectAndStore(agentId, {
+                event: `User said: "${text.slice(0, 100)}..." | Agent responded about: ${cortexResult.internalThought?.slice(0, 50) || 'interaction'}`,
+                emotionBefore: currentLimbic,
+                emotionAfter,
+                context: conversationHistory.slice(-2).map(t => t.text).join(' | ')
+            }).catch(err => console.warn('[CortexSystem] Episode detection failed:', err));
         }
 
         return {
             responseText: cortexResult.responseText,
             internalThought: cortexResult.internalThought,
-            moodShift: cortexResult.nextLimbic
+            moodShift: emotionDeltas  // Now computed by EmotionEngine, not LLM
         };
     }
 
