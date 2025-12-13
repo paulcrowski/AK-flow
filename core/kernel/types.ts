@@ -61,6 +61,8 @@ export type KernelEventType =
   | 'TOGGLE_AUTONOMY'         // Switch autonomy mode
   | 'TOGGLE_CHEMISTRY'        // Enable/disable neurochemistry
   | 'TOGGLE_POETIC'           // Switch poetic mode
+  | 'THOUGHT_GENERATED'       // New thought added to history
+  | 'HYDRATE'                 // Restore state from storage
   | 'STATE_OVERRIDE'          // Debug: manual state injection
   | 'RESET';                  // Full kernel reset
 

@@ -62,6 +62,18 @@ export function kernelReducer(state: KernelState, event: KernelEvent): KernelRed
     case 'TOGGLE_POETIC':
       return handleTogglePoetic(state, outputs);
       
+    case 'GOAL_FORMED':
+      return handleGoalFormed(state, event, outputs);
+      
+    case 'GOAL_COMPLETED':
+      return handleGoalCompleted(state, outputs);
+      
+    case 'THOUGHT_GENERATED':
+      return handleThoughtGenerated(state, event, outputs);
+      
+    case 'HYDRATE':
+      return handleHydrate(state, event, outputs);
+      
     case 'STATE_OVERRIDE':
       return handleStateOverride(state, event, outputs);
       
@@ -429,6 +441,122 @@ function handleReset(state: KernelState, outputs: KernelOutput[]): KernelReducer
   outputs.push({
     type: 'LOG',
     payload: { message: 'KERNEL RESET - Full State Reset' }
+  });
+  
+  return { nextState, outputs };
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// GOAL HANDLERS
+// ═══════════════════════════════════════════════════════════════════════════
+
+function handleGoalFormed(state: KernelState, event: KernelEvent, outputs: KernelOutput[]): KernelReducerResult {
+  const payload = event.payload as { goal: string; priority: number } | undefined;
+  if (!payload?.goal) {
+    return { nextState: state, outputs };
+  }
+  
+  // Create proper Goal object
+  const newGoal = {
+    id: `goal_${event.timestamp}`,
+    description: payload.goal,
+    priority: payload.priority ?? 0.5,
+    progress: 0,
+    source: 'user' as const,
+    createdAt: event.timestamp
+  };
+  
+  const nextState = {
+    ...state,
+    goalState: {
+      ...state.goalState,
+      activeGoal: newGoal,
+      goalsFormedTimestamps: [
+        ...state.goalState.goalsFormedTimestamps.slice(-9),
+        event.timestamp
+      ],
+      lastGoals: [
+        ...state.goalState.lastGoals.slice(-4),
+        { description: payload.goal, timestamp: event.timestamp, source: 'kernel' }
+      ]
+    }
+  };
+  
+  outputs.push({
+    type: 'LOG',
+    payload: { message: `GOAL FORMED: ${payload.goal}` }
+  });
+  
+  return { nextState, outputs };
+}
+
+function handleGoalCompleted(state: KernelState, outputs: KernelOutput[]): KernelReducerResult {
+  const completedGoal = state.goalState.activeGoal;
+  
+  const nextState = {
+    ...state,
+    goalState: {
+      ...state.goalState,
+      activeGoal: null
+    }
+  };
+  
+  if (completedGoal) {
+    outputs.push({
+      type: 'LOG',
+      payload: { message: `GOAL COMPLETED: ${completedGoal}` }
+    });
+  }
+  
+  return { nextState, outputs };
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// THOUGHT & HYDRATE HANDLERS
+// ═══════════════════════════════════════════════════════════════════════════
+
+function handleThoughtGenerated(state: KernelState, event: KernelEvent, outputs: KernelOutput[]): KernelReducerResult {
+  const payload = event.payload as { thought: string } | undefined;
+  if (!payload?.thought) {
+    return { nextState: state, outputs };
+  }
+  
+  // Add to thought history (bounded)
+  const newHistory = [...state.thoughtHistory, payload.thought];
+  if (newHistory.length > MAX_THOUGHT_HISTORY) {
+    newHistory.shift();
+  }
+  
+  return {
+    nextState: {
+      ...state,
+      thoughtHistory: newHistory
+    },
+    outputs
+  };
+}
+
+function handleHydrate(state: KernelState, event: KernelEvent, outputs: KernelOutput[]): KernelReducerResult {
+  const payload = event.payload as { state: Partial<KernelState> } | undefined;
+  if (!payload?.state) {
+    return { nextState: state, outputs };
+  }
+  
+  // Merge hydrated state with current, preserving structure
+  const nextState = {
+    ...state,
+    ...payload.state,
+    // Deep merge for nested objects
+    limbic: { ...state.limbic, ...payload.state.limbic },
+    soma: { ...state.soma, ...payload.state.soma },
+    neuro: { ...state.neuro, ...payload.state.neuro },
+    goalState: { ...state.goalState, ...payload.state.goalState },
+    resonance: { ...state.resonance, ...payload.state.resonance },
+  };
+  
+  outputs.push({
+    type: 'LOG',
+    payload: { message: 'STATE HYDRATED from storage' }
   });
   
   return { nextState, outputs };
