@@ -206,6 +206,21 @@ export const SYSTEM_CONFIG = {
     
     /** Habituation decay per consecutive same-direction shift */
     habituationDecayRate: 0.2,
+    
+    // ═══════════════════════════════════════════════════════════════════════
+    // BASELINE ATTRACTORS (Tonic Activity - neurons are never "off")
+    // ═══════════════════════════════════════════════════════════════════════
+    /** Fear baseline - healthy vigilance, not paranoia */
+    fearBaseline: 0.05,
+    
+    /** Curiosity baseline - always some drive to explore */
+    curiosityBaseline: 0.3,
+    
+    /** Frustration baseline - zero tolerance is healthy */
+    frustrationBaseline: 0.0,
+    
+    /** Satisfaction baseline - neutral contentment */
+    satisfactionBaseline: 0.5,
   },
 
   // ─────────────────────────────────────────────────────────────────────────

@@ -164,25 +164,33 @@ export const LimbicSystem = {
     },
 
     /**
-     * Apply emotional homeostasis (decay towards baseline).
+     * Apply emotional homeostasis (decay towards baseline attractors).
      * 
-     * LOGIC:
-     * - Fear, Curiosity, Frustration decay to 0.0
-     * - Satisfaction decays to 0.5
-     * - Factor 0.995 provides slow, natural cooling
+     * NEUROBIOLOGICAL MODEL:
+     * - Neurons have TONIC ACTIVITY - they're never truly "off"
+     * - Emotions converge to healthy baselines, not zero
+     * - This prevents "emotional death" where fear/curiosity flatline
+     * 
+     * BASELINES (from config):
+     * - Fear → 0.05 (healthy vigilance)
+     * - Curiosity → 0.3 (drive to explore)
+     * - Frustration → 0.0 (zero tolerance is healthy)
+     * - Satisfaction → 0.5 (neutral contentment)
      */
     applyHomeostasis(current: LimbicState): LimbicState {
-        const decay = (value: number, target: number) => {
-            const factor = 0.995; // slow decay
-            const next = value * factor + target * (1 - factor);
+        const config = getLimbicConfig();
+        const factor = config.homeostasisDecayFactor;
+        
+        const decay = (value: number, baseline: number) => {
+            const next = value * factor + baseline * (1 - factor);
             return Math.min(1, Math.max(0, next));
         };
 
         return {
-            fear: decay(current.fear, 0.0),
-            curiosity: decay(current.curiosity, 0.0),
-            frustration: decay(current.frustration, 0.0),
-            satisfaction: decay(current.satisfaction, 0.5)
+            fear: decay(current.fear, config.fearBaseline),
+            curiosity: decay(current.curiosity, config.curiosityBaseline),
+            frustration: decay(current.frustration, config.frustrationBaseline),
+            satisfaction: decay(current.satisfaction, config.satisfactionBaseline)
         };
     },
 
