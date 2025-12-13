@@ -17,6 +17,7 @@ export {
   buildMinimalCortexState,
   setCachedIdentity,
   clearIdentityCache,
+  refreshIdentityCache,
   ESTIMATED_MINIMAL_TOKENS,
   type MinimalBuilderInput
 } from './MinimalCortexStateBuilder';

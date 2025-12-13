@@ -18,6 +18,7 @@ import { createProcessOutputForTools } from '../utils/toolParser';
 import { DreamConsolidationService, BASELINE_NEURO } from '../services/DreamConsolidationService';
 // REFACTOR: Single WakeService for all wake logic (DRY principle)
 import { executeWakeProcess } from '../core/services/WakeService';
+import { refreshIdentityCache } from '../core/builders';
 
 // Helper for delays
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
@@ -579,6 +580,11 @@ export const useCognitiveKernel = (loadedIdentity?: AgentIdentity | null) => {
         if (!stateRef.current.autonomousMode) {
             isLoopRunning.current = false;
             return;
+        }
+
+        // IDENTITY CACHE REFRESH: Prevent UNINITIALIZED_AGENT panic after TTL
+        if (loadedIdentityRef.current?.id) {
+            refreshIdentityCache(loadedIdentityRef.current.id);
         }
 
         const currentState = stateRef.current;

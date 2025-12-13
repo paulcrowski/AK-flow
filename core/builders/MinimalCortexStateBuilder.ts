@@ -31,7 +31,8 @@ interface CachedIdentity {
 }
 
 const identityCache = new Map<string, CachedIdentity>();
-const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minut
+const CACHE_TTL_MS = 30 * 60 * 1000; // 30 minut (increased from 5 to prevent identity loss)
+const CACHE_WARN_MS = 15 * 60 * 1000; // Warn after 15 minutes
 
 /**
  * Ustawia tożsamość w cache (wywoływane przy starcie sesji)
@@ -54,14 +55,34 @@ export function setCachedIdentity(
 }
 
 /**
+ * Refreshes cache timestamp (sliding window TTL)
+ */
+export function refreshIdentityCache(agentId: string): void {
+  const cached = identityCache.get(agentId);
+  if (cached) {
+    cached.loadedAt = Date.now();
+  }
+}
+
+/**
  * Pobiera tożsamość z cache
+ * CRITICAL: Never returns null for existing cache - only logs warning after TTL
+ * This prevents UNINITIALIZED_AGENT panic attacks
  */
 function getCachedIdentity(agentId: string): CachedIdentity | null {
   const cached = identityCache.get(agentId);
   if (!cached) return null;
   
-  // Check TTL
-  if (Date.now() - cached.loadedAt > CACHE_TTL_MS) {
+  const age = Date.now() - cached.loadedAt;
+  
+  // Soft warning at 15 minutes - identity should be refreshed
+  if (age > CACHE_WARN_MS && age <= CACHE_TTL_MS) {
+    console.warn(`[MinimalCortex] ⚠️ Identity cache stale for ${cached.coreIdentity.name} (${Math.round(age/60000)}min). Consider refreshing.`);
+  }
+  
+  // Hard TTL at 30 minutes - delete cache, force reload
+  if (age > CACHE_TTL_MS) {
+    console.error(`[MinimalCortex] ❌ Identity cache EXPIRED for ${cached.coreIdentity.name} (${Math.round(age/60000)}min). Clearing.`);
     identityCache.delete(agentId);
     return null;
   }
