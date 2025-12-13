@@ -100,7 +100,7 @@ describe('HardFacts Wiring', () => {
       verbosity: 0.5,
       arousal: 0.5,
       conscientiousness: 0.5,
-      social_awareness: 0.5,
+      socialAwareness: 0.5,
       curiosity: 0.5
     });
 
@@ -131,7 +131,8 @@ describe('Identity Wiring', () => {
   });
 
   it('MinimalCortexStateBuilder fallback is UNINITIALIZED_AGENT', async () => {
-    const { buildMinimalCortexState, clearIdentityCache } = await import('../../core/builders');
+    // Import directly from MinimalCortexStateBuilder to avoid supabase dependency chain
+    const { buildMinimalCortexState, clearIdentityCache } = await import('../../core/builders/MinimalCortexStateBuilder');
 
     // Clear cache to trigger fallback
     clearIdentityCache();

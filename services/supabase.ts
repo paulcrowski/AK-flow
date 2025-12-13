@@ -114,25 +114,19 @@ export const MemoryService = {
         return [];
       }
       
-      // Use RLS diagnostics wrapper
-      const result = await supabase
+      const { data, error } = await supabase
         .from('memories')
         .select('*')
         .eq('agent_id', currentAgentId)
         .order('created_at', { ascending: false })
-        .limit(limit)
-        .withRLSDiagnostics('recallRecent');
+        .limit(limit);
       
-      if (result.error) {
-          console.warn("Recall Error (ignoring):", result.error.message);
+      if (error) {
+          console.warn("Recall Error (ignoring):", error.message);
           return [];
       }
       
-      // Check for RLS issues
-      if (result.isRLSIssue) {
-          console.warn("RLS DIAGNOSTIC:", result.rlsMessage);
-          // You could add user feedback here or trigger a re-authentication flow
-      }
+      const result = { data, error };
 
       return (result.data || []).map(item => ({
         id: item.id,

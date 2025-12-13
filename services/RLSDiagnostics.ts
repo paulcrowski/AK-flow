@@ -57,12 +57,11 @@ export class RLSDiagnostics {
      * Gets current user role from JWT
      * @returns Current user role or 'anonymous' if not available
      */
-    static getCurrentUserRole(): string {
+    static async getCurrentUserRole(): Promise<string> {
         try {
-            const session = supabase.auth.getSession();
-            if (session && session.user) {
-                // @ts-ignore - accessing role from JWT
-                return session.user.role || 'authenticated';
+            const { data } = await supabase.auth.getSession();
+            if (data?.session?.user) {
+                return 'authenticated';
             }
             return 'anonymous';
         } catch (error) {
@@ -99,10 +98,10 @@ export class RLSDiagnostics {
      * @returns Diagnostic report with current RLS status
      */
     static async generateDiagnosticReport(): Promise<RLSDiagnosticReport> {
-        const userRole = this.getCurrentUserRole();
+        const userRole = await this.getCurrentUserRole();
         const tablesToTest = ['memories', 'agents', 'interactions']; // Add your main tables
         
-        const tableAccessResults = {};
+        const tableAccessResults: Record<string, boolean> = {};
         for (const table of tablesToTest) {
             tableAccessResults[table] = await this.testTableAccess(table);
         }
@@ -145,28 +144,3 @@ export interface RLSDiagnosticReport {
     tableAccess: Record<string, boolean>;
     recommendations: string[];
 }
-
-// Add RLS diagnostic middleware to supabase client
-declare module '@supabase/supabase-js' {
-    interface PostgrestQueryBuilder {
-        withRLSDiagnostics(operationName: string): Promise<{
-            data: any;
-            error: any;
-            isRLSIssue: boolean;
-            rlsMessage: string | null;
-        }>;
-    }
-}
-
-// Extend Supabase query builder with RLS diagnostics
-supabase.from = function(tableName: string) {
-    const queryBuilder = originalFrom.call(this, tableName);
-    
-    queryBuilder.withRLSDiagnostics = async function(operationName: string) {
-        return RLSDiagnostics.diagnoseQuery(this, operationName);
-    };
-    
-    return queryBuilder;
-};
-
-const originalFrom = supabase.from.bind(supabase);

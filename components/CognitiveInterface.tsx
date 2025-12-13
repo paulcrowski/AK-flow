@@ -89,7 +89,7 @@ export function CognitiveInterface() {
                             verbosity: 0.5,
                             arousal: 0.5,
                             conscientiousness: 0.5,
-                            social_awareness: 0.5,
+                            socialAwareness: 0.5,
                             curiosity: 0.5
                         }
                     );

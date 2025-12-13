@@ -4,31 +4,31 @@
  * Stabilne cechy charakteru wpływające na styl odpowiedzi.
  * Ewoluują powoli przez TraitEvolutionEngine.
  * 
+ * UNIFIED: All TraitVector uses camelCase (socialAwareness, not social_awareness).
+ * 
  * @module core/types/TraitVector
  */
 
-export interface CortexTraitVector {
-  /** Gadatliwość 0.0-1.0. Wysoka = dłuższe odpowiedzi. */
-  verbosity: number;
-  
-  /** Pobudzenie 0.0-1.0. Jak łatwo system się "nakręca". */
-  arousal: number;
-  
-  /** Sumienność 0.0-1.0. Fokus na zadanie vs dygresje. */
-  conscientiousness: number;
-  
-  /** Świadomość społeczna 0.0-1.0. Wrażliwość na powtórzenia. */
-  social_awareness: number;
-  
-  /** Ciekawość 0.0-1.0. Nagroda za nowość vs znane ścieżki. */
-  curiosity: number;
-}
+import { TraitVector } from '../../types';
 
-/** Domyślny wektor cech dla nowego agenta */
+/**
+ * CortexTraitVector - Alias for TraitVector from types.ts
+ * 
+ * UNIFIED: Now uses camelCase fields (socialAwareness) to match main TraitVector.
+ * This is the Single Source of Truth for personality traits.
+ */
+export type CortexTraitVector = TraitVector;
+
+/** 
+ * Domyślny wektor cech dla nowego agenta.
+ * SINGLE SOURCE OF TRUTH - used by kernel/initialState and builders.
+ * 
+ * Values from original useCognitiveKernel.ts baseline.
+ */
 export const DEFAULT_TRAIT_VECTOR: Readonly<CortexTraitVector> = {
-  verbosity: 0.4,
   arousal: 0.3,
-  conscientiousness: 0.7,
-  social_awareness: 0.6,
-  curiosity: 0.5
+  verbosity: 0.4,
+  conscientiousness: 0.8,
+  socialAwareness: 0.8,
+  curiosity: 0.6
 } as const;

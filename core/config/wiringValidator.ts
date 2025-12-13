@@ -85,12 +85,13 @@ export const CRITICAL_SYSTEMS = [
     description: 'Ensures hard_facts field exists in CortexState',
     configPath: 'N/A (type-level)',
     testFn: async () => {
-      const { buildMinimalCortexState, setCachedIdentity } = await import('../builders');
+      // Import directly to avoid supabase dependency chain from CortexStateBuilder
+      const { buildMinimalCortexState, setCachedIdentity } = await import('../builders/MinimalCortexStateBuilder');
       setCachedIdentity('wiring-test', {
         name: 'WiringTest',
         core_values: [],
         constitutional_constraints: []
-      }, { verbosity: 0.5, arousal: 0.5, conscientiousness: 0.5, social_awareness: 0.5, curiosity: 0.5 });
+      }, { verbosity: 0.5, arousal: 0.5, conscientiousness: 0.5, socialAwareness: 0.5, curiosity: 0.5 });
       
       const state = buildMinimalCortexState({
         agentId: 'wiring-test',

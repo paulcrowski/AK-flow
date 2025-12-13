@@ -50,7 +50,7 @@ describe('CortexStateBuilder', () => {
         verbosity: 0.4,
         arousal: 0.3,
         conscientiousness: 0.7,
-        social_awareness: 0.6,
+        socialAwareness: 0.6,
         curiosity: 0.5
       },
       core_identity: {
