@@ -17,6 +17,7 @@ import * as GoalSystem from './GoalSystem';
 import { GoalContext } from './GoalSystem';
 import { decideExpression, computeNovelty, estimateSocialCost } from './ExpressionPolicy';
 import { computeDialogThreshold } from '../utils/thresholds';
+import { ExecutiveGate } from './ExecutiveGate';
 
 export namespace EventLoop {
     export interface LoopContext {
@@ -139,11 +140,13 @@ export namespace EventLoop {
         if (ctx.autonomousMode && !input) {
             const silenceDuration = (Date.now() - ctx.silenceStart) / 1000;
             
-            // RACE CONDITION GUARD: Don't trigger autonomous volition if user JUST spoke
-            // This prevents double responses when processUserInput and cognitiveCycle overlap
+            // EXECUTIVE GATE: Use proper silence window instead of hardcoded 3s
             const timeSinceLastUserInteraction = Date.now() - (ctx.goalState.lastUserInteractionAt || 0);
-            if (timeSinceLastUserInteraction < 3000) {
-                // User spoke less than 3s ago - skip autonomous volition to avoid double response
+            const gateContext = ExecutiveGate.getDefaultContext(ctx.limbic, timeSinceLastUserInteraction);
+            
+            // Check silence window via ExecutiveGate config
+            if (timeSinceLastUserInteraction < gateContext.silence_window) {
+                // User spoke recently - skip autonomous volition (ExecutiveGate silence window)
                 return ctx;
             }
 
@@ -198,7 +201,7 @@ export namespace EventLoop {
                 }
             }
 
-            // 3B. GOAL EXECUTION (single-shot)
+            // 3B. GOAL EXECUTION (single-shot) - via ExecutiveGate
             if (ctx.goalState.activeGoal) {
                 const goal: Goal = ctx.goalState.activeGoal;
                 const result = await CortexSystem.pursueGoal(goal, {
@@ -212,11 +215,27 @@ export namespace EventLoop {
                     sessionOverlay: ctx.sessionOverlay
                 });
 
+                // Create goal-driven candidate
+                const goalCandidate = ExecutiveGate.createGoalCandidate(
+                    result.responseText,
+                    result.internalThought || '',
+                    goal.id,
+                    { source: goal.source, salience: goal.priority }
+                );
+                
+                // ExecutiveGate decides for goal-driven speech
+                const goalGateDecision = ExecutiveGate.decide([goalCandidate], gateContext);
+                
                 if (result.internalThought) {
                     callbacks.onMessage('assistant', result.internalThought, 'thought');
                 }
 
-                callbacks.onMessage('assistant', result.responseText, 'speech');
+                if (goalGateDecision.should_speak && goalGateDecision.winner) {
+                    callbacks.onMessage('assistant', goalGateDecision.winner.speech_content, 'speech');
+                } else {
+                    // Goal speech suppressed - log it
+                    callbacks.onThought(`[GOAL SUPPRESSED] ${result.responseText?.slice(0, 50)}...`);
+                }
 
                 const executedAt = Date.now();
 
@@ -388,23 +407,49 @@ export namespace EventLoop {
 
                     voicePressure = finalPressure;
                 }
-                const decision = VolitionSystem.shouldSpeak(
+                // ═══════════════════════════════════════════════════════════════════
+                // EXECUTIVE GATE (13/10 PIONEER ARCHITECTURE)
+                // Jedna bramka mowy - deterministyczna decyzja
+                // ═══════════════════════════════════════════════════════════════════
+                
+                // Create autonomous candidate
+                const autonomousCandidate = ExecutiveGate.createAutonomousCandidate(
+                    volition.speech_content,
                     volition.internal_monologue,
-                    voicePressure,
-                    silenceDuration,
-                    ctx.limbic,
-                    ctx.thoughtHistory,
-                    ctx.lastSpeakTimestamp,
-                    Date.now(),
-                    ctx.poeticMode, // Pass mode to volition
-                    ctx.soma.isSleeping // FAZA 5: Sleep Mode v1
+                    {
+                        source: 'autonomous_volition',
+                        novelty: currentNovelty,
+                        salience: voicePressure  // Use voice_pressure as salience proxy
+                    }
                 );
+                
+                // ExecutiveGate decides (no reactive candidates in autonomous path)
+                const gateDecision = ExecutiveGate.decide(
+                    [autonomousCandidate],
+                    gateContext
+                );
+                
+                // Log decision for observability
+                eventBus.publish({
+                    id: `executive-gate-${Date.now()}`,
+                    timestamp: Date.now(),
+                    source: AgentType.CORTEX_FLOW,
+                    type: PacketType.SYSTEM_ALERT,
+                    payload: {
+                        event: 'EXECUTIVE_GATE_DECISION',
+                        should_speak: gateDecision.should_speak,
+                        reason: gateDecision.reason,
+                        voice_pressure: gateDecision.debug?.voice_pressure,
+                        candidate_strength: autonomousCandidate.strength
+                    },
+                    priority: 0.5
+                });
 
-                if (decision.shouldSpeak) {
-                    callbacks.onMessage('assistant', volition.speech_content, 'speech');
+                if (gateDecision.should_speak && gateDecision.winner) {
+                    callbacks.onMessage('assistant', gateDecision.winner.speech_content, 'speech');
                     ctx.lastSpeakTimestamp = Date.now();
                     ctx.silenceStart = Date.now();
-                    ctx.thoughtHistory.push(volition.internal_monologue);
+                    ctx.thoughtHistory.push(gateDecision.winner.internal_thought);
 
                     // Limit history size
                     if (ctx.thoughtHistory.length > 20) ctx.thoughtHistory.shift();
@@ -415,6 +460,9 @@ export namespace EventLoop {
                     // Emotional response to speech
                     ctx.limbic = LimbicSystem.applySpeechResponse(ctx.limbic);
                     callbacks.onLimbicUpdate(ctx.limbic);
+                } else if (gateDecision.winner) {
+                    // Thought only - log but don't speak
+                    callbacks.onThought(`[SUPPRESSED] ${gateDecision.winner.internal_thought}`);
                 }
             }
         }

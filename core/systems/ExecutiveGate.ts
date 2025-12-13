@@ -1,0 +1,405 @@
+/**
+ * ExecutiveGate - Jedna Bramka Mowy (13/10 PIONEER ARCHITECTURE)
+ * 
+ * ═══════════════════════════════════════════════════════════════════════════
+ * KONTRAKT SYSTEMU:
+ * "System może generować wiele myśli równolegle, ale tylko jedna 
+ *  deterministyczna bramka wykonawcza decyduje, która myśl staje się mową;
+ *  odpowiedź na użytkownika zawsze ma absolutny priorytet."
+ * ═══════════════════════════════════════════════════════════════════════════
+ * 
+ * ARCHITEKTURA:
+ * 1. Reaktywna (user response) → TWARDE VETO, zawsze wygrywa
+ * 2. Autonomiczne → konkurują między sobą (Competitive Inhibition)
+ * 3. Zwycięzca → bramka voice_pressure (deterministyczna)
+ * 4. Jeśli przejdzie → speech, jeśli nie → thought only
+ * 
+ * NEUROBIOLOGICZNY MODEL:
+ * - Kora przedczołowa (PFC) jako arbiter
+ * - Myśli konkurują, nie negocjują
+ * - Jedna ścieżka wyjściowa do artykulacji
+ * 
+ * @module core/systems/ExecutiveGate
+ * @author AK-FLOW Pioneer Architecture
+ */
+
+import type { LimbicState } from '../../types';
+
+// ═══════════════════════════════════════════════════════════════════════════
+// TYPES
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Typ kandydata do mowy
+ */
+export type CandidateType = 'reactive' | 'autonomous' | 'goal_driven';
+
+/**
+ * Kandydat do mowy - każda myśl która chce stać się wypowiedzią
+ */
+export interface SpeechCandidate {
+  /** Unikalny identyfikator */
+  id: string;
+  
+  /** Typ kandydata */
+  type: CandidateType;
+  
+  /** Treść do wypowiedzenia */
+  speech_content: string;
+  
+  /** Wewnętrzna myśl (do logów) */
+  internal_thought: string;
+  
+  /** Timestamp utworzenia */
+  timestamp: number;
+  
+  /** Siła kandydata (dla Competitive Inhibition) */
+  strength: number;
+  
+  /** Czy to odpowiedź na user input? */
+  is_user_response: boolean;
+  
+  /** Metadata dla debugowania */
+  metadata?: {
+    source?: string;
+    goal_id?: string;
+    novelty?: number;
+    salience?: number;
+  };
+}
+
+/**
+ * Wynik decyzji bramki
+ */
+export interface GateDecision {
+  /** Czy publikować jako speech? */
+  should_speak: boolean;
+  
+  /** Zwycięski kandydat (jeśli jest) */
+  winner: SpeechCandidate | null;
+  
+  /** Powód decyzji */
+  reason: GateReason;
+  
+  /** Kandydaci którzy przegrali (do logów) */
+  losers: SpeechCandidate[];
+  
+  /** Debug info */
+  debug?: {
+    reactive_count: number;
+    autonomous_count: number;
+    voice_pressure: number;
+    silence_window_ok: boolean;
+  };
+}
+
+export type GateReason = 
+  | 'REACTIVE_VETO'           // Reaktywna wygrała (absolutny priorytet)
+  | 'AUTONOMOUS_WON'          // Autonomiczna wygrała konkurencję
+  | 'VOICE_PRESSURE_LOW'      // Autonomiczna przegrała z voice_pressure
+  | 'SILENCE_WINDOW_VIOLATED' // Za wcześnie po user input
+  | 'NO_CANDIDATES'           // Brak kandydatów
+  | 'EMPTY_SPEECH';           // Kandydat ma pusty speech
+
+/**
+ * Kontekst dla bramki
+ */
+export interface GateContext {
+  /** Aktualny stan limbiczny */
+  limbic: LimbicState;
+  
+  /** Czas od ostatniego user input (ms) */
+  time_since_user_input: number;
+  
+  /** Minimalne okno ciszy dla autonomicznych (ms) */
+  silence_window: number;
+  
+  /** Próg voice_pressure dla autonomicznych */
+  voice_pressure_threshold: number;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// CONFIGURATION
+// ═══════════════════════════════════════════════════════════════════════════
+
+const DEFAULT_CONFIG = {
+  /** Minimalne okno ciszy (ms) - autonomiczne nie mówią jeśli user pisał niedawno */
+  SILENCE_WINDOW_MS: 5000,
+  
+  /** Próg voice_pressure dla autonomicznych (0-1) */
+  VOICE_PRESSURE_THRESHOLD: 0.6,
+  
+  /** Wagi dla Competitive Inhibition */
+  WEIGHTS: {
+    novelty: 0.3,
+    salience: 0.4,
+    goal_relevance: 0.2,
+    recency: 0.1
+  }
+} as const;
+
+// ═══════════════════════════════════════════════════════════════════════════
+// EXECUTIVE GATE
+// ═══════════════════════════════════════════════════════════════════════════
+
+export const ExecutiveGate = {
+  
+  /**
+   * Główna funkcja decyzyjna - wybiera który kandydat (jeśli którykolwiek) 
+   * ma prawo stać się mową.
+   * 
+   * KONTRAKT:
+   * 1. Reaktywna ZAWSZE wygrywa (twarde veto)
+   * 2. Autonomiczne konkurują tylko jeśli minęło okno ciszy
+   * 3. Zwycięzca musi przejść przez bramkę voice_pressure
+   */
+  decide(
+    candidates: SpeechCandidate[],
+    context: GateContext
+  ): GateDecision {
+    const now = Date.now();
+    
+    // Separuj kandydatów
+    const reactive = candidates.filter(c => c.type === 'reactive' || c.is_user_response);
+    const autonomous = candidates.filter(c => c.type === 'autonomous' && !c.is_user_response);
+    const goalDriven = candidates.filter(c => c.type === 'goal_driven' && !c.is_user_response);
+    
+    // Oblicz voice_pressure deterministycznie
+    const voicePressure = this.computeVoicePressure(context.limbic);
+    
+    // Debug info
+    const debug = {
+      reactive_count: reactive.length,
+      autonomous_count: autonomous.length + goalDriven.length,
+      voice_pressure: voicePressure,
+      silence_window_ok: context.time_since_user_input >= context.silence_window
+    };
+    
+    // ═══════════════════════════════════════════════════════════════════════
+    // RULE 1: Reaktywna ma TWARDE VETO
+    // ═══════════════════════════════════════════════════════════════════════
+    if (reactive.length > 0) {
+      // Jeśli jest więcej niż jedna reaktywna, weź najnowszą
+      const winner = reactive.sort((a, b) => b.timestamp - a.timestamp)[0];
+      
+      // Walidacja - pusty speech = nie publikuj
+      if (!winner.speech_content.trim()) {
+        return {
+          should_speak: false,
+          winner: null,
+          reason: 'EMPTY_SPEECH',
+          losers: candidates,
+          debug
+        };
+      }
+      
+      return {
+        should_speak: true,
+        winner,
+        reason: 'REACTIVE_VETO',
+        losers: [...autonomous, ...goalDriven, ...reactive.filter(c => c.id !== winner.id)],
+        debug
+      };
+    }
+    
+    // ═══════════════════════════════════════════════════════════════════════
+    // RULE 2: Sprawdź okno ciszy
+    // ═══════════════════════════════════════════════════════════════════════
+    if (context.time_since_user_input < context.silence_window) {
+      // User pisał niedawno - autonomiczne milczą
+      return {
+        should_speak: false,
+        winner: null,
+        reason: 'SILENCE_WINDOW_VIOLATED',
+        losers: [...autonomous, ...goalDriven],
+        debug
+      };
+    }
+    
+    // ═══════════════════════════════════════════════════════════════════════
+    // RULE 3: Competitive Inhibition między autonomicznymi
+    // ═══════════════════════════════════════════════════════════════════════
+    const allAutonomous = [...autonomous, ...goalDriven];
+    
+    if (allAutonomous.length === 0) {
+      return {
+        should_speak: false,
+        winner: null,
+        reason: 'NO_CANDIDATES',
+        losers: [],
+        debug
+      };
+    }
+    
+    // Konkurencja - najsilniejszy wygrywa
+    const ranked = allAutonomous.sort((a, b) => b.strength - a.strength);
+    const winner = ranked[0];
+    const losers = ranked.slice(1);
+    
+    // Walidacja - pusty speech = nie publikuj
+    if (!winner.speech_content.trim()) {
+      return {
+        should_speak: false,
+        winner: null,
+        reason: 'EMPTY_SPEECH',
+        losers: allAutonomous,
+        debug
+      };
+    }
+    
+    // ═══════════════════════════════════════════════════════════════════════
+    // RULE 4: Bramka voice_pressure
+    // ═══════════════════════════════════════════════════════════════════════
+    if (voicePressure < context.voice_pressure_threshold) {
+      // Siła za niska - myśl idzie do logów, nie do speech
+      return {
+        should_speak: false,
+        winner: winner, // Zwracamy zwycięzcę do logowania jako thought
+        reason: 'VOICE_PRESSURE_LOW',
+        losers,
+        debug
+      };
+    }
+    
+    // Zwycięzca przeszedł wszystkie bramki
+    return {
+      should_speak: true,
+      winner,
+      reason: 'AUTONOMOUS_WON',
+      losers,
+      debug
+    };
+  },
+  
+  /**
+   * Oblicz voice_pressure deterministycznie z limbic state.
+   * 
+   * FORMUŁA:
+   * voice_pressure = (curiosity + satisfaction - fear - frustration) / 2 + 0.5
+   * 
+   * Zakres: 0.0 - 1.0
+   * - Wysoka curiosity/satisfaction → chce mówić
+   * - Wysoki fear/frustration → hamuje mowę
+   */
+  computeVoicePressure(limbic: LimbicState): number {
+    const raw = (limbic.curiosity + limbic.satisfaction - limbic.fear - limbic.frustration) / 2 + 0.5;
+    return Math.max(0, Math.min(1, raw));
+  },
+  
+  /**
+   * Oblicz siłę kandydata dla Competitive Inhibition.
+   * 
+   * FORMUŁA:
+   * strength = novelty * W1 + salience * W2 + goal_relevance * W3 + recency * W4
+   */
+  computeCandidateStrength(
+    candidate: Partial<SpeechCandidate>,
+    now: number = Date.now()
+  ): number {
+    const weights = DEFAULT_CONFIG.WEIGHTS;
+    
+    const novelty = candidate.metadata?.novelty ?? 0.5;
+    const salience = candidate.metadata?.salience ?? 0.5;
+    const goalRelevance = candidate.type === 'goal_driven' ? 0.8 : 0.3;
+    
+    // Recency: nowsze = silniejsze (decay over 30s)
+    const age = now - (candidate.timestamp ?? now);
+    const recency = Math.max(0, 1 - age / 30000);
+    
+    return (
+      novelty * weights.novelty +
+      salience * weights.salience +
+      goalRelevance * weights.goal_relevance +
+      recency * weights.recency
+    );
+  },
+  
+  /**
+   * Stwórz kandydata reaktywnego (odpowiedź na usera).
+   */
+  createReactiveCandidate(
+    speech_content: string,
+    internal_thought: string,
+    id: string = `reactive-${Date.now()}`
+  ): SpeechCandidate {
+    return {
+      id,
+      type: 'reactive',
+      speech_content,
+      internal_thought,
+      timestamp: Date.now(),
+      strength: 1.0, // Reaktywna zawsze ma max strength (choć nie używane w decyzji)
+      is_user_response: true
+    };
+  },
+  
+  /**
+   * Stwórz kandydata autonomicznego.
+   */
+  createAutonomousCandidate(
+    speech_content: string,
+    internal_thought: string,
+    metadata?: SpeechCandidate['metadata'],
+    id: string = `autonomous-${Date.now()}`
+  ): SpeechCandidate {
+    const candidate: SpeechCandidate = {
+      id,
+      type: 'autonomous',
+      speech_content,
+      internal_thought,
+      timestamp: Date.now(),
+      strength: 0, // Will be computed
+      is_user_response: false,
+      metadata
+    };
+    
+    candidate.strength = this.computeCandidateStrength(candidate);
+    return candidate;
+  },
+  
+  /**
+   * Stwórz kandydata goal-driven.
+   */
+  createGoalCandidate(
+    speech_content: string,
+    internal_thought: string,
+    goal_id: string,
+    metadata?: Omit<SpeechCandidate['metadata'], 'goal_id'>,
+    id: string = `goal-${Date.now()}`
+  ): SpeechCandidate {
+    const candidate: SpeechCandidate = {
+      id,
+      type: 'goal_driven',
+      speech_content,
+      internal_thought,
+      timestamp: Date.now(),
+      strength: 0, // Will be computed
+      is_user_response: false,
+      metadata: { ...metadata, goal_id }
+    };
+    
+    candidate.strength = this.computeCandidateStrength(candidate);
+    return candidate;
+  },
+  
+  /**
+   * Pobierz domyślny kontekst.
+   */
+  getDefaultContext(
+    limbic: LimbicState,
+    time_since_user_input: number
+  ): GateContext {
+    return {
+      limbic,
+      time_since_user_input,
+      silence_window: DEFAULT_CONFIG.SILENCE_WINDOW_MS,
+      voice_pressure_threshold: DEFAULT_CONFIG.VOICE_PRESSURE_THRESHOLD
+    };
+  }
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
+// EXPORTS
+// ═══════════════════════════════════════════════════════════════════════════
+
+export { DEFAULT_CONFIG as EXECUTIVE_GATE_CONFIG };
