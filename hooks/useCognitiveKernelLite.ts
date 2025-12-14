@@ -169,32 +169,73 @@ export const useCognitiveKernelLite = (loadedIdentity?: AgentIdentity | null) =>
     if (pendingOutputs.length === 0) return;
     
     for (const output of pendingOutputs) {
-      switch (output.type) {
-        case 'DREAM_CONSOLIDATION':
-          {
-            const state = getCognitiveState();
-            DreamConsolidationService.consolidate(
-              state.limbic,
-              state.traitVector,
-              loadedIdentityRef.current?.name || 'AK-FLOW'
-            ).catch(console.error);
-          }
-          break;
-          
-        case 'WAKE_PROCESS':
-          executeWakeProcess(loadedIdentityRef.current?.id || 'unknown')
-            .catch(console.error);
-          break;
-          
-        case 'EVENT_BUS_PUBLISH':
-          if (output.payload?.packet) {
-            eventBus.publish(output.payload.packet);
-          }
-          break;
-          
-        case 'LOG':
-          console.log(`[Kernel] ${output.payload?.message}`);
-          break;
+      try {
+        switch (output.type) {
+          case 'DREAM_CONSOLIDATION':
+            {
+              const state = getCognitiveState();
+              DreamConsolidationService.consolidate(
+                state.limbic,
+                state.traitVector,
+                loadedIdentityRef.current?.name || 'AK-FLOW'
+              ).catch(console.error);
+            }
+            break;
+            
+          case 'WAKE_PROCESS':
+            {
+              const wakeState = getCognitiveState();
+              executeWakeProcess({
+                agentId: loadedIdentityRef.current?.id || 'unknown',
+                agentName: loadedIdentityRef.current?.name || 'AK-FLOW',
+                currentTraits: wakeState.traitVector,
+                currentLimbic: wakeState.limbic,
+                currentNeuro: wakeState.neuro
+              }).catch(console.error);
+            }
+            break;
+            
+          case 'EVENT_BUS_PUBLISH':
+            if (output.payload?.packet) {
+              eventBus.publish(output.payload.packet);
+            }
+            break;
+            
+          case 'LOG':
+            console.log(`[Kernel] ${output.payload?.message}`);
+            break;
+            
+          case 'MAYBE_REM_CYCLE':
+            // Runtime handles randomness - reducer stays pure
+            if (Math.random() < (output.payload?.probability || 0.3)) {
+              eventBus.publish({
+                id: generateUUID(),
+                timestamp: Date.now(),
+                source: AgentType.VISUAL_CORTEX,
+                type: PacketType.THOUGHT_CANDIDATE,
+                payload: { 
+                  internal_monologue: `REM Cycle: Dreaming... Energy at ${output.payload?.energy || 0}%` 
+                },
+                priority: 0.1
+              });
+            }
+            break;
+            
+          case 'MAYBE_DREAM_CONSOLIDATION':
+            // Runtime handles randomness - reducer stays pure
+            if (Math.random() < (output.payload?.probability || 0.5)) {
+              const state = getCognitiveState();
+              DreamConsolidationService.consolidate(
+                state.limbic,
+                state.traitVector,
+                loadedIdentityRef.current?.name || 'AK-FLOW'
+              ).catch(console.error);
+            }
+            break;
+        }
+      } catch (e) {
+        console.error('[OutputProcessor] Error processing output:', output.type, e);
+        // Continue processing other outputs
       }
     }
   }, [pendingOutputs]);

@@ -4,7 +4,7 @@ import { AgentType, PacketType } from '../types';
 import { generateUUID } from '../utils/uuid';
 import { setCurrentAgentId } from '../services/supabase';
 import { NeuroMonitor } from './NeuroMonitor';
-import { useCognitiveKernel, AgentIdentity } from '../hooks/useCognitiveKernel';
+import { useCognitiveKernelLite, AgentIdentity } from '../hooks/useCognitiveKernelLite';
 import { ComponentErrorBoundary } from './ComponentErrorBoundary';
 import { useSession, Agent } from '../contexts/SessionContext';
 import { AgentSelector } from './AgentSelector';
@@ -174,7 +174,7 @@ export function CognitiveInterface() {
         injectStateOverride,
         goalState,
         resetKernel
-    } = useCognitiveKernel(loadedIdentity);
+    } = useCognitiveKernelLite(loadedIdentity);
 
     const [input, setInput] = useState('');
     const [sessionTokens, setSessionTokens] = useState(0);

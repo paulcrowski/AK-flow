@@ -14,15 +14,18 @@ Sesja zakończona sukcesem. System osiągnął stabilność tożsamości w dług
 5.  **useCognitiveKernelLite** - thin React wrapper (~340 linii)
 6.  **StrictMode guards** - brak duplikatów eventów
 
+7.  **Zdiagnozowano Race Condition:** "Double Brain" (EventLoop vs processUserInput) - znaleziono przyczynę rozdwojenia odpowiedzi.
+
 **Testy:** 53 passing (KernelEngine + CognitiveStore)
 
-### 🐛 Crucial Fix: Identity Cache TTL Bug
-**Objawy:** Po 5 minutach sesji agent wpadał w panikę (fear: 0.95, curiosity: 0), widząc siebie jako `UNINITIALIZED_AGENT`.
-**Root Cause:** Cache identity miał TTL 5 minut. Wygasał w trakcie aktywnej sesji.
-**Rozwiązanie:**
-- TTL podniesiony do 30 min (warning przy 15 min).
-- Dodano `refreshIdentityCache()` w pętli `cognitiveCycle` (odświeżanie co tick ~3s).
-- Agent nigdy nie traci tożsamości podczas aktywności.
+### 🐛 Crucial Fixes:
+1.  **Identity Cache TTL Bug:**
+    - Objawy: Panika po 5 min (`UNINITIALIZED_AGENT`).
+    - Fix: Active Refresh w pętli kognitywnej + TTL 30min.
+2.  **Race Condition Diagnosis:**
+    - Objawy: Podwójne odpowiedzi (logiczna + losowa).
+    - Diagnoza: Niezależne ścieżki przetwarzania dla React input i EventLoop tick.
+    - Plan: Unified Input Queue (Jutro).
 
 ## 📋 Statystyki logów
 Logi wyglądają świetnie - każdy event cyklu życia pojawia się tylko raz:

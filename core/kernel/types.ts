@@ -11,6 +11,19 @@ import type { LimbicState, SomaState, NeurotransmitterState, GoalState, Resonanc
 import type { TraitVector } from '../../types';
 
 // ═══════════════════════════════════════════════════════════════════════════
+// CONVERSATION TYPES
+// ═══════════════════════════════════════════════════════════════════════════
+
+export interface ConversationTurn {
+  role: 'user' | 'assistant';
+  text: string;
+  type?: 'thought' | 'speech' | 'visual' | 'intel' | 'action' | 'tool_result';
+  timestamp: number;
+  imageData?: string;
+  sources?: any[];
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // KERNEL STATE - Immutable snapshot of cognitive system
 // ═══════════════════════════════════════════════════════════════════════════
 
@@ -41,6 +54,9 @@ export interface KernelState {
   
   // History (bounded)
   thoughtHistory: string[];
+  
+  // Conversation history (bounded, persists in state machine)
+  conversation: ConversationTurn[];
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -64,6 +80,8 @@ export type KernelEventType =
   | 'THOUGHT_GENERATED'       // New thought added to history
   | 'HYDRATE'                 // Restore state from storage
   | 'STATE_OVERRIDE'          // Debug: manual state injection
+  | 'ADD_MESSAGE'             // Add message to conversation
+  | 'CLEAR_CONVERSATION'      // Clear conversation history
   | 'RESET';                  // Full kernel reset
 
 export interface KernelEvent {
@@ -85,6 +103,7 @@ export type KernelEventPayload =
   | NeuroUpdatePayload
   | StateOverridePayload
   | GoalPayload
+  | AddMessagePayload
   | EmptyPayload;
 
 export interface TickPayload {
@@ -126,6 +145,14 @@ export interface GoalPayload {
   description?: string;
 }
 
+export interface AddMessagePayload {
+  role: 'user' | 'assistant';
+  text: string;
+  type?: 'thought' | 'speech' | 'visual' | 'intel' | 'action' | 'tool_result';
+  imageData?: string;
+  sources?: any[];
+}
+
 export interface EmptyPayload {}
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -138,7 +165,9 @@ export type KernelOutputType =
   | 'MEMORY_STORE'            // Store to Supabase
   | 'SCHEDULE_TICK'           // Schedule next tick
   | 'DREAM_CONSOLIDATION'     // Trigger dream service
-  | 'WAKE_PROCESS';           // Trigger wake service
+  | 'WAKE_PROCESS'            // Trigger wake service
+  | 'MAYBE_REM_CYCLE'         // Probabilistic REM cycle (runtime decides)
+  | 'MAYBE_DREAM_CONSOLIDATION'; // Probabilistic dream consolidation (runtime decides)
 
 export interface KernelOutput {
   type: KernelOutputType;

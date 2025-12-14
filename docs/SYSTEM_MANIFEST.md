@@ -1,8 +1,22 @@
 # AK-FLOW: Cognitive Agent Architecture Manifest
 **System Version:** 6.1 (Stabilization & Reality Anchors)  
-**Last Updated:** 2025-12-12  
+**Last Updated:** 2025-12-13  
 **Architecture Type:** Active Inference (Friston) + Global Workspace Theory + Multi-Modal RAG + **Stateless Inference Engine**  
 **Status:** Autonomous / Stateful / Modular / Self-Aware / Goal-Driven / Personality-Driven / **Emergent Identity**
+
+---
+
+## 🆕 What's New in V6.2 (2025-12-13)
+
+### FAZA 6.2: Kernel Stabilization & Identity Truth
+**Status:** ✅ Wdrożone (Stabilność 100%)
+
+#### 🔧 Kluczowe Komponenty:
+1.  **KernelEngine (State Machine):** Zastąpiliśmy luźne `useState` deterministyczną maszyną stanów (reducer), co eliminuje stany nieustalone w cyklu kognitywnym.
+2.  **Unified Input Queue (Plan):** Zdiagnozowano "Double Brain Race Condition". Decyzja architektoniczna: EventLoop musi być jedynym źródłem prawdy o czasie.
+3.  **Active Identity Anchor:** Naprawa błędu "Śmierci Ego" (TTL 5min) poprzez aktywny refresh cache'u w pętli.
+4.  **Strict Mode Purity:** Eliminacja podwójnych wywołań eventów w trybie deweloperskim React 18.
+5.  **Circular Dependency Hell:** Rozwiązanie cyklicznych importów między `types` a `supabase`.
 
 ---
 

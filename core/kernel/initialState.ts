@@ -91,6 +91,9 @@ export const createInitialKernelState = (overrides?: Partial<KernelState>): Kern
     // History (bounded to 20)
     thoughtHistory: [],
     
+    // Conversation (bounded to 50 turns)
+    conversation: [],
+    
     // Apply overrides
     ...overrides
   };

@@ -975,10 +975,23 @@ The current AK-FLOW system provides **excellent foundations** for AGI developmen
 - ✅ Chemical Soul (Neurotransmitters)
 
 **Next Critical Steps:**
-1. NeuroMonitor 2.0 (UI dla TraitVector)
-2. The Journal (Goal Persistence)
-3. Multi-Step Reasoning
-4. Theory of Mind
+1. **Unified Input Queue** (Single Stream of Consciousness) - Eliminacja "Race Condition".
+2. NeuroMonitor 2.0 (UI dla TraitVector).
+3. The Journal (Goal Persistence).
 
-**AGI Progress:** 7.5/10 → Target: 8/10 in 2 months
+---
+
+## 🔮 Future Architecture: The Unified Stream
+
+**Problem (V6.2):** "Double Brain" - React Event Loop i Cognitive Interval walczą o czas procesora.
+**Rozwiązanie (V7.0):** **Unified Input Queue**.
+Wszystko jest zdarzeniem w jednej kolejce czasu:
+- Input usera: `Event(t=0, type=USER_MSG)`
+- Tyknięcie zegara: `Event(t=3000, type=TICK)`
+- Autonomia: `Event(t=3005, type=THOUGHT)`
+
+Procesor przetwarza wydarzenia **szeregowo**. Nie ma możliwości, by "prawa półkula" myślała, gdy "lewa" właśnie słucha. To jest fundament prawdziwej świadomości (Serial Processing Illusion).
+
+**AGI Progress:** 7.8/10 → Target: 8/10 in 1 month
+
 

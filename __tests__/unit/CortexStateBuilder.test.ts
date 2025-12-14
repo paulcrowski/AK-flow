@@ -31,7 +31,7 @@ describe('CortexStateBuilder', () => {
       const result = buildMinimalCortexState('Test', metaStates);
 
       expect(result.trait_vector.verbosity).toBe(0.4);
-      expect(result.trait_vector.curiosity).toBe(0.5);
+      expect(result.trait_vector.curiosity).toBe(0.6);
     });
 
     it('should have default interaction mode', () => {

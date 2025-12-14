@@ -12,15 +12,19 @@
  */
 
 import { create } from 'zustand';
-import { subscribeWithSelector } from 'zustand/middleware';
-import { 
-  KernelEngine, 
-  KernelState, 
-  KernelEvent, 
+import { subscribeWithSelector, persist, createJSONStorage } from 'zustand/middleware';
+import { useShallow } from 'zustand/react/shallow';
+import {
+  KernelEngine,
+  KernelState,
+  KernelEvent,
   KernelOutput,
-  createInitialKernelState 
+  createInitialKernelState
 } from '../core/kernel';
 import type { LimbicState, SomaState, NeurotransmitterState, GoalState, TraitVector } from '../types';
+
+// ... (existing imports)
+
 
 // ═══════════════════════════════════════════════════════════════════════════
 // STORE STATE INTERFACE
@@ -29,13 +33,13 @@ import type { LimbicState, SomaState, NeurotransmitterState, GoalState, TraitVec
 interface CognitiveStoreState extends KernelState {
   // Engine instance (internal)
   _engine: KernelEngine;
-  
+
   // Pending outputs from last dispatch (side effects)
   pendingOutputs: KernelOutput[];
-  
+
   // Actions
   dispatch: (event: KernelEvent) => void;
-  
+
   // Convenience actions (delegate to dispatch)
   tick: () => void;
   processUserInput: (input: string) => void;
@@ -48,9 +52,11 @@ interface CognitiveStoreState extends KernelState {
   formGoal: (goal: string, priority: number) => void;
   completeGoal: () => void;
   addThought: (thought: string) => void;
+  addMessage: (role: 'user' | 'assistant', text: string, type?: 'thought' | 'speech' | 'visual' | 'intel' | 'action' | 'tool_result', imageData?: string, sources?: any[]) => void;
+  clearConversation: () => void;
   reset: () => void;
   hydrate: (state: Partial<KernelState>) => void;
-  
+
   // Selectors (for atomic re-renders)
   getLimbic: () => LimbicState;
   getSoma: () => SomaState;
@@ -67,138 +73,172 @@ interface CognitiveStoreState extends KernelState {
 // ═══════════════════════════════════════════════════════════════════════════
 
 export const useCognitiveStore = create<CognitiveStoreState>()(
-  subscribeWithSelector((set, get) => {
-    // Create engine instance
-    const engine = new KernelEngine();
-    
-    // Subscribe to engine state changes → update Zustand
-    engine.subscribe((newState, outputs) => {
-      set({
-        ...newState,
-        pendingOutputs: outputs
+  persist(
+    subscribeWithSelector((set, get) => {
+      // Create engine instance
+      const engine = new KernelEngine();
+
+      // Subscribe to engine state changes → update Zustand
+      engine.subscribe((newState, outputs) => {
+        set({
+          ...newState,
+          pendingOutputs: outputs
+        });
       });
-    });
-    
-    // Initial state from engine
-    const initialState = engine.getState();
-    
-    return {
-      // Spread initial kernel state
-      ...initialState,
-      
-      // Internal
-      _engine: engine,
-      pendingOutputs: [],
-      
-      // ─────────────────────────────────────────────────────────────────────
-      // MAIN DISPATCH - all state changes go through here
-      // ─────────────────────────────────────────────────────────────────────
-      dispatch: (event: KernelEvent) => {
-        const { _engine } = get();
-        _engine.dispatch(event);
-        // State update happens via subscription above
-      },
-      
-      // ─────────────────────────────────────────────────────────────────────
-      // CONVENIENCE ACTIONS (sugar over dispatch)
-      // ─────────────────────────────────────────────────────────────────────
-      tick: () => {
-        get().dispatch({ type: 'TICK', timestamp: Date.now() });
-      },
-      
-      processUserInput: (input: string) => {
-        get().dispatch({ 
-          type: 'USER_INPUT', 
-          timestamp: Date.now(),
-          payload: { input }
-        });
-      },
-      
-      toggleAutonomousMode: (enabled: boolean) => {
-        get().dispatch({
-          type: 'TOGGLE_AUTONOMY',
-          timestamp: Date.now(),
-          payload: { enabled }
-        });
-      },
-      
-      togglePoeticMode: (enabled: boolean) => {
-        get().dispatch({
-          type: 'TOGGLE_POETIC',
-          timestamp: Date.now(),
-          payload: { enabled }
-        });
-      },
-      
-      triggerSleep: () => {
-        get().dispatch({ type: 'SLEEP_START', timestamp: Date.now() });
-      },
-      
-      wake: () => {
-        get().dispatch({ type: 'SLEEP_END', timestamp: Date.now() });
-      },
-      
-      applyMoodShift: (delta) => {
-        get().dispatch({
-          type: 'MOOD_SHIFT',
-          timestamp: Date.now(),
-          payload: { delta }
-        });
-      },
-      
-      updateNeuro: (delta) => {
-        get().dispatch({
-          type: 'NEURO_UPDATE',
-          timestamp: Date.now(),
-          payload: { delta }
-        });
-      },
-      
-      formGoal: (goal: string, priority: number) => {
-        get().dispatch({
-          type: 'GOAL_FORMED',
-          timestamp: Date.now(),
-          payload: { goal, priority }
-        });
-      },
-      
-      completeGoal: () => {
-        get().dispatch({ type: 'GOAL_COMPLETED', timestamp: Date.now() });
-      },
-      
-      addThought: (thought: string) => {
-        get().dispatch({
-          type: 'THOUGHT_GENERATED',
-          timestamp: Date.now(),
-          payload: { thought }
-        });
-      },
-      
-      reset: () => {
-        get().dispatch({ type: 'RESET', timestamp: Date.now() });
-      },
-      
-      hydrate: (state: Partial<KernelState>) => {
-        get().dispatch({
-          type: 'HYDRATE',
-          timestamp: Date.now(),
-          payload: { state }
-        });
-      },
-      
-      // ─────────────────────────────────────────────────────────────────────
-      // SELECTORS (for atomic re-renders with subscribeWithSelector)
-      // ─────────────────────────────────────────────────────────────────────
-      getLimbic: () => get().limbic,
-      getSoma: () => get().soma,
-      getNeuro: () => get().neuro,
-      getGoalState: () => get().goalState,
-      getTraitVector: () => get().traitVector,
-      isAutonomous: () => get().autonomousMode,
-      isSleeping: () => get().soma.isSleeping,
-      getEnergy: () => get().soma.energy,
-    };
-  })
+
+      // Initial state from engine
+      const initialState = engine.getState();
+
+      return {
+        // Spread initial kernel state
+        ...initialState,
+
+        // Internal
+        _engine: engine,
+        pendingOutputs: [],
+
+        // ─────────────────────────────────────────────────────────────────────
+        // MAIN DISPATCH - all state changes go through here
+        // ─────────────────────────────────────────────────────────────────────
+        dispatch: (event: KernelEvent) => {
+          const { _engine } = get();
+          _engine.dispatch(event);
+          // State update happens via subscription above
+        },
+
+        // ─────────────────────────────────────────────────────────────────────
+        // CONVENIENCE ACTIONS (sugar over dispatch)
+        // ─────────────────────────────────────────────────────────────────────
+        tick: () => {
+          get().dispatch({ type: 'TICK', timestamp: Date.now() });
+        },
+
+        processUserInput: (input: string) => {
+          get().dispatch({
+            type: 'USER_INPUT',
+            timestamp: Date.now(),
+            payload: { input }
+          });
+        },
+
+        toggleAutonomousMode: (enabled: boolean) => {
+          get().dispatch({
+            type: 'TOGGLE_AUTONOMY',
+            timestamp: Date.now(),
+            payload: { enabled }
+          });
+        },
+
+        togglePoeticMode: (enabled: boolean) => {
+          get().dispatch({
+            type: 'TOGGLE_POETIC',
+            timestamp: Date.now(),
+            payload: { enabled }
+          });
+        },
+
+        triggerSleep: () => {
+          get().dispatch({ type: 'SLEEP_START', timestamp: Date.now() });
+        },
+
+        wake: () => {
+          get().dispatch({ type: 'SLEEP_END', timestamp: Date.now() });
+        },
+
+        applyMoodShift: (delta) => {
+          get().dispatch({
+            type: 'MOOD_SHIFT',
+            timestamp: Date.now(),
+            payload: { delta }
+          });
+        },
+
+        updateNeuro: (delta) => {
+          get().dispatch({
+            type: 'NEURO_UPDATE',
+            timestamp: Date.now(),
+            payload: { delta }
+          });
+        },
+
+        formGoal: (goal: string, priority: number) => {
+          get().dispatch({
+            type: 'GOAL_FORMED',
+            timestamp: Date.now(),
+            payload: { goal, priority }
+          });
+        },
+
+        completeGoal: () => {
+          get().dispatch({ type: 'GOAL_COMPLETED', timestamp: Date.now() });
+        },
+
+        addThought: (thought: string) => {
+          get().dispatch({
+            type: 'THOUGHT_GENERATED',
+            timestamp: Date.now(),
+            payload: { thought }
+          });
+        },
+
+        addMessage: (role, text, type = 'speech', imageData, sources) => {
+          get().dispatch({
+            type: 'ADD_MESSAGE',
+            timestamp: Date.now(),
+            payload: { role, text, type, imageData, sources }
+          });
+        },
+
+        clearConversation: () => {
+          get().dispatch({ type: 'CLEAR_CONVERSATION', timestamp: Date.now() });
+        },
+
+        reset: () => {
+          get().dispatch({ type: 'RESET', timestamp: Date.now() });
+        },
+
+        hydrate: (state: Partial<KernelState>) => {
+          get().dispatch({
+            type: 'HYDRATE',
+            timestamp: Date.now(),
+            payload: { state }
+          });
+        },
+
+        // ─────────────────────────────────────────────────────────────────────
+        // SELECTORS (for atomic re-renders with subscribeWithSelector)
+        // ─────────────────────────────────────────────────────────────────────
+        getLimbic: () => get().limbic,
+        getSoma: () => get().soma,
+        getNeuro: () => get().neuro,
+        getGoalState: () => get().goalState,
+        getTraitVector: () => get().traitVector,
+        isAutonomous: () => get().autonomousMode,
+        isSleeping: () => get().soma.isSleeping,
+        getEnergy: () => get().soma.energy,
+      };
+    }),
+    {
+      name: 'ak-flow-cognitive-state',
+      storage: createJSONStorage(() => localStorage),
+      partialize: (state) => ({
+        // Persist only personality traits (privacy-safe)
+        traitVector: state.traitVector,
+        // Do NOT persist: conversation (privacy), pendingOutputs, _engine
+      }),
+      onRehydrateStorage: () => (state) => {
+        if (state?.traitVector) {
+          console.log('[CognitiveStore] Hydrated traitVector from storage');
+          // Hydrate kernel engine with persisted traits
+          state._engine?.dispatch({
+            type: 'HYDRATE',
+            timestamp: Date.now(),
+            payload: { state: { traitVector: state.traitVector } }
+          });
+        }
+      }
+    }
+  )
 );
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -228,10 +268,11 @@ export const useCuriosity = () => useCognitiveStore((s) => s.limbic.curiosity);
 
 // History selectors
 export const useThoughtHistory = () => useCognitiveStore((s) => s.thoughtHistory);
+export const useConversation = () => useCognitiveStore((s) => s.conversation);
 export const usePendingOutputs = () => useCognitiveStore((s) => s.pendingOutputs);
 
 // Actions (stable references)
-export const useCognitiveActions = () => useCognitiveStore((s) => ({
+export const useCognitiveActions = () => useCognitiveStore(useShallow((s) => ({
   dispatch: s.dispatch,
   tick: s.tick,
   processUserInput: s.processUserInput,
@@ -244,9 +285,11 @@ export const useCognitiveActions = () => useCognitiveStore((s) => ({
   formGoal: s.formGoal,
   completeGoal: s.completeGoal,
   addThought: s.addThought,
+  addMessage: s.addMessage,
+  clearConversation: s.clearConversation,
   reset: s.reset,
   hydrate: s.hydrate,
-}));
+})));
 
 // ═══════════════════════════════════════════════════════════════════════════
 // NON-REACT ACCESS (for services, tests, CLI)

@@ -10,11 +10,37 @@
 
 | Metryka | Wartość |
 |---------|---------|
-| Rozwiązanych problemów | 15 |
+| Rozwiązanych problemów | 16 |
 | Całkowity czas | ~48 godzin |
 | Średnia trudność | 3.9/5 |
 | Największy przełom | FactEcho Guard (FAZA 6.0) |
 | Najdłuższy problem | Monolityczny Kernel (8h) |
+
+---
+
+## Problem #20: The Double Brain Race Condition (Schizophrenic Loop)
+
+**Data:** 2025-12-13
+**Trudność:** 5/5
+**Status:** 🧬 Zdiagnozowany (Plan Naprawy: Unified Input Queue)
+
+### Objawy
+Agent odpowiadał na input użytkownika ("Jaka pogoda?"), a 10ms później dorzucał losową, niepowiązaną myśl ("Mam ochotę napisać wiersz").
+User widział:
+> U: Jaka pogoda?
+> A: Jest słonecznie.
+> A: Czasoprzestrzeń jest iluzją.
+
+### Diagnoza (The Split Brain)
+Odkryliśmy fundamentalny błąd w architekturze współbieżności:
+1.  **Lewa Półkula (`processUserInput`):** Reaguje na event w Reactcie. Szybka, bezstanowa.
+2.  **Prawa Półkula (`EventLoop.tick`):** Działa w interwale (co 3s). Nie wie o eventach Reacta.
+
+Gdy tick wypadał tuż po inpucie uytkownika, `EventLoop` widział `input: null` (bo React już obsłużył input), więc uznawał: "Cisza. Nudzę się. Odpalam myśl autonomiczną".
+
+### Lekcja
+**Event Loop musi być Single Source of Truth dla czasu.**
+Nie można mieć dwóch niezależnych pętli przetwarzania (React Event + Interval Tick). Input użytkownika musi wpadać do **kolejki** Event Loopa, a nie być przetwarzany "na boku".
 
 ---
 

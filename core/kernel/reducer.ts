@@ -7,8 +7,8 @@
  * @module core/kernel/reducer
  */
 
-import type { KernelState, KernelEvent, KernelReducerResult, KernelOutput } from './types';
-import type { MoodShiftPayload, NeuroUpdatePayload, StateOverridePayload, UserInputPayload, AgentSpokePayload, ToolResultPayload } from './types';
+import type { KernelState, KernelEvent, KernelReducerResult, KernelOutput, ConversationTurn } from './types';
+import type { MoodShiftPayload, NeuroUpdatePayload, StateOverridePayload, UserInputPayload, AgentSpokePayload, ToolResultPayload, AddMessagePayload } from './types';
 import { createInitialKernelState, INITIAL_LIMBIC, INITIAL_SOMA, INITIAL_NEURO, INITIAL_RESONANCE, BASELINE_NEURO } from './initialState';
 import * as SomaSystem from '../systems/SomaSystem';
 import * as LimbicSystem from '../systems/LimbicSystem';
@@ -76,6 +76,12 @@ export function kernelReducer(state: KernelState, event: KernelEvent): KernelRed
       
     case 'STATE_OVERRIDE':
       return handleStateOverride(state, event, outputs);
+      
+    case 'ADD_MESSAGE':
+      return handleAddMessage(state, event, outputs);
+      
+    case 'CLEAR_CONVERSATION':
+      return handleClearConversation(state, outputs);
       
     case 'RESET':
       return handleReset(state, outputs);
@@ -145,24 +151,19 @@ function handleTick(state: KernelState, event: KernelEvent, outputs: KernelOutpu
       });
       outputs.push({ type: 'WAKE_PROCESS', payload: {} });
     } else {
-      // REM Sleep (occasional)
-      if (Math.random() > 0.7) {
-        outputs.push({
-          type: 'EVENT_BUS_PUBLISH',
-          payload: {
-            source: AgentType.VISUAL_CORTEX,
-            type: PacketType.THOUGHT_CANDIDATE,
-            payload: { 
-              internal_monologue: `REM Cycle: Dreaming... Energy at ${Math.round(metabolicResult.newState.energy)}%` 
-            },
-            priority: 0.1
-          }
-        });
-      }
-      // Dream consolidation (occasional)
-      if (Math.random() > 0.5) {
-        outputs.push({ type: 'DREAM_CONSOLIDATION', payload: {} });
-      }
+      // REM Sleep (probabilistic - runtime decides)
+      outputs.push({
+        type: 'MAYBE_REM_CYCLE',
+        payload: { 
+          probability: 0.3,
+          energy: Math.round(metabolicResult.newState.energy)
+        }
+      });
+      // Dream consolidation (probabilistic - runtime decides)
+      outputs.push({ 
+        type: 'MAYBE_DREAM_CONSOLIDATION', 
+        payload: { probability: 0.5 } 
+      });
     }
   }
   
@@ -557,6 +558,56 @@ function handleHydrate(state: KernelState, event: KernelEvent, outputs: KernelOu
   outputs.push({
     type: 'LOG',
     payload: { message: 'STATE HYDRATED from storage' }
+  });
+  
+  return { nextState, outputs };
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// CONVERSATION HANDLERS
+// ═══════════════════════════════════════════════════════════════════════════
+
+const MAX_CONVERSATION_TURNS = 50;
+
+function handleAddMessage(state: KernelState, event: KernelEvent, outputs: KernelOutput[]): KernelReducerResult {
+  const payload = event.payload as AddMessagePayload | undefined;
+  if (!payload?.text) {
+    return { nextState: state, outputs };
+  }
+  
+  const newTurn: ConversationTurn = {
+    role: payload.role,
+    text: payload.text,
+    type: payload.type || 'speech',
+    timestamp: event.timestamp,
+    imageData: payload.imageData,
+    sources: payload.sources
+  };
+  
+  // Add to conversation (bounded)
+  let newConversation = [...state.conversation, newTurn];
+  if (newConversation.length > MAX_CONVERSATION_TURNS) {
+    newConversation = newConversation.slice(-MAX_CONVERSATION_TURNS);
+  }
+  
+  const nextState = {
+    ...state,
+    conversation: newConversation,
+    silenceStart: event.timestamp
+  };
+  
+  return { nextState, outputs };
+}
+
+function handleClearConversation(state: KernelState, outputs: KernelOutput[]): KernelReducerResult {
+  const nextState = {
+    ...state,
+    conversation: []
+  };
+  
+  outputs.push({
+    type: 'LOG',
+    payload: { message: 'CONVERSATION CLEARED' }
   });
   
   return { nextState, outputs };
