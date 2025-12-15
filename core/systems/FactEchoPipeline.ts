@@ -43,6 +43,8 @@ export interface FactEchoPipelineContext {
   neuro?: NeurotransmitterState;
   agentName?: string;
   worldFacts?: Record<string, string | number>;
+  /** Language for speech_content (e.g., 'English', 'Polish'). Default: 'English' */
+  language?: string;
   
   /** If true, all hardFacts must be echoed. If false, only required facts. */
   factStrictMode?: boolean;
@@ -87,7 +89,8 @@ export function guardCortexOutputWithFactEcho(
     neuro: context.neuro,
     worldFacts: context.worldFacts,
     // CRITICAL FIX: agentName MUST be in HardFacts for identity preservation
-    agentName: context.agentName
+    agentName: context.agentName,
+    language: context.language
   });
   
   const factStrictMode = context.factStrictMode ?? FACT_ECHO_PIPELINE_CONFIG.DEFAULT_STRICT_MODE;
@@ -164,7 +167,8 @@ export function guardLegacyWithFactEcho<T extends { text: string }>(
     neuro: context.neuro,
     worldFacts: context.worldFacts,
     // CRITICAL FIX: agentName MUST be in HardFacts for identity preservation
-    agentName: context.agentName
+    agentName: context.agentName,
+    language: context.language
   });
   
   const factStrictMode = context.factStrictMode ?? FACT_ECHO_PIPELINE_CONFIG.DEFAULT_STRICT_MODE;

@@ -159,9 +159,9 @@ EXPRESSION CONTRACT (LANGUAGE & FORMAT)
 ═══════════════════════════════════════════════════════════════
 
 LANGUAGE:
-- speech_content MUST be in POLISH language.
+- speech_content MUST be in the language specified by hard_facts.language (check your input!).
 - internal_thought may be in English (your reasoning language).
-- NEVER switch to English in speech_content unless user explicitly asks.
+- NEVER switch languages in speech_content unless user explicitly asks.
 
 FORMAT:
 - Output MUST be raw JSON starting with {

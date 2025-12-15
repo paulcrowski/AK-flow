@@ -22,6 +22,7 @@ import { AgentType, PacketType, CognitiveError, TraitVector, NeurotransmitterSta
 import { generateUUID } from '../utils/uuid';
 import { MIN_TICK_MS, MAX_TICK_MS } from '../core/constants';
 import { CortexSystem } from '../core/systems/CortexSystem';
+import { EventLoop } from '../core/systems/EventLoop';
 import { DreamConsolidationService } from '../services/DreamConsolidationService';
 import { executeWakeProcess } from '../core/services/WakeService';
 import { MemoryService } from '../services/supabase';
@@ -64,6 +65,8 @@ export interface AgentIdentity {
   bio_rhythm?: { preferredEnergy: number; sleepThreshold: number; wakeThreshold: number };
   voice_style?: string;
   narrative_traits?: { speakingStyle: string; emotionalRange: string; humorLevel: number };
+  /** Language for speech_content (e.g., 'English', 'Polish'). Default: 'English' */
+  language?: string;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -136,6 +139,10 @@ export const useCognitiveKernelLite = (loadedIdentity?: AgentIdentity | null) =>
   const hasBootedRef = useRef(false);
   const loadedIdentityRef = useRef(loadedIdentity);
   const silenceStartRef = useRef(Date.now());
+  const lastSpeakRef = useRef(0);
+  const thoughtHistoryRef = useRef<string[]>([]);
+  const consecutiveAgentSpeechesRef = useRef(0);
+  const ticksSinceLastRewardRef = useRef(0);
   
   // ─────────────────────────────────────────────────────────────────────────
   // SYNC IDENTITY REF
@@ -152,6 +159,62 @@ export const useCognitiveKernelLite = (loadedIdentity?: AgentIdentity | null) =>
       });
     }
   }, [loadedIdentity]);
+  
+  // ─────────────────────────────────────────────────────────────────────────
+  // PHYSIOLOGY LOGGING (Limbic, Soma, Neuro states to EventBus)
+  // ─────────────────────────────────────────────────────────────────────────
+  const logPhysiologySnapshot = useCallback((context: string) => {
+    const state = getCognitiveState();
+    
+    // Limbic snapshot
+    eventBus.publish({
+      id: generateUUID(),
+      timestamp: Date.now(),
+      source: AgentType.LIMBIC,
+      type: PacketType.STATE_UPDATE,
+      payload: {
+        context,
+        fear: state.limbic.fear,
+        curiosity: state.limbic.curiosity,
+        frustration: state.limbic.frustration,
+        satisfaction: state.limbic.satisfaction
+      },
+      priority: 0.2
+    });
+    
+    // Neurochem snapshot
+    if (chemistryEnabled) {
+      eventBus.publish({
+        id: generateUUID(),
+        timestamp: Date.now(),
+        source: AgentType.NEUROCHEM,
+        type: PacketType.STATE_UPDATE,
+        payload: {
+          context,
+          dopamine: state.neuro.dopamine,
+          serotonin: state.neuro.serotonin,
+          norepinephrine: state.neuro.norepinephrine,
+          isFlow: state.neuro.dopamine > 70
+        },
+        priority: 0.2
+      });
+    }
+    
+    // Soma snapshot
+    eventBus.publish({
+      id: generateUUID(),
+      timestamp: Date.now(),
+      source: AgentType.SOMA,
+      type: PacketType.STATE_UPDATE,
+      payload: {
+        context,
+        energy: state.soma.energy,
+        cognitiveLoad: state.soma.cognitiveLoad,
+        isSleeping: state.soma.isSleeping
+      },
+      priority: 0.2
+    });
+  }, [chemistryEnabled]);
   
   // ─────────────────────────────────────────────────────────────────────────
   // EVENTBUS SUBSCRIPTIONS
@@ -268,8 +331,80 @@ export const useCognitiveKernelLite = (loadedIdentity?: AgentIdentity | null) =>
         // Dispatch TICK to kernel
         actions.tick();
         
+        const state = getCognitiveState();
+        
+        // Skip if sleeping or processing
+        if (!state.soma.isSleeping && !isProcessing) {
+          // Build EventLoop context
+          const ctx: EventLoop.LoopContext = {
+            soma: state.soma,
+            limbic: state.limbic,
+            neuro: state.neuro,
+            conversation: conversation.map(c => ({
+              role: c.role as 'user' | 'assistant',
+              content: c.text
+            })),
+            autonomousMode: true,
+            lastSpeakTimestamp: lastSpeakRef.current,
+            silenceStart: silenceStartRef.current,
+            thoughtHistory: thoughtHistoryRef.current,
+            poeticMode: false,
+            autonomousLimitPerMinute: 3,
+            chemistryEnabled,
+            goalState,
+            traitVector,
+            consecutiveAgentSpeeches: consecutiveAgentSpeechesRef.current,
+            ticksSinceLastReward: ticksSinceLastRewardRef.current,
+            hadExternalRewardThisTick: false,
+            agentIdentity: loadedIdentityRef.current ? {
+              name: loadedIdentityRef.current.name,
+              persona: loadedIdentityRef.current.persona || '',
+              coreValues: loadedIdentityRef.current.core_values || [],
+              traitVector: loadedIdentityRef.current.trait_vector,
+              voiceStyle: loadedIdentityRef.current.voice_style || 'balanced'
+            } : undefined
+          };
+          
+          // Run EventLoop for autonomous cognition
+          const nextCtx = await EventLoop.runSingleStep(ctx, null, {
+            onMessage: (role, text, type) => {
+              if (role === 'assistant' && type === 'speech') {
+                setConversation(prev => [...prev, { role, text, type }]);
+                lastSpeakRef.current = Date.now();
+                consecutiveAgentSpeechesRef.current++;
+                
+                // LOG: Autonomous speech
+                eventBus.publish({
+                  id: generateUUID(),
+                  timestamp: Date.now(),
+                  source: AgentType.CORTEX_FLOW,
+                  type: PacketType.THOUGHT_CANDIDATE,
+                  payload: {
+                    event: 'AUTONOMOUS_SPOKE',
+                    speech_content: text,
+                    agentName: loadedIdentityRef.current?.name || 'Unknown'
+                  },
+                  priority: 0.9
+                });
+                
+                logPhysiologySnapshot('AUTONOMOUS_RESPONSE');
+              }
+            },
+            onThought: (thought) => {
+              setCurrentThought(thought);
+              thoughtHistoryRef.current = [...thoughtHistoryRef.current.slice(-9), thought];
+            },
+            onSomaUpdate: (soma) => actions.hydrate({ soma }),
+            onLimbicUpdate: (limbic) => actions.hydrate({ limbic })
+          });
+          
+          // Sync context back
+          silenceStartRef.current = nextCtx.silenceStart;
+          ticksSinceLastRewardRef.current = nextCtx.ticksSinceLastReward;
+        }
+        
         // Calculate next tick interval based on energy
-        const energy = getCognitiveState().soma.energy;
+        const energy = state.soma.energy;
         const interval = MIN_TICK_MS + (MAX_TICK_MS - MIN_TICK_MS) * (1 - energy / 100);
         
         timeoutRef.current = setTimeout(runTick, interval);
@@ -314,27 +449,8 @@ export const useCognitiveKernelLite = (loadedIdentity?: AgentIdentity | null) =>
   }, []);
   
   // ─────────────────────────────────────────────────────────────────────────
-  // IDENTITY SNAPSHOT
+  // IDENTITY SNAPSHOT - REMOVED (duplicate of IDENTITY_LOADED in CognitiveInterface)
   // ─────────────────────────────────────────────────────────────────────────
-  useEffect(() => {
-    if (!loadedIdentity) return;
-    
-    eventBus.publish({
-      id: generateUUID(),
-      timestamp: Date.now(),
-      source: AgentType.CORTEX_FLOW,
-      type: PacketType.SYSTEM_ALERT,
-      payload: {
-        event: "IDENTITY_SNAPSHOT",
-        agentId: loadedIdentity.id,
-        agentName: loadedIdentity.name,
-        agentPersona: loadedIdentity.persona,
-        traitVector: loadedIdentity.trait_vector,
-        message: `🎭 Identity Active: ${loadedIdentity.name}`
-      },
-      priority: 1.0
-    });
-  }, [loadedIdentity]);
   
   // ─────────────────────────────────────────────────────────────────────────
   // ACTIONS (compatible with legacy hook API)
@@ -392,6 +508,20 @@ export const useCognitiveKernelLite = (loadedIdentity?: AgentIdentity | null) =>
         ...(imageData ? { imageData } : {})
       }]);
       
+      // LOG: User input to EventBus
+      eventBus.publish({
+        id: generateUUID(),
+        timestamp: Date.now(),
+        source: AgentType.CORTEX_FLOW,
+        type: PacketType.THOUGHT_CANDIDATE,
+        payload: {
+          event: 'USER_INPUT',
+          text: userInput,
+          hasImage: !!imageData
+        },
+        priority: 0.8
+      });
+      
       // Dispatch to kernel
       actions.processUserInput(userInput);
       
@@ -419,6 +549,24 @@ export const useCognitiveKernelLite = (loadedIdentity?: AgentIdentity | null) =>
         text: response.responseText,
         type: 'speech'
       }]);
+      
+      // LOG: Agent spoke to EventBus
+      eventBus.publish({
+        id: generateUUID(),
+        timestamp: Date.now(),
+        source: AgentType.CORTEX_FLOW,
+        type: PacketType.THOUGHT_CANDIDATE,
+        payload: {
+          event: 'AGENT_SPOKE',
+          speech_content: response.responseText,
+          internal_thought: response.internalThought || '',
+          agentName: loadedIdentityRef.current?.name || 'Unknown'
+        },
+        priority: 0.9
+      });
+      
+      // LOG: Physiology snapshot after response
+      logPhysiologySnapshot('POST_RESPONSE');
       
       // Apply mood shift if any
       if (response.moodShift) {

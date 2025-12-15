@@ -18,6 +18,24 @@
 
 ---
 
+## Problem #21: System Determinism & Error Handling (The Stability Gap)
+
+**Data:** 2025-12-15
+**Trudność:** 3/5
+**Status:** ✅ Rozwiązany (RNG Injection + Global Boundary)
+
+### Objawy
+System był trudny do debugowania, ponieważ decyzje probabilistyczne (np. czy wejść w REM cycle) były oparte na `Math.random()`. Dodatkowo, błąd w jednym komponencie Reacta wywalał całą aplikację (White Screen).
+
+### Rozwiązanie
+1. **Deterministic RNG**: Wstrzyknięcie `createRng(seed)` do wszystkich systemów decyzyjnych (`DecisionGate`, `ExpressionPolicy`).
+2. **Global Error Boundary**: `ComponentErrorBoundary` łapie błędy w `CognitiveInterface` i pozwala na graceful recovery bez przeładowania strony.
+
+### Lekcja
+**Determinizm to nie opcja, to wymóg.** Aby debugować AGI, musisz móc odtworzyć ten sam "rzut kością" dwa razy. RNG musi być centralnie zarządzane.
+
+---
+
 ## Problem #20: The Double Brain Race Condition (Schizophrenic Loop)
 
 **Data:** 2025-12-13

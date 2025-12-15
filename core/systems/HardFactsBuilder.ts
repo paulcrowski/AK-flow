@@ -38,8 +38,10 @@ export function buildHardFacts(options: {
   worldFacts?: Record<string, string | number>;
   // IDENTITY SINGLE SOURCE OF TRUTH (13/10)
   agentName?: string;
+  /** Language for speech_content (e.g., 'English', 'Polish'). Default: 'English' */
+  language?: string;
 }): HardFacts {
-  const { soma, neuro, worldFacts, agentName } = options;
+  const { soma, neuro, worldFacts, agentName, language } = options;
   
   const facts: HardFacts = {};
   
@@ -62,6 +64,10 @@ export function buildHardFacts(options: {
   if (agentName) {
     facts.agentName = agentName;
   }
+  
+  // LANGUAGE as hard fact - determines speech_content language
+  // Default: English (all agents speak English unless specified otherwise)
+  facts.language = language || 'English';
   
   // Soma facts
   if (soma) {

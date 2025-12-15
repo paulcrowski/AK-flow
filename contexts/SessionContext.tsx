@@ -40,6 +40,8 @@ export interface Agent {
   bio_rhythm?: BioRhythm;
   voice_style?: string;
   narrative_traits?: NarrativeTraits;
+  /** Language for speech_content (e.g., 'English', 'Polish'). Default: 'English' */
+  language?: string;
   created_at: string;
   last_active_at: string;
 }

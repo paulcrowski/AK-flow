@@ -31,7 +31,7 @@ const Header: React.FC<{ onOpenSync: () => void }> = ({ onOpenSync }) => {
         </div>
 
         {/* Quick Command */}
-        <button 
+        <button
           onClick={toggleCommandPalette}
           className="hidden md:flex items-center gap-2 px-3 py-1.5 text-xs text-gray-500 bg-white/5 border border-white/10 rounded-lg hover:bg-white/10 transition-colors"
         >
@@ -46,11 +46,10 @@ const Header: React.FC<{ onOpenSync: () => void }> = ({ onOpenSync }) => {
       <div className="flex items-center gap-6">
         {/* Sync Status Indicator */}
         <div className="flex items-center gap-2 text-xs font-mono">
-          <div className={`w-2 h-2 rounded-full ${
-            syncStatus.status === 'SYNCED' ? 'bg-neon-green' :
+          <div className={`w-2 h-2 rounded-full ${syncStatus.status === 'SYNCED' ? 'bg-neon-green' :
             syncStatus.status === 'PENDING' ? 'bg-yellow-400 animate-pulse' :
-            'bg-red-400'
-          }`} />
+              'bg-red-400'
+            }`} />
           <span className="text-gray-500">{syncStatus.status}</span>
         </div>
 
@@ -58,15 +57,15 @@ const Header: React.FC<{ onOpenSync: () => void }> = ({ onOpenSync }) => {
         <div className="hidden md:flex flex-col items-end">
           <span className="text-[9px] text-gray-500 font-mono tracking-widest">TRANSCENDENCE</span>
           <div className="w-32 h-1.5 bg-gray-800 rounded-full mt-1 overflow-hidden">
-            <div 
+            <div
               className="h-full bg-gradient-to-r from-neon-purple to-neon-blue shadow-[0_0_10px_#a855f7] transition-all duration-1000"
-              style={{ width: `${stats.overallProgress}%` }} 
+              style={{ width: `${stats.overallProgress}%` }}
             />
           </div>
         </div>
 
         {/* Sync Button */}
-        <button 
+        <button
           onClick={onOpenSync}
           className="flex items-center gap-2 bg-gradient-to-r from-neon-blue/10 to-neon-purple/10 hover:from-neon-blue/20 hover:to-neon-purple/20 border border-white/10 hover:border-white/30 px-4 py-2 rounded-lg text-[10px] font-mono font-bold text-white transition-all shadow-[0_0_10px_rgba(59,130,246,0.1)] hover:shadow-[0_0_15px_rgba(59,130,246,0.3)]"
         >
@@ -100,18 +99,16 @@ const TabNav: React.FC = () => {
         <button
           key={tab.id}
           onClick={() => setActiveTab(tab.id)}
-          className={`relative px-6 py-3.5 text-xs font-bold font-mono tracking-wider transition-all border-b-2 flex items-center gap-2 ${
-            activeTab === tab.id 
-              ? `border-${tab.color} text-white bg-white/5` 
-              : 'border-transparent text-gray-600 hover:text-gray-300'
-          }`}
+          className={`relative px-6 py-3.5 text-xs font-bold font-mono tracking-wider transition-all border-b-2 flex items-center gap-2 ${activeTab === tab.id
+            ? `border-${tab.color} text-white bg-white/5`
+            : 'border-transparent text-gray-600 hover:text-gray-300'
+            }`}
         >
           <span>{tab.icon}</span>
           <span>{tab.label}</span>
           {tab.count !== null && tab.count > 0 && (
-            <span className={`px-1.5 py-0.5 text-[9px] rounded ${
-              activeTab === tab.id ? `bg-${tab.color}/20 text-${tab.color}` : 'bg-white/10 text-gray-500'
-            }`}>
+            <span className={`px-1.5 py-0.5 text-[9px] rounded ${activeTab === tab.id ? `bg-${tab.color}/20 text-${tab.color}` : 'bg-white/10 text-gray-500'
+              }`}>
               {tab.count}
             </span>
           )}
@@ -130,26 +127,34 @@ function App() {
   const [autoLoadAttempted, setAutoLoadAttempted] = useState(false);
   const { activeTab, loadState } = useNexusStore();
 
-  // AUTO-LOAD: Try to load from local file on startup
+  // AUTO-LOAD & POLLING: Keep state in sync with JSON file
   useEffect(() => {
-    if (autoLoadAttempted) return;
-    setAutoLoadAttempted(true);
-    
-    const autoLoad = async () => {
+    let intervalId: number;
+
+    const loadData = async () => {
       try {
-        // Try to fetch from local data folder
-        const response = await fetch('/data/ak-flow-state.json');
+        const response = await fetch('/data/ak-flow-state.json?t=' + Date.now()); // Prevent caching
         if (response.ok) {
           const state = await response.json();
-          console.log('[App] Auto-loaded state from /data/ak-flow-state.json');
+          // Only update if actually changed to prevent jitter (store should handle diffing ideally, 
+          // but for now we just load it. Zustand might trigger re-renders, but it's fine for this scale)
           loadState(state);
         }
       } catch (error) {
-        console.log('[App] No auto-load file found, waiting for manual sync');
+        console.warn('[App] Auto-load failed:', error);
       }
     };
-    
-    autoLoad();
+
+    // Initial load
+    if (!autoLoadAttempted) {
+      setAutoLoadAttempted(true);
+      loadData();
+    }
+
+    // Poll every 2 seconds
+    intervalId = window.setInterval(loadData, 2000);
+
+    return () => clearInterval(intervalId);
   }, [autoLoadAttempted, loadState]);
 
   // Setup file watcher callback
@@ -194,23 +199,25 @@ function App() {
 
   return (
     <div className="h-screen bg-[#050505] text-gray-300 font-sans selection:bg-neon-purple selection:text-white flex flex-col overflow-hidden">
-      
+
       {/* Header */}
       <Header onOpenSync={() => setIsSyncOpen(true)} />
 
       {/* Main Workspace */}
       <div className="flex-1 flex flex-col min-h-0">
-        
+
         {/* Tab Navigation */}
         <TabNav />
 
         {/* Content Area */}
-        <div className="flex-1 p-6 overflow-hidden bg-[#09090b]">
-          <div className="h-full max-w-7xl mx-auto">
-            {activeTab === 'TASKS' && <TaskBoard />}
-            {activeTab === 'ROADMAP' && <RoadmapView />}
-            {activeTab === 'CHALLENGES' && <ChallengesView />}
-            {activeTab === 'NOTES' && <NotesView />}
+        <div className="flex-1 overflow-hidden bg-[#09090b] relative">
+          <div className="absolute inset-0 p-6 flex flex-col">
+            <div className="flex-1 min-h-0 max-w-7xl mx-auto w-full">
+              {activeTab === 'TASKS' && <TaskBoard />}
+              {activeTab === 'ROADMAP' && <RoadmapView />}
+              {activeTab === 'CHALLENGES' && <ChallengesView />}
+              {activeTab === 'NOTES' && <NotesView />}
+            </div>
           </div>
         </div>
       </div>

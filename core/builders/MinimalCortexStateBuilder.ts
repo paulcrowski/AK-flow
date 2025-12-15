@@ -27,6 +27,8 @@ interface CachedIdentity {
   traitVector: CortexTraitVector;
   /** Top 3 core shards - cached, not fetched per request */
   coreShards: IdentityShard[];
+  /** Language for speech_content (e.g., 'English', 'Polish'). Default: 'English' */
+  language: string;
   loadedAt: number;
 }
 
@@ -43,15 +45,17 @@ export function setCachedIdentity(
   agentId: string,
   identity: CoreIdentity,
   traits: CortexTraitVector,
-  coreShards: IdentityShard[] = []
+  coreShards: IdentityShard[] = [],
+  language: string = 'English'
 ): void {
   identityCache.set(agentId, {
     coreIdentity: identity,
     traitVector: traits,
     coreShards: coreShards.slice(0, 3), // Max 3 core shards
+    language,
     loadedAt: Date.now()
   });
-  console.log(`[MinimalCortex] Identity cached for ${identity.name} with ${coreShards.length} core shards`);
+  console.log(`[MinimalCortex] Identity cached for ${identity.name} (language: ${language}) with ${coreShards.length} core shards`);
 }
 
 /**
@@ -152,6 +156,7 @@ export function buildMinimalCortexState(
   }
   
   const traitVector = cached?.traitVector ?? DEFAULT_TRAIT_VECTOR;
+  const language = cached?.language ?? 'English';
   
   // Core shards from cache (max 3, ~100 tokens)
   const coreShards = cached?.coreShards ?? [];
@@ -187,7 +192,8 @@ export function buildMinimalCortexState(
     // CRITICAL: HardFacts are THE single source of truth for identity and time
     // LLM MUST read these, not hallucinate dates or names
     hard_facts: buildHardFacts({
-      agentName: coreIdentity.name
+      agentName: coreIdentity.name,
+      language: language
       // Note: soma/neuro not available here, will be added by caller if needed
     })
   };

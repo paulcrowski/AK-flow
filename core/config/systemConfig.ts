@@ -242,7 +242,7 @@ export const SYSTEM_CONFIG = {
   // ─────────────────────────────────────────────────────────────────────────
   rng: {
     /** Seed for deterministic RNG. null = Math.random(), string = deterministic */
-    seed: null as string | null,
+    seed: 'debug-test' as string | null,  // TESTING MODE - set to null for production
   },
 
   // ─────────────────────────────────────────────────────────────────────────

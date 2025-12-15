@@ -40,6 +40,8 @@ export interface PipelineContext {
   limbic?: LimbicState;
   agentName?: string;
   worldFacts?: Record<string, string | number>;
+  /** Language for speech_content (e.g., 'English', 'Polish'). Default: 'English' */
+  language?: string;
 }
 
 export interface PipelineResult<T> {
@@ -76,7 +78,8 @@ export function guardSpeech(
   const hardFacts = buildHardFacts({
     soma: context.soma,
     neuro: context.neuro,
-    worldFacts: context.worldFacts
+    worldFacts: context.worldFacts,
+    language: context.language
   });
   
   // Reset guard for new turn

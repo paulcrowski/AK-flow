@@ -2,7 +2,6 @@
   "version": "13.0",
   "lastModified": "2025-12-15T10:30:00.000Z",
   "modifiedBy": "AI_WINDSURF",
-  
   "tasks": [
     {
       "id": "task-today-001",
@@ -12,8 +11,16 @@
       "type": "TODAY",
       "isCompleted": false,
       "subtasks": [
-        { "id": "sub-001", "content": "Zlikwidowac podwojna sciezke processUserInput + EventLoop.tick", "isCompleted": false },
-        { "id": "sub-002", "content": "Eliminuje race condition (agent odpowiada 2x)", "isCompleted": false }
+        {
+          "id": "sub-001",
+          "content": "Zlikwidowac podwojna sciezke processUserInput + EventLoop.tick",
+          "isCompleted": false
+        },
+        {
+          "id": "sub-002",
+          "content": "Eliminuje race condition (agent odpowiada 2x)",
+          "isCompleted": false
+        }
       ],
       "createdAt": "2025-12-15T10:00:00.000Z",
       "updatedAt": "2025-12-15T10:00:00.000Z"
@@ -26,8 +33,16 @@
       "type": "TODAY",
       "isCompleted": false,
       "subtasks": [
-        { "id": "sub-001", "content": "Dokonczyc reakcje serotoninowe w ChemistryBridge.ts", "isCompleted": false },
-        { "id": "sub-002", "content": "Stabilizowac emocje PO porazkach narzedzi", "isCompleted": false }
+        {
+          "id": "sub-001",
+          "content": "Dokonczyc reakcje serotoninowe w ChemistryBridge.ts",
+          "isCompleted": false
+        },
+        {
+          "id": "sub-002",
+          "content": "Stabilizowac emocje PO porazkach narzedzi",
+          "isCompleted": false
+        }
       ],
       "createdAt": "2025-12-15T10:00:00.000Z",
       "updatedAt": "2025-12-15T10:00:00.000Z"
@@ -40,8 +55,16 @@
       "type": "TODAY",
       "isCompleted": false,
       "subtasks": [
-        { "id": "sub-001", "content": "Dodac hemisphere tracking do ExecutiveGate.ts", "isCompleted": false },
-        { "id": "sub-002", "content": "Wyswietlic w NeuroMonitor dashboard", "isCompleted": false }
+        {
+          "id": "sub-001",
+          "content": "Dodac hemisphere tracking do ExecutiveGate.ts",
+          "isCompleted": false
+        },
+        {
+          "id": "sub-002",
+          "content": "Wyswietlic w NeuroMonitor dashboard",
+          "isCompleted": false
+        }
       ],
       "createdAt": "2025-12-15T10:00:00.000Z",
       "updatedAt": "2025-12-15T10:00:00.000Z"
@@ -54,9 +77,21 @@
       "type": "TODAY",
       "isCompleted": false,
       "subtasks": [
-        { "id": "sub-001", "content": "Zaimplementowac NOTES tool", "isCompleted": false },
-        { "id": "sub-002", "content": "Zaimplementowac READ_FILE tool", "isCompleted": false },
-        { "id": "sub-003", "content": "Podlaczyc do EvaluationBus", "isCompleted": false }
+        {
+          "id": "sub-001",
+          "content": "Zaimplementowac NOTES tool",
+          "isCompleted": false
+        },
+        {
+          "id": "sub-002",
+          "content": "Zaimplementowac READ_FILE tool",
+          "isCompleted": false
+        },
+        {
+          "id": "sub-003",
+          "content": "Podlaczyc do EvaluationBus",
+          "isCompleted": false
+        }
       ],
       "createdAt": "2025-12-15T10:00:00.000Z",
       "updatedAt": "2025-12-15T10:00:00.000Z"
@@ -69,9 +104,21 @@
       "type": "TODAY",
       "isCompleted": false,
       "subtasks": [
-        { "id": "sub-001", "content": "Dodac ACh do NeurotransmitterSystem.ts", "isCompleted": false },
-        { "id": "sub-002", "content": "Uruchom w trybie PASSIVE (logging-only)", "isCompleted": false },
-        { "id": "sub-003", "content": "Loguj co ACh chcialby zrobic bez blokowania", "isCompleted": false }
+        {
+          "id": "sub-001",
+          "content": "Dodac ACh do NeurotransmitterSystem.ts",
+          "isCompleted": false
+        },
+        {
+          "id": "sub-002",
+          "content": "Uruchom w trybie PASSIVE (logging-only)",
+          "isCompleted": false
+        },
+        {
+          "id": "sub-003",
+          "content": "Loguj co ACh chcialby zrobic bez blokowania",
+          "isCompleted": false
+        }
       ],
       "createdAt": "2025-12-15T10:00:00.000Z",
       "updatedAt": "2025-12-15T10:00:00.000Z"
@@ -84,11 +131,46 @@
       "type": "TODAY",
       "isCompleted": false,
       "subtasks": [
-        { "id": "sub-001", "content": "Endpoint na Supabase do logow", "isCompleted": false },
-        { "id": "sub-002", "content": "Wysylka co 30s najwazniejszych metryk", "isCompleted": false }
+        {
+          "id": "sub-001",
+          "content": "Endpoint na Supabase do logow",
+          "isCompleted": false
+        },
+        {
+          "id": "sub-002",
+          "content": "Wysylka co 30s najwazniejszych metryk",
+          "isCompleted": false
+        }
       ],
       "createdAt": "2025-12-15T10:00:00.000Z",
       "updatedAt": "2025-12-15T10:00:00.000Z"
+    },
+    {
+      "id": "task-today-007",
+      "content": "System Determinism & Stability (RNG + ErrorBoundary)",
+      "details": "PROBLEM: Brak determinizmu w losowych decyzjach (REM, Expression) oraz ryzyko crashu calej aplikacji. ROZWIAZANIE: Centralny RNG z seedem oraz ComponentErrorBoundary.",
+      "priority": "HIGH",
+      "type": "TODAY",
+      "isCompleted": true,
+      "subtasks": [
+        {
+          "id": "sub-001",
+          "content": "Integracja RNG w ExpressionPolicy, DecisionGate, Hooks",
+          "isCompleted": true
+        },
+        {
+          "id": "sub-002",
+          "content": "ComponentErrorBoundary w App.tsx",
+          "isCompleted": true
+        },
+        {
+          "id": "sub-003",
+          "content": "Audit konfiguracji",
+          "isCompleted": true
+        }
+      ],
+      "createdAt": "2025-12-15T11:45:00.000Z",
+      "updatedAt": "2025-12-15T11:45:00.000Z"
     },
     {
       "id": "task-tomorrow-001",
@@ -97,7 +179,11 @@
       "type": "TOMORROW",
       "isCompleted": false,
       "subtasks": [
-        { "id": "sub-001", "content": "Przeniesc wszystkie progi do jednego pliku", "isCompleted": false }
+        {
+          "id": "sub-001",
+          "content": "Przeniesc wszystkie progi do jednego pliku",
+          "isCompleted": false
+        }
       ],
       "createdAt": "2025-12-15T10:00:00.000Z",
       "updatedAt": "2025-12-15T10:00:00.000Z"
@@ -109,8 +195,16 @@
       "type": "TOMORROW",
       "isCompleted": false,
       "subtasks": [
-        { "id": "sub-001", "content": "Logowanie czasu cognitiveCycle", "isCompleted": false },
-        { "id": "sub-002", "content": "Dashboard DOPAMINE_TICK w NeuroMonitor", "isCompleted": false }
+        {
+          "id": "sub-001",
+          "content": "Logowanie czasu cognitiveCycle",
+          "isCompleted": false
+        },
+        {
+          "id": "sub-002",
+          "content": "Dashboard DOPAMINE_TICK w NeuroMonitor",
+          "isCompleted": false
+        }
       ],
       "createdAt": "2025-12-15T10:00:00.000Z",
       "updatedAt": "2025-12-15T10:00:00.000Z"
@@ -122,7 +216,11 @@
       "type": "TOMORROW",
       "isCompleted": false,
       "subtasks": [
-        { "id": "sub-001", "content": "Graceful degradation dla krytycznych bledow", "isCompleted": false }
+        {
+          "id": "sub-001",
+          "content": "Graceful degradation dla krytycznych bledow",
+          "isCompleted": false
+        }
       ],
       "createdAt": "2025-12-15T10:00:00.000Z",
       "updatedAt": "2025-12-15T10:00:00.000Z"
@@ -144,9 +242,21 @@
       "type": "BACKLOG",
       "isCompleted": false,
       "subtasks": [
-        { "id": "sub-001", "content": "Episodic Memory: Zdarzenie + Emocja + Skutek", "isCompleted": false },
-        { "id": "sub-002", "content": "Semantic Memory: Wyciagniete reguly o swiecie", "isCompleted": false },
-        { "id": "sub-003", "content": "Emotional Markers", "isCompleted": false }
+        {
+          "id": "sub-001",
+          "content": "Episodic Memory: Zdarzenie + Emocja + Skutek",
+          "isCompleted": false
+        },
+        {
+          "id": "sub-002",
+          "content": "Semantic Memory: Wyciagniete reguly o swiecie",
+          "isCompleted": false
+        },
+        {
+          "id": "sub-003",
+          "content": "Emotional Markers",
+          "isCompleted": false
+        }
       ],
       "createdAt": "2025-12-15T10:00:00.000Z",
       "updatedAt": "2025-12-15T10:00:00.000Z"
@@ -158,8 +268,16 @@
       "type": "BACKLOG",
       "isCompleted": false,
       "subtasks": [
-        { "id": "sub-001", "content": "Multi-agent support", "isCompleted": false },
-        { "id": "sub-002", "content": "Attention Gates", "isCompleted": false }
+        {
+          "id": "sub-001",
+          "content": "Multi-agent support",
+          "isCompleted": false
+        },
+        {
+          "id": "sub-002",
+          "content": "Attention Gates",
+          "isCompleted": false
+        }
       ],
       "createdAt": "2025-12-15T10:00:00.000Z",
       "updatedAt": "2025-12-15T10:00:00.000Z"
@@ -171,7 +289,11 @@
       "type": "BACKLOG",
       "isCompleted": false,
       "subtasks": [
-        { "id": "sub-001", "content": "Meta-cognitive reflection", "isCompleted": false }
+        {
+          "id": "sub-001",
+          "content": "Meta-cognitive reflection",
+          "isCompleted": false
+        }
       ],
       "createdAt": "2025-12-15T10:00:00.000Z",
       "updatedAt": "2025-12-15T10:00:00.000Z"
@@ -183,8 +305,16 @@
       "type": "BACKLOG",
       "isCompleted": false,
       "subtasks": [
-        { "id": "sub-001", "content": "Podlaczyc cele do EvaluationBus", "isCompleted": false },
-        { "id": "sub-002", "content": "Goal success tracking", "isCompleted": false }
+        {
+          "id": "sub-001",
+          "content": "Podlaczyc cele do EvaluationBus",
+          "isCompleted": false
+        },
+        {
+          "id": "sub-002",
+          "content": "Goal success tracking",
+          "isCompleted": false
+        }
       ],
       "createdAt": "2025-12-15T10:00:00.000Z",
       "updatedAt": "2025-12-15T10:00:00.000Z"
@@ -196,8 +326,16 @@
       "type": "BACKLOG",
       "isCompleted": false,
       "subtasks": [
-        { "id": "sub-001", "content": "ExecutiveControl z histereza", "isCompleted": false },
-        { "id": "sub-002", "content": "Brak oscylacji progow", "isCompleted": false }
+        {
+          "id": "sub-001",
+          "content": "ExecutiveControl z histereza",
+          "isCompleted": false
+        },
+        {
+          "id": "sub-002",
+          "content": "Brak oscylacji progow",
+          "isCompleted": false
+        }
       ],
       "createdAt": "2025-12-15T10:00:00.000Z",
       "updatedAt": "2025-12-15T10:00:00.000Z"
@@ -209,8 +347,16 @@
       "type": "BACKLOG",
       "isCompleted": false,
       "subtasks": [
-        { "id": "sub-001", "content": "Sen jako proces edycji osobowosci", "isCompleted": false },
-        { "id": "sub-002", "content": "Lekcje dnia do pamieci", "isCompleted": false }
+        {
+          "id": "sub-001",
+          "content": "Sen jako proces edycji osobowosci",
+          "isCompleted": false
+        },
+        {
+          "id": "sub-002",
+          "content": "Lekcje dnia do pamieci",
+          "isCompleted": false
+        }
       ],
       "createdAt": "2025-12-15T10:00:00.000Z",
       "updatedAt": "2025-12-15T10:00:00.000Z"
@@ -222,8 +368,16 @@
       "type": "BACKLOG",
       "isCompleted": false,
       "subtasks": [
-        { "id": "sub-001", "content": "CoreIdentity z DB", "isCompleted": false },
-        { "id": "sub-002", "content": "Pelny CortexStateBuilder", "isCompleted": false }
+        {
+          "id": "sub-001",
+          "content": "CoreIdentity z DB",
+          "isCompleted": false
+        },
+        {
+          "id": "sub-002",
+          "content": "Pelny CortexStateBuilder",
+          "isCompleted": false
+        }
       ],
       "createdAt": "2025-12-15T10:00:00.000Z",
       "updatedAt": "2025-12-15T10:00:00.000Z"
@@ -235,7 +389,11 @@
       "type": "BACKLOG",
       "isCompleted": false,
       "subtasks": [
-        { "id": "sub-001", "content": "Formalizacja sygnalow zwrotnych od swiata", "isCompleted": false }
+        {
+          "id": "sub-001",
+          "content": "Formalizacja sygnalow zwrotnych od swiata",
+          "isCompleted": false
+        }
       ],
       "createdAt": "2025-12-15T10:00:00.000Z",
       "updatedAt": "2025-12-15T10:00:00.000Z"
@@ -247,14 +405,21 @@
       "type": "BACKLOG",
       "isCompleted": false,
       "subtasks": [
-        { "id": "sub-001", "content": "Przejscie z surowych logow na epizody", "isCompleted": false },
-        { "id": "sub-002", "content": "GoalJournal - pamiec przyszlosci", "isCompleted": false }
+        {
+          "id": "sub-001",
+          "content": "Przejscie z surowych logow na epizody",
+          "isCompleted": false
+        },
+        {
+          "id": "sub-002",
+          "content": "GoalJournal - pamiec przyszlosci",
+          "isCompleted": false
+        }
       ],
       "createdAt": "2025-12-15T10:00:00.000Z",
       "updatedAt": "2025-12-15T10:00:00.000Z"
     }
   ],
-  
   "roadmap": [
     {
       "id": "rm-t1-01",
@@ -557,7 +722,6 @@
       "updatedAt": "2025-12-15T10:00:00.000Z"
     }
   ],
-  
   "challenges": [
     {
       "id": "ch-001",
@@ -620,14 +784,16 @@
       "updatedAt": "2025-12-15T10:00:00.000Z"
     }
   ],
-  
   "notes": [
     {
       "id": "note-001",
       "title": "Zasada: Dzialanie -> Porażki -> Regulacja",
       "content": "Narzedzia przed regulacja! Agent musi popelniac bledy, zanim go regulujemy. EvalBus musi miec realne sygnaly, nie symulacje.",
       "category": "DECISION",
-      "tags": ["architecture", "philosophy"],
+      "tags": [
+        "architecture",
+        "philosophy"
+      ],
       "createdAt": "2025-12-15T10:00:00.000Z",
       "updatedAt": "2025-12-15T10:00:00.000Z"
     },
@@ -636,7 +802,10 @@
       "title": "PIONEER: LLM opisuje, System czuje",
       "content": "LLM zwraca symbolic classification (valence, salience, novelty). EmotionEngine oblicza deterministyczne delty. LLM nie moze utrzymac invariantow emocjonalnych.",
       "category": "DECISION",
-      "tags": ["architecture", "emotions"],
+      "tags": [
+        "architecture",
+        "emotions"
+      ],
       "createdAt": "2025-12-15T10:00:00.000Z",
       "updatedAt": "2025-12-15T10:00:00.000Z"
     },
@@ -645,7 +814,10 @@
       "title": "3-Layer Cognition",
       "content": "MINDSPACE (mysli, zero narzedzi) -> DECISION GATE (walidacja energii, cooldown) -> EXPRESSION (wykonanie narzedzi). Mapowanie: Prefrontal -> Basal Ganglia -> Motor Cortex.",
       "category": "DECISION",
-      "tags": ["architecture", "tools"],
+      "tags": [
+        "architecture",
+        "tools"
+      ],
       "createdAt": "2025-12-15T10:00:00.000Z",
       "updatedAt": "2025-12-15T10:00:00.000Z"
     },
@@ -654,7 +826,10 @@
       "title": "Fact jest nienaruszalny, komentarz jest osobowosciowy",
       "content": "LLM moze KOMENTOWAC fakty ale NIGDY ich ZMIENIAC. APPROX dozwolone tylko obok literalu. energy: 23 -> '23% - to malo' OK, ale 'malo energii' = MUTATION!",
       "category": "DECISION",
-      "tags": ["prism", "facts"],
+      "tags": [
+        "prism",
+        "facts"
+      ],
       "createdAt": "2025-12-15T10:00:00.000Z",
       "updatedAt": "2025-12-15T10:00:00.000Z"
     },
@@ -663,7 +838,10 @@
       "title": "Commercial Applications",
       "content": "Potential use cases: Game NPCs, Trading Agents, High-profile publications, Cognitive Assistants.",
       "category": "IDEA",
-      "tags": ["business", "future"],
+      "tags": [
+        "business",
+        "future"
+      ],
       "createdAt": "2025-12-15T10:00:00.000Z",
       "updatedAt": "2025-12-15T10:00:00.000Z"
     },
@@ -672,7 +850,10 @@
       "title": "Testy: 318 passing",
       "content": "Status: 318 testow przechodzi, 1 skipped (EventLoop flaky). Build OK. 7/7 systemow ACTIVE.",
       "category": "INSIGHT",
-      "tags": ["testing", "status"],
+      "tags": [
+        "testing",
+        "status"
+      ],
       "createdAt": "2025-12-15T10:00:00.000Z",
       "updatedAt": "2025-12-15T10:00:00.000Z"
     },
@@ -681,12 +862,14 @@
       "title": "Tryby systemu",
       "content": "LEGACY (~200 tokenow), MVP (~350 tokenow, cache, zero DB), FULL (~1500 tokenow, DB queries). Aktualnie: MVP wlaczony.",
       "category": "DECISION",
-      "tags": ["config", "performance"],
+      "tags": [
+        "config",
+        "performance"
+      ],
       "createdAt": "2025-12-15T10:00:00.000Z",
       "updatedAt": "2025-12-15T10:00:00.000Z"
     }
   ],
-  
   "stats": {
     "totalFeatures": 30,
     "implemented": 17,
@@ -694,12 +877,11 @@
     "planned": 10,
     "overallProgress": 63,
     "currentPhase": "FAZA 6.2: Kernel Stabilization",
-    "todayCompleted": 0,
-    "streak": 5,
+    "todayCompleted": 1,
+    "streak": 6,
     "testsTotal": 318,
     "testsPassing": 318
   },
-  
   "settings": {
     "theme": "cyberpunk",
     "autoSaveInterval": 2000,

@@ -28,7 +28,8 @@ const agentToIdentity = (agent: Agent | null): AgentIdentity | null => {
         core_values: agent.core_values,
         bio_rhythm: agent.bio_rhythm,
         voice_style: agent.voice_style,
-        narrative_traits: agent.narrative_traits
+        narrative_traits: agent.narrative_traits,
+        language: agent.language
     };
 };
 
@@ -101,7 +102,9 @@ export function CognitiveInterface() {
                             conscientiousness: 0.5,
                             socialAwareness: 0.5,
                             curiosity: 0.5
-                        }
+                        },
+                        [], // coreShards - empty for now
+                        identity.language || 'English'
                     );
 
                     // FAZA 5: Publish IDENTITY_LOADED event to EventBus
@@ -118,7 +121,8 @@ export function CognitiveInterface() {
                             core_values: identity.core_values || [],
                             voice_style: identity.voice_style || 'balanced',
                             trait_vector: identity.trait_vector,
-                            narrative_traits: identity.narrative_traits
+                            narrative_traits: identity.narrative_traits,
+                            language: identity.language || 'English'
                         },
                         priority: 1.0
                     });
