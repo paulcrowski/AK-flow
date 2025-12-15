@@ -60,7 +60,7 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, onToggle, onDelete, onEdit, i
 
   return (
     <div
-      className={`group relative p-4 rounded-xl border border-white/5 transition-all duration-200 bg-[#111] hover:bg-[#161616] cursor-pointer ${task.isCompleted ? 'opacity-40 grayscale' : ''
+      className={`group relative p-5 rounded-xl border border-white/5 transition-all duration-200 bg-[#111] hover:bg-[#161616] cursor-pointer ${task.isCompleted ? 'opacity-40 grayscale' : ''
         } ${isDragging ? 'scale-105 shadow-2xl z-10' : 'hover:border-white/10'
         } ${isExpanded ? 'ring-1 ring-neon-purple/50' : ''
         }`}
@@ -70,46 +70,46 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, onToggle, onDelete, onEdit, i
         {/* Checkbox */}
         <button
           onClick={onToggle}
-          className={`mt-1 w-5 h-5 rounded border transition-all flex items-center justify-center ${task.isCompleted
+          className={`mt-1.5 w-6 h-6 rounded border transition-all flex items-center justify-center ${task.isCompleted
             ? 'bg-neon-green/80 border-neon-green'
             : 'border-white/20 hover:border-white/40 bg-transparent'
             }`}
         >
           {task.isCompleted && (
-            <svg className="w-3.5 h-3.5 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-4 h-4 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
             </svg>
           )}
         </button>
 
         {/* Content */}
-        <div className="flex-1 min-w-0 py-0.5">
-          <div className="flex items-center gap-2 mb-1">
-            <h4 className={`font-semibold text-[15px] leading-tight ${task.isCompleted ? 'text-gray-500 line-through' : 'text-gray-100'}`}>
+        <div className="flex-1 min-w-0 py-1">
+          <div className="flex items-center gap-2 mb-2">
+            <h4 className={`font-semibold text-lg leading-snug ${task.isCompleted ? 'text-gray-500 line-through' : 'text-gray-100'}`}>
               {task.content}
             </h4>
           </div>
 
           <div className="flex items-center gap-3">
             {/* Priority Badge */}
-            <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${pConfig.class}`}>
+            <span className={`text-xs font-bold px-2 py-1 rounded border ${pConfig.class}`}>
               {pConfig.text}
             </span>
 
             {/* Context/Tag */}
             {task.context && (
-              <span className="text-[11px] font-mono text-gray-500">
+              <span className="text-xs font-mono text-gray-500">
                 [{task.context}]
               </span>
             )}
           </div>
 
           {task.subtasks && task.subtasks.length > 0 && (
-            <div className={`mt-3 pt-2 border-t border-white/5 text-xs font-mono flex items-center gap-2 ${task.isCompleted ? 'text-gray-600' : 'text-gray-500'}`}>
+            <div className={`mt-3 pt-2 border-t border-white/5 text-sm font-mono flex items-center gap-2 ${task.isCompleted ? 'text-gray-600' : 'text-gray-500'}`}>
               <span className={task.isCompleted ? 'text-gray-600' : 'text-neon-blue'}>
                 {task.subtasks.filter(s => s.isCompleted).length}/{task.subtasks.length}
               </span>
-              <div className="flex-1 h-1 bg-white/5 rounded-full overflow-hidden">
+              <div className="flex-1 h-1.5 bg-white/5 rounded-full overflow-hidden">
                 <div
                   className="h-full bg-neon-blue transition-all"
                   style={{ width: `${(task.subtasks.filter(s => s.isCompleted).length / task.subtasks.length) * 100}%` }}
@@ -121,33 +121,33 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, onToggle, onDelete, onEdit, i
 
         {/* Actions (visible on hover) */}
         <div className="opacity-0 group-hover:opacity-100 transition-opacity flex flex-col gap-1">
-          <button onClick={(e) => copyForAI(e)} className="p-1 hover:text-neon-green text-gray-500 relative" title="Copy for AI">
+          <button onClick={(e) => copyForAI(e)} className="p-1.5 hover:text-neon-green text-gray-500 relative" title="Copy for AI">
             {showCopied ? (
-              <svg className="w-4 h-4 text-neon-green" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+              <svg className="w-5 h-5 text-neon-green" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
             ) : (
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" /></svg>
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" /></svg>
             )}
           </button>
-          <button onClick={(e) => { e.stopPropagation(); onEdit(); }} className="p-1 hover:text-neon-blue text-gray-500" title="Edit"><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg></button>
-          <button onClick={(e) => { e.stopPropagation(); onDelete(); }} className="p-1 hover:text-red-500 text-gray-500" title="Delete"><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg></button>
+          <button onClick={(e) => { e.stopPropagation(); onEdit(); }} className="p-1.5 hover:text-neon-blue text-gray-500" title="Edit"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg></button>
+          <button onClick={(e) => { e.stopPropagation(); onDelete(); }} className="p-1.5 hover:text-red-500 text-gray-500" title="Delete"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg></button>
         </div>
       </div>
 
       {/* Expanded Details */}
       {isExpanded && (
-        <div className="mt-3 pt-3 border-t border-white/10 animate-slide-up">
+        <div className="mt-4 pt-4 border-t border-white/10 animate-slide-up">
           {/* Details */}
           {task.details && (
-            <p className="text-sm text-gray-400 mb-3">{task.details}</p>
+            <p className="text-base text-gray-300 mb-4 leading-relaxed">{task.details}</p>
           )}
 
           {/* Subtasks with checkboxes */}
           {task.subtasks && task.subtasks.length > 0 && (
-            <div className="space-y-2">
-              <div className="text-[10px] font-mono text-gray-500 uppercase">Subtasks</div>
+            <div className="space-y-3">
+              <div className="text-xs font-mono text-gray-500 uppercase tracking-widest">Subtasks</div>
               {task.subtasks.map((subtask, idx) => (
-                <div key={subtask.id || idx} className="flex items-center gap-2 text-sm">
-                  <div className={`w-3 h-3 rounded-sm border ${subtask.isCompleted ? 'bg-neon-green/50 border-neon-green' : 'border-white/20'}`} />
+                <div key={subtask.id || idx} className="flex items-center gap-3 text-base">
+                  <div className={`w-4 h-4 rounded-sm border ${subtask.isCompleted ? 'bg-neon-green/50 border-neon-green' : 'border-white/20'}`} />
                   <span className={subtask.isCompleted ? 'text-gray-500 line-through' : 'text-gray-300'}>
                     {subtask.content}
                   </span>
@@ -159,9 +159,9 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, onToggle, onDelete, onEdit, i
           {/* Copy Button */}
           <button
             onClick={(e) => copyForAI(e)}
-            className="mt-3 w-full py-2.5 text-xs font-mono font-bold text-neon-green bg-neon-green/10 border border-neon-green/30 rounded-lg hover:bg-neon-green/20 transition-colors flex items-center justify-center gap-2"
+            className="mt-4 w-full py-3 text-sm font-mono font-bold text-neon-green bg-neon-green/10 border border-neon-green/30 rounded-lg hover:bg-neon-green/20 transition-colors flex items-center justify-center gap-2"
           >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" /></svg>
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" /></svg>
             {showCopied ? '✓ COPIED TO CLIPBOARD!' : 'COPY FOR AI'}
           </button>
         </div>
@@ -240,25 +240,25 @@ const TaskColumn: React.FC<TaskColumnProps> = ({ title, type, tasks, accentColor
   };
 
   return (
-    <div className={`flex-1 flex flex-col min-w-[400px] min-h-0 border rounded-2xl bg-black/40 backdrop-blur-sm ${themeColors[theme]}`}>
+    <div className={`flex-1 flex flex-col min-w-[450px] min-h-0 border rounded-2xl bg-black/40 backdrop-blur-sm ${themeColors[theme]}`}>
       {/* Header */}
-      <div className="p-4 border-b border-white/5 flex items-center justify-between">
+      <div className="p-5 border-b border-white/5 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className={`w-2 h-2 rounded-full ${theme === 'red' ? 'bg-red-500' : theme === 'blue' ? 'bg-blue-500' : 'bg-gray-500'}`} />
-          <h3 className="font-mono font-bold tracking-widest text-sm text-gray-200 uppercase">
+          <div className={`w-2.5 h-2.5 rounded-full ${theme === 'red' ? 'bg-red-500' : theme === 'blue' ? 'bg-blue-500' : 'bg-gray-500'}`} />
+          <h3 className="font-mono font-bold tracking-widest text-base text-gray-200 uppercase">
             {title}
           </h3>
         </div>
 
         <div className="flex items-center gap-3">
-          <span className="text-[10px] font-mono text-gray-500 px-2 py-0.5 rounded-full bg-white/5 border border-white/5">
+          <span className="text-xs font-mono text-gray-500 px-2.5 py-1 rounded-full bg-white/5 border border-white/5">
             {cCount}/{tCount}
           </span>
           <button
             onClick={() => { setIsAdding(true); setTimeout(() => inputRef.current?.focus(), 50); }}
-            className={`p-1.5 rounded-md hover:bg-white/10 ${accentColor} transition-colors`}
+            className={`p-2 rounded-md hover:bg-white/10 ${accentColor} transition-colors`}
           >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
             </svg>
           </button>
@@ -415,6 +415,8 @@ export const TaskBoard: React.FC = () => {
   const todayTasks = sortTasks(filterTasks(rawTodayTasks));
   const tomorrowTasks = sortTasks(filterTasks(rawTomorrowTasks));
 
+  // ... (previous code)
+
   // 3. Smart Suggestion Logic (Focus on Today)
   const getRecommendedTask = () => {
     // Look for Critical/High in Today first
@@ -433,8 +435,12 @@ export const TaskBoard: React.FC = () => {
 
   const suggestion = getRecommendedTask();
 
+  // 4. Backlog Logic
+  const rawBacklogTasks = getTasksByType('BACKLOG');
+  const backlogTasks = sortTasks(filterTasks(rawBacklogTasks));
+
   return (
-    <div className="h-full flex flex-col p-6 max-w-[1600px] mx-auto">
+    <div className="h-full flex flex-col p-6 w-full max-w-[95%] mx-auto">
 
       {/* Smart Suggestion Header */}
       {suggestion && (
@@ -458,9 +464,9 @@ export const TaskBoard: React.FC = () => {
       )}
 
       {/* Search / Filter Bar */}
-      <div className="mb-8 flex items-center justify-between">
+      <div className="mb-6 flex items-center justify-between">
         <div className="relative w-full max-w-2xl group">
-          {/* Search placeholder - kept as is for now */}
+          {/* Search placeholder */}
           <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
             <svg className="h-4 w-4 text-gray-500 group-focus-within:text-neon-purple transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
@@ -477,8 +483,8 @@ export const TaskBoard: React.FC = () => {
           <button
             onClick={() => setFilter('ALL')}
             className={`px-3 py-1.5 text-xs font-bold rounded border transition-all ${filter === 'ALL'
-                ? 'bg-neon-purple text-black border-neon-purple shadow-[0_0_10px_rgba(168,85,247,0.4)]'
-                : 'bg-[#111] text-gray-500 border-white/5 hover:text-gray-300'
+              ? 'bg-neon-purple text-black border-neon-purple shadow-[0_0_10px_rgba(168,85,247,0.4)]'
+              : 'bg-[#111] text-gray-500 border-white/5 hover:text-gray-300'
               }`}
           >
             ALL
@@ -486,8 +492,8 @@ export const TaskBoard: React.FC = () => {
           <button
             onClick={() => setFilter('ACTIVE')}
             className={`px-3 py-1.5 text-xs font-bold rounded border transition-all ${filter === 'ACTIVE'
-                ? 'bg-blue-500/20 text-blue-400 border-blue-500/50'
-                : 'bg-[#111] text-gray-500 border-white/5 hover:text-gray-300'
+              ? 'bg-blue-500/20 text-blue-400 border-blue-500/50'
+              : 'bg-[#111] text-gray-500 border-white/5 hover:text-gray-300'
               }`}
           >
             ACTIVE
@@ -495,8 +501,8 @@ export const TaskBoard: React.FC = () => {
           <button
             onClick={() => setFilter('DONE')}
             className={`px-3 py-1.5 text-xs font-bold rounded border transition-all ${filter === 'DONE'
-                ? 'bg-green-500/20 text-green-400 border-green-500/50'
-                : 'bg-[#111] text-gray-500 border-white/5 hover:text-gray-300'
+              ? 'bg-green-500/20 text-green-400 border-green-500/50'
+              : 'bg-[#111] text-gray-500 border-white/5 hover:text-gray-300'
               }`}
           >
             DONE
@@ -504,8 +510,8 @@ export const TaskBoard: React.FC = () => {
         </div>
       </div>
 
-      {/* Main Grid - 2 Columns Dominant */}
-      <div className="flex-1 grid grid-cols-2 gap-8 min-h-0">
+      {/* Main Grid - 3 Columns with specific priorities */}
+      <div className="flex-1 grid grid-cols-1 lg:grid-cols-3 gap-6 min-h-0 overflow-x-auto">
         <TaskColumn
           title="TACTICAL OPS // TODAY"
           type="TODAY"
@@ -523,6 +529,15 @@ export const TaskBoard: React.FC = () => {
           theme="blue"
           completedCount={rawTomorrowTasks.filter(t => t.isCompleted).length}
           totalCount={rawTomorrowTasks.length}
+        />
+        <TaskColumn
+          title="DEPTH ARCHIVE // BACKLOG"
+          type="BACKLOG"
+          tasks={backlogTasks}
+          accentColor="text-gray-400"
+          theme="gray"
+          completedCount={rawBacklogTasks.filter(t => t.isCompleted).length}
+          totalCount={rawBacklogTasks.length}
         />
       </div>
     </div>

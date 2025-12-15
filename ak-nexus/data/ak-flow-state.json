@@ -1,36 +1,96 @@
 {
-  "version": "13.0",
-  "lastModified": "2025-12-15T17:42:28.124Z",
-  "modifiedBy": "USER",
+  "version": "1.0.0",
+  "lastUpdated": "2025-12-15T18:45:00.000Z",
+  "project": "AK-Flow",
   "tasks": [
     {
       "id": "task-today-001",
       "content": "Unified Input Queue - jedna brama wejscia",
       "details": "PROBLEM: Obecnie mamy 2 sciezki wejscia - processUserInput() i EventLoop.tick(). To powoduje race condition gdzie agent odpowiada 2x na ten sam input. ROZWIAZANIE: Jedna kolejka wejsciowa w EventLoop, ktora kolejkuje wszystkie inputy (user, system, autonomous) i przetwarza je sekwencyjnie. EventLoop staje sie JEDYNYM zrodlem prawdy o czasie.",
       "priority": "CRITICAL",
-      "type": "TODAY",
-      "isCompleted": false,
+      "type": "DONE",
+      "isCompleted": true,
       "subtasks": [
         {
           "id": "sub-001",
           "content": "Zlikwidowac podwojna sciezke processUserInput + EventLoop.tick",
-          "isCompleted": false
+          "isCompleted": true
         },
         {
           "id": "sub-002",
           "content": "Eliminuje race condition (agent odpowiada 2x)",
-          "isCompleted": false
+          "isCompleted": true
         }
       ],
       "createdAt": "2025-12-15T10:00:00.000Z",
-      "updatedAt": "2025-12-15T10:00:00.000Z"
+      "updatedAt": "2025-12-15T18:45:00.000Z"
+    },
+    {
+      "id": "task-top-001",
+      "content": "TOOLS - READ_FILE & SEARCH_IN_REPO (P0)",
+      "details": "CEL: Agent musi widziec kod, zeby go naprawiac. BEZ TEGO STOI W MIEJSCU. \n1. READ_FILE(path) - whitelisted repo access. \n2. SEARCH_IN_REPO(query) - ripgrep wrapper. zwraca {ok, matches}. Kazde uzycie loguje do EvaluationBus (stage: TOOL).",
+      "priority": "CRITICAL",
+      "type": "TOMORROW",
+      "isCompleted": false,
+      "subtasks": [
+        {
+          "id": "sub-t1",
+          "content": "Implementacja READ_FILE (whitelist checked)",
+          "isCompleted": false
+        },
+        {
+          "id": "sub-t2",
+          "content": "Implementacja SEARCH_IN_REPO (ripgrep)",
+          "isCompleted": false
+        },
+        {
+          "id": "sub-t3",
+          "content": "Podlaczenie do EvaluationBus (stage: TOOL)",
+          "isCompleted": false
+        }
+      ],
+      "createdAt": "2025-12-15T18:45:00.000Z",
+      "updatedAt": "2025-12-15T18:45:00.000Z"
+    },
+    {
+      "id": "task-top-002",
+      "content": "WORK LOOP v1 - Code Critic Cycle",
+      "details": "Stala sekwencja tur dla pracy z kodem: SCOPE -> EVIDENCE -> HYPOTHESIS -> PATCH PLAN -> RISK CHECK -> NOTE. \nAgent nie moze proponowac zmian bez dowodow (EVIDENCE: READ_FILE).",
+      "priority": "CRITICAL",
+      "type": "TOMORROW",
+      "isCompleted": false,
+      "subtasks": [
+        {
+          "id": "wl-01",
+          "content": "Zdefiniowac WorkLoop State (Scope, Evidence, Plan)",
+          "isCompleted": false
+        },
+        {
+          "id": "wl-02",
+          "content": "Wymusic Evidence przed Patch Plan",
+          "isCompleted": false
+        }
+      ],
+      "createdAt": "2025-12-15T18:45:00.000Z",
+      "updatedAt": "2025-12-15T18:45:00.000Z"
+    },
+    {
+      "id": "task-top-003",
+      "content": "WRITE_NOTE Tool - Workspace Memory",
+      "details": "Agent musi zapisywac wnioski z pracy. Zapis do workspace (.md), nie do pamieci wektorowej. Twarde wnioski z sukcesow/porazek.",
+      "priority": "HIGH",
+      "type": "TOMORROW",
+      "isCompleted": false,
+      "subtasks": [],
+      "createdAt": "2025-12-15T18:45:00.000Z",
+      "updatedAt": "2025-12-15T18:45:00.000Z"
     },
     {
       "id": "task-today-002",
       "content": "ChemistryBridge - Serotonin Reactions (40% -> 100%)",
       "details": "PROBLEM: ChemistryBridge ma tylko 40% reakcji serotoninowych. Serotonina odpowiada za stabilnosc nastroju i odpornosc na porazki. ROZWIAZANIE: Dokonczyc mapowanie EvaluationEvent -> serotonin delta. Gdy narzedzie zawodzi, serotonina powinna spadac lagodnie (nie gwaltownie jak dopamina). Zapobiega to panice przy bledach.",
-      "priority": "HIGH",
-      "type": "TODAY",
+      "priority": "LOW",
+      "type": "BACKLOG",
       "isCompleted": false,
       "subtasks": [
         {
@@ -49,187 +109,29 @@
     },
     {
       "id": "task-today-003",
-      "content": "ExecutiveGate - Hemisphere Tracking (70% -> 100%)",
-      "details": "PROBLEM: ExecutiveGate nie loguje pelnej aktywnosci obu polkul (lewy=logika, prawy=emocje). ROZWIAZANIE: Dodac metryki: leftHemisphere.activity, rightHemisphere.activity, conflictScore. Wyswietlac w NeuroMonitor. Pozwala debugowac dlaczego agent podjal dana decyzje.",
-      "priority": "HIGH",
-      "type": "TODAY",
+      "content": "ExecutiveGate - Hemisphere Tracking",
+      "priority": "MEDIUM",
+      "type": "BACKLOG",
       "isCompleted": false,
-      "subtasks": [
-        {
-          "id": "sub-001",
-          "content": "Dodac hemisphere tracking do ExecutiveGate.ts",
-          "isCompleted": false
-        },
-        {
-          "id": "sub-002",
-          "content": "Wyswietlic w NeuroMonitor dashboard",
-          "isCompleted": false
-        }
-      ],
-      "createdAt": "2025-12-15T10:00:00.000Z",
-      "updatedAt": "2025-12-15T10:00:00.000Z"
-    },
-    {
-      "id": "task-today-004",
-      "content": "Workspace Tools - NOTES + READ_FILE",
-      "details": "PROBLEM: Agent nie ma prawdziwych narzedzi do testowania EvaluationBus. ROZWIAZANIE: Zaimplementowac 2 minimalne narzedzia - NOTES (zapis notatek) i READ_FILE (odczyt plikow). Kazde uzycie generuje EvaluationEvent (success/failure) co pozwala testowac caly pipeline uczenia.",
-      "priority": "HIGH",
-      "type": "TODAY",
-      "isCompleted": false,
-      "subtasks": [
-        {
-          "id": "sub-001",
-          "content": "Zaimplementowac NOTES tool",
-          "isCompleted": false
-        },
-        {
-          "id": "sub-002",
-          "content": "Zaimplementowac READ_FILE tool",
-          "isCompleted": false
-        },
-        {
-          "id": "sub-003",
-          "content": "Podlaczyc do EvaluationBus",
-          "isCompleted": false
-        }
-      ],
+      "subtasks": [],
       "createdAt": "2025-12-15T10:00:00.000Z",
       "updatedAt": "2025-12-15T10:00:00.000Z"
     },
     {
       "id": "task-today-005",
       "content": "Acetylocholina (ACh) - Attention Gate (PASSIVE MODE)",
-      "details": "PROBLEM: Brak czwartego neuroprzekaznika (mamy DA, 5HT, NE). ACh w mozgu odpowiada za uwage i focus. ROZWIAZANIE: Dodac ACh do NeurotransmitterSystem. Na razie tryb PASSIVE - tylko loguje co CHCIALBY zrobic, ale nie blokuje. Po 2 tygodniach obserwacji wlaczymy tryb ACTIVE.",
-      "priority": "HIGH",
-      "type": "TODAY",
+      "priority": "LOW",
+      "type": "BACKLOG",
       "isCompleted": false,
-      "subtasks": [
-        {
-          "id": "sub-001",
-          "content": "Dodac ACh do NeurotransmitterSystem.ts",
-          "isCompleted": false
-        },
-        {
-          "id": "sub-002",
-          "content": "Uruchom w trybie PASSIVE (logging-only)",
-          "isCompleted": false
-        },
-        {
-          "id": "sub-003",
-          "content": "Loguj co ACh chcialby zrobic bez blokowania",
-          "isCompleted": false
-        }
-      ],
+      "subtasks": [],
       "createdAt": "2025-12-15T10:00:00.000Z",
       "updatedAt": "2025-12-15T10:00:00.000Z"
     },
     {
       "id": "task-today-006",
       "content": "Logi wysylane na serwer - telemetria",
-      "details": "PROBLEM: Nie mamy zdalnego dostepu do logow agenta. ROZWIAZANIE: Wysylac kluczowe metryki (chemStats, limbicState, decisions) na serwer co X sekund. Pozwala monitorowac agenta bez patrzenia w konsole.",
-      "priority": "HIGH",
-      "type": "TODAY",
-      "isCompleted": false,
-      "subtasks": [
-        {
-          "id": "sub-001",
-          "content": "Endpoint na Supabase do logow",
-          "isCompleted": false
-        },
-        {
-          "id": "sub-002",
-          "content": "Wysylka co 30s najwazniejszych metryk",
-          "isCompleted": false
-        }
-      ],
-      "createdAt": "2025-12-15T10:00:00.000Z",
-      "updatedAt": "2025-12-15T10:00:00.000Z"
-    },
-    {
-      "id": "task-today-007",
-      "content": "System Determinism & Stability (RNG + ErrorBoundary)",
-      "details": "PROBLEM: Brak determinizmu w losowych decyzjach (REM, Expression) oraz ryzyko crashu calej aplikacji. ROZWIAZANIE: Centralny RNG z seedem oraz ComponentErrorBoundary.",
-      "priority": "HIGH",
-      "type": "TODAY",
-      "isCompleted": true,
-      "subtasks": [
-        {
-          "id": "sub-001",
-          "content": "Integracja RNG w ExpressionPolicy, DecisionGate, Hooks",
-          "isCompleted": true
-        },
-        {
-          "id": "sub-002",
-          "content": "ComponentErrorBoundary w App.tsx",
-          "isCompleted": true
-        },
-        {
-          "id": "sub-003",
-          "content": "Audit konfiguracji",
-          "isCompleted": true
-        }
-      ],
-      "createdAt": "2025-12-15T11:45:00.000Z",
-      "updatedAt": "2025-12-15T11:45:00.000Z"
-    },
-    {
-      "id": "task-tomorrow-001",
-      "content": "Centralizacja Thresholds do systemConfig.ts",
       "priority": "MEDIUM",
-      "type": "TOMORROW",
-      "isCompleted": false,
-      "subtasks": [
-        {
-          "id": "sub-001",
-          "content": "Przeniesc wszystkie progi do jednego pliku",
-          "isCompleted": false
-        }
-      ],
-      "createdAt": "2025-12-15T10:00:00.000Z",
-      "updatedAt": "2025-12-15T10:00:00.000Z"
-    },
-    {
-      "id": "task-tomorrow-002",
-      "content": "Performance Monitoring Dashboard",
-      "priority": "MEDIUM",
-      "type": "TOMORROW",
-      "isCompleted": false,
-      "subtasks": [
-        {
-          "id": "sub-001",
-          "content": "Logowanie czasu cognitiveCycle",
-          "isCompleted": false
-        },
-        {
-          "id": "sub-002",
-          "content": "Dashboard DOPAMINE_TICK w NeuroMonitor",
-          "isCompleted": false
-        }
-      ],
-      "createdAt": "2025-12-15T10:00:00.000Z",
-      "updatedAt": "2025-12-15T10:00:00.000Z"
-    },
-    {
-      "id": "task-tomorrow-003",
-      "content": "Error Recovery System",
-      "priority": "MEDIUM",
-      "type": "TOMORROW",
-      "isCompleted": false,
-      "subtasks": [
-        {
-          "id": "sub-001",
-          "content": "Graceful degradation dla krytycznych bledow",
-          "isCompleted": false
-        }
-      ],
-      "createdAt": "2025-12-15T10:00:00.000Z",
-      "updatedAt": "2025-12-15T10:00:00.000Z"
-    },
-    {
-      "id": "task-tomorrow-004",
-      "content": "RPE System - Dopamine Decay Tuning",
-      "priority": "LOW",
-      "type": "TOMORROW",
+      "type": "BACKLOG",
       "isCompleted": false,
       "subtasks": [],
       "createdAt": "2025-12-15T10:00:00.000Z",
@@ -241,23 +143,7 @@
       "priority": "HIGH",
       "type": "BACKLOG",
       "isCompleted": false,
-      "subtasks": [
-        {
-          "id": "sub-001",
-          "content": "Episodic Memory: Zdarzenie + Emocja + Skutek",
-          "isCompleted": false
-        },
-        {
-          "id": "sub-002",
-          "content": "Semantic Memory: Wyciagniete reguly o swiecie",
-          "isCompleted": false
-        },
-        {
-          "id": "sub-003",
-          "content": "Emotional Markers",
-          "isCompleted": false
-        }
-      ],
+      "subtasks": [],
       "createdAt": "2025-12-15T10:00:00.000Z",
       "updatedAt": "2025-12-15T10:00:00.000Z"
     },
@@ -267,18 +153,7 @@
       "priority": "HIGH",
       "type": "BACKLOG",
       "isCompleted": false,
-      "subtasks": [
-        {
-          "id": "sub-001",
-          "content": "Multi-agent support",
-          "isCompleted": false
-        },
-        {
-          "id": "sub-002",
-          "content": "Attention Gates",
-          "isCompleted": false
-        }
-      ],
+      "subtasks": [],
       "createdAt": "2025-12-15T10:00:00.000Z",
       "updatedAt": "2025-12-15T10:00:00.000Z"
     },
@@ -288,13 +163,7 @@
       "priority": "HIGH",
       "type": "BACKLOG",
       "isCompleted": false,
-      "subtasks": [
-        {
-          "id": "sub-001",
-          "content": "Meta-cognitive reflection",
-          "isCompleted": false
-        }
-      ],
+      "subtasks": [],
       "createdAt": "2025-12-15T10:00:00.000Z",
       "updatedAt": "2025-12-15T10:00:00.000Z"
     },
@@ -304,18 +173,7 @@
       "priority": "MEDIUM",
       "type": "BACKLOG",
       "isCompleted": false,
-      "subtasks": [
-        {
-          "id": "sub-001",
-          "content": "Podlaczyc cele do EvaluationBus",
-          "isCompleted": false
-        },
-        {
-          "id": "sub-002",
-          "content": "Goal success tracking",
-          "isCompleted": false
-        }
-      ],
+      "subtasks": [],
       "createdAt": "2025-12-15T10:00:00.000Z",
       "updatedAt": "2025-12-15T10:00:00.000Z"
     },
@@ -325,18 +183,7 @@
       "priority": "MEDIUM",
       "type": "BACKLOG",
       "isCompleted": false,
-      "subtasks": [
-        {
-          "id": "sub-001",
-          "content": "ExecutiveControl z histereza",
-          "isCompleted": false
-        },
-        {
-          "id": "sub-002",
-          "content": "Brak oscylacji progow",
-          "isCompleted": false
-        }
-      ],
+      "subtasks": [],
       "createdAt": "2025-12-15T10:00:00.000Z",
       "updatedAt": "2025-12-15T10:00:00.000Z"
     },
@@ -346,18 +193,7 @@
       "priority": "HIGH",
       "type": "BACKLOG",
       "isCompleted": false,
-      "subtasks": [
-        {
-          "id": "sub-001",
-          "content": "Sen jako proces edycji osobowosci",
-          "isCompleted": false
-        },
-        {
-          "id": "sub-002",
-          "content": "Lekcje dnia do pamieci",
-          "isCompleted": false
-        }
-      ],
+      "subtasks": [],
       "createdAt": "2025-12-15T10:00:00.000Z",
       "updatedAt": "2025-12-15T10:00:00.000Z"
     },
@@ -367,18 +203,7 @@
       "priority": "HIGH",
       "type": "BACKLOG",
       "isCompleted": false,
-      "subtasks": [
-        {
-          "id": "sub-001",
-          "content": "CoreIdentity z DB",
-          "isCompleted": false
-        },
-        {
-          "id": "sub-002",
-          "content": "Pelny CortexStateBuilder",
-          "isCompleted": false
-        }
-      ],
+      "subtasks": [],
       "createdAt": "2025-12-15T10:00:00.000Z",
       "updatedAt": "2025-12-15T10:00:00.000Z"
     },
@@ -388,69 +213,9 @@
       "priority": "HIGH",
       "type": "BACKLOG",
       "isCompleted": false,
-      "subtasks": [
-        {
-          "id": "sub-001",
-          "content": "Formalizacja sygnalow zwrotnych od swiata",
-          "isCompleted": false
-        }
-      ],
+      "subtasks": [],
       "createdAt": "2025-12-15T10:00:00.000Z",
       "updatedAt": "2025-12-15T10:00:00.000Z"
-    },
-    {
-      "id": "task-backlog-009",
-      "content": "Pamiec - Memory Engine Full",
-      "priority": "HIGH",
-      "type": "TOMORROW",
-      "isCompleted": false,
-      "subtasks": [
-        {
-          "id": "sub-001",
-          "content": "Przejscie z surowych logow na epizody",
-          "isCompleted": false
-        },
-        {
-          "id": "sub-002",
-          "content": "GoalJournal - pamiec przyszlosci",
-          "isCompleted": false
-        }
-      ],
-      "createdAt": "2025-12-15T10:00:00.000Z",
-      "updatedAt": "2025-12-15T10:00:00.000Z"
-    },
-    {
-      "id": "task-backlog-010",
-      "content": "Security: Rate Limiting (Audit Recommendation)",
-      "details": "PROBLEM: Brak limitowania zapytan do API (ryzyko kosztow/DDoS). ROZWIAZANIE: Dodac middleware z rate limitingiem dla endpointow krytycznych.",
-      "priority": "HIGH",
-      "type": "TOMORROW",
-      "isCompleted": false,
-      "subtasks": [],
-      "createdAt": "2025-12-15T13:30:00.000Z",
-      "updatedAt": "2025-12-15T13:30:00.000Z"
-    },
-    {
-      "id": "task-backlog-011",
-      "content": "Monitoring: Health Check Endpoint (Audit Recommendation)",
-      "details": "PROBLEM: Brak prostego sposobu na sprawdzenie czy system zyje (dla zewnetrznych monitorow). ROZWIAZANIE: Endpoint /health zwracajacy status kluczowych systemow.",
-      "priority": "HIGH",
-      "type": "TOMORROW",
-      "isCompleted": false,
-      "subtasks": [],
-      "createdAt": "2025-12-15T13:30:00.000Z",
-      "updatedAt": "2025-12-15T13:30:00.000Z"
-    },
-    {
-      "id": "task-backlog-012",
-      "content": "Performance: Identity Caching (Audit Recommendation)",
-      "details": "PROBLEM: Czeste zapytania do DB o tozsamosc agenta. ROZWIAZANIE: Cache tozsamosci w pamieci (lub Redis) z inwalidacja.",
-      "priority": "MEDIUM",
-      "type": "TOMORROW",
-      "isCompleted": false,
-      "subtasks": [],
-      "createdAt": "2025-12-15T13:30:00.000Z",
-      "updatedAt": "2025-12-15T13:30:00.000Z"
     }
   ],
   "roadmap": [
