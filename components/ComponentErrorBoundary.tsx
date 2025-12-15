@@ -6,30 +6,54 @@ interface Props {
     children: React.ReactNode;
     fallback?: React.ReactNode;
     componentName?: string;
+    onError?: (error: Error, errorInfo: React.ErrorInfo) => void;
 }
 
 interface State {
     hasError: boolean;
     error: Error | null;
+    errorInfo: React.ErrorInfo | null;
 }
 
-// Error boundaries must be class components
+/**
+ * Error Boundary - łapie błędy JavaScript w renderze dzieci
+ * 
+ * Użycie:
+ *   <ComponentErrorBoundary componentName="NeuroMonitor">
+ *     <NeuroMonitor />
+ *   </ComponentErrorBoundary>
+ */
 export class ComponentErrorBoundary extends React.Component<Props, State> {
     constructor(props: Props) {
         super(props);
         this.state = {
             hasError: false,
-            error: null
+            error: null,
+            errorInfo: null
         };
     }
 
-    static getDerivedStateFromError(error: Error): State {
+    static getDerivedStateFromError(error: Error): Partial<State> {
         return { hasError: true, error };
     }
 
     componentDidCatch(error: Error, errorInfo: React.ErrorInfo): void {
-        console.error(`Uncaught error in ${this.props.componentName || 'Component'}:`, error, errorInfo);
+        const componentName = this.props.componentName || 'Unknown';
+        
+        // Log error with full context
+        console.error(`[ErrorBoundary] ${componentName} crashed:`, error);
+        console.error('[ErrorBoundary] Component stack:', errorInfo.componentStack);
+        
+        // Store errorInfo for display
+        this.setState({ errorInfo });
+        
+        // Call optional error handler
+        this.props.onError?.(error, errorInfo);
     }
+
+    handleReset = (): void => {
+        this.setState({ hasError: false, error: null, errorInfo: null });
+    };
 
     render(): React.ReactNode {
         if (this.state.hasError) {
@@ -38,15 +62,30 @@ export class ComponentErrorBoundary extends React.Component<Props, State> {
             }
 
             return (
-                <div className="p-4 border border-red-500/30 bg-red-900/10 rounded-lg text-red-400 font-mono text-sm">
-                    <h3 className="font-bold mb-2">⚠️ Component Error: {this.props.componentName}</h3>
-                    <p className="opacity-80">{this.state.error?.message}</p>
-                    <button
-                        className="mt-3 px-3 py-1 bg-red-500/20 hover:bg-red-500/30 rounded transition-colors text-xs"
-                        onClick={() => this.setState({ hasError: false, error: null })}
-                    >
-                        Retry Component
-                    </button>
+                <div className="p-4 border border-red-500/30 bg-red-900/10 rounded-lg text-red-400 font-mono text-sm m-2">
+                    <div className="flex items-center gap-2 mb-2">
+                        <span className="text-xl">⚠️</span>
+                        <h3 className="font-bold">
+                            {this.props.componentName || 'Komponent'} — błąd
+                        </h3>
+                    </div>
+                    <p className="opacity-80 mb-3 text-xs">
+                        {this.state.error?.message || 'Nieznany błąd'}
+                    </p>
+                    <div className="flex gap-2">
+                        <button
+                            className="px-3 py-1.5 bg-red-500/20 hover:bg-red-500/30 rounded transition-colors text-xs font-bold"
+                            onClick={this.handleReset}
+                        >
+                            Spróbuj ponownie
+                        </button>
+                        <button
+                            className="px-3 py-1.5 bg-gray-500/20 hover:bg-gray-500/30 rounded transition-colors text-xs text-gray-400"
+                            onClick={() => window.location.reload()}
+                        >
+                            Odśwież stronę
+                        </button>
+                    </div>
                 </div>
             );
         }
@@ -54,3 +93,5 @@ export class ComponentErrorBoundary extends React.Component<Props, State> {
         return this.props.children;
     }
 }
+
+export default ComponentErrorBoundary;

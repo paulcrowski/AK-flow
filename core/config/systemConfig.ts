@@ -236,6 +236,28 @@ export const SYSTEM_CONFIG = {
     /** Log identity issues */
     logIdentityIssues: true,
   },
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // RNG (Deterministic Random Number Generator)
+  // ─────────────────────────────────────────────────────────────────────────
+  rng: {
+    /** Seed for deterministic RNG. null = Math.random(), string = deterministic */
+    seed: null as string | null,
+  },
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // CONVERSATION MEMORY MANAGEMENT
+  // ─────────────────────────────────────────────────────────────────────────
+  conversation: {
+    /** Max messages in kernel memory (RAM) */
+    maxLength: 50,
+    
+    /** Archive to database for full history */
+    archiveToDatabase: true,
+    
+    /** Truncation strategy */
+    truncateStrategy: 'keep-recent' as const,
+  },
 } as const;
 
 // ═══════════════════════════════════════════════════════════════════════════
