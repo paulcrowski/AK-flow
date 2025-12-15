@@ -1,6 +1,6 @@
 {
   "version": "13.0",
-  "lastModified": "2025-12-15T10:30:00.000Z",
+  "lastModified": "2025-12-15T16:20:00.000Z",
   "modifiedBy": "AI_WINDSURF",
   
   "tasks": [
@@ -684,6 +684,15 @@
       "tags": ["config", "performance"],
       "createdAt": "2025-12-15T10:00:00.000Z",
       "updatedAt": "2025-12-15T10:00:00.000Z"
+    },
+    {
+      "id": "note-008",
+      "title": "Daily Close: Soft Homeostasis (2025-12-15)",
+      "content": "Zamknieto faze: Hybrid + Soft Homeostasis (SocialDynamics) + basic testy integracyjne. Dodano SocialDynamics do KernelState, reducer decay/relief/escalation, gating w EventLoop.shouldSpeakToUser, fix userResponded w useCognitiveKernelLite, selektory do UI. Dodano test __tests__/integration/SocialDynamics.test.ts (16/16 PASS). Uporzadkowano docs: SOCIAL_DYNAMICS.md + CHALLENGES.md + daily log 2025-12-15 + aktualizacja SYSTEM_MANIFEST.md i ARCHITECTURE_MAP.md. StyleGuard ustawiony domyslnie OFF w systemConfig (wolnosc dla testow osobowosci).",
+      "category": "INSIGHT",
+      "tags": ["daily_close", "homeostasis", "testing", "docs"],
+      "createdAt": "2025-12-15T16:20:00.000Z",
+      "updatedAt": "2025-12-15T16:20:00.000Z"
     }
   ],
   
@@ -694,10 +703,10 @@
     "planned": 10,
     "overallProgress": 63,
     "currentPhase": "FAZA 6.2: Kernel Stabilization",
-    "todayCompleted": 0,
+    "todayCompleted": 1,
     "streak": 5,
-    "testsTotal": 318,
-    "testsPassing": 318
+    "testsTotal": 395,
+    "testsPassing": 395
   },
   
   "settings": {

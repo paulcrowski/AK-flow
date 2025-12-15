@@ -1,10 +1,48 @@
 # AK-FLOW: Cognitive Agent Architecture Manifest
-**System Version:** 6.1 (Stabilization & Reality Anchors)  
-**Last Updated:** 2025-12-13  
+**System Version:** 6.3 (Hybrid + Soft Homeostasis)  
+**Last Updated:** 2025-12-15  
 **Architecture Type:** Active Inference (Friston) + Global Workspace Theory + Multi-Modal RAG + **Stateless Inference Engine**  
 **Status:** Autonomous / Stateful / Modular / Self-Aware / Goal-Driven / Personality-Driven / **Emergent Identity**
 
 ---
+
+## 🆕 What's New in V6.3 (2025-12-15)
+
+### Hybrid + Soft Homeostasis: Social Dynamics (anti-spam / anti-mania)
+
+**Cel:** ograniczyć autonomiczne „gadanie do ściany” bez twardych limitów.
+
+**Kluczowe elementy:**
+- `SocialDynamics` w `KernelState`:
+  - `socialCost`, `autonomyBudget`, `userPresenceScore`, `consecutiveWithoutResponse`
+- Event: `SOCIAL_DYNAMICS_UPDATE`
+- Soft gating w `EventLoop.shouldSpeakToUser()`:
+  - `effectivePressure = voicePressure - socialCost`
+  - `dynamicThreshold` rośnie gdy user znika
+- Basic testy integracyjne:
+  - `__tests__/integration/SocialDynamics.test.ts`
+
+**Konfiguracja (Single Source):**
+- `core/config/systemConfig.ts` → `SYSTEM_CONFIG.socialDynamics`
+
+### Style preferences jako część osobowości (nie hardcoded)
+
+Dodano możliwość trzymania preferencji stylu w danych agenta (`style_prefs`).
+
+**Uwaga:** StyleGuard jest *opcjonalny* i sterowany configiem:
+- `core/config/systemConfig.ts` → `SYSTEM_CONFIG.styleGuard`
+- stan na dziś: **domyślnie OFF** (żeby testować ewolucję osobowości bez wymuszeń)
+
+---
+
+## 🧭 Documentation Protocol (żeby nie mnożyć plików)
+
+Jedna reguła: **architektura w jednym miejscu, logi w jednym miejscu, problemy w jednym miejscu**.
+
+- **Opis systemu / rozdziały do pracy mgr/dok:** `docs/SYSTEM_MANIFEST.md` (ten plik)
+- **Mapa flow / diagramy / skrót:** `docs/architecture/ARCHITECTURE_MAP.md`
+- **Dzienny zapis prac + testy + co dalej:** `docs/daily logs/YYYY-MM-DD.md`
+- **Historia problemów/przełomów:** `docs/engineering/CHALLENGES.md`
 
 ## 🆕 What's New in V6.2 (2025-12-13)
 

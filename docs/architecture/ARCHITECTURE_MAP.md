@@ -5,6 +5,18 @@
 
 ---
 
+## 🆕 FAZA 6.3: Hybrid + Soft Homeostasis (Social Dynamics) (2025-12-15)
+
+**Cel:** agent nie spamuje autonomicznie gdy user nie odpowiada (bez twardych cooldownów).
+
+**Mechanika:**
+- `SocialDynamics` (KernelState): `socialCost`, `autonomyBudget`, `userPresenceScore`, `consecutiveWithoutResponse`
+- Event: `SOCIAL_DYNAMICS_UPDATE` (agentSpoke/userResponded/silenceMs)
+- Soft gating w `EventLoop.shouldSpeakToUser()`
+
+**Dokumentacja:**
+- `docs/architecture/SOCIAL_DYNAMICS.md`
+
 ## 🆕 FAZA 6.0: PRISM Architecture - FactEcho Guard (2025-12-10)
 
 ### Kluczowa Zmiana: JSON Guard zamiast Regex

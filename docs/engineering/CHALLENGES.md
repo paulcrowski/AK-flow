@@ -4,6 +4,13 @@
 > **Dla kogo:** Przyszłe publikacje naukowe, zespół, przyszłe ja.  
 > **Format:** Problem → Próby → Rozwiązanie → Lekcje → Meta-analiza
 
+## Gdzie co logować (żeby nie mnożyć plików)
+
+- **ARCH / opis działania systemu (do pracy mgr/dok):** `docs/SYSTEM_MANIFEST.md`
+- **Mapa przepływu (skrótowy diagram/flow):** `docs/architecture/ARCHITECTURE_MAP.md`
+- **Zmiany z dnia + testy + co dalej:** `docs/daily logs/YYYY-MM-DD.md`
+- **Historia problemów (ten plik):** tylko gdy pojawia się *nowy* problem lub przełom
+
 ---
 
 ## Statystyki
@@ -15,6 +22,54 @@
 | Średnia trudność | 3.9/5 |
 | Największy przełom | FactEcho Guard (FAZA 6.0) |
 | Najdłuższy problem | Monolityczny Kernel (8h) |
+
+---
+
+## Problem #22: The Manic Spam Loop (Homeostatic Fix 6.0)
+
+**Data:** 2025-12-15
+**Trudność:** 5/5
+**Status:** ✅ Rozwiązany (Hybrid + Soft Homeostasis)
+
+### Objawy
+W trybie autonomicznym agent "gadał do ściany". Mimo braku odpowiedzi użytkownika, generował 3-4 wiadomości na minutę, każda o czym innym ("Jaka pogoda?", "A może wiersz?", "System działa?").
+Dopamina nie spadała, brak było "zmęczenia społecznego".
+
+### Diagnoza (Split Brain)
+Mieliśmy **Split Brain**:
+1. `useCognitiveKernel` (UI) - wie o userze.
+2. `EventLoop` (Autonomia) - żyje w swoim świecie `input: null`.
+Brakowało mostu, który mówi Autonomii: "Hej, nikt nie odpisuje, zwolnij".
+
+### Rozwiązanie (Soft Homeostasis)
+Wdrożyliśmy system **Social Dynamics**:
+1. **Social Cost:** Każda wypowiedź "kosztuje" (0.15). Koszt rośnie wykładniczo w monologu.
+2. **Dynamic Threshold:** Próg wejścia rośnie, gdy użytkownik milczy (`0.6 -> 0.9`).
+3. **Budget:** Agent ma budżet (1.0). User refilluje budżet odpisując.
+
+Efekt: Agent mówi raz, drugi... i cichnie. Czeka. Jak user odpisze -> BOOM, ulga (cost / 2), budżet refill.
+To naturalna, biologiczna regulacja rozmowy.
+
+### Pliki
+- `core/kernel/types.ts` - SocialDynamics interface
+- `core/kernel/reducer.ts` - Logika decay/growth
+- `core/systems/EventLoop.ts` - `shouldSpeakToUser` gate
+
+### Dokumentacja
+- `docs/architecture/SOCIAL_DYNAMICS.md` (opis mechanizmu + testy + config)
+
+### Testy (basic)
+```bash
+npm test -- --run __tests__/integration/SocialDynamics.test.ts
+```
+
+### Konfiguracja
+- `core/config/systemConfig.ts` → `SYSTEM_CONFIG.socialDynamics`
+- `core/config/systemConfig.ts` → `SYSTEM_CONFIG.styleGuard` (domyślnie OFF dla testów ewolucji osobowości)
+
+### Lekcja
+**Rigid Cooldowns < Soft Homeostasis.**
+Sztywne "max 1 message/min" są nudne. Biologiczne "zmęczenie monologiem" jest naturalne i pozwala na krótkie serie (bursts), ale blokuje spam.
 
 ---
 

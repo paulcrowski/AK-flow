@@ -23,9 +23,9 @@
 ### Checklist
 
 ```
-═══════════════════════════════════════════════════════════════════════════
+══════════════════════════════════════════════════════════════════════════
 🔧 NEW FEATURE CHECKLIST
-═══════════════════════════════════════════════════════════════════════════
+══════════════════════════════════════════════════════════════════════════
 
 □ 1. CONFIG
    └─ Dodaj przełącznik do core/config/systemConfig.ts
@@ -51,37 +51,7 @@
    └─ docs/FEATURE_FLAGS.md - jeśli nowy flag
    └─ docs/STATUS.md - aktualizuj "Co działa"
 
-═══════════════════════════════════════════════════════════════════════════
-```
-
-### Przykład
-
-```typescript
-// 1. CONFIG - w core/config/systemConfig.ts
-myNewFeature: {
-  enabled: true,
-  threshold: 0.5,
-}
-
-// 2. INVARIANT - w core/config/wiringValidator.ts
-{
-  name: 'MyNewFeature',
-  description: 'Does something important',
-  configPath: 'myNewFeature.enabled',
-  testFn: async () => {
-    const { myFunction } = await import('../systems/MySystem');
-    return typeof myFunction === 'function';
-  }
-}
-
-// 3. TELEMETRY - w samym module
-console.log(`[MySystem] ACTION: doing thing with value=${value}`);
-
-// 4. WIRING - upewnij się że jest wywołane!
-// W EventLoop.ts lub CortexSystem.ts:
-if (SYSTEM_CONFIG.myNewFeature.enabled) {
-  myFunction(ctx);
-}
+══════════════════════════════════════════════════════════════════════════
 ```
 
 ---
@@ -98,62 +68,119 @@ if (SYSTEM_CONFIG.myNewFeature.enabled) {
 ═══════════════════════════════════════════════════════════════════════════
 
 □ 1. TESTY
-   └─ npm test -- --run
+   └─ npm run build
+   └─ npm test
    └─ Wszystkie MUSZĄ przechodzić przed commitem!
 
 □ 2. WIRING VALIDATION
    └─ Sprawdź czy validateWiring() pokazuje wszystko ACTIVE
    └─ npm run dev → sprawdź logi przy starcie
 
-□ 3. COMMIT
+□ 3. DAILY LOG
+   └─ Zaktualizuj: docs/daily logs/YYYY-MM-DD.md
+   └─ Dopisz: co zrobione, jak zweryfikowane (build/test), co dalej
+
+□ 4. CHALLENGES (tylko gdy zaszło „nowe zjawisko”)
+   └─ Jeśli był nowy problem / przełom: dopisz do docs/engineering/CHALLENGES.md
+
+□ 5. ARCH DOCS (tylko gdy zmienił się flow/kontrakt)
+   └─ SYSTEM_MANIFEST.md: dopisz/aktualizuj sekcję „What’s New”
+   └─ ARCHITECTURE_MAP.md: dodaj krótki wpis / link
+
+□ 6. NEXUS (ak-flow-state.json)
+   └─ Zaktualizuj lastModified
+   └─ Dodaj note „Daily Close: YYYY-MM-DD” (krótko: co, testy, co dalej)
+   └─ Zaktualizuj stats.testsTotal/testsPassing
+
+□ 7. COMMIT CLOSE
+   └─ Jeden commit = jedna spójna zmiana + testy + wpis w daily log
    └─ git add .
-   └─ git commit -m "YYYY-MM-DD: [krótki opis zmian]"
+   └─ git commit -m "feat(faza6): short summary"
    └─ git push
 
-□ 4. DAILY LOG
-   └─ Stwórz/zaktualizuj docs/daily-logs/SESSION_LOG_YYYY_MM_DD.md
-   └─ Użyj template poniżej
-
-□ 5. STATUS UPDATE
-   └─ Zaktualizuj docs/STATUS.md jeśli duże zmiany
-   └─ Zaktualizuj liczniki testów
-
-□ 6. TOMORROW NOTE
-   └─ Zapisz co robić jutro w daily log
-   └─ 3 punkty max!
+□ 8. TOMORROW NOTE
+   └─ 1-3 punkty w daily log + (opcjonalnie) przenieś taski w ak-flow-state.json
 
 ═══════════════════════════════════════════════════════════════════════════
 ```
 
-### Template Daily Log
+### Template Blocks (kopiuj/wklej)
+
+#### Template: Challenge Entry (docs/engineering/CHALLENGES.md)
 
 ```markdown
-# 📅 Session Log: YYYY-MM-DD
+## Problem #NN: [Nazwa problemu]
 
-## 🎯 Cel dnia
-- [co chciałeś osiągnąć]
+**Data:** YYYY-MM-DD
+**Trudność:** 1-5/5
+**Status:** OPEN / INVESTIGATING / ✅ Rozwiązany
 
-## ✅ Co zrobione
-- [lista zrealizowanych zadań]
+### Objawy
+- ...
 
-## ❌ Co nie zrobione
-- [lista niezrealizowanych - dlaczego?]
+### Diagnoza
+- ...
 
-## 🐛 Napotkane problemy
-- [problemy i jak je rozwiązałeś]
+### Rozwiązanie
+- ...
 
-## 📊 Metryki
-- Testy: X passed
-- Nowe pliki: X
-- Zmodyfikowane: X
+### Pliki
+- ...
 
-## 🔮 Na jutro
-1. [priorytet 1]
-2. [priorytet 2]
-3. [priorytet 3]
+### Testy
+`npm test`
 
-## 💡 Przemyślenia
-- [notatki, pomysły, wnioski]
+### Lekcja
+- ...
+```
+
+#### Template: Manifest Update (docs/SYSTEM_MANIFEST.md)
+
+```markdown
+## 🆕 What's New in VX.Y (YYYY-MM-DD)
+
+### [Nazwa zmiany]
+
+**Cel:** ...
+
+**Kluczowe elementy:**
+- ...
+
+**Konfiguracja (Single Source):**
+- core/config/systemConfig.ts → SYSTEM_CONFIG.xxx
+
+**Testy:**
+`npm test`
+```
+
+#### Template: Architecture Map Update (docs/architecture/ARCHITECTURE_MAP.md)
+
+```markdown
+## 🆕 FAZA X.Y: [Temat] (YYYY-MM-DD)
+
+**Cel:** ...
+
+**Mechanika:**
+- ...
+
+**Dokumentacja:**
+- docs/architecture/XYZ.md
+```
+
+#### Template: Nexus Daily Close Note (ak-flow-state.json)
+
+W `notes[]` dodaj:
+
+```json
+{
+  "id": "note-XXX",
+  "title": "Daily Close: YYYY-MM-DD",
+  "content": "1-4 zdania: co zrobione + build/test status + co dalej",
+  "category": "INSIGHT",
+  "tags": ["daily_close"],
+  "createdAt": "YYYY-MM-DDTHH:MM:SS.000Z",
+  "updatedAt": "YYYY-MM-DDTHH:MM:SS.000Z"
+}
 ```
 
 ---

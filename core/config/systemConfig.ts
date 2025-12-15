@@ -258,6 +258,61 @@ export const SYSTEM_CONFIG = {
     /** Truncation strategy */
     truncateStrategy: 'keep-recent' as const,
   },
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // SOCIAL DYNAMICS (Soft Homeostasis for Autonomous Speech)
+  // ─────────────────────────────────────────────────────────────────────────
+  socialDynamics: {
+    /** Enable social dynamics gating */
+    enabled: true,
+    
+    /** Cost increment per speech (multiplied by consecutive count) */
+    costPerSpeech: 0.15,
+    
+    /** Budget spent per speech */
+    budgetPerSpeech: 0.2,
+    
+    /** Cost reduction when user responds (multiply factor) */
+    userResponseRelief: 0.5,
+    
+    /** Budget boost when user responds */
+    userResponseBudgetBoost: 0.3,
+    
+    /** Decay rate when user present (> 0.5 presence) */
+    decayRateUserPresent: 0.95,
+    
+    /** Decay rate when user absent */
+    decayRateUserAbsent: 0.99,
+    
+    /** Budget regeneration per tick */
+    budgetRegenPerTick: 0.01,
+    
+    /** Time for presence to decay to 0 (ms) */
+    presenceDecayTimeMs: 10 * 60 * 1000, // 10 minutes
+    
+    /** Minimum budget to allow speech */
+    minBudgetToSpeak: 0.2,
+    
+    /** Base threshold for speech */
+    baseThreshold: 0.6,
+    
+    /** Log social dynamics checks */
+    logEnabled: true,
+  },
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // STYLE GUARD (Post-generation filter)
+  // ─────────────────────────────────────────────────────────────────────────
+  styleGuard: {
+    /** Enable StyleGuard filtering - OFF by default to allow personality freedom */
+    enabled: false,  // Let personality evolve naturally through conversation
+    
+    /** Minimum text length after filtering (below = suppress) */
+    minTextLength: 10,
+    
+    /** Log when filtering is applied */
+    logEnabled: true,
+  },
 } as const;
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -272,6 +327,8 @@ export type ChemistryConfig = typeof SYSTEM_CONFIG.chemistryBridge;
 export type GoalsConfig = typeof SYSTEM_CONFIG.goals;
 export type RPEConfig = typeof SYSTEM_CONFIG.rpe;
 export type ExpressionConfig = typeof SYSTEM_CONFIG.expression;
+export type SocialDynamicsConfig = typeof SYSTEM_CONFIG.socialDynamics;
+export type StyleGuardConfig = typeof SYSTEM_CONFIG.styleGuard;
 export type VolitionConfig = typeof SYSTEM_CONFIG.volition;
 export type LimbicConfig = typeof SYSTEM_CONFIG.limbic;
 
