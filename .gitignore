@@ -23,6 +23,11 @@ dist-ssr
 *.sln
 *.sw?
 
+# Editor swap/backup/temp files
+*.crswap
+*.tmp
+*~
+
 # Workspace files
 *.code-workspace
 
