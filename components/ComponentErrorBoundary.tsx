@@ -1,18 +1,18 @@
 // @ts-nocheck
-// TODO: Fix React class component typing issue with moduleResolution: bundler
-import React from 'react';
+// Known issue: React class components have typing issues with moduleResolution: bundler
+import { Component, ReactNode, ErrorInfo } from 'react';
 
 interface Props {
-    children: React.ReactNode;
-    fallback?: React.ReactNode;
+    children: ReactNode;
+    fallback?: ReactNode;
     componentName?: string;
-    onError?: (error: Error, errorInfo: React.ErrorInfo) => void;
+    onError?: (error: Error, errorInfo: ErrorInfo) => void;
 }
 
 interface State {
     hasError: boolean;
     error: Error | null;
-    errorInfo: React.ErrorInfo | null;
+    errorInfo: ErrorInfo | null;
 }
 
 /**
@@ -23,7 +23,7 @@ interface State {
  *     <NeuroMonitor />
  *   </ComponentErrorBoundary>
  */
-export class ComponentErrorBoundary extends React.Component<Props, State> {
+export class ComponentErrorBoundary extends Component<Props, State> {
     constructor(props: Props) {
         super(props);
         this.state = {

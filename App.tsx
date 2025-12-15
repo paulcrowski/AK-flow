@@ -4,6 +4,7 @@ import { useSession } from './contexts/SessionContext';
 import { LoginScreen } from './components/LoginScreen';
 import { AgentSelector } from './components/AgentSelector';
 import { CognitiveInterface } from './components/CognitiveInterface';
+import { ComponentErrorBoundary } from './components/ComponentErrorBoundary';
 import { Brain, Loader2 } from 'lucide-react';
 import { setCurrentAgentId } from './services/supabase';
 import { logSystemConfig, validateWiring } from './core/config';
@@ -60,7 +61,12 @@ function App() {
     }
 
     // 4. COGNITIVE INTERFACE (MAIN APP)
-    return <CognitiveInterface />;
+    return (
+        // @ts-expect-error - Known React class component typing issue with moduleResolution: bundler
+        <ComponentErrorBoundary componentName="CognitiveInterface">
+            <CognitiveInterface />
+        </ComponentErrorBoundary>
+    );
 }
 
 export default App;

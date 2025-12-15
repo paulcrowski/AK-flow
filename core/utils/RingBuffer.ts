@@ -143,8 +143,8 @@ export interface StateSnapshot {
 // GLOBAL LOG BUFFER (Singleton)
 // ═══════════════════════════════════════════════════════════════════════════
 
-const LOG_BUFFER_SIZE = 500;
-const STATE_BUFFER_SIZE = 100;
+const LOG_BUFFER_SIZE = 1000;
+const STATE_BUFFER_SIZE = 200;
 
 export const logBuffer = new RingBuffer<LogEntry>(LOG_BUFFER_SIZE);
 export const stateBuffer = new RingBuffer<StateSnapshot>(STATE_BUFFER_SIZE);

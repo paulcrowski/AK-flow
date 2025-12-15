@@ -25,6 +25,11 @@ import { CortexSystem } from '../core/systems/CortexSystem';
 import { DreamConsolidationService } from '../services/DreamConsolidationService';
 import { executeWakeProcess } from '../core/services/WakeService';
 import { MemoryService } from '../services/supabase';
+import { createRng } from '../core/utils/rng';
+import { SYSTEM_CONFIG } from '../core/config/systemConfig';
+
+// Deterministic RNG for reproducible behavior
+const rng = createRng(SYSTEM_CONFIG.rng.seed);
 
 import {
   useCognitiveStore,
@@ -207,7 +212,7 @@ export const useCognitiveKernelLite = (loadedIdentity?: AgentIdentity | null) =>
             
           case 'MAYBE_REM_CYCLE':
             // Runtime handles randomness - reducer stays pure
-            if (Math.random() < (output.payload?.probability || 0.3)) {
+            if (rng() < (output.payload?.probability || 0.3)) {
               eventBus.publish({
                 id: generateUUID(),
                 timestamp: Date.now(),
@@ -223,7 +228,7 @@ export const useCognitiveKernelLite = (loadedIdentity?: AgentIdentity | null) =>
             
           case 'MAYBE_DREAM_CONSOLIDATION':
             // Runtime handles randomness - reducer stays pure
-            if (Math.random() < (output.payload?.probability || 0.5)) {
+            if (rng() < (output.payload?.probability || 0.5)) {
               const state = getCognitiveState();
               DreamConsolidationService.consolidate(
                 state.limbic,

@@ -16,6 +16,11 @@ import type { SomaState } from '../../types';
 import { eventBus } from '../EventBus';
 import { AgentType, PacketType } from '../../types';
 import { generateUUID } from '../../utils/uuid';
+import { createRng } from '../utils/rng';
+import { SYSTEM_CONFIG } from '../config/systemConfig';
+
+// Deterministic RNG for reproducible behavior
+const rng = createRng(SYSTEM_CONFIG.rng.seed);
 
 /**
  * Konfiguracja polityki narzędzi
@@ -161,7 +166,7 @@ function redirectIntentToSpeech(output: CortexOutput, intent: ToolIntent): Corte
   };
   
   const phrases = naturalPhrases[intent.tool || ''] || [`${toolTag}`];
-  const phrase = phrases[Math.floor(Math.random() * phrases.length)];
+  const phrase = phrases[Math.floor(rng() * phrases.length)];
   
   // Dodaj na końcu speech jeśli jest treść, lub zastąp jeśli pusty
   const newSpeech = output.speech_content.trim()

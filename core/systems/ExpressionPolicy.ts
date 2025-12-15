@@ -1,5 +1,9 @@
 import { TraitVector, NeurotransmitterState, SomaState, InteractionContextType } from '../../types';
-import { getExpressionConfig } from '../config/systemConfig';
+import { getExpressionConfig, SYSTEM_CONFIG } from '../config/systemConfig';
+import { createRng } from '../utils/rng';
+
+// Deterministic RNG for reproducible behavior
+const rng = createRng(SYSTEM_CONFIG.rng.seed);
 
 export interface ExpressionInput {
   internalThought?: string;
@@ -85,7 +89,7 @@ function applyDopamineBreaker(
     text = shortenToFirstSentences(text, 1);
   }
   if (noveltyScore < 0.6) {
-    if (goalAlignment < 0.8 && Math.random() > 0.3) say = false;
+    if (goalAlignment < 0.8 && rng() > 0.3) say = false;
   }
   if (noveltyScore < 0.4) {
     say = false; // Hard mute for low novelty autonomy
@@ -94,7 +98,7 @@ function applyDopamineBreaker(
   // Dopamine Breaker: agent is "high" and looping
   if (dopamine >= 95 && noveltyScore < 0.5) {
     const breakChance = 0.8 - (goalAlignment * 0.5); // 0.3-0.8 chance to mute
-    if (Math.random() < breakChance) {
+    if (rng() < breakChance) {
       say = false;
       console.log(`[ExpressionPolicy] DOPAMINE BREAKER: dopamine=${dopamine.toFixed(0)}, novelty=${noveltyScore.toFixed(2)} → muting`);
     }
