@@ -172,7 +172,6 @@ export interface AddMessagePayload {
 export interface SocialDynamicsPayload {
   agentSpoke?: boolean;         // Agent just spoke
   userResponded?: boolean;      // User just responded
-  silenceMs?: number;           // Current silence duration for presence decay
 }
 
 export interface EmptyPayload { }

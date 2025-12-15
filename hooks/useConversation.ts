@@ -67,9 +67,6 @@ export const useConversation = ({ identityRef }: UseConversationConfig) => {
         ...(imageData ? { imageData } : {})
       }]);
       
-      // FAZA 6: User responded - reset social dynamics
-      actions.updateSocialDynamics({ userResponded: true });
-      
       // Dispatch to kernel - this triggers CortexSystem through EventLoop
       actions.processUserInput(userInput);
       

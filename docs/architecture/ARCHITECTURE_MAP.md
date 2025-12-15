@@ -11,7 +11,7 @@
 
 **Mechanika:**
 - `SocialDynamics` (KernelState): `socialCost`, `autonomyBudget`, `userPresenceScore`, `consecutiveWithoutResponse`
-- Event: `SOCIAL_DYNAMICS_UPDATE` (agentSpoke/userResponded/silenceMs)
+- Event: `SOCIAL_DYNAMICS_UPDATE` (agentSpoke/userResponded) + decay na `TICK` (z `lastUserInteractionAt`)
 - Soft gating w `EventLoop.shouldSpeakToUser()`
 
 **Dokumentacja:**

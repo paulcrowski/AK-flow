@@ -54,7 +54,7 @@ interface CognitiveStoreState extends KernelState {
   addThought: (thought: string) => void;
   addMessage: (role: 'user' | 'assistant', text: string, type?: 'thought' | 'speech' | 'visual' | 'intel' | 'action' | 'tool_result', imageData?: string, sources?: any[]) => void;
   clearConversation: () => void;
-  updateSocialDynamics: (payload: { agentSpoke?: boolean; userResponded?: boolean; silenceMs?: number }) => void;
+  updateSocialDynamics: (payload: { agentSpoke?: boolean; userResponded?: boolean }) => void;
   reset: () => void;
   hydrate: (state: Partial<KernelState>) => void;
 
@@ -194,7 +194,7 @@ export const useCognitiveStore = create<CognitiveStoreState>()(
           get().dispatch({ type: 'CLEAR_CONVERSATION', timestamp: Date.now() });
         },
 
-        updateSocialDynamics: (payload: { agentSpoke?: boolean; userResponded?: boolean; silenceMs?: number }) => {
+        updateSocialDynamics: (payload: { agentSpoke?: boolean; userResponded?: boolean }) => {
           get().dispatch({
             type: 'SOCIAL_DYNAMICS_UPDATE',
             timestamp: Date.now(),

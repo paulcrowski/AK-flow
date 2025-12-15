@@ -9,11 +9,12 @@
 
 import type { KernelState, KernelEvent, KernelReducerResult, KernelOutput, ConversationTurn } from './types';
 import type { MoodShiftPayload, NeuroUpdatePayload, StateOverridePayload, UserInputPayload, AgentSpokePayload, ToolResultPayload, AddMessagePayload, SocialDynamicsPayload, SocialDynamics } from './types';
-import { createInitialKernelState, INITIAL_LIMBIC, INITIAL_SOMA, INITIAL_NEURO, INITIAL_RESONANCE, BASELINE_NEURO } from './initialState';
+import { createInitialKernelState, INITIAL_LIMBIC, INITIAL_SOMA, INITIAL_NEURO, INITIAL_RESONANCE, BASELINE_NEURO, INITIAL_SOCIAL_DYNAMICS } from './initialState';
 import * as SomaSystem from '../systems/SomaSystem';
 import * as LimbicSystem from '../systems/LimbicSystem';
 import * as BiologicalClock from '../systems/BiologicalClock';
 import { AgentType, PacketType } from '../../types';
+import { SYSTEM_CONFIG } from '../config/systemConfig';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // CONSTANTS
@@ -103,10 +104,31 @@ function handleTick(state: KernelState, event: KernelEvent, outputs: KernelOutpu
   if (!state.autonomousMode) {
     return { nextState: state, outputs };
   }
+
+  // FAZA 6: SocialDynamics decay happens ONLY here (single source of truth).
+  // Compute presence from lastUserInteractionAt (no silenceMs passed from outside).
+  const sdCfg = SYSTEM_CONFIG.socialDynamics;
+  const SOCIAL_COST_BASELINE = INITIAL_SOCIAL_DYNAMICS.socialCost;
+  const now = event.timestamp;
+  const silenceMs = Math.max(0, now - state.lastUserInteractionAt);
+  const userPresenceScore = Math.max(0, Math.min(1, 1 - silenceMs / sdCfg.presenceDecayTimeMs));
+  const decayRate = userPresenceScore > 0.5 ? sdCfg.decayRateUserPresent : sdCfg.decayRateUserAbsent;
+  const socialCost = Math.max(
+    SOCIAL_COST_BASELINE,
+    SOCIAL_COST_BASELINE + (state.socialDynamics.socialCost - SOCIAL_COST_BASELINE) * decayRate
+  );
+  const autonomyBudget = Math.min(1, state.socialDynamics.autonomyBudget + sdCfg.budgetRegenPerTick);
+  const nextSocialDynamics: SocialDynamics = {
+    ...state.socialDynamics,
+    socialCost: Math.min(1, socialCost),
+    autonomyBudget: Math.max(0, autonomyBudget),
+    userPresenceScore,
+    consecutiveWithoutResponse: Math.max(0, Math.floor(state.socialDynamics.consecutiveWithoutResponse))
+  };
   
   // Calculate metabolic state
   const metabolicResult = SomaSystem.calculateMetabolicState(state.soma, 0);
-  let nextState = { ...state, soma: metabolicResult.newState };
+  let nextState = { ...state, soma: metabolicResult.newState, socialDynamics: nextSocialDynamics };
   let nextTick = BiologicalClock.getDefaultAwakeTick();
   
   // Sleep/Wake transitions
@@ -199,7 +221,14 @@ function handleUserInput(state: KernelState, event: KernelEvent, outputs: Kernel
     goalState: {
       ...state.goalState,
       lastUserInteractionAt: now
-    }
+    },
+    // FAZA 6: Social Dynamics relief is driven by reducer (caller may still dispatch SOCIAL_DYNAMICS_UPDATE,
+    // but this ensures we never miss the userResponded reset).
+    socialDynamics: handleSocialDynamicsUpdate(
+      state,
+      { type: 'SOCIAL_DYNAMICS_UPDATE', timestamp: now, payload: { userResponded: true } } as KernelEvent,
+      []
+    ).nextState.socialDynamics
   };
   
   // Wake up if sleeping
@@ -623,6 +652,9 @@ function handleClearConversation(state: KernelState, outputs: KernelOutput[]): K
 function handleSocialDynamicsUpdate(state: KernelState, event: KernelEvent, outputs: KernelOutput[]): KernelReducerResult {
   const payload = event.payload as SocialDynamicsPayload;
   const current = state.socialDynamics;
+
+  const sdCfg = SYSTEM_CONFIG.socialDynamics;
+  const SOCIAL_COST_BASELINE = INITIAL_SOCIAL_DYNAMICS.socialCost;
   
   let socialCost = current.socialCost;
   let autonomyBudget = current.autonomyBudget;
@@ -632,33 +664,23 @@ function handleSocialDynamicsUpdate(state: KernelState, event: KernelEvent, outp
   // Agent spoke: increase cost, spend budget, track consecutive
   if (payload.agentSpoke) {
     consecutiveWithoutResponse++;
-    socialCost += 0.15 * consecutiveWithoutResponse; // Escalating cost
-    socialCost = Math.min(1, socialCost);            // Clamp to 1
-    autonomyBudget -= 0.2;
-    autonomyBudget = Math.max(0, autonomyBudget);    // Clamp to 0
+    socialCost += sdCfg.costPerSpeech * consecutiveWithoutResponse; // Escalating cost
+    autonomyBudget -= sdCfg.budgetPerSpeech;
   }
   
   // User responded: reset consecutive, halve cost, boost presence
   if (payload.userResponded) {
     consecutiveWithoutResponse = 0;
-    socialCost *= 0.5;                               // Significant relief
+    socialCost *= sdCfg.userResponseRelief;           // Significant relief
     userPresenceScore = 1.0;                         // Full presence
-    autonomyBudget = Math.min(1, autonomyBudget + 0.3); // Budget boost
+    autonomyBudget = autonomyBudget + sdCfg.userResponseBudgetBoost; // Budget boost
   }
-  
-  // Time-based decay (called on tick)
-  if (payload.silenceMs !== undefined) {
-    // Dynamic decay: faster when user active, slower when absent
-    const decayRate = userPresenceScore > 0.5 ? 0.95 : 0.99;
-    socialCost *= decayRate;
-    
-    // Budget regeneration (slow)
-    autonomyBudget = Math.min(1, autonomyBudget + 0.01);
-    
-    // Presence decay based on silence (10 min to reach 0)
-    const TEN_MINUTES = 10 * 60 * 1000;
-    userPresenceScore = Math.max(0, 1 - payload.silenceMs / TEN_MINUTES);
-  }
+
+  // Clamp / finalize
+  socialCost = Math.max(SOCIAL_COST_BASELINE, Math.min(1, socialCost));
+  autonomyBudget = Math.max(0, Math.min(1, autonomyBudget));
+  userPresenceScore = Math.max(0, Math.min(1, userPresenceScore));
+  consecutiveWithoutResponse = Math.max(0, Math.floor(consecutiveWithoutResponse));
   
   const newSocialDynamics: SocialDynamics = {
     socialCost,

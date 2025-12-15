@@ -83,7 +83,7 @@ W praktyce na 2025-12-15 **StyleGuard jest domyślnie wyłączony w `SYSTEM_CONF
 
 ```typescript
 const INITIAL_SOCIAL_DYNAMICS = {
-  socialCost: 0,              // Czysta karta
+  socialCost: 0.05,           // Baseline (nigdy nie spada do zera)
   autonomyBudget: 1.0,        // Pełna energia
   userPresenceScore: 0.5,     // Niepewność (czy ktoś tu jest?)
   consecutiveWithoutResponse: 0
@@ -99,7 +99,7 @@ graph TD
     UserInput[User Pisze] -->|userResponded: true| Relief[Ulga: Cost -50%, Budget +30%]
     Relief --> State[SocialDynamics State]
     
-    Tick[Tick Loop] -->|silenceMs| Decay[Decay: Cost spada, Presence spada]
+    Tick[Tick Loop] -->|TICK event| Decay[Decay: Cost spada do baseline, Presence spada]
     Decay --> State
     
     AgentPonder[Agent Chce Mówić] --> Check{Build Check}
@@ -123,10 +123,10 @@ npm test -- --run __tests__/integration/SocialDynamics.test.ts
 ```
 
 Testy pokrywają:
-- stan początkowy
+- stan początkowy (baseline socialCost = 0.05)
 - eskalację kosztu po mowie agenta
 - ulgę po odpowiedzi usera
-- decay po `silenceMs`
+- decay na TICK (liczone z `lastUserInteractionAt`, nie z zewnętrznego `silenceMs`)
 
 ---
 

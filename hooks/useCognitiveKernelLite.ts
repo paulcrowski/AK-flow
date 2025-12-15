@@ -434,10 +434,6 @@ export const useCognitiveKernelLite = (loadedIdentity?: AgentIdentity | null) =>
           ticksSinceLastRewardRef.current = nextCtx.ticksSinceLastReward;
         }
         
-        // FAZA 6: Update social dynamics decay on each tick
-        const silenceMs = Date.now() - state.lastUserInteractionAt;
-        actions.updateSocialDynamics({ silenceMs });
-        
         // Calculate next tick interval based on energy
         const energy = state.soma.energy;
         const interval = MIN_TICK_MS + (MAX_TICK_MS - MIN_TICK_MS) * (1 - energy / 100);
@@ -556,9 +552,6 @@ export const useCognitiveKernelLite = (loadedIdentity?: AgentIdentity | null) =>
         },
         priority: 0.8
       });
-      
-      // FAZA 6: User responded - reset social dynamics (ulga po odpowiedzi)
-      actions.updateSocialDynamics({ userResponded: true });
       
       // Dispatch to kernel
       actions.processUserInput(userInput);

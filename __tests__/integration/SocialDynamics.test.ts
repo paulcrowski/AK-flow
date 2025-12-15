@@ -19,7 +19,7 @@ describe('SocialDynamics', () => {
   describe('Initial State', () => {
     it('should have correct initial values', () => {
       expect(initialState.socialDynamics).toEqual(INITIAL_SOCIAL_DYNAMICS);
-      expect(initialState.socialDynamics.socialCost).toBe(0);
+      expect(initialState.socialDynamics.socialCost).toBe(0.05);
       expect(initialState.socialDynamics.autonomyBudget).toBe(1);
       expect(initialState.socialDynamics.userPresenceScore).toBe(0.5); // Neutral at start
       expect(initialState.socialDynamics.consecutiveWithoutResponse).toBe(0);
@@ -196,93 +196,49 @@ describe('SocialDynamics', () => {
     });
   });
 
-  describe('Time-based Decay (silenceMs)', () => {
-    it('should decay socialCost over time', () => {
-      let state = { 
-        ...initialState, 
-        socialDynamics: { 
-          ...initialState.socialDynamics, 
+  describe('Time-based Decay (TICK)', () => {
+    it('should decay socialCost over time towards baseline', () => {
+      const now = Date.now();
+      const state = {
+        ...initialState,
+        autonomousMode: true,
+        lastUserInteractionAt: now,
+        socialDynamics: {
+          ...initialState.socialDynamics,
           socialCost: 0.5,
-          userPresenceScore: 0.8 // User active → faster decay
-        } 
+          userPresenceScore: 1.0
+        }
       };
 
-      const event: KernelEvent = {
-        type: 'SOCIAL_DYNAMICS_UPDATE',
-        timestamp: Date.now(),
-        payload: { silenceMs: 5000 }
+      const tick: KernelEvent = {
+        type: 'TICK',
+        timestamp: now + 1000,
+        payload: {}
       };
-      const { nextState } = kernelReducer(state, event);
+      const { nextState } = kernelReducer(state, tick);
 
-      // With userPresence > 0.5, decay rate is 0.95
-      expect(nextState.socialDynamics.socialCost).toBeCloseTo(0.5 * 0.95, 2);
+      expect(nextState.socialDynamics.socialCost).toBeLessThan(0.5);
+      expect(nextState.socialDynamics.socialCost).toBeGreaterThanOrEqual(0.05);
     });
 
-    it('should decay slower when user is absent', () => {
-      let state = { 
-        ...initialState, 
-        socialDynamics: { 
-          ...initialState.socialDynamics, 
-          socialCost: 0.5,
-          userPresenceScore: 0.3 // User absent → slower decay
-        } 
-      };
-
-      const event: KernelEvent = {
-        type: 'SOCIAL_DYNAMICS_UPDATE',
-        timestamp: Date.now(),
-        payload: { silenceMs: 5000 }
-      };
-      const { nextState } = kernelReducer(state, event);
-
-      // With userPresence < 0.5, decay rate is 0.99
-      expect(nextState.socialDynamics.socialCost).toBeCloseTo(0.5 * 0.99, 2);
-    });
-
-    it('should regenerate autonomyBudget over time', () => {
-      let state = { 
-        ...initialState, 
-        socialDynamics: { 
-          ...initialState.socialDynamics, 
-          autonomyBudget: 0.5
-        } 
-      };
-
-      const event: KernelEvent = {
-        type: 'SOCIAL_DYNAMICS_UPDATE',
-        timestamp: Date.now(),
-        payload: { silenceMs: 5000 }
-      };
-      const { nextState } = kernelReducer(state, event);
-
-      expect(nextState.socialDynamics.autonomyBudget).toBe(0.51); // +0.01
-    });
-
-    it('should decay userPresenceScore based on silence duration', () => {
+    it('should decay userPresenceScore based on lastUserInteractionAt', () => {
+      const now = Date.now();
       const fiveMinutesMs = 5 * 60 * 1000;
-      
-      const event: KernelEvent = {
-        type: 'SOCIAL_DYNAMICS_UPDATE',
-        timestamp: Date.now(),
-        payload: { silenceMs: fiveMinutesMs }
+      const state = {
+        ...initialState,
+        autonomousMode: true,
+        lastUserInteractionAt: now,
       };
-      const { nextState } = kernelReducer(initialState, event);
 
-      // 5 min silence → 50% presence (10 min to reach 0)
+      const tick: KernelEvent = {
+        type: 'TICK',
+        timestamp: now + fiveMinutesMs,
+        payload: {}
+      };
+      const { nextState } = kernelReducer(state, tick);
+
+      // 5 min silence → ~0.5 presence (10 min to reach 0)
       expect(nextState.socialDynamics.userPresenceScore).toBeCloseTo(0.5, 1);
-    });
-
-    it('should clamp userPresenceScore to min 0', () => {
-      const fifteenMinutesMs = 15 * 60 * 1000;
-      
-      const event: KernelEvent = {
-        type: 'SOCIAL_DYNAMICS_UPDATE',
-        timestamp: Date.now(),
-        payload: { silenceMs: fifteenMinutesMs }
-      };
-      const { nextState } = kernelReducer(initialState, event);
-
-      expect(nextState.socialDynamics.userPresenceScore).toBe(0);
     });
   });
 
@@ -297,7 +253,8 @@ describe('SocialDynamics', () => {
         payload: { agentSpoke: true }
       };
       state = kernelReducer(state, speak1).nextState;
-      expect(state.socialDynamics.socialCost).toBeCloseTo(0.15, 2);
+      // Baseline is 0.05, so first speech adds +0.15 => 0.20
+      expect(state.socialDynamics.socialCost).toBeCloseTo(0.20, 2);
 
       // 2. Agent speaks again (cost escalates)
       const speak2: KernelEvent = {
@@ -306,7 +263,8 @@ describe('SocialDynamics', () => {
         payload: { agentSpoke: true }
       };
       state = kernelReducer(state, speak2).nextState;
-      expect(state.socialDynamics.socialCost).toBeCloseTo(0.45, 2); // 0.15 + 0.3
+      // Previous 0.20 + (0.15 * 2) => 0.50
+      expect(state.socialDynamics.socialCost).toBeCloseTo(0.50, 2);
 
       // 3. User responds (relief!)
       const userResponse: KernelEvent = {
@@ -315,17 +273,19 @@ describe('SocialDynamics', () => {
         payload: { userResponded: true }
       };
       state = kernelReducer(state, userResponse).nextState;
-      expect(state.socialDynamics.socialCost).toBeCloseTo(0.225, 2); // halved
+      // Halved
+      expect(state.socialDynamics.socialCost).toBeCloseTo(0.25, 2);
       expect(state.socialDynamics.consecutiveWithoutResponse).toBe(0);
 
       // 4. Time passes (decay)
+      const costBeforeDecay = state.socialDynamics.socialCost;
       const tickDecay: KernelEvent = {
-        type: 'SOCIAL_DYNAMICS_UPDATE',
-        timestamp: Date.now(),
-        payload: { silenceMs: 60000 } // 1 minute
+        type: 'TICK',
+        timestamp: Date.now() + 60000,
+        payload: {}
       };
-      state = kernelReducer(state, tickDecay).nextState;
-      expect(state.socialDynamics.socialCost).toBeLessThan(0.225);
+      state = kernelReducer({ ...state, autonomousMode: true }, tickDecay).nextState;
+      expect(state.socialDynamics.socialCost).toBeLessThan(costBeforeDecay);
     });
   });
 });

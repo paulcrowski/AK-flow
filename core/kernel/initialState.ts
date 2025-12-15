@@ -51,7 +51,7 @@ export const INITIAL_RESONANCE: ResonanceField = {
 import type { SocialDynamics } from './types';
 
 export const INITIAL_SOCIAL_DYNAMICS: SocialDynamics = {
-  socialCost: 0,                    // Start fresh
+  socialCost: 0.05,                 // Baseline (never fully zero)
   autonomyBudget: 1.0,              // Full budget at start
   userPresenceScore: 0.5,           // Neutral presence
   consecutiveWithoutResponse: 0     // No unanswered speeches

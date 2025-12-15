@@ -20,6 +20,7 @@ import { decideExpression, computeNovelty, estimateSocialCost } from './Expressi
 import { computeDialogThreshold } from '../utils/thresholds';
 import { ExecutiveGate } from './ExecutiveGate';
 import { StyleGuard, UserStylePrefs } from './StyleGuard';
+import { SYSTEM_CONFIG } from '../config/systemConfig';
 
 export namespace EventLoop {
     export interface LoopContext {
@@ -72,14 +73,18 @@ export namespace EventLoop {
     // ═══════════════════════════════════════════════════════════════════════════
     
     function shouldSpeakToUser(ctx: LoopContext, voicePressure: number): { allowed: boolean; reason: string } {
+        const sdCfg = SYSTEM_CONFIG.socialDynamics;
+        if (!sdCfg.enabled) {
+            return { allowed: true, reason: 'DISABLED' };
+        }
         const sd = ctx.socialDynamics;
         if (!sd) {
             // Fallback to old behavior if no social dynamics
-            return { allowed: voicePressure > 0.6, reason: 'NO_SOCIAL_DYNAMICS' };
+            return { allowed: voicePressure > sdCfg.baseThreshold, reason: 'NO_SOCIAL_DYNAMICS' };
         }
         
         // Hard block: autonomy budget exhausted
-        if (sd.autonomyBudget < 0.2) {
+        if (sd.autonomyBudget < sdCfg.minBudgetToSpeak) {
             return { allowed: false, reason: 'BUDGET_EXHAUSTED' };
         }
         
@@ -87,7 +92,7 @@ export namespace EventLoop {
         const effectivePressure = Math.max(0, voicePressure - sd.socialCost);
         
         // Dynamic threshold: higher when user absent
-        const dynamicThreshold = 0.6 + (1 - sd.userPresenceScore) * 0.3;
+        const dynamicThreshold = sdCfg.baseThreshold + (1 - sd.userPresenceScore) * 0.3;
         
         // Log for observability
         eventBus.publish({
@@ -542,14 +547,13 @@ export namespace EventLoop {
                 const finalShouldSpeak = gateDecision.should_speak && socialCheck.allowed;
                 
                 if (finalShouldSpeak && gateDecision.winner) {
-                    // FAZA 6: Apply StyleGuard filter before sending
-                    const styleResult = StyleGuard.apply(
-                        gateDecision.winner.speech_content,
-                        ctx.userStylePrefs || {}
-                    );
+                    const styleCfg = SYSTEM_CONFIG.styleGuard;
+                    const styleResult = styleCfg.enabled
+                        ? StyleGuard.apply(gateDecision.winner.speech_content, ctx.userStylePrefs || {})
+                        : { text: gateDecision.winner.speech_content, wasFiltered: false, filters: [] };
                     
                     // Only emit if text remains after filtering
-                    if (styleResult.text.length > 10) {
+                    if (styleResult.text.length > styleCfg.minTextLength) {
                         callbacks.onMessage('assistant', styleResult.text, 'speech');
                         ctx.lastSpeakTimestamp = Date.now();
                         ctx.silenceStart = Date.now();
