@@ -123,6 +123,7 @@ export interface ProjectState {
   version: string;
   lastModified: string;
   modifiedBy: 'USER' | 'AI_WINDSURF' | 'AI_CURSOR' | 'AI_CLAUDE';
+  dailyGoal?: string;
   tasks: DailyTask[];
   roadmap: RoadmapItem[];
   challenges: Challenge[];

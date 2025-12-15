@@ -212,7 +212,7 @@ function App() {
         {/* Content Area */}
         <div className="flex-1 overflow-hidden bg-[#09090b] relative">
           <div className="absolute inset-0 p-6 flex flex-col">
-            <div className="flex-1 min-h-0 max-w-7xl mx-auto w-full">
+            <div className="flex-1 min-h-0 w-full">
               {activeTab === 'TASKS' && <TaskBoard />}
               {activeTab === 'ROADMAP' && <RoadmapView />}
               {activeTab === 'CHALLENGES' && <ChallengesView />}

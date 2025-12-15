@@ -439,8 +439,31 @@ export const TaskBoard: React.FC = () => {
   const rawBacklogTasks = getTasksByType('BACKLOG');
   const backlogTasks = sortTasks(filterTasks(rawBacklogTasks));
 
+  // 5. Daily Goal
+  const { dailyGoal, setDailyGoal } = useNexusStore();
+
   return (
-    <div className="h-full flex flex-col p-6 w-full max-w-[95%] mx-auto">
+    <div className="h-full flex flex-col p-1 w-full mx-auto">
+
+      {/* Daily Main Goal */}
+      <div className="mb-6 px-1">
+        <div className="relative group">
+          <div className="absolute -inset-1 bg-gradient-to-r from-neon-purple/20 to-neon-blue/20 rounded-lg blur opacity-25 group-hover:opacity-50 transition duration-1000"></div>
+          <div className="relative flex items-center gap-4 bg-[#0a0a0a] border border-white/10 rounded-lg p-4">
+            <div className="text-2xl">🎯</div>
+            <div className="flex-1">
+              <div className="text-[10px] font-mono font-bold text-neon-purple tracking-widest uppercase mb-1">Pass-Through Objective</div>
+              <input
+                type="text"
+                value={dailyGoal || ''}
+                onChange={(e) => setDailyGoal(e.target.value)}
+                placeholder="CLICK TO SET TODAY'S MAIN OBJECTIVE..."
+                className="w-full bg-transparent text-xl font-bold text-white placeholder-gray-700 outline-none"
+              />
+            </div>
+          </div>
+        </div>
+      </div>
 
       {/* Smart Suggestion Header */}
       {suggestion && (

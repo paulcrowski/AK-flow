@@ -5,7 +5,7 @@
 
 import { create } from 'zustand';
 import { subscribeWithSelector } from 'zustand/middleware';
-import { 
+import {
   ProjectState, DailyTask, RoadmapItem, Challenge, Note,
   Status, Priority, Tier, ProjectStats, SyncStatus, AIAction
 } from '../types';
@@ -27,6 +27,9 @@ interface NexusStore extends ProjectState {
   filterPriority: Priority | 'ALL';
   filterStatus: Status | 'ALL';
   focusedTaskId: string | null;
+
+  // Actions - Goal
+  setDailyGoal: (goal: string) => void;
 
   // Actions - Tasks
   addTask: (task: Partial<DailyTask>) => void;
@@ -69,10 +72,10 @@ interface NexusStore extends ProjectState {
   saveToFile: () => Promise<boolean>;
   openFile: () => Promise<boolean>;
   exportState: () => void;
-  
+
   // Actions - AI Integration
   executeAIActions: (actions: AIAction[]) => void;
-  
+
   // Actions - History
   undo: () => void;
   redo: () => void;
@@ -88,7 +91,7 @@ interface NexusStore extends ProjectState {
 // HELPER FUNCTIONS
 // ─────────────────────────────────────────────────────────────────
 
-const generateId = (prefix: string) => 
+const generateId = (prefix: string) =>
   `${prefix}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
 const now = () => new Date().toISOString();
@@ -102,7 +105,7 @@ export const useNexusStore = create<NexusStore>()(
     // ═══════════════════════════════════════════════════════════
     // INITIAL STATE
     // ═══════════════════════════════════════════════════════════
-    
+
     version: '13.0',
     lastModified: now(),
     modifiedBy: 'USER',
@@ -130,7 +133,7 @@ export const useNexusStore = create<NexusStore>()(
       compactMode: false,
       soundEnabled: true
     },
-    
+
     // UI State
     activeTab: 'TASKS',
     isLoading: false,
@@ -142,6 +145,19 @@ export const useNexusStore = create<NexusStore>()(
     filterPriority: 'ALL',
     filterStatus: 'ALL',
     focusedTaskId: null,
+    dailyGoal: '',
+
+    // ═══════════════════════════════════════════════════════════
+    // GOAL ACTIONS
+    // ═══════════════════════════════════════════════════════════
+
+    setDailyGoal: (goal) => {
+      set(state => ({
+        dailyGoal: goal,
+        lastModified: now(),
+        syncStatus: { ...state.syncStatus, status: 'PENDING', pendingChanges: state.syncStatus.pendingChanges + 1 }
+      }));
+    },
 
     // ═══════════════════════════════════════════════════════════
     // TASK ACTIONS
@@ -176,7 +192,7 @@ export const useNexusStore = create<NexusStore>()(
         lastModified: now(),
         syncStatus: { ...state.syncStatus, status: 'PENDING', pendingChanges: state.syncStatus.pendingChanges + 1 }
       }));
-      
+
       get().recalculateStats();
     },
 
@@ -194,7 +210,7 @@ export const useNexusStore = create<NexusStore>()(
       });
 
       set(state => ({
-        tasks: state.tasks.map(t => 
+        tasks: state.tasks.map(t =>
           t.id === id ? { ...t, ...updates, updatedAt: now() } : t
         ),
         lastModified: now(),
@@ -220,7 +236,7 @@ export const useNexusStore = create<NexusStore>()(
         lastModified: now(),
         syncStatus: { ...state.syncStatus, status: 'PENDING', pendingChanges: state.syncStatus.pendingChanges + 1 }
       }));
-      
+
       get().recalculateStats();
     },
 
@@ -229,25 +245,25 @@ export const useNexusStore = create<NexusStore>()(
       if (!task) return;
 
       const isCompleted = !task.isCompleted;
-      
+
       set(state => ({
-        tasks: state.tasks.map(t => 
-          t.id === id ? { 
-            ...t, 
+        tasks: state.tasks.map(t =>
+          t.id === id ? {
+            ...t,
             isCompleted,
             completedAt: isCompleted ? now() : undefined,
-            updatedAt: now() 
+            updatedAt: now()
           } : t
         ),
         lastModified: now()
       }));
-      
+
       get().recalculateStats();
     },
 
     moveTask: (id, type) => {
       set(state => ({
-        tasks: state.tasks.map(t => 
+        tasks: state.tasks.map(t =>
           t.id === id ? { ...t, type, updatedAt: now() } : t
         ),
         lastModified: now()
@@ -296,7 +312,7 @@ export const useNexusStore = create<NexusStore>()(
         roadmap: [...state.roadmap, item],
         lastModified: now()
       }));
-      
+
       get().recalculateStats();
     },
 
@@ -314,12 +330,12 @@ export const useNexusStore = create<NexusStore>()(
       });
 
       set(state => ({
-        roadmap: state.roadmap.map(r => 
+        roadmap: state.roadmap.map(r =>
           r.id === id ? { ...r, ...updates, updatedAt: now() } : r
         ),
         lastModified: now()
       }));
-      
+
       get().recalculateStats();
     },
 
@@ -340,7 +356,7 @@ export const useNexusStore = create<NexusStore>()(
         roadmap: state.roadmap.filter(r => r.id !== id),
         lastModified: now()
       }));
-      
+
       get().recalculateStats();
     },
 
@@ -389,7 +405,7 @@ export const useNexusStore = create<NexusStore>()(
 
     updateChallenge: (id, updates) => {
       set(state => ({
-        challenges: state.challenges.map(c => 
+        challenges: state.challenges.map(c =>
           c.id === id ? { ...c, ...updates, updatedAt: now() } : c
         ),
         lastModified: now()
@@ -405,13 +421,13 @@ export const useNexusStore = create<NexusStore>()(
 
     resolveChallenge: (id, solution) => {
       set(state => ({
-        challenges: state.challenges.map(c => 
-          c.id === id ? { 
-            ...c, 
+        challenges: state.challenges.map(c =>
+          c.id === id ? {
+            ...c,
             status: 'RESOLVED',
             potentialSolution: solution || c.potentialSolution,
             resolvedAt: now(),
-            updatedAt: now() 
+            updatedAt: now()
           } : c
         ),
         lastModified: now()
@@ -442,7 +458,7 @@ export const useNexusStore = create<NexusStore>()(
 
     updateNote: (id, updates) => {
       set(state => ({
-        notes: state.notes.map(n => 
+        notes: state.notes.map(n =>
           n.id === id ? { ...n, ...updates, updatedAt: now() } : n
         ),
         lastModified: now()
@@ -461,21 +477,21 @@ export const useNexusStore = create<NexusStore>()(
     // ═══════════════════════════════════════════════════════════
 
     setActiveTab: (tab) => set({ activeTab: tab }),
-    
+
     setSelectedItem: (item, type) => set({ selectedItem: item, modalType: type }),
-    
+
     closeModal: () => set({ selectedItem: null, modalType: null }),
-    
-    toggleCommandPalette: () => set(state => ({ 
-      isCommandPaletteOpen: !state.isCommandPaletteOpen 
+
+    toggleCommandPalette: () => set(state => ({
+      isCommandPaletteOpen: !state.isCommandPaletteOpen
     })),
-    
+
     setSearchQuery: (query) => set({ searchQuery: query }),
-    
+
     setFilterPriority: (priority) => set({ filterPriority: priority }),
-    
+
     setFilterStatus: (status) => set({ filterStatus: status }),
-    
+
     setFocusedTask: (id) => set({ focusedTaskId: id }),
 
     updatePhase: (phase) => set(state => ({
@@ -512,25 +528,25 @@ export const useNexusStore = create<NexusStore>()(
       };
 
       const success = await fileService.saveFile(projectState);
-      
+
       if (success) {
-        set({ 
+        set({
           syncStatus: { status: 'SYNCED', lastSync: now(), pendingChanges: 0 }
         });
       }
-      
+
       return success;
     },
 
     openFile: async () => {
       set({ isLoading: true });
       const state = await fileService.openFile();
-      
+
       if (state) {
         get().loadState(state);
         return true;
       }
-      
+
       set({ isLoading: false });
       return false;
     },
@@ -558,7 +574,7 @@ export const useNexusStore = create<NexusStore>()(
     executeAIActions: (actions) => {
       actions.forEach(action => {
         console.log('[AI Action]', action.type, action.payload);
-        
+
         switch (action.type) {
           case 'ADD_TASK':
             get().addTask(action.payload as Partial<DailyTask>);
@@ -584,7 +600,7 @@ export const useNexusStore = create<NexusStore>()(
           case 'UPDATE_ROADMAP_STATUS':
             if (action.payload.id && action.payload.status) {
               get().updateRoadmapStatus(
-                action.payload.id, 
+                action.payload.id,
                 action.payload.status,
                 action.payload.completionPercentage
               );
@@ -605,7 +621,7 @@ export const useNexusStore = create<NexusStore>()(
             break;
         }
       });
-      
+
       // Mark as modified by AI
       set({ modifiedBy: 'AI_WINDSURF' as any });
     },
@@ -631,7 +647,7 @@ export const useNexusStore = create<NexusStore>()(
             }));
           } else if (entry.previousValue) {
             set(state => ({
-              tasks: state.tasks.map(t => 
+              tasks: state.tasks.map(t =>
                 t.id === entry.entityId ? entry.previousValue : t
               )
             }));
@@ -639,7 +655,7 @@ export const useNexusStore = create<NexusStore>()(
           break;
         // Similar for ROADMAP, CHALLENGE, NOTE...
       }
-      
+
       get().recalculateStats();
     },
 
@@ -660,14 +676,14 @@ export const useNexusStore = create<NexusStore>()(
             }));
           } else if (entry.newValue) {
             set(state => ({
-              tasks: state.tasks.map(t => 
+              tasks: state.tasks.map(t =>
                 t.id === entry.entityId ? entry.newValue : t
               )
             }));
           }
           break;
       }
-      
+
       get().recalculateStats();
     },
 
@@ -677,7 +693,7 @@ export const useNexusStore = create<NexusStore>()(
 
     getFilteredTasks: () => {
       const { tasks, searchQuery, filterPriority, settings } = get();
-      
+
       return tasks.filter(task => {
         if (!settings.showCompletedTasks && task.isCompleted) return false;
         if (filterPriority !== 'ALL' && task.priority !== filterPriority) return false;
@@ -701,23 +717,23 @@ export const useNexusStore = create<NexusStore>()(
 
     recalculateStats: () => {
       const { roadmap, tasks } = get();
-      
+
       const totalFeatures = roadmap.length;
       const implemented = roadmap.filter(r => r.status === Status.COMPLETED).length;
-      const partial = roadmap.filter(r => 
+      const partial = roadmap.filter(r =>
         r.status === Status.PARTIAL || r.status === Status.IN_PROGRESS
       ).length;
       const blocked = roadmap.filter(r => r.status === Status.BLOCKED).length;
       const notImplemented = totalFeatures - implemented - partial - blocked;
-      
-      const overallProgress = totalFeatures > 0 
+
+      const overallProgress = totalFeatures > 0
         ? Math.round(roadmap.reduce((acc, r) => acc + r.completionPercentage, 0) / totalFeatures)
         : 0;
 
       const today = new Date().toDateString();
-      const todayCompleted = tasks.filter(t => 
-        t.isCompleted && 
-        t.completedAt && 
+      const todayCompleted = tasks.filter(t =>
+        t.isCompleted &&
+        t.completedAt &&
         new Date(t.completedAt).toDateString() === today
       ).length;
 
@@ -747,9 +763,9 @@ useNexusStore.subscribe(
   (state) => state.lastModified,
   () => {
     const { settings } = useNexusStore.getState();
-    
+
     if (saveTimeout) clearTimeout(saveTimeout);
-    
+
     saveTimeout = window.setTimeout(() => {
       if (fileService.hasFileAccess()) {
         useNexusStore.getState().saveToFile();
