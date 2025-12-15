@@ -42,6 +42,13 @@ export interface Agent {
   narrative_traits?: NarrativeTraits;
   /** Language for speech_content (e.g., 'English', 'Polish'). Default: 'English' */
   language?: string;
+  // FAZA 6: Style preferences as part of personality
+  style_prefs?: {
+    noEmoji?: boolean;      // Crezji: false (expressive), Professional: true
+    maxLength?: number;     // Verbose: undefined, Concise: 200
+    noExclamation?: boolean;
+    formalTone?: boolean;
+  };
   created_at: string;
   last_active_at: string;
 }

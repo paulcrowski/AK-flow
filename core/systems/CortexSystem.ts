@@ -77,6 +77,13 @@ export namespace CortexSystem {
         traitVector: TraitVector;
         voiceStyle?: string;  // 'balanced' | 'formal' | 'casual' | 'poetic'
         language?: string;    // 'English' | 'Polish' | etc.
+        // FAZA 6: Style preferences as part of personality (not hardcoded)
+        stylePrefs?: {
+            noEmoji?: boolean;      // Crezji: false (expressive), Professional: true
+            maxLength?: number;     // Verbose agent: undefined, Concise: 200
+            noExclamation?: boolean;
+            formalTone?: boolean;   // Derives from voiceStyle but can override
+        };
     }
 
     // Session Overlay: temporary focus without changing core identity

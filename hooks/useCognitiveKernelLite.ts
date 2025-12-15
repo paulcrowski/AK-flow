@@ -67,6 +67,13 @@ export interface AgentIdentity {
   narrative_traits?: { speakingStyle: string; emotionalRange: string; humorLevel: number };
   /** Language for speech_content (e.g., 'English', 'Polish'). Default: 'English' */
   language?: string;
+  // FAZA 6: Style preferences as part of personality
+  style_prefs?: {
+    noEmoji?: boolean;
+    maxLength?: number;
+    noExclamation?: boolean;
+    formalTone?: boolean;
+  };
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -376,10 +383,14 @@ export const useCognitiveKernelLite = (loadedIdentity?: AgentIdentity | null) =>
               coreValues: loadedIdentityRef.current.core_values || [],
               traitVector: loadedIdentityRef.current.trait_vector,
               voiceStyle: loadedIdentityRef.current.voice_style || 'balanced',
-              language: loadedIdentityRef.current.language || 'English'
+              language: loadedIdentityRef.current.language || 'English',
+              // FAZA 6: StylePrefs from identity (not hardcoded)
+              stylePrefs: loadedIdentityRef.current.style_prefs
             } : undefined,
             // FAZA 6: Social Dynamics for soft homeostasis
-            socialDynamics: state.socialDynamics
+            socialDynamics: state.socialDynamics,
+            // FAZA 6: StylePrefs from identity (fallback to empty = permissive)
+            userStylePrefs: loadedIdentityRef.current?.style_prefs || {}
           };
           
           // Run EventLoop for autonomous cognition
@@ -545,6 +556,9 @@ export const useCognitiveKernelLite = (loadedIdentity?: AgentIdentity | null) =>
         },
         priority: 0.8
       });
+      
+      // FAZA 6: User responded - reset social dynamics (ulga po odpowiedzi)
+      actions.updateSocialDynamics({ userResponded: true });
       
       // Dispatch to kernel
       actions.processUserInput(userInput);
