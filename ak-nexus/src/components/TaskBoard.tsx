@@ -442,6 +442,31 @@ export const TaskBoard: React.FC = () => {
   // 5. Daily Goal
   const { dailyGoal, setDailyGoal } = useNexusStore();
 
+  const allTasks = [...rawTodayTasks, ...rawTomorrowTasks, ...rawBacklogTasks];
+
+  const executionRank = (t: DailyTask) => {
+    const text = `${t.content ?? ''} ${t.details ?? ''}`.toLowerCase();
+    const isTool = text.includes('tools') || text.includes('read_file') || text.includes('search_in_repo') || text.includes('visualize');
+    const isTest = text.includes('test') || text.includes('protocol');
+    if (!t.isCompleted && isTool) return 0;
+    if (!t.isCompleted && isTest) return 1;
+    if (!t.isCompleted) return 2;
+    return 9;
+  };
+
+  const suggestedOrder = [...allTasks]
+    .filter(t => !t.isCompleted)
+    .sort((a, b) => {
+      const ra = executionRank(a);
+      const rb = executionRank(b);
+      if (ra !== rb) return ra - rb;
+      const pa = priorityScore(a.priority);
+      const pb = priorityScore(b.priority);
+      if (pa !== pb) return pb - pa;
+      return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+    })
+    .slice(0, 6);
+
   return (
     <div className="h-full flex flex-col p-1 w-full mx-auto">
 
@@ -485,6 +510,36 @@ export const TaskBoard: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Execution Order */}
+      <div className="mb-6 w-full bg-black/30 border border-white/10 rounded-2xl p-5">
+        <div className="flex items-center justify-between mb-3">
+          <div>
+            <div className="text-[10px] font-mono font-bold text-gray-500 tracking-widest uppercase">Execution Order</div>
+            <div className="text-sm text-gray-400">Proponowana kolejność (TOOLS → TESTS → reszta)</div>
+          </div>
+          <div className="text-[10px] font-mono text-gray-600">top {suggestedOrder.length}</div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+          {suggestedOrder.map((t, idx) => (
+            <div key={t.id} className="flex items-center gap-3 p-3 rounded-xl bg-panel/30 border border-white/5">
+              <div className="w-6 h-6 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-[10px] font-mono text-gray-400">
+                {idx + 1}
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="text-xs font-semibold text-white truncate">{t.content}</div>
+                <div className="text-[10px] font-mono text-gray-500 truncate">{t.type} • {t.priority}</div>
+              </div>
+              <div className="text-[10px] font-mono text-gray-600">{executionRank(t) === 0 ? 'TOOLS' : executionRank(t) === 1 ? 'TEST' : 'DO'}</div>
+            </div>
+          ))}
+
+          {suggestedOrder.length === 0 && (
+            <div className="text-xs font-mono text-gray-600">No active tasks</div>
+          )}
+        </div>
+      </div>
 
       {/* Search / Filter Bar */}
       <div className="mb-6 flex items-center justify-between">

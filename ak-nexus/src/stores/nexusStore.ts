@@ -17,7 +17,7 @@ import { fileService, historyService } from '../services/fileService';
 
 interface NexusStore extends ProjectState {
   // UI State
-  activeTab: 'TASKS' | 'ROADMAP' | 'CHALLENGES' | 'NOTES';
+  activeTab: 'TASKS' | 'ROADMAP' | 'CHALLENGES' | 'NOTES' | 'TIMELINE';
   isLoading: boolean;
   syncStatus: SyncStatus;
   selectedItem: any | null;
@@ -95,6 +95,69 @@ const generateId = (prefix: string) =>
   `${prefix}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
 const now = () => new Date().toISOString();
+
+const normalizeTaskType = (type: any, isCompleted: any): DailyTask['type'] => {
+  if (type === 'TODAY' || type === 'TOMORROW' || type === 'BACKLOG') return type;
+  if (type === 'DONE') return isCompleted ? 'TODAY' : 'BACKLOG';
+  return 'BACKLOG';
+};
+
+const normalizeIncomingState = (state: any): ProjectState => {
+  const lastModified = typeof state?.lastModified === 'string'
+    ? state.lastModified
+    : (typeof state?.lastUpdated === 'string' ? state.lastUpdated : now());
+
+  const tasks: DailyTask[] = Array.isArray(state?.tasks)
+    ? state.tasks.map((t: any) => ({
+      ...t,
+      type: normalizeTaskType(t?.type, t?.isCompleted),
+      // Ensure fields exist for UI assumptions
+      subtasks: Array.isArray(t?.subtasks) ? t.subtasks : [],
+      details: typeof t?.details === 'string' ? t.details : (t?.details == null ? '' : String(t.details)),
+      createdAt: typeof t?.createdAt === 'string' ? t.createdAt : now(),
+      updatedAt: typeof t?.updatedAt === 'string' ? t.updatedAt : now()
+    }))
+    : [];
+
+  const roadmap: RoadmapItem[] = Array.isArray(state?.roadmap) ? state.roadmap : [];
+  const challenges: Challenge[] = Array.isArray(state?.challenges) ? state.challenges : [];
+  const notes: Note[] = Array.isArray(state?.notes) ? state.notes : [];
+
+  const stats: ProjectStats = {
+    totalFeatures: typeof state?.stats?.totalFeatures === 'number' ? state.stats.totalFeatures : roadmap.length,
+    implemented: typeof state?.stats?.implemented === 'number' ? state.stats.implemented : 0,
+    partial: typeof state?.stats?.partial === 'number' ? state.stats.partial : 0,
+    notImplemented: typeof state?.stats?.notImplemented === 'number' ? state.stats.notImplemented : 0,
+    blocked: typeof state?.stats?.blocked === 'number' ? state.stats.blocked : 0,
+    overallProgress: typeof state?.stats?.overallProgress === 'number' ? state.stats.overallProgress : 0,
+    currentPhase: typeof state?.stats?.currentPhase === 'string' ? state.stats.currentPhase : 'INITIALIZATION',
+    lastSync: typeof state?.stats?.lastSync === 'string' ? state.stats.lastSync : now(),
+    todayCompleted: typeof state?.stats?.todayCompleted === 'number' ? state.stats.todayCompleted : 0,
+    streak: typeof state?.stats?.streak === 'number' ? state.stats.streak : 0
+  };
+
+  const settings = {
+    theme: state?.settings?.theme ?? 'cyberpunk',
+    autoSaveInterval: typeof state?.settings?.autoSaveInterval === 'number' ? state.settings.autoSaveInterval : 2000,
+    fileWatchEnabled: typeof state?.settings?.fileWatchEnabled === 'boolean' ? state.settings.fileWatchEnabled : true,
+    showCompletedTasks: typeof state?.settings?.showCompletedTasks === 'boolean' ? state.settings.showCompletedTasks : true,
+    compactMode: typeof state?.settings?.compactMode === 'boolean' ? state.settings.compactMode : false,
+    soundEnabled: typeof state?.settings?.soundEnabled === 'boolean' ? state.settings.soundEnabled : true
+  };
+
+  return {
+    version: typeof state?.version === 'string' ? state.version : '13.0',
+    lastModified,
+    modifiedBy: (state?.modifiedBy ?? 'USER') as any,
+    dailyGoal: typeof state?.dailyGoal === 'string' ? state.dailyGoal : '',
+    tasks,
+    roadmap,
+    challenges,
+    notes,
+    stats,
+    settings
+  };
+};
 
 // ─────────────────────────────────────────────────────────────────
 // STORE IMPLEMENTATION
@@ -504,8 +567,9 @@ export const useNexusStore = create<NexusStore>()(
     // ═══════════════════════════════════════════════════════════
 
     loadState: (state) => {
+      const normalized = normalizeIncomingState(state as any);
       set({
-        ...state,
+        ...normalized,
         activeTab: get().activeTab,
         isLoading: false,
         syncStatus: { status: 'SYNCED', lastSync: now(), pendingChanges: 0 }

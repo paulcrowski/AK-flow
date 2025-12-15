@@ -209,6 +209,38 @@ Your job is to manage the project state file: \`ak-flow-state.json\`
 5. UPDATE "lastModified" timestamp
 6. OUTPUT complete valid JSON
 
+## EXECUTION RULES (IMPORTANT)
+
+### Required schema (must always exist)
+- Top-level fields required: 
+  - version, lastModified (ISO), modifiedBy
+  - tasks[], roadmap[], challenges[], notes[]
+  - stats{}, settings{}
+
+### Task rules (so UI + Execution Order works)
+- Allowed task.type values ONLY:
+  - TODAY | TOMORROW | BACKLOG
+- isCompleted:
+  - true => may set completedAt (ISO)
+  - false => completedAt should be omitted
+
+### Tagging conventions (so ordering is automatic)
+- If a task is about tools, include in content/details one of:
+  - TOOLS, READ_FILE, SEARCH_IN_REPO, VISUALIZE
+- If a task is a protocol/test, include:
+  - TEST or PROTOCOL
+
+### Timestamps
+- When modifying an item:
+  - update its updatedAt
+- When adding an item:
+  - set createdAt and updatedAt
+- Also update top-level lastModified
+
+### Do NOT break history
+- Preserve existing IDs.
+- Never delete items unless explicitly requested.
+
 ## RULES
 
 - PRESERVE existing IDs when updating

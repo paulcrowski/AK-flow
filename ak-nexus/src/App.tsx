@@ -9,6 +9,7 @@ import { fileService } from './services/fileService';
 import { TaskBoard } from './components/TaskBoard';
 import { RoadmapView } from './components/RoadmapView';
 import { ChallengesView, NotesView } from './components/ChallengesAndNotes';
+import { TimelineView } from './components/TimelineView';
 import { CommandPalette } from './components/CommandPalette';
 import { StatusBar, SyncPanel, DetailModal } from './components/StatusBarAndModals';
 
@@ -91,6 +92,7 @@ const TabNav: React.FC = () => {
     { id: 'ROADMAP' as const, label: 'vision_matrix.db', icon: '🗺️', color: 'neon-blue', count: null },
     { id: 'CHALLENGES' as const, label: 'anomalies.log', icon: '⚠️', color: 'neon-red', count: challenges.filter(c => c.status === 'OPEN').length },
     { id: 'NOTES' as const, label: 'research.md', icon: '📝', color: 'neon-purple', count: null },
+    { id: 'TIMELINE' as const, label: 'timeline.log', icon: '🕒', color: 'neon-purple', count: null },
   ];
 
   return (
@@ -133,12 +135,19 @@ function App() {
 
     const loadData = async () => {
       try {
-        const response = await fetch('/data/ak-flow-state.json?t=' + Date.now()); // Prevent caching
-        if (response.ok) {
-          const state = await response.json();
-          // Only update if actually changed to prevent jitter (store should handle diffing ideally, 
-          // but for now we just load it. Zustand might trigger re-renders, but it's fine for this scale)
-          loadState(state);
+        // Vite serves files from `publicDir` at the root (publicDir='data' => /ak-flow-state.json)
+        const cacheBuster = Date.now();
+        const urls = [`/ak-flow-state.json?t=${cacheBuster}`, `/data/ak-flow-state.json?t=${cacheBuster}`];
+
+        for (const url of urls) {
+          const response = await fetch(url);
+          if (response.ok) {
+            const state = await response.json();
+            // Only update if actually changed to prevent jitter (store should handle diffing ideally,
+            // but for now we just load it. Zustand might trigger re-renders, but it's fine for this scale)
+            loadState(state);
+            return;
+          }
         }
       } catch (error) {
         console.warn('[App] Auto-load failed:', error);
@@ -198,7 +207,7 @@ function App() {
   }, [loadState]);
 
   return (
-    <div className="h-screen bg-[#050505] text-gray-300 font-sans selection:bg-neon-purple selection:text-white flex flex-col overflow-hidden">
+    <div className="h-screen bg-[#050505] text-gray-300 font-sans selection:bg-neon-purple selection:text-white flex flex-col">
 
       {/* Header */}
       <Header onOpenSync={() => setIsSyncOpen(true)} />
@@ -210,13 +219,14 @@ function App() {
         <TabNav />
 
         {/* Content Area */}
-        <div className="flex-1 overflow-hidden bg-[#09090b] relative">
-          <div className="absolute inset-0 p-6 flex flex-col">
-            <div className="flex-1 min-h-0 w-full">
+        <div className="flex-1 bg-[#09090b] relative min-h-0 overflow-y-auto">
+          <div className="p-6 flex flex-col min-h-full">
+            <div className="w-full">
               {activeTab === 'TASKS' && <TaskBoard />}
               {activeTab === 'ROADMAP' && <RoadmapView />}
               {activeTab === 'CHALLENGES' && <ChallengesView />}
               {activeTab === 'NOTES' && <NotesView />}
+              {activeTab === 'TIMELINE' && <TimelineView />}
             </div>
           </div>
         </div>

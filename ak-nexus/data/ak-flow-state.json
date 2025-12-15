@@ -1,8 +1,10 @@
 {
   "version": "1.0.0",
-  "lastUpdated": "2025-12-15T18:45:00.000Z",
+  "lastUpdated": "2025-12-15T21:41:00.000Z",
+  "lastModified": "2025-12-15T21:41:00.000Z",
+  "modifiedBy": "AI_WINDSURF",
   "project": "AK-Flow",
-  "dailyGoal": "Implement Essential Tools (READ_FILE, SEARCH) & Work Loop",
+  "dailyGoal": "PROTOCOL: ALBERTO FIRST CONTACT (Vision, Orientation, Memory)",
   "tasks": [
     {
       "id": "task-today-001",
@@ -129,14 +131,70 @@
       "updatedAt": "2025-12-15T10:00:00.000Z"
     },
     {
-      "id": "task-today-006",
-      "content": "Logi wysylane na serwer - telemetria",
-      "priority": "MEDIUM",
-      "type": "BACKLOG",
+      "id": "test-protocol-001",
+      "content": "TEST 1: Wzrok (Vision Verification)",
+      "details": "CEL: Agent musi udowodnić, że widzi pliki.\nKROKI:\n1. Zaimplementować tool `READ_FILE`.\n2. Agent ma przeczytać `docs/engineering/CHALLENGES.md`.\n3. Agent ma streścić 3 najważniejsze wyzwania w jednym zdaniu.\nJEŚLI ZROBI TO SAM → SUKCES.",
+      "priority": "CRITICAL",
+      "type": "TODAY",
       "isCompleted": false,
-      "subtasks": [],
-      "createdAt": "2025-12-15T10:00:00.000Z",
-      "updatedAt": "2025-12-15T10:00:00.000Z"
+      "subtasks": [
+        {
+          "id": "tp-01-1",
+          "content": "Implementacja `READ_FILE` (fs.readFile whitelisted)",
+          "isCompleted": false
+        },
+        {
+          "id": "tp-01-2",
+          "content": "Weryfikacja: Agent cytuje treść pliku",
+          "isCompleted": false
+        }
+      ],
+      "createdAt": "2025-12-15T20:45:00.000Z",
+      "updatedAt": "2025-12-15T20:45:00.000Z"
+    },
+    {
+      "id": "test-protocol-002",
+      "content": "TEST 2: Orientacja (Spatial Awareness)",
+      "details": "CEL: Agent musi znaleźć informację w nieznanym miejscu.\nKROKI:\n1. Zaimplementować tool `SEARCH_IN_REPO` (ripgrep).\n2. Zapytać Agenta: 'Gdzie w kodzie definiujemy dopaminę?'.\n3. Agent musi użyć `SEARCH('dopamine')` i podać plik `ChemistryBridge.ts`.\nJEŚLI ZNAJDZIE SAM → SUKCES.",
+      "priority": "CRITICAL",
+      "type": "TODAY",
+      "isCompleted": false,
+      "subtasks": [
+        {
+          "id": "tp-02-1",
+          "content": "Implementacja `SEARCH_IN_REPO`",
+          "isCompleted": false
+        },
+        {
+          "id": "tp-02-2",
+          "content": "Weryfikacja: Agent lokalizuje plik definicji",
+          "isCompleted": false
+        }
+      ],
+      "createdAt": "2025-12-15T20:45:00.000Z",
+      "updatedAt": "2025-12-15T20:45:00.000Z"
+    },
+    {
+      "id": "test-protocol-003",
+      "content": "TEST 3: Pamięć (Write Persistence)",
+      "details": "CEL: Agent musi zostawić ślad po swojej pracy.\nKROKI:\n1. Zaimplementować tool `WRITE_NOTE`.\n2. Agent ma zapisać plik `docs/daily logs/alberto_first_contact.md` z treścią 'I can see clearly now'.\nJEŚLI PLIK POWSTANIE → SUKCES.",
+      "priority": "HIGH",
+      "type": "TODAY",
+      "isCompleted": false,
+      "subtasks": [
+        {
+          "id": "tp-03-1",
+          "content": "Implementacja `WRITE_NOTE`",
+          "isCompleted": false
+        },
+        {
+          "id": "tp-03-2",
+          "content": "Weryfikacja: Plik pojawia się na dysku",
+          "isCompleted": false
+        }
+      ],
+      "createdAt": "2025-12-15T20:45:00.000Z",
+      "updatedAt": "2025-12-15T20:45:00.000Z"
     },
     {
       "id": "task-backlog-001",
@@ -217,6 +275,18 @@
       "subtasks": [],
       "createdAt": "2025-12-15T10:00:00.000Z",
       "updatedAt": "2025-12-15T10:00:00.000Z"
+    },
+    {
+      "id": "task-nexus-001",
+      "content": "Fix scroll w Nexus UI",
+      "details": "INTENT:\n- Da\u0107 mo\u017cliwo\u015b\u0107 scrollowania do do\u0142u w TASKS/TIMELINE.\n\nIMPLEMENTATION:\n- Zmiana layoutu w ak-nexus/src/App.tsx: content area ma overflow-y-auto i normalny flow (bez absolute inset-0).\n- Usuni\u0119to overflow-hidden z root container.\n\nEVIDENCE:\n- W UI mo\u017cna zjecha\u0107 na d\u00f3\u0142 strony w TASKS (i analogicznie w TIMELINE).\n\nRISKS:\n- Przy bardzo du\u017cej ilo\u015bci tre\u015bci mo\u017ce wymaga\u0107 dopracowania wysoko\u015bci min-h/overflow w podwidokach.",
+      "priority": "HIGH",
+      "type": "TODAY",
+      "isCompleted": true,
+      "completedAt": "2025-12-15T21:41:00.000Z",
+      "subtasks": [],
+      "createdAt": "2025-12-15T21:41:00.000Z",
+      "updatedAt": "2025-12-15T21:41:00.000Z"
     }
   ],
   "roadmap": [
@@ -595,7 +665,7 @@
   "notes": [
     {
       "id": "note-001",
-      "title": "Zasada: Dzialanie -> Porażki -> Regulacja",
+      "title": "Zasada: Dzialanie → Porażki → Regulacja",
       "content": "Narzedzia przed regulacja! Agent musi popelniac bledy, zanim go regulujemy. EvalBus musi miec realne sygnaly, nie symulacje.",
       "category": "DECISION",
       "tags": [
@@ -620,7 +690,7 @@
     {
       "id": "note-003",
       "title": "3-Layer Cognition",
-      "content": "MINDSPACE (mysli, zero narzedzi) -> DECISION GATE (walidacja energii, cooldown) -> EXPRESSION (wykonanie narzedzi). Mapowanie: Prefrontal -> Basal Ganglia -> Motor Cortex.",
+      "content": "MINDSPACE (mysli, zero narzedzi) → DECISION GATE (walidacja energii, cooldown) → EXPRESSION (wykonanie narzedzi). Mapowanie: Prefrontal → Basal Ganglia → Motor Cortex.",
       "category": "DECISION",
       "tags": [
         "architecture",
@@ -632,7 +702,7 @@
     {
       "id": "note-004",
       "title": "Fact jest nienaruszalny, komentarz jest osobowosciowy",
-      "content": "LLM moze KOMENTOWAC fakty ale NIGDY ich ZMIENIAC. APPROX dozwolone tylko obok literalu. energy: 23 -> '23% - to malo' OK, ale 'malo energii' = MUTATION!",
+      "content": "LLM moze KOMENTOWAC fakty ale NIGDY ich ZMIENIAC. APPROX dozwolone tylko obok literalu. energy: 23 → '23% - to malo' OK, ale 'malo energii' = MUTATION!",
       "category": "DECISION",
       "tags": [
         "prism",
@@ -676,6 +746,19 @@
       ],
       "createdAt": "2025-12-15T10:00:00.000Z",
       "updatedAt": "2025-12-15T10:00:00.000Z"
+    },
+    {
+      "id": "note-008",
+      "title": "CHECKPOINT: Fix scroll w Nexus UI",
+      "content": "INTENT: Da\u0107 mo\u017cliwo\u015b\u0107 scrollowania do do\u0142u w TASKS/TIMELINE.\nIMPLEMENTATION: Zmiana layoutu w ak-nexus/src/App.tsx (overflow-y-auto + usuni\u0119cie overflow-hidden i absolute inset-0).\nEVIDENCE: Da si\u0119 zjecha\u0107 na d\u00f3\u0142 w TASKS.\nFILES: ak-nexus/src/App.tsx",
+      "category": "INSIGHT",
+      "tags": [
+        "checkpoint",
+        "nexus",
+        "ui"
+      ],
+      "createdAt": "2025-12-15T21:41:00.000Z",
+      "updatedAt": "2025-12-15T21:41:00.000Z"
     }
   ],
   "stats": {
@@ -685,7 +768,7 @@
     "planned": 10,
     "overallProgress": 52,
     "currentPhase": "FAZA 6.2: Kernel Stabilization",
-    "todayCompleted": 0,
+    "todayCompleted": 1,
     "streak": 6,
     "testsTotal": 318,
     "testsPassing": 318,
