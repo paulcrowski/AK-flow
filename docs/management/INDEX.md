@@ -10,8 +10,8 @@
 
 | Potrzebujesz... | Idź do... |
 |-----------------|-----------|
-| Zrozumieć architekturę | [ARCHITECTURE_MAP.md](./ARCHITECTURE_MAP.md) |
-| Dodać nową funkcję | [PROCEDURES.md](./PROCEDURES.md) |
+| Zrozumieć architekturę | [ARCHITECTURE_MAP.md](../architecture/ARCHITECTURE_MAP.md) |
+| Dodać nową funkcję | [PROCEDURES.md](../PROCEDURES.md) |
 | Sprawdzić co włączone | [FEATURE_FLAGS.md](./FEATURE_FLAGS.md) |
 | Zobaczyć postęp | [STATUS.md](./STATUS.md) |
 | Debugować problem | [DATABASE_QUERIES.md](./DATABASE_QUERIES.md) |
@@ -35,8 +35,8 @@ docs/
 ├── 🔬 research/             ← Pomysły i eksperymenty
 │   └── (pliki badawcze)
 │
-├── 📅 daily-logs/           ← Historia sesji
-│   └── SESSION_LOG_YYYY_MM_DD.md
+├── 📅 daily logs/           ← Historia sesji
+│   └── YYYY-MM-DD.md
 │
 └── 🗄️ archive/              ← Stare dokumenty
     └── (legacy docs)
@@ -70,10 +70,10 @@ npm run dev  # sprawdź logi przy starcie
 ```
 
 ### Dodając nową funkcję:
-→ Zobacz [PROCEDURES.md](./PROCEDURES.md)
+→ Zobacz [PROCEDURES.md](../PROCEDURES.md)
 
 ### Zamykając dzień:
-→ Zobacz sekcja "Procedura Zamknięcia Dnia" w [PROCEDURES.md](./PROCEDURES.md)
+→ Zobacz sekcja "Procedura Zamknięcia Dnia" w [PROCEDURES.md](../PROCEDURES.md)
 
 ---
 
@@ -94,7 +94,7 @@ Pełny roadmap: [ROADMAP_AGI_PHASES.md](./architecture/ROADMAP_AGI_PHASES.md)
 ## 📞 KONTAKT Z PRZESZŁOŚCIĄ
 
 Jeśli szukasz czegoś starego:
-- Stare sesje: `docs/daily-logs/`
+- Stare sesje: `docs/daily logs/`
 - Stare pomysły: `docs/archive/`
 - Stare audyty: `docs/archive/`
 

@@ -98,9 +98,9 @@
 ## 🔗 LINKI
 
 - [Feature Flags](./FEATURE_FLAGS.md)
-- [Procedury](./PROCEDURES.md)
-- [Architektura](./architecture/ARCHITECTURE_MAP.md)
-- [Daily Logs](./daily-logs/)
+- [Procedury](../PROCEDURES.md)
+- [Architektura](../architecture/ARCHITECTURE_MAP.md)
+- [Daily Logs](../daily logs/)
 
 ---
 

@@ -16,6 +16,15 @@
 
 ---
 
+## ✅ Single Source of Truth (żeby nie powstawały złe pliki)
+
+- **Procedury:** `docs/PROCEDURES.md` (ten plik) — nie twórz kopii w `docs/management/`
+- **Daily logs:** `docs/daily logs/YYYY-MM-DD.md` (spacja w nazwie katalogu)
+- **Architektura:** `docs/architecture/ARCHITECTURE_MAP.md` + `docs/SYSTEM_MANIFEST.md`
+- **Problemy / zjawiska:** `docs/engineering/CHALLENGES.md`
+
+---
+
 ## 🆕 Procedura Nowej Funkcji
 
 > **ALARM-3 STANDARD**: Każda nowa funkcja MUSI przejść przez te kroki.
