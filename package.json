@@ -1,5 +1,5 @@
 {
-  "name": "3.4-alberto-ak-flow:-cognitive-brain-agent-search-dream-cemi",
+  "name": "ak-flow",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -15,7 +15,10 @@
     "test:integration": "node scripts/test-runner.js run integration",
     "test:e2e": "node scripts/test-runner.js run e2e",
     "test:list": "node scripts/test-runner.js list",
-    "test:analyze": "node scripts/test-runner.js analyze"
+    "test:analyze": "node scripts/test-runner.js analyze",
+    "nexus": "npm run dev --prefix ak-nexus",
+    "nexus:build": "npm run build --prefix ak-nexus",
+    "nexus:install": "npm install --prefix ak-nexus"
   },
   "dependencies": {
     "@google/genai": "^1.30.0",

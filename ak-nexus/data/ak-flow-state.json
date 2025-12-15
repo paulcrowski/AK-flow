@@ -1,0 +1,709 @@
+{
+  "version": "13.0",
+  "lastModified": "2025-12-15T10:30:00.000Z",
+  "modifiedBy": "AI_WINDSURF",
+  
+  "tasks": [
+    {
+      "id": "task-today-001",
+      "content": "Unified Input Queue - jedna brama wejscia",
+      "details": "PROBLEM: Obecnie mamy 2 sciezki wejscia - processUserInput() i EventLoop.tick(). To powoduje race condition gdzie agent odpowiada 2x na ten sam input. ROZWIAZANIE: Jedna kolejka wejsciowa w EventLoop, ktora kolejkuje wszystkie inputy (user, system, autonomous) i przetwarza je sekwencyjnie. EventLoop staje sie JEDYNYM zrodlem prawdy o czasie.",
+      "priority": "CRITICAL",
+      "type": "TODAY",
+      "isCompleted": false,
+      "subtasks": [
+        { "id": "sub-001", "content": "Zlikwidowac podwojna sciezke processUserInput + EventLoop.tick", "isCompleted": false },
+        { "id": "sub-002", "content": "Eliminuje race condition (agent odpowiada 2x)", "isCompleted": false }
+      ],
+      "createdAt": "2025-12-15T10:00:00.000Z",
+      "updatedAt": "2025-12-15T10:00:00.000Z"
+    },
+    {
+      "id": "task-today-002",
+      "content": "ChemistryBridge - Serotonin Reactions (40% -> 100%)",
+      "details": "PROBLEM: ChemistryBridge ma tylko 40% reakcji serotoninowych. Serotonina odpowiada za stabilnosc nastroju i odpornosc na porazki. ROZWIAZANIE: Dokonczyc mapowanie EvaluationEvent -> serotonin delta. Gdy narzedzie zawodzi, serotonina powinna spadac lagodnie (nie gwaltownie jak dopamina). Zapobiega to panice przy bledach.",
+      "priority": "HIGH",
+      "type": "TODAY",
+      "isCompleted": false,
+      "subtasks": [
+        { "id": "sub-001", "content": "Dokonczyc reakcje serotoninowe w ChemistryBridge.ts", "isCompleted": false },
+        { "id": "sub-002", "content": "Stabilizowac emocje PO porazkach narzedzi", "isCompleted": false }
+      ],
+      "createdAt": "2025-12-15T10:00:00.000Z",
+      "updatedAt": "2025-12-15T10:00:00.000Z"
+    },
+    {
+      "id": "task-today-003",
+      "content": "ExecutiveGate - Hemisphere Tracking (70% -> 100%)",
+      "details": "PROBLEM: ExecutiveGate nie loguje pelnej aktywnosci obu polkul (lewy=logika, prawy=emocje). ROZWIAZANIE: Dodac metryki: leftHemisphere.activity, rightHemisphere.activity, conflictScore. Wyswietlac w NeuroMonitor. Pozwala debugowac dlaczego agent podjal dana decyzje.",
+      "priority": "HIGH",
+      "type": "TODAY",
+      "isCompleted": false,
+      "subtasks": [
+        { "id": "sub-001", "content": "Dodac hemisphere tracking do ExecutiveGate.ts", "isCompleted": false },
+        { "id": "sub-002", "content": "Wyswietlic w NeuroMonitor dashboard", "isCompleted": false }
+      ],
+      "createdAt": "2025-12-15T10:00:00.000Z",
+      "updatedAt": "2025-12-15T10:00:00.000Z"
+    },
+    {
+      "id": "task-today-004",
+      "content": "Workspace Tools - NOTES + READ_FILE",
+      "details": "PROBLEM: Agent nie ma prawdziwych narzedzi do testowania EvaluationBus. ROZWIAZANIE: Zaimplementowac 2 minimalne narzedzia - NOTES (zapis notatek) i READ_FILE (odczyt plikow). Kazde uzycie generuje EvaluationEvent (success/failure) co pozwala testowac caly pipeline uczenia.",
+      "priority": "HIGH",
+      "type": "TODAY",
+      "isCompleted": false,
+      "subtasks": [
+        { "id": "sub-001", "content": "Zaimplementowac NOTES tool", "isCompleted": false },
+        { "id": "sub-002", "content": "Zaimplementowac READ_FILE tool", "isCompleted": false },
+        { "id": "sub-003", "content": "Podlaczyc do EvaluationBus", "isCompleted": false }
+      ],
+      "createdAt": "2025-12-15T10:00:00.000Z",
+      "updatedAt": "2025-12-15T10:00:00.000Z"
+    },
+    {
+      "id": "task-today-005",
+      "content": "Acetylocholina (ACh) - Attention Gate (PASSIVE MODE)",
+      "details": "PROBLEM: Brak czwartego neuroprzekaznika (mamy DA, 5HT, NE). ACh w mozgu odpowiada za uwage i focus. ROZWIAZANIE: Dodac ACh do NeurotransmitterSystem. Na razie tryb PASSIVE - tylko loguje co CHCIALBY zrobic, ale nie blokuje. Po 2 tygodniach obserwacji wlaczymy tryb ACTIVE.",
+      "priority": "HIGH",
+      "type": "TODAY",
+      "isCompleted": false,
+      "subtasks": [
+        { "id": "sub-001", "content": "Dodac ACh do NeurotransmitterSystem.ts", "isCompleted": false },
+        { "id": "sub-002", "content": "Uruchom w trybie PASSIVE (logging-only)", "isCompleted": false },
+        { "id": "sub-003", "content": "Loguj co ACh chcialby zrobic bez blokowania", "isCompleted": false }
+      ],
+      "createdAt": "2025-12-15T10:00:00.000Z",
+      "updatedAt": "2025-12-15T10:00:00.000Z"
+    },
+    {
+      "id": "task-today-006",
+      "content": "Logi wysylane na serwer - telemetria",
+      "details": "PROBLEM: Nie mamy zdalnego dostepu do logow agenta. ROZWIAZANIE: Wysylac kluczowe metryki (chemStats, limbicState, decisions) na serwer co X sekund. Pozwala monitorowac agenta bez patrzenia w konsole.",
+      "priority": "HIGH",
+      "type": "TODAY",
+      "isCompleted": false,
+      "subtasks": [
+        { "id": "sub-001", "content": "Endpoint na Supabase do logow", "isCompleted": false },
+        { "id": "sub-002", "content": "Wysylka co 30s najwazniejszych metryk", "isCompleted": false }
+      ],
+      "createdAt": "2025-12-15T10:00:00.000Z",
+      "updatedAt": "2025-12-15T10:00:00.000Z"
+    },
+    {
+      "id": "task-tomorrow-001",
+      "content": "Centralizacja Thresholds do systemConfig.ts",
+      "priority": "MEDIUM",
+      "type": "TOMORROW",
+      "isCompleted": false,
+      "subtasks": [
+        { "id": "sub-001", "content": "Przeniesc wszystkie progi do jednego pliku", "isCompleted": false }
+      ],
+      "createdAt": "2025-12-15T10:00:00.000Z",
+      "updatedAt": "2025-12-15T10:00:00.000Z"
+    },
+    {
+      "id": "task-tomorrow-002",
+      "content": "Performance Monitoring Dashboard",
+      "priority": "MEDIUM",
+      "type": "TOMORROW",
+      "isCompleted": false,
+      "subtasks": [
+        { "id": "sub-001", "content": "Logowanie czasu cognitiveCycle", "isCompleted": false },
+        { "id": "sub-002", "content": "Dashboard DOPAMINE_TICK w NeuroMonitor", "isCompleted": false }
+      ],
+      "createdAt": "2025-12-15T10:00:00.000Z",
+      "updatedAt": "2025-12-15T10:00:00.000Z"
+    },
+    {
+      "id": "task-tomorrow-003",
+      "content": "Error Recovery System",
+      "priority": "MEDIUM",
+      "type": "TOMORROW",
+      "isCompleted": false,
+      "subtasks": [
+        { "id": "sub-001", "content": "Graceful degradation dla krytycznych bledow", "isCompleted": false }
+      ],
+      "createdAt": "2025-12-15T10:00:00.000Z",
+      "updatedAt": "2025-12-15T10:00:00.000Z"
+    },
+    {
+      "id": "task-tomorrow-004",
+      "content": "RPE System - Dopamine Decay Tuning",
+      "priority": "LOW",
+      "type": "TOMORROW",
+      "isCompleted": false,
+      "subtasks": [],
+      "createdAt": "2025-12-15T10:00:00.000Z",
+      "updatedAt": "2025-12-15T10:00:00.000Z"
+    },
+    {
+      "id": "task-backlog-001",
+      "content": "Long-term Memory Architecture (FAZA 6)",
+      "priority": "HIGH",
+      "type": "BACKLOG",
+      "isCompleted": false,
+      "subtasks": [
+        { "id": "sub-001", "content": "Episodic Memory: Zdarzenie + Emocja + Skutek", "isCompleted": false },
+        { "id": "sub-002", "content": "Semantic Memory: Wyciagniete reguly o swiecie", "isCompleted": false },
+        { "id": "sub-003", "content": "Emotional Markers", "isCompleted": false }
+      ],
+      "createdAt": "2025-12-15T10:00:00.000Z",
+      "updatedAt": "2025-12-15T10:00:00.000Z"
+    },
+    {
+      "id": "task-backlog-002",
+      "content": "Multi-agent Conflict Resolution (FAZA 7)",
+      "priority": "HIGH",
+      "type": "BACKLOG",
+      "isCompleted": false,
+      "subtasks": [
+        { "id": "sub-001", "content": "Multi-agent support", "isCompleted": false },
+        { "id": "sub-002", "content": "Attention Gates", "isCompleted": false }
+      ],
+      "createdAt": "2025-12-15T10:00:00.000Z",
+      "updatedAt": "2025-12-15T10:00:00.000Z"
+    },
+    {
+      "id": "task-backlog-003",
+      "content": "Wewnetrzny Obserwator (InternalObserver)",
+      "priority": "HIGH",
+      "type": "BACKLOG",
+      "isCompleted": false,
+      "subtasks": [
+        { "id": "sub-001", "content": "Meta-cognitive reflection", "isCompleted": false }
+      ],
+      "createdAt": "2025-12-15T10:00:00.000Z",
+      "updatedAt": "2025-12-15T10:00:00.000Z"
+    },
+    {
+      "id": "task-backlog-004",
+      "content": "Sprzezenie zwrotne celow (GoalFeedback)",
+      "priority": "MEDIUM",
+      "type": "BACKLOG",
+      "isCompleted": false,
+      "subtasks": [
+        { "id": "sub-001", "content": "Podlaczyc cele do EvaluationBus", "isCompleted": false },
+        { "id": "sub-002", "content": "Goal success tracking", "isCompleted": false }
+      ],
+      "createdAt": "2025-12-15T10:00:00.000Z",
+      "updatedAt": "2025-12-15T10:00:00.000Z"
+    },
+    {
+      "id": "task-backlog-005",
+      "content": "Sterowanie wykonawcze (ExecutiveControl)",
+      "priority": "MEDIUM",
+      "type": "BACKLOG",
+      "isCompleted": false,
+      "subtasks": [
+        { "id": "sub-001", "content": "ExecutiveControl z histereza", "isCompleted": false },
+        { "id": "sub-002", "content": "Brak oscylacji progow", "isCompleted": false }
+      ],
+      "createdAt": "2025-12-15T10:00:00.000Z",
+      "updatedAt": "2025-12-15T10:00:00.000Z"
+    },
+    {
+      "id": "task-backlog-006",
+      "content": "Sad Snu (DreamJudge)",
+      "priority": "HIGH",
+      "type": "BACKLOG",
+      "isCompleted": false,
+      "subtasks": [
+        { "id": "sub-001", "content": "Sen jako proces edycji osobowosci", "isCompleted": false },
+        { "id": "sub-002", "content": "Lekcje dnia do pamieci", "isCompleted": false }
+      ],
+      "createdAt": "2025-12-15T10:00:00.000Z",
+      "updatedAt": "2025-12-15T10:00:00.000Z"
+    },
+    {
+      "id": "task-backlog-007",
+      "content": "Identity-Lite to BIG",
+      "priority": "HIGH",
+      "type": "BACKLOG",
+      "isCompleted": false,
+      "subtasks": [
+        { "id": "sub-001", "content": "CoreIdentity z DB", "isCompleted": false },
+        { "id": "sub-002", "content": "Pelny CortexStateBuilder", "isCompleted": false }
+      ],
+      "createdAt": "2025-12-15T10:00:00.000Z",
+      "updatedAt": "2025-12-15T10:00:00.000Z"
+    },
+    {
+      "id": "task-backlog-008",
+      "content": "WorldResponse Architecture",
+      "priority": "HIGH",
+      "type": "BACKLOG",
+      "isCompleted": false,
+      "subtasks": [
+        { "id": "sub-001", "content": "Formalizacja sygnalow zwrotnych od swiata", "isCompleted": false }
+      ],
+      "createdAt": "2025-12-15T10:00:00.000Z",
+      "updatedAt": "2025-12-15T10:00:00.000Z"
+    },
+    {
+      "id": "task-backlog-009",
+      "content": "Pamiec - Memory Engine Full",
+      "priority": "HIGH",
+      "type": "BACKLOG",
+      "isCompleted": false,
+      "subtasks": [
+        { "id": "sub-001", "content": "Przejscie z surowych logow na epizody", "isCompleted": false },
+        { "id": "sub-002", "content": "GoalJournal - pamiec przyszlosci", "isCompleted": false }
+      ],
+      "createdAt": "2025-12-15T10:00:00.000Z",
+      "updatedAt": "2025-12-15T10:00:00.000Z"
+    }
+  ],
+  
+  "roadmap": [
+    {
+      "id": "rm-t1-01",
+      "title": "Introspection Loop",
+      "description": "Autonomiczne generowanie mysli, wewnetrzny monolog, voice pressure evaluation. Agent mysli sam z siebie.",
+      "tier": "Tier 1: Autonomous Consciousness",
+      "status": "COMPLETED",
+      "completionPercentage": 100,
+      "createdAt": "2025-12-15T10:00:00.000Z",
+      "updatedAt": "2025-12-15T10:00:00.000Z"
+    },
+    {
+      "id": "rm-t1-02",
+      "title": "Dream State (Visual Hallucinations)",
+      "description": "REM sleep visual generation z memory consolidation. Agent sni i konsoliduje wspomnienia.",
+      "tier": "Tier 1: Autonomous Consciousness",
+      "status": "COMPLETED",
+      "completionPercentage": 100,
+      "createdAt": "2025-12-15T10:00:00.000Z",
+      "updatedAt": "2025-12-15T10:00:00.000Z"
+    },
+    {
+      "id": "rm-t1-03",
+      "title": "Emotional Momentum",
+      "description": "Emotional homeostasis, decay curves, mood shifts. Emocje dzialaja jak fizyka - EMA smoothing, refractory periods.",
+      "tier": "Tier 1: Autonomous Consciousness",
+      "status": "COMPLETED",
+      "completionPercentage": 100,
+      "createdAt": "2025-12-15T10:00:00.000Z",
+      "updatedAt": "2025-12-15T10:00:00.000Z"
+    },
+    {
+      "id": "rm-t2-01",
+      "title": "Goal Formation",
+      "description": "Podstawowe autonomiczne formowanie celow (Curiosity/Empathy). Agent sam tworzy cele gdy user milczy.",
+      "tier": "Tier 2: Proactive Behaviors",
+      "status": "COMPLETED",
+      "completionPercentage": 100,
+      "createdAt": "2025-12-15T10:00:00.000Z",
+      "updatedAt": "2025-12-15T10:00:00.000Z"
+    },
+    {
+      "id": "rm-t2-02",
+      "title": "Exploration Drive",
+      "description": "Curiosity-driven behavior. Systematyczna eksploracja nieznanych tematow. Potrzebuje dopracowania.",
+      "tier": "Tier 2: Proactive Behaviors",
+      "status": "IN_PROGRESS",
+      "completionPercentage": 60,
+      "createdAt": "2025-12-15T10:00:00.000Z",
+      "updatedAt": "2025-12-15T10:00:00.000Z"
+    },
+    {
+      "id": "rm-t2-03",
+      "title": "Proactive Communication",
+      "description": "Voice pressure threshold, autonomous speech decision pipeline. Agent decyduje kiedy mowic.",
+      "tier": "Tier 2: Proactive Behaviors",
+      "status": "COMPLETED",
+      "completionPercentage": 100,
+      "createdAt": "2025-12-15T10:00:00.000Z",
+      "updatedAt": "2025-12-15T10:00:00.000Z"
+    },
+    {
+      "id": "rm-t3-01",
+      "title": "Chemical Soul (Dopamine)",
+      "description": "Dopamina jako nagroda, BOREDOM_DECAY przy nudzie, RPE decay. Chemia kieruje motywacja.",
+      "tier": "Tier 3: Advanced Cognition",
+      "status": "COMPLETED",
+      "completionPercentage": 100,
+      "createdAt": "2025-12-15T10:00:00.000Z",
+      "updatedAt": "2025-12-15T10:00:00.000Z"
+    },
+    {
+      "id": "rm-t3-02",
+      "title": "Serotonin Reactions",
+      "description": "Stabilnosc nastroju, reakcje na porazki. ChemistryBridge laczy EvaluationBus z chemia.",
+      "tier": "Tier 3: Advanced Cognition",
+      "status": "PARTIAL",
+      "completionPercentage": 40,
+      "createdAt": "2025-12-15T10:00:00.000Z",
+      "updatedAt": "2025-12-15T10:00:00.000Z"
+    },
+    {
+      "id": "rm-t3-03",
+      "title": "Norepinephrine Focus",
+      "description": "Fokus i uwaga. Wplyw na koncentracje przy zadaniach.",
+      "tier": "Tier 3: Advanced Cognition",
+      "status": "NOT_STARTED",
+      "completionPercentage": 20,
+      "createdAt": "2025-12-15T10:00:00.000Z",
+      "updatedAt": "2025-12-15T10:00:00.000Z"
+    },
+    {
+      "id": "rm-t4-01",
+      "title": "Persona-Less Cortex",
+      "description": "LLM nie wie kim jest - dowiaduje sie z danych w kazdym wywolaniu. Stateless Inference Engine.",
+      "tier": "Tier 4: Personality & Identity",
+      "status": "COMPLETED",
+      "completionPercentage": 100,
+      "createdAt": "2025-12-15T10:00:00.000Z",
+      "updatedAt": "2025-12-15T10:00:00.000Z"
+    },
+    {
+      "id": "rm-t4-02",
+      "title": "Tagged Cognition",
+      "description": "3 warstwy: INTERNAL_THOUGHT, ASSISTANT_SAID, MY_ACTION. Agent wie co myslal, co powiedzial, co zrobil.",
+      "tier": "Tier 4: Personality & Identity",
+      "status": "COMPLETED",
+      "completionPercentage": 100,
+      "createdAt": "2025-12-15T10:00:00.000Z",
+      "updatedAt": "2025-12-15T10:00:00.000Z"
+    },
+    {
+      "id": "rm-t4-03",
+      "title": "Decision Gate (3-Layer)",
+      "description": "MINDSPACE -> DECISION GATE -> EXPRESSION. Narzedzia nigdy nie sa w myslach.",
+      "tier": "Tier 4: Personality & Identity",
+      "status": "COMPLETED",
+      "completionPercentage": 100,
+      "createdAt": "2025-12-15T10:00:00.000Z",
+      "updatedAt": "2025-12-15T10:00:00.000Z"
+    },
+    {
+      "id": "rm-t5-01",
+      "title": "EvaluationBus",
+      "description": "Centralna magistrala sygnalow uczenia. GOAL/CONFESSION/PARSER/GUARD/USER -> unified format.",
+      "tier": "Tier 5: Meta-Cognition",
+      "status": "COMPLETED",
+      "completionPercentage": 100,
+      "createdAt": "2025-12-15T10:00:00.000Z",
+      "updatedAt": "2025-12-15T10:00:00.000Z"
+    },
+    {
+      "id": "rm-t5-02",
+      "title": "FactEcho Guard",
+      "description": "JSON-based fact validation (NO REGEX!). Agent MUSI echowac fakty ktore uzyl.",
+      "tier": "Tier 5: Meta-Cognition",
+      "status": "COMPLETED",
+      "completionPercentage": 100,
+      "createdAt": "2025-12-15T10:00:00.000Z",
+      "updatedAt": "2025-12-15T10:00:00.000Z"
+    },
+    {
+      "id": "rm-t5-03",
+      "title": "PersonaGuard",
+      "description": "Wykrywanie identity drift i fact mutation. Retry logic z temperature decay.",
+      "tier": "Tier 5: Meta-Cognition",
+      "status": "COMPLETED",
+      "completionPercentage": 100,
+      "createdAt": "2025-12-15T10:00:00.000Z",
+      "updatedAt": "2025-12-15T10:00:00.000Z"
+    },
+    {
+      "id": "rm-t6-01",
+      "title": "ExecutiveGate",
+      "description": "Deterministyczna bramka wykonawcza. Reaktywna ma TWARDE VETO.",
+      "tier": "Tier 6: Creativity & Expression",
+      "status": "COMPLETED",
+      "completionPercentage": 100,
+      "createdAt": "2025-12-15T10:00:00.000Z",
+      "updatedAt": "2025-12-15T10:00:00.000Z"
+    },
+    {
+      "id": "rm-t6-02",
+      "title": "EmotionEngine Deterministic",
+      "description": "LLM opisuje swiat, System CZUJE swiat. Symbolic classification -> deterministic deltas.",
+      "tier": "Tier 6: Creativity & Expression",
+      "status": "COMPLETED",
+      "completionPercentage": 100,
+      "createdAt": "2025-12-15T10:00:00.000Z",
+      "updatedAt": "2025-12-15T10:00:00.000Z"
+    },
+    {
+      "id": "rm-t6-03",
+      "title": "ExpressionPolicy",
+      "description": "Narcissism Filter, Dopamine Breaker, Silence Breaker. Filtrowanie wypowiedzi.",
+      "tier": "Tier 6: Creativity & Expression",
+      "status": "COMPLETED",
+      "completionPercentage": 100,
+      "createdAt": "2025-12-15T10:00:00.000Z",
+      "updatedAt": "2025-12-15T10:00:00.000Z"
+    },
+    {
+      "id": "rm-t7-01",
+      "title": "Unified Input Queue",
+      "description": "Jedna brama wejscia eliminujaca race condition. EventLoop jako jedyne zrodlo prawdy o czasie.",
+      "tier": "Tier 7: Social Intelligence",
+      "status": "NOT_STARTED",
+      "completionPercentage": 0,
+      "createdAt": "2025-12-15T10:00:00.000Z",
+      "updatedAt": "2025-12-15T10:00:00.000Z"
+    },
+    {
+      "id": "rm-t7-02",
+      "title": "Acetylcholine (ACh)",
+      "description": "Attention Gate modulujacy focus. Na razie passive mode (logging-only).",
+      "tier": "Tier 7: Social Intelligence",
+      "status": "NOT_STARTED",
+      "completionPercentage": 0,
+      "createdAt": "2025-12-15T10:00:00.000Z",
+      "updatedAt": "2025-12-15T10:00:00.000Z"
+    },
+    {
+      "id": "rm-t7-03",
+      "title": "Workspace Tools",
+      "description": "NOTES + READ_FILE. Agent moze zapisywac notatki i czytac pliki.",
+      "tier": "Tier 7: Social Intelligence",
+      "status": "NOT_STARTED",
+      "completionPercentage": 0,
+      "createdAt": "2025-12-15T10:00:00.000Z",
+      "updatedAt": "2025-12-15T10:00:00.000Z"
+    },
+    {
+      "id": "rm-t8-01",
+      "title": "Memory Engine Full",
+      "description": "Episodic + Semantic Memory. Przejscie z surowych logow na przetworzone epizody.",
+      "tier": "Tier 8: Superpowers",
+      "status": "NOT_STARTED",
+      "completionPercentage": 0,
+      "createdAt": "2025-12-15T10:00:00.000Z",
+      "updatedAt": "2025-12-15T10:00:00.000Z"
+    },
+    {
+      "id": "rm-t8-02",
+      "title": "GoalJournal",
+      "description": "Pamiec przyszlosci i dlugoterinowych misji. Co robimy w tej fazie? Co zostalo przerwane?",
+      "tier": "Tier 8: Superpowers",
+      "status": "NOT_STARTED",
+      "completionPercentage": 0,
+      "createdAt": "2025-12-15T10:00:00.000Z",
+      "updatedAt": "2025-12-15T10:00:00.000Z"
+    },
+    {
+      "id": "rm-t8-03",
+      "title": "DreamConsolidation 2.0",
+      "description": "Sen jako proces edycji osobowosci. Lekcje dnia, zmiany zachowania, aktualizacja GoalJournal.",
+      "tier": "Tier 8: Superpowers",
+      "status": "NOT_STARTED",
+      "completionPercentage": 0,
+      "createdAt": "2025-12-15T10:00:00.000Z",
+      "updatedAt": "2025-12-15T10:00:00.000Z"
+    },
+    {
+      "id": "rm-t9-01",
+      "title": "Multi-Agent Support",
+      "description": "Wielu agentow w jednym srodowisku. LEARN_FROM tool.",
+      "tier": "Tier 9: Evolution",
+      "status": "NOT_STARTED",
+      "completionPercentage": 0,
+      "createdAt": "2025-12-15T10:00:00.000Z",
+      "updatedAt": "2025-12-15T10:00:00.000Z"
+    },
+    {
+      "id": "rm-t9-02",
+      "title": "ExecutiveControl z Histereza",
+      "description": "Globalny obraz ocen systemu. Okno czasowe, minimum eventow, cooldown.",
+      "tier": "Tier 9: Evolution",
+      "status": "NOT_STARTED",
+      "completionPercentage": 0,
+      "createdAt": "2025-12-15T10:00:00.000Z",
+      "updatedAt": "2025-12-15T10:00:00.000Z"
+    },
+    {
+      "id": "rm-t9-03",
+      "title": "WorldResponse Architecture",
+      "description": "Formalizacja sygnalow zwrotnych od swiata. Feedback loops.",
+      "tier": "Tier 9: Evolution",
+      "status": "NOT_STARTED",
+      "completionPercentage": 0,
+      "createdAt": "2025-12-15T10:00:00.000Z",
+      "updatedAt": "2025-12-15T10:00:00.000Z"
+    },
+    {
+      "id": "rm-t10-01",
+      "title": "Full CoreIdentity",
+      "description": "Twardy, wersjonowany obiekt w DB. TraitVector + Values + NarrativeTraits.",
+      "tier": "Tier 10: Transcendence",
+      "status": "NOT_STARTED",
+      "completionPercentage": 0,
+      "createdAt": "2025-12-15T10:00:00.000Z",
+      "updatedAt": "2025-12-15T10:00:00.000Z"
+    },
+    {
+      "id": "rm-t10-02",
+      "title": "Reflection Consolidation",
+      "description": "Dlugoterminowe raporty: zrodla bolu, ewolucja osobowosci, trendy.",
+      "tier": "Tier 10: Transcendence",
+      "status": "NOT_STARTED",
+      "completionPercentage": 0,
+      "createdAt": "2025-12-15T10:00:00.000Z",
+      "updatedAt": "2025-12-15T10:00:00.000Z"
+    },
+    {
+      "id": "rm-t10-03",
+      "title": "Emergent Identity",
+      "description": "Agent sam pisze swoje narrative_self i persona_tags. Fluid Traits z neuro-dryftem.",
+      "tier": "Tier 10: Transcendence",
+      "status": "NOT_STARTED",
+      "completionPercentage": 0,
+      "createdAt": "2025-12-15T10:00:00.000Z",
+      "updatedAt": "2025-12-15T10:00:00.000Z"
+    }
+  ],
+  
+  "challenges": [
+    {
+      "id": "ch-001",
+      "title": "Race Condition - podwojna odpowiedz",
+      "description": "Zdiagnozowano Double Brain Race Condition. processUserInput i EventLoop.tick moga odpowiadac jednoczesnie.",
+      "severity": "CRITICAL",
+      "status": "OPEN",
+      "potentialSolution": "Unified Input Queue - EventLoop musi byc jedynym zrodlem prawdy o czasie.",
+      "createdAt": "2025-12-15T10:00:00.000Z",
+      "updatedAt": "2025-12-15T10:00:00.000Z"
+    },
+    {
+      "id": "ch-002",
+      "title": "Serotonin Reactions niedokonczone (40%)",
+      "description": "ChemistryBridge jest gotowy ale serotonin reactions sa niekompletne. Emocje nie stabilizuja sie po porazkach.",
+      "severity": "HIGH",
+      "status": "INVESTIGATING",
+      "potentialSolution": "Dokonczyc reakcje serotoninowe w ChemistryBridge. Wlaczyc dopiero po narzediach.",
+      "createdAt": "2025-12-15T10:00:00.000Z",
+      "updatedAt": "2025-12-15T10:00:00.000Z"
+    },
+    {
+      "id": "ch-003",
+      "title": "ChemistryBridge disabled",
+      "description": "CHEMISTRY_BRIDGE_CONFIG.ENABLED = false. Kod gotowy ale czeka na obserwacje.",
+      "severity": "MODERATE",
+      "status": "INVESTIGATING",
+      "potentialSolution": "Najpierw obserwuj (logi), potem wlacz reakcje chemiczne.",
+      "createdAt": "2025-12-15T10:00:00.000Z",
+      "updatedAt": "2025-12-15T10:00:00.000Z"
+    },
+    {
+      "id": "ch-004",
+      "title": "Brak realnych narzedzi",
+      "description": "Agent nie ma NOTES ani READ_FILE. Bez realnych dzialan regulacja jest sztuczna.",
+      "severity": "HIGH",
+      "status": "OPEN",
+      "potentialSolution": "Zaimplementowac NOTES + READ_FILE jako minimalne narzedzia testowe.",
+      "createdAt": "2025-12-15T10:00:00.000Z",
+      "updatedAt": "2025-12-15T10:00:00.000Z"
+    },
+    {
+      "id": "ch-005",
+      "title": "GoalFeedbackSystem niezaimplementowany",
+      "description": "Cele nie sa spiete z chemia ani z meta-ocena. Sukces/porazka celu nie daje sygnalu do EvaluationBus.",
+      "severity": "HIGH",
+      "status": "OPEN",
+      "potentialSolution": "Zaimplementowac GoalFeedbackSystem: cele -> EvaluationBus -> ChemistryBridge.",
+      "createdAt": "2025-12-15T10:00:00.000Z",
+      "updatedAt": "2025-12-15T10:00:00.000Z"
+    },
+    {
+      "id": "ch-006",
+      "title": "1 skipped test (EventLoop flaky)",
+      "description": "Jest 1 skipped test w EventLoop - do refaktoru.",
+      "severity": "LOW",
+      "status": "OPEN",
+      "potentialSolution": "Refaktor EventLoop dla lepszej testowalnosci.",
+      "createdAt": "2025-12-15T10:00:00.000Z",
+      "updatedAt": "2025-12-15T10:00:00.000Z"
+    }
+  ],
+  
+  "notes": [
+    {
+      "id": "note-001",
+      "title": "Zasada: Dzialanie -> Porażki -> Regulacja",
+      "content": "Narzedzia przed regulacja! Agent musi popelniac bledy, zanim go regulujemy. EvalBus musi miec realne sygnaly, nie symulacje.",
+      "category": "DECISION",
+      "tags": ["architecture", "philosophy"],
+      "createdAt": "2025-12-15T10:00:00.000Z",
+      "updatedAt": "2025-12-15T10:00:00.000Z"
+    },
+    {
+      "id": "note-002",
+      "title": "PIONEER: LLM opisuje, System czuje",
+      "content": "LLM zwraca symbolic classification (valence, salience, novelty). EmotionEngine oblicza deterministyczne delty. LLM nie moze utrzymac invariantow emocjonalnych.",
+      "category": "DECISION",
+      "tags": ["architecture", "emotions"],
+      "createdAt": "2025-12-15T10:00:00.000Z",
+      "updatedAt": "2025-12-15T10:00:00.000Z"
+    },
+    {
+      "id": "note-003",
+      "title": "3-Layer Cognition",
+      "content": "MINDSPACE (mysli, zero narzedzi) -> DECISION GATE (walidacja energii, cooldown) -> EXPRESSION (wykonanie narzedzi). Mapowanie: Prefrontal -> Basal Ganglia -> Motor Cortex.",
+      "category": "DECISION",
+      "tags": ["architecture", "tools"],
+      "createdAt": "2025-12-15T10:00:00.000Z",
+      "updatedAt": "2025-12-15T10:00:00.000Z"
+    },
+    {
+      "id": "note-004",
+      "title": "Fact jest nienaruszalny, komentarz jest osobowosciowy",
+      "content": "LLM moze KOMENTOWAC fakty ale NIGDY ich ZMIENIAC. APPROX dozwolone tylko obok literalu. energy: 23 -> '23% - to malo' OK, ale 'malo energii' = MUTATION!",
+      "category": "DECISION",
+      "tags": ["prism", "facts"],
+      "createdAt": "2025-12-15T10:00:00.000Z",
+      "updatedAt": "2025-12-15T10:00:00.000Z"
+    },
+    {
+      "id": "note-005",
+      "title": "Commercial Applications",
+      "content": "Potential use cases: Game NPCs, Trading Agents, High-profile publications, Cognitive Assistants.",
+      "category": "IDEA",
+      "tags": ["business", "future"],
+      "createdAt": "2025-12-15T10:00:00.000Z",
+      "updatedAt": "2025-12-15T10:00:00.000Z"
+    },
+    {
+      "id": "note-006",
+      "title": "Testy: 318 passing",
+      "content": "Status: 318 testow przechodzi, 1 skipped (EventLoop flaky). Build OK. 7/7 systemow ACTIVE.",
+      "category": "INSIGHT",
+      "tags": ["testing", "status"],
+      "createdAt": "2025-12-15T10:00:00.000Z",
+      "updatedAt": "2025-12-15T10:00:00.000Z"
+    },
+    {
+      "id": "note-007",
+      "title": "Tryby systemu",
+      "content": "LEGACY (~200 tokenow), MVP (~350 tokenow, cache, zero DB), FULL (~1500 tokenow, DB queries). Aktualnie: MVP wlaczony.",
+      "category": "DECISION",
+      "tags": ["config", "performance"],
+      "createdAt": "2025-12-15T10:00:00.000Z",
+      "updatedAt": "2025-12-15T10:00:00.000Z"
+    }
+  ],
+  
+  "stats": {
+    "totalFeatures": 30,
+    "implemented": 17,
+    "partial": 3,
+    "planned": 10,
+    "overallProgress": 63,
+    "currentPhase": "FAZA 6.2: Kernel Stabilization",
+    "todayCompleted": 0,
+    "streak": 5,
+    "testsTotal": 318,
+    "testsPassing": 318
+  },
+  
+  "settings": {
+    "theme": "cyberpunk",
+    "autoSaveInterval": 2000,
+    "fileWatchEnabled": true,
+    "showCompletedTasks": true
+  }
+}

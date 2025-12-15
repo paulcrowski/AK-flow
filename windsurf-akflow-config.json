@@ -1,0 +1,73 @@
+{
+  "name": "AK-FLOW NEXUS Integration",
+  "version": "1.0",
+  "nexusConfig": {
+    "stateFilePath": "ak-flow-state.json",
+    "nexusDataPath": "ak-nexus/data/ak-flow-state.json",
+    "pollingInterval": 1000,
+    "autoSaveInterval": 2000,
+    "backup": {
+      "enabled": true,
+      "maxBackups": 5,
+      "backupFolder": "backups/"
+    }
+  },
+  "integrationPoints": {
+    "testResults": {
+      "enabled": true,
+      "failureThreshold": "HIGH",
+      "successUpdate": {
+        "completeTask": true,
+        "updateRoadmap": true
+      }
+    },
+    "codeAnalysis": {
+      "enabled": true,
+      "complexityThreshold": 15,
+      "duplicateCodeThreshold": 5
+    }
+  },
+  "aiProtocol": {
+    "editors": {
+      "windsurf": {
+        "name": "AI_WINDSURF",
+        "prefix": "ws"
+      },
+      "antigrafity": {
+        "name": "AI_ANTIGRAFITY", 
+        "prefix": "ag"
+      },
+      "cursor": {
+        "name": "AI_CURSOR",
+        "prefix": "cur"
+      },
+      "claude": {
+        "name": "AI_CLAUDE",
+        "prefix": "cl"
+      }
+    },
+    "allowedActions": [
+      "ADD_TASK",
+      "COMPLETE_TASK",
+      "UPDATE_TASK",
+      "DELETE_TASK",
+      "UPDATE_ROADMAP_STATUS",
+      "ADD_CHALLENGE",
+      "RESOLVE_CHALLENGE",
+      "ADD_NOTE",
+      "UPDATE_PHASE"
+    ],
+    "idGeneration": {
+      "taskPrefix": "task-",
+      "challengePrefix": "ch-",
+      "notePrefix": "note-",
+      "roadmapPrefix": "rm-",
+      "useTimestamp": true
+    }
+  },
+  "webAccess": {
+    "nexusPort": 3001,
+    "mainAppPort": 5173,
+    "enabled": true
+  }
+}
