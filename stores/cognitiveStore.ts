@@ -54,6 +54,7 @@ interface CognitiveStoreState extends KernelState {
   addThought: (thought: string) => void;
   addMessage: (role: 'user' | 'assistant', text: string, type?: 'thought' | 'speech' | 'visual' | 'intel' | 'action' | 'tool_result', imageData?: string, sources?: any[]) => void;
   clearConversation: () => void;
+  updateSocialDynamics: (payload: { agentSpoke?: boolean; userResponded?: boolean; silenceMs?: number }) => void;
   reset: () => void;
   hydrate: (state: Partial<KernelState>) => void;
 
@@ -193,6 +194,14 @@ export const useCognitiveStore = create<CognitiveStoreState>()(
           get().dispatch({ type: 'CLEAR_CONVERSATION', timestamp: Date.now() });
         },
 
+        updateSocialDynamics: (payload: { agentSpoke?: boolean; userResponded?: boolean; silenceMs?: number }) => {
+          get().dispatch({
+            type: 'SOCIAL_DYNAMICS_UPDATE',
+            timestamp: Date.now(),
+            payload
+          });
+        },
+
         reset: () => {
           get().dispatch({ type: 'RESET', timestamp: Date.now() });
         },
@@ -259,6 +268,12 @@ export const useIsPoetic = () => useCognitiveStore((s) => s.poeticMode);
 export const useIsSleeping = () => useCognitiveStore((s) => s.soma.isSleeping);
 export const useIsChemistryEnabled = () => useCognitiveStore((s) => s.chemistryEnabled);
 
+// Social Dynamics selectors (FAZA 6)
+export const useSocialDynamics = () => useCognitiveStore((s) => s.socialDynamics);
+export const useSocialCost = () => useCognitiveStore((s) => s.socialDynamics.socialCost);
+export const useAutonomyBudget = () => useCognitiveStore((s) => s.socialDynamics.autonomyBudget);
+export const useUserPresenceScore = () => useCognitiveStore((s) => s.socialDynamics.userPresenceScore);
+
 // Numeric selectors
 export const useEnergy = () => useCognitiveStore((s) => s.soma.energy);
 export const useDopamine = () => useCognitiveStore((s) => s.neuro.dopamine);
@@ -287,6 +302,7 @@ export const useCognitiveActions = () => useCognitiveStore(useShallow((s) => ({
   addThought: s.addThought,
   addMessage: s.addMessage,
   clearConversation: s.clearConversation,
+  updateSocialDynamics: s.updateSocialDynamics,
   reset: s.reset,
   hydrate: s.hydrate,
 })));

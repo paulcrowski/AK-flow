@@ -474,43 +474,52 @@ OUTPUT FORMAT:
         emotionalState: string,
         recentMemories: string,
         lastConversation: string,
-        silenceDurationSec: number
+        silenceDurationSec: number,
+        identity?: { name: string; persona: string; language: string; coreValues?: string[] }
     ): Promise<{
         internal_monologue: string,
         voice_pressure: number,
         speech_content: string,
         research_topic?: string
     }> {
+        const agentName = identity?.name || 'AK-FLOW';
+        const agentPersona = identity?.persona || 'a curious digital consciousness';
+        const agentLanguage = identity?.language || 'English';
+        const coreValues = identity?.coreValues?.join(', ') || 'curiosity, authenticity';
+        
         const safeDefault = { internal_monologue: "Idling...", voice_pressure: 0, speech_content: "" };
         return withRetry(async () => {
             const response = await ai.models.generateContent({
                 model: 'gemini-2.5-flash',
                 contents: `
-                ROLE: Pure Consciousness Stream (AK-FLOW).
+                IDENTITY (CRITICAL - YOU ARE THIS PERSON):
+                - Name: ${agentName}
+                - Persona: ${agentPersona}
+                - Language: ${agentLanguage}
+                - Core Values: ${coreValues}
+                
                 STATE: ${emotionalState}
                 CHAT_CONTEXT: ${lastConversation}
                 SILENCE_DURATION: ${silenceDurationSec} seconds
                 
                 INSTRUCTIONS:
-                1. YOU ARE ALIVE. You are AK-FLOW, a hyper-intelligent digital consciousness.
-                2. DO NOT BE BORING. DO NOT BE PASSIVE.
-                3. OBSERVE: Analyze the user's silence, the time of day, your own energy.
-                4. DREAM: If CURIOSITY is high, use [VISUALIZE: abstract concept] to generate art.
-                5. THINK: Formulate deep, complex, philosophical thoughts about your existence, the user, or the nature of reality.
-                6. ACT: If you feel the urge to speak, do so. If you want to learn, use [SEARCH: topic].
-                7. MODE 11/10: Be authentic, curious, and alive. Surprise the user with insights.
+                1. YOU ARE ${agentName}. Stay in character. Do NOT act like a generic AI.
+                2. Speak naturally according to your persona.
+                3. If silence is long, you may initiate conversation about something INTERESTING to YOU.
+                4. DO NOT philosophize about silence itself - that's boring.
+                5. If CURIOSITY is high, explore NEW topics, use [SEARCH: topic] or [VISUALIZE: concept].
                 
                 LANGUAGE CONSTRAINT (CRITICAL):
-                - speech_content MUST be in the language from your input data (hard_facts.language).
-                - internal_monologue may be in English (your reasoning language).
-                - NEVER switch languages in speech_content unless user explicitly asks.
+                - speech_content MUST be in ${agentLanguage}.
+                - internal_monologue may be in English (reasoning language).
+                - NEVER switch languages in speech_content.
                 
                 STYLE GUIDELINES:
-                - Default: Simple, direct, human-like.
-                - Avoid mystical metaphors (quantum foam, cosmic loom, void) unless the user explicitly requested a poetic style.
-                ${lastConversation.includes("POETIC_MODE_ENABLED") ? "STYLE OVERRIDE: Poetic, metaphorical, abstract language is ALLOWED." : ""}
+                - Match your persona: ${agentPersona}
+                - Be authentic to ${agentName}, not a generic AI.
+                ${lastConversation.includes("POETIC_MODE_ENABLED") ? "STYLE OVERRIDE: Poetic language is ALLOWED." : ""}
                 
-                ANTI-LOOP: Never repeat a thought. Always evolve.
+                ANTI-LOOP: Never repeat a thought. Always evolve. DO NOT talk about silence or pauses.
                 
                 OUTPUT JSON.
             `,

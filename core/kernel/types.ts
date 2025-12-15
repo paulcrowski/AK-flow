@@ -24,6 +24,17 @@ export interface ConversationTurn {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// SOCIAL DYNAMICS - Soft homeostasis for autonomous speech regulation
+// ═══════════════════════════════════════════════════════════════════════════
+
+export interface SocialDynamics {
+  socialCost: number;                    // 0-1, increases with speeches, decays over time
+  autonomyBudget: number;                // 0-1, spent on speech, regenerates slowly
+  userPresenceScore: number;             // 0-1, high when user active, decays in silence
+  consecutiveWithoutResponse: number;    // Counter for speeches without user reply
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // KERNEL STATE - Immutable snapshot of cognitive system
 // ═══════════════════════════════════════════════════════════════════════════
 
@@ -33,28 +44,31 @@ export interface KernelState {
   soma: SomaState;
   neuro: NeurotransmitterState;
   resonance: ResonanceField;
-  
+
   // Personality & Goals
   traitVector: TraitVector;
   goalState: GoalState;
-  
+
   // Mode flags
   autonomousMode: boolean;
   poeticMode: boolean;
   chemistryEnabled: boolean;
-  
+
   // Temporal tracking
   lastSpeakTimestamp: number;
   silenceStart: number;
   lastUserInteractionAt: number;
-  
+
   // Counters (for RPE, narcissism guard, etc.)
   consecutiveAgentSpeeches: number;
   ticksSinceLastReward: number;
-  
+
+  // Social dynamics (soft homeostasis for autonomous speech)
+  socialDynamics: SocialDynamics;
+
   // History (bounded)
   thoughtHistory: string[];
-  
+
   // Conversation history (bounded, persists in state machine)
   conversation: ConversationTurn[];
 }
@@ -82,6 +96,7 @@ export type KernelEventType =
   | 'STATE_OVERRIDE'          // Debug: manual state injection
   | 'ADD_MESSAGE'             // Add message to conversation
   | 'CLEAR_CONVERSATION'      // Clear conversation history
+  | 'SOCIAL_DYNAMICS_UPDATE'  // Update social dynamics (soft homeostasis)
   | 'RESET';                  // Full kernel reset
 
 export interface KernelEvent {
@@ -104,6 +119,7 @@ export type KernelEventPayload =
   | StateOverridePayload
   | GoalPayload
   | AddMessagePayload
+  | SocialDynamicsPayload
   | EmptyPayload;
 
 export interface TickPayload {
@@ -153,7 +169,13 @@ export interface AddMessagePayload {
   sources?: any[];
 }
 
-export interface EmptyPayload {}
+export interface SocialDynamicsPayload {
+  agentSpoke?: boolean;         // Agent just spoke
+  userResponded?: boolean;      // User just responded
+  silenceMs?: number;           // Current silence duration for presence decay
+}
+
+export interface EmptyPayload { }
 
 // ═══════════════════════════════════════════════════════════════════════════
 // KERNEL OUTPUTS - Side effects to be executed by runtime

@@ -375,8 +375,11 @@ export const useCognitiveKernelLite = (loadedIdentity?: AgentIdentity | null) =>
               persona: loadedIdentityRef.current.persona || '',
               coreValues: loadedIdentityRef.current.core_values || [],
               traitVector: loadedIdentityRef.current.trait_vector,
-              voiceStyle: loadedIdentityRef.current.voice_style || 'balanced'
-            } : undefined
+              voiceStyle: loadedIdentityRef.current.voice_style || 'balanced',
+              language: loadedIdentityRef.current.language || 'English'
+            } : undefined,
+            // FAZA 6: Social Dynamics for soft homeostasis
+            socialDynamics: state.socialDynamics
           };
           
           // Run EventLoop for autonomous cognition
@@ -401,6 +404,9 @@ export const useCognitiveKernelLite = (loadedIdentity?: AgentIdentity | null) =>
                   priority: 0.9
                 });
                 
+                // FAZA 6: Update social dynamics - agent spoke
+                actions.updateSocialDynamics({ agentSpoke: true });
+                
                 logPhysiologySnapshot('AUTONOMOUS_RESPONSE');
               }
             },
@@ -416,6 +422,10 @@ export const useCognitiveKernelLite = (loadedIdentity?: AgentIdentity | null) =>
           silenceStartRef.current = nextCtx.silenceStart;
           ticksSinceLastRewardRef.current = nextCtx.ticksSinceLastReward;
         }
+        
+        // FAZA 6: Update social dynamics decay on each tick
+        const silenceMs = Date.now() - state.lastUserInteractionAt;
+        actions.updateSocialDynamics({ silenceMs });
         
         // Calculate next tick interval based on energy
         const energy = state.soma.energy;

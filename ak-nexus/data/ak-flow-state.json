@@ -402,7 +402,7 @@
       "id": "task-backlog-009",
       "content": "Pamiec - Memory Engine Full",
       "priority": "HIGH",
-      "type": "BACKLOG",
+      "type": "TOMORROW",
       "isCompleted": false,
       "subtasks": [
         {
@@ -418,6 +418,39 @@
       ],
       "createdAt": "2025-12-15T10:00:00.000Z",
       "updatedAt": "2025-12-15T10:00:00.000Z"
+    },
+    {
+      "id": "task-backlog-010",
+      "content": "Security: Rate Limiting (Audit Recommendation)",
+      "details": "PROBLEM: Brak limitowania zapytan do API (ryzyko kosztow/DDoS). ROZWIAZANIE: Dodac middleware z rate limitingiem dla endpointow krytycznych.",
+      "priority": "HIGH",
+      "type": "TOMORROW",
+      "isCompleted": false,
+      "subtasks": [],
+      "createdAt": "2025-12-15T13:30:00.000Z",
+      "updatedAt": "2025-12-15T13:30:00.000Z"
+    },
+    {
+      "id": "task-backlog-011",
+      "content": "Monitoring: Health Check Endpoint (Audit Recommendation)",
+      "details": "PROBLEM: Brak prostego sposobu na sprawdzenie czy system zyje (dla zewnetrznych monitorow). ROZWIAZANIE: Endpoint /health zwracajacy status kluczowych systemow.",
+      "priority": "HIGH",
+      "type": "TOMORROW",
+      "isCompleted": false,
+      "subtasks": [],
+      "createdAt": "2025-12-15T13:30:00.000Z",
+      "updatedAt": "2025-12-15T13:30:00.000Z"
+    },
+    {
+      "id": "task-backlog-012",
+      "content": "Performance: Identity Caching (Audit Recommendation)",
+      "details": "PROBLEM: Czeste zapytania do DB o tozsamosc agenta. ROZWIAZANIE: Cache tozsamosci w pamieci (lub Redis) z inwalidacja.",
+      "priority": "MEDIUM",
+      "type": "TOMORROW",
+      "isCompleted": false,
+      "subtasks": [],
+      "createdAt": "2025-12-15T13:30:00.000Z",
+      "updatedAt": "2025-12-15T13:30:00.000Z"
     }
   ],
   "roadmap": [

@@ -6,6 +6,7 @@
  */
 
 import { LimbicState, SomaState, NeurotransmitterState, AgentType, PacketType, GoalState, Goal, TraitVector } from '../../types';
+import type { SocialDynamics } from '../kernel/types';
 import { LimbicSystem } from './LimbicSystem';
 import { CortexSystem, ConversationTurn } from './CortexSystem';
 import type { CortexSystem as CortexSystemNS } from './CortexSystem';
@@ -18,6 +19,7 @@ import { GoalContext } from './GoalSystem';
 import { decideExpression, computeNovelty, estimateSocialCost } from './ExpressionPolicy';
 import { computeDialogThreshold } from '../utils/thresholds';
 import { ExecutiveGate } from './ExecutiveGate';
+import { StyleGuard, UserStylePrefs } from './StyleGuard';
 
 export namespace EventLoop {
     export interface LoopContext {
@@ -42,6 +44,10 @@ export namespace EventLoop {
         // FAZA 5.1: RPE (Reward Prediction Error) tracking
         ticksSinceLastReward: number;
         hadExternalRewardThisTick: boolean;
+        // FAZA 6: Social Dynamics (Soft Homeostasis)
+        socialDynamics?: SocialDynamics;
+        // FAZA 6: User Style Preferences (Style Contract)
+        userStylePrefs?: UserStylePrefs;
     }
 
     // Module-level Budget Tracking (counters only, limit is in context)
@@ -59,6 +65,54 @@ export namespace EventLoop {
             return false;
         }
         return true;
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // SOCIAL DYNAMICS: Soft Homeostasis for Autonomous Speech
+    // ═══════════════════════════════════════════════════════════════════════════
+    
+    function shouldSpeakToUser(ctx: LoopContext, voicePressure: number): { allowed: boolean; reason: string } {
+        const sd = ctx.socialDynamics;
+        if (!sd) {
+            // Fallback to old behavior if no social dynamics
+            return { allowed: voicePressure > 0.6, reason: 'NO_SOCIAL_DYNAMICS' };
+        }
+        
+        // Hard block: autonomy budget exhausted
+        if (sd.autonomyBudget < 0.2) {
+            return { allowed: false, reason: 'BUDGET_EXHAUSTED' };
+        }
+        
+        // Compute effective pressure (reduced by social cost)
+        const effectivePressure = Math.max(0, voicePressure - sd.socialCost);
+        
+        // Dynamic threshold: higher when user absent
+        const dynamicThreshold = 0.6 + (1 - sd.userPresenceScore) * 0.3;
+        
+        // Log for observability
+        eventBus.publish({
+            id: `social-dynamics-check-${Date.now()}`,
+            timestamp: Date.now(),
+            source: AgentType.CORTEX_FLOW,
+            type: PacketType.SYSTEM_ALERT,
+            payload: {
+                event: 'SOCIAL_DYNAMICS_CHECK',
+                voicePressure,
+                socialCost: sd.socialCost.toFixed(3),
+                effectivePressure: effectivePressure.toFixed(3),
+                dynamicThreshold: dynamicThreshold.toFixed(3),
+                autonomyBudget: sd.autonomyBudget.toFixed(3),
+                userPresenceScore: sd.userPresenceScore.toFixed(3),
+                consecutiveWithoutResponse: sd.consecutiveWithoutResponse
+            },
+            priority: 0.4
+        });
+        
+        if (effectivePressure < dynamicThreshold) {
+            return { allowed: false, reason: 'BELOW_THRESHOLD' };
+        }
+        
+        return { allowed: true, reason: 'ALLOWED' };
     }
 
     export interface LoopCallbacks {
@@ -299,7 +353,13 @@ export namespace EventLoop {
                     JSON.stringify(ctx.limbic),
                     "Latent processing...",
                     historyText,
-                    silenceDuration
+                    silenceDuration,
+                    ctx.agentIdentity ? {
+                        name: ctx.agentIdentity.name,
+                        persona: ctx.agentIdentity.persona,
+                        language: ctx.agentIdentity.language || 'English',
+                        coreValues: ctx.agentIdentity.coreValues
+                    } : undefined
                 );
 
                 callbacks.onThought(volition.internal_monologue);
@@ -477,24 +537,43 @@ export namespace EventLoop {
                     priority: 0.5
                 });
 
-                if (gateDecision.should_speak && gateDecision.winner) {
-                    callbacks.onMessage('assistant', gateDecision.winner.speech_content, 'speech');
-                    ctx.lastSpeakTimestamp = Date.now();
-                    ctx.silenceStart = Date.now();
-                    ctx.thoughtHistory.push(gateDecision.winner.internal_thought);
+                // FAZA 6: Social Dynamics check (soft homeostasis)
+                const socialCheck = shouldSpeakToUser(ctx, voicePressure);
+                const finalShouldSpeak = gateDecision.should_speak && socialCheck.allowed;
+                
+                if (finalShouldSpeak && gateDecision.winner) {
+                    // FAZA 6: Apply StyleGuard filter before sending
+                    const styleResult = StyleGuard.apply(
+                        gateDecision.winner.speech_content,
+                        ctx.userStylePrefs || {}
+                    );
+                    
+                    // Only emit if text remains after filtering
+                    if (styleResult.text.length > 10) {
+                        callbacks.onMessage('assistant', styleResult.text, 'speech');
+                        ctx.lastSpeakTimestamp = Date.now();
+                        ctx.silenceStart = Date.now();
+                        ctx.thoughtHistory.push(gateDecision.winner.internal_thought);
 
-                    // Limit history size
-                    if (ctx.thoughtHistory.length > 20) ctx.thoughtHistory.shift();
+                        // Limit history size
+                        if (ctx.thoughtHistory.length > 20) ctx.thoughtHistory.shift();
 
-                    // FAZA 4.5: Increment consecutive agent speeches counter
-                    ctx.consecutiveAgentSpeeches++;
+                        // FAZA 4.5: Increment consecutive agent speeches counter
+                        ctx.consecutiveAgentSpeeches++;
 
-                    // Emotional response to speech
-                    ctx.limbic = LimbicSystem.applySpeechResponse(ctx.limbic);
-                    callbacks.onLimbicUpdate(ctx.limbic);
+                        // Emotional response to speech
+                        ctx.limbic = LimbicSystem.applySpeechResponse(ctx.limbic);
+                        callbacks.onLimbicUpdate(ctx.limbic);
+                    } else {
+                        // Text too short after filtering - suppress
+                        callbacks.onThought(`[STYLE_FILTERED] ${gateDecision.winner.internal_thought}`);
+                    }
                 } else if (gateDecision.winner) {
                     // Thought only - log but don't speak
-                    callbacks.onThought(`[SUPPRESSED] ${gateDecision.winner.internal_thought}`);
+                    const suppressReason = !socialCheck.allowed 
+                        ? `[SOCIAL_BLOCK:${socialCheck.reason}]` 
+                        : '[SUPPRESSED]';
+                    callbacks.onThought(`${suppressReason} ${gateDecision.winner.internal_thought}`);
                 }
             }
         }

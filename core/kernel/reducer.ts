@@ -8,7 +8,7 @@
  */
 
 import type { KernelState, KernelEvent, KernelReducerResult, KernelOutput, ConversationTurn } from './types';
-import type { MoodShiftPayload, NeuroUpdatePayload, StateOverridePayload, UserInputPayload, AgentSpokePayload, ToolResultPayload, AddMessagePayload } from './types';
+import type { MoodShiftPayload, NeuroUpdatePayload, StateOverridePayload, UserInputPayload, AgentSpokePayload, ToolResultPayload, AddMessagePayload, SocialDynamicsPayload, SocialDynamics } from './types';
 import { createInitialKernelState, INITIAL_LIMBIC, INITIAL_SOMA, INITIAL_NEURO, INITIAL_RESONANCE, BASELINE_NEURO } from './initialState';
 import * as SomaSystem from '../systems/SomaSystem';
 import * as LimbicSystem from '../systems/LimbicSystem';
@@ -82,6 +82,9 @@ export function kernelReducer(state: KernelState, event: KernelEvent): KernelRed
       
     case 'CLEAR_CONVERSATION':
       return handleClearConversation(state, outputs);
+      
+    case 'SOCIAL_DYNAMICS_UPDATE':
+      return handleSocialDynamicsUpdate(state, event, outputs);
       
     case 'RESET':
       return handleReset(state, outputs);
@@ -609,6 +612,84 @@ function handleClearConversation(state: KernelState, outputs: KernelOutput[]): K
     type: 'LOG',
     payload: { message: 'CONVERSATION CLEARED' }
   });
+  
+  return { nextState, outputs };
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// SOCIAL DYNAMICS HANDLER (Soft Homeostasis)
+// ═══════════════════════════════════════════════════════════════════════════
+
+function handleSocialDynamicsUpdate(state: KernelState, event: KernelEvent, outputs: KernelOutput[]): KernelReducerResult {
+  const payload = event.payload as SocialDynamicsPayload;
+  const current = state.socialDynamics;
+  
+  let socialCost = current.socialCost;
+  let autonomyBudget = current.autonomyBudget;
+  let userPresenceScore = current.userPresenceScore;
+  let consecutiveWithoutResponse = current.consecutiveWithoutResponse;
+  
+  // Agent spoke: increase cost, spend budget, track consecutive
+  if (payload.agentSpoke) {
+    consecutiveWithoutResponse++;
+    socialCost += 0.15 * consecutiveWithoutResponse; // Escalating cost
+    socialCost = Math.min(1, socialCost);            // Clamp to 1
+    autonomyBudget -= 0.2;
+    autonomyBudget = Math.max(0, autonomyBudget);    // Clamp to 0
+  }
+  
+  // User responded: reset consecutive, halve cost, boost presence
+  if (payload.userResponded) {
+    consecutiveWithoutResponse = 0;
+    socialCost *= 0.5;                               // Significant relief
+    userPresenceScore = 1.0;                         // Full presence
+    autonomyBudget = Math.min(1, autonomyBudget + 0.3); // Budget boost
+  }
+  
+  // Time-based decay (called on tick)
+  if (payload.silenceMs !== undefined) {
+    // Dynamic decay: faster when user active, slower when absent
+    const decayRate = userPresenceScore > 0.5 ? 0.95 : 0.99;
+    socialCost *= decayRate;
+    
+    // Budget regeneration (slow)
+    autonomyBudget = Math.min(1, autonomyBudget + 0.01);
+    
+    // Presence decay based on silence (10 min to reach 0)
+    const TEN_MINUTES = 10 * 60 * 1000;
+    userPresenceScore = Math.max(0, 1 - payload.silenceMs / TEN_MINUTES);
+  }
+  
+  const newSocialDynamics: SocialDynamics = {
+    socialCost,
+    autonomyBudget,
+    userPresenceScore,
+    consecutiveWithoutResponse
+  };
+  
+  const nextState = {
+    ...state,
+    socialDynamics: newSocialDynamics
+  };
+  
+  // Log significant changes
+  if (payload.agentSpoke || payload.userResponded) {
+    outputs.push({
+      type: 'EVENT_BUS_PUBLISH',
+      payload: {
+        source: AgentType.CORTEX_FLOW,
+        type: PacketType.STATE_UPDATE,
+        payload: {
+          event: 'SOCIAL_DYNAMICS_UPDATE',
+          socialCost: newSocialDynamics.socialCost.toFixed(3),
+          autonomyBudget: newSocialDynamics.autonomyBudget.toFixed(3),
+          userPresenceScore: newSocialDynamics.userPresenceScore.toFixed(3),
+          consecutiveWithoutResponse: newSocialDynamics.consecutiveWithoutResponse
+        },
+        priority: 0.3
+      }
+    });
+  }
   
   return { nextState, outputs };
 }

@@ -45,6 +45,19 @@ export const INITIAL_RESONANCE: ResonanceField = {
 };
 
 // ═══════════════════════════════════════════════════════════════════════════
+// SOCIAL DYNAMICS BASELINE (Soft Homeostasis)
+// ═══════════════════════════════════════════════════════════════════════════
+
+import type { SocialDynamics } from './types';
+
+export const INITIAL_SOCIAL_DYNAMICS: SocialDynamics = {
+  socialCost: 0,                    // Start fresh
+  autonomyBudget: 1.0,              // Full budget at start
+  userPresenceScore: 0.5,           // Neutral presence
+  consecutiveWithoutResponse: 0     // No unanswered speeches
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
 // GOAL STATE BASELINE
 // ═══════════════════════════════════════════════════════════════════════════
 
@@ -87,6 +100,9 @@ export const createInitialKernelState = (overrides?: Partial<KernelState>): Kern
     // Counters
     consecutiveAgentSpeeches: 0,
     ticksSinceLastReward: 0,
+    
+    // Social dynamics (soft homeostasis)
+    socialDynamics: INITIAL_SOCIAL_DYNAMICS,
     
     // History (bounded to 20)
     thoughtHistory: [],

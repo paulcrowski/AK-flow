@@ -309,12 +309,12 @@ export function CognitiveInterface() {
                 </header>
 
                 {/* Thought Stream */}
-                <div className={`h-12 border-b border-gray-700 flex items-center px-6 text-xs font-mono overflow-hidden whitespace-nowrap transition-colors duration-1000 ${systemError ? 'bg-red-900/20 text-red-400' :
+                <div className={`min-h-12 py-2 border-b border-gray-700 flex items-start px-6 text-xs font-mono transition-colors duration-1000 ${systemError ? 'bg-red-900/20 text-red-400' :
                     isSleeping ? 'bg-indigo-950/20 text-indigo-300' :
                         isFatigued ? 'bg-[#1a1010] text-orange-300' :
                             'bg-brain-panel text-brain-accent'
                     }`}>
-                    <span className="mr-2 font-bold flex items-center gap-2 opacity-70">
+                    <span className="mr-2 font-bold flex items-center gap-2 opacity-70 shrink-0">
                         {isProcessing ? <Loader2 size={12} className="animate-spin" /> :
                             isSleeping ? <Moon size={12} /> :
                                 isFatigued ? <EyeOff size={12} /> : <Zap size={12} />}
@@ -323,7 +323,7 @@ export function CognitiveInterface() {
                             isSleeping ? 'REM STATE:' :
                                 isFatigued ? 'DROWSY:' : 'CORTEX:'}
                     </span>
-                    <span className={`${isProcessing ? 'animate-pulse' : ''} italic opacity-90`}>
+                    <span className={`${isProcessing ? 'animate-pulse' : ''} italic opacity-90 break-words overflow-wrap-anywhere`}>
                         {currentThought}
                     </span>
                 </div>

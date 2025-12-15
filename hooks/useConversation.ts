@@ -60,17 +60,21 @@ export const useConversation = ({ identityRef }: UseConversationConfig) => {
     silenceStartRef.current = Date.now();
     
     try {
-      // Add user message to conversation
+      // Add user message to conversation (optimistic UI update)
       setConversation(prev => [...prev, { 
         role: 'user', 
         text: userInput,
         ...(imageData ? { imageData } : {})
       }]);
       
-      // Dispatch to kernel
+      // FAZA 6: User responded - reset social dynamics
+      actions.updateSocialDynamics({ userResponded: true });
+      
+      // Dispatch to kernel - this triggers CortexSystem through EventLoop
       actions.processUserInput(userInput);
       
-      // Process through CortexSystem
+      // UNIFIED BRAIN: Process through CortexSystem (single path)
+      // This is the ONLY place where CortexSystem is called for user input
       const state = getCognitiveState();
       const response = await CortexSystem.processUserMessage({
         text: userInput,

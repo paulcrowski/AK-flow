@@ -76,6 +76,7 @@ export namespace CortexSystem {
         coreValues: string[];
         traitVector: TraitVector;
         voiceStyle?: string;  // 'balanced' | 'formal' | 'casual' | 'poetic'
+        language?: string;    // 'English' | 'Polish' | etc.
     }
 
     // Session Overlay: temporary focus without changing core identity
