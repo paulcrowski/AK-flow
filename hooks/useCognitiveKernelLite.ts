@@ -143,6 +143,20 @@ export const useCognitiveKernelLite = (loadedIdentity?: AgentIdentity | null) =>
   const thoughtHistoryRef = useRef<string[]>([]);
   const consecutiveAgentSpeechesRef = useRef(0);
   const ticksSinceLastRewardRef = useRef(0);
+  // STALE CLOSURE FIX: Refs for values used in tick loop
+  const conversationRef = useRef(conversation);
+  const isProcessingRef = useRef(isProcessing);
+  
+  // ─────────────────────────────────────────────────────────────────────────
+  // SYNC REFS (prevent stale closures in tick loop)
+  // ─────────────────────────────────────────────────────────────────────────
+  useEffect(() => {
+    conversationRef.current = conversation;
+  }, [conversation]);
+  
+  useEffect(() => {
+    isProcessingRef.current = isProcessing;
+  }, [isProcessing]);
   
   // ─────────────────────────────────────────────────────────────────────────
   // SYNC IDENTITY REF
@@ -333,14 +347,14 @@ export const useCognitiveKernelLite = (loadedIdentity?: AgentIdentity | null) =>
         
         const state = getCognitiveState();
         
-        // Skip if sleeping or processing
-        if (!state.soma.isSleeping && !isProcessing) {
-          // Build EventLoop context
+        // Skip if sleeping or processing (use refs to avoid stale closures)
+        if (!state.soma.isSleeping && !isProcessingRef.current) {
+          // Build EventLoop context (use conversationRef to get latest conversation)
           const ctx: EventLoop.LoopContext = {
             soma: state.soma,
             limbic: state.limbic,
             neuro: state.neuro,
-            conversation: conversation.map(c => ({
+            conversation: conversationRef.current.map(c => ({
               role: c.role as 'user' | 'assistant',
               content: c.text
             })),
