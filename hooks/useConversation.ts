@@ -10,7 +10,7 @@
  */
 
 import { useState, useCallback, useRef, type MutableRefObject } from 'react';
-import { CortexSystem } from '../core/systems/CortexSystem';
+import { EventLoop } from '../core/systems/EventLoop';
 import { getCognitiveState, useCognitiveActions } from '../stores/cognitiveStore';
 import type { CognitiveError } from '../types';
 import type { AgentIdentity } from './useCognitiveKernelLite';
@@ -69,40 +69,58 @@ export const useConversation = ({ identityRef }: UseConversationConfig) => {
       
       // Dispatch to kernel - this triggers CortexSystem through EventLoop
       actions.processUserInput(userInput);
-      
-      // UNIFIED BRAIN: Process through CortexSystem (single path)
-      // This is the ONLY place where CortexSystem is called for user input
+
       const state = getCognitiveState();
-      const response = await CortexSystem.processUserMessage({
-        text: userInput,
-        currentLimbic: state.limbic,
-        currentSoma: state.soma,
-        conversationHistory: conversation.map(c => ({
-          role: c.role as 'user' | 'assistant',
-          content: c.text
-        })),
-        identity: identityRef.current ? {
+      const ctx: EventLoop.LoopContext = {
+        soma: state.soma,
+        limbic: state.limbic,
+        neuro: state.neuro,
+        conversation: [
+          ...conversation.map(c => ({
+            role: c.role as 'user' | 'assistant',
+            content: c.text
+          })),
+          { role: 'user', content: userInput }
+        ],
+        autonomousMode: false,
+        lastSpeakTimestamp: state.lastSpeakTimestamp,
+        silenceStart: state.silenceStart,
+        thoughtHistory: state.thoughtHistory,
+        poeticMode: state.poeticMode,
+        autonomousLimitPerMinute: 3,
+        chemistryEnabled: state.chemistryEnabled,
+        goalState: state.goalState,
+        traitVector: state.traitVector,
+        consecutiveAgentSpeeches: state.consecutiveAgentSpeeches,
+        ticksSinceLastReward: state.ticksSinceLastReward,
+        hadExternalRewardThisTick: false,
+        agentIdentity: identityRef.current ? {
           name: identityRef.current.name,
           persona: identityRef.current.persona || '',
+          coreValues: identityRef.current.core_values || [],
           traitVector: identityRef.current.trait_vector,
-          coreValues: identityRef.current.core_values || []
-        } : undefined
+          voiceStyle: identityRef.current.voice_style || 'balanced',
+          language: identityRef.current.language || 'English',
+          stylePrefs: identityRef.current.style_prefs
+        } : undefined,
+        socialDynamics: state.socialDynamics,
+        userStylePrefs: identityRef.current?.style_prefs || {}
+      };
+
+      await EventLoop.runSingleStep(ctx, userInput, {
+        onMessage: (role, text, type) => {
+          if (role === 'assistant' && type === 'speech') {
+            setConversation(prev => [...prev, { role, text, type: 'speech' }]);
+            setCurrentThought(text.slice(0, 100) + '...');
+          } else if (role === 'assistant' && type === 'thought') {
+            setCurrentThought(text);
+          }
+        },
+        onThought: (thought) => setCurrentThought(thought),
+        onSomaUpdate: (soma) => actions.hydrate({ soma }),
+        onLimbicUpdate: (limbic) => actions.hydrate({ limbic })
       });
-      
-      // Add response to conversation
-      setConversation(prev => [...prev, {
-        role: 'assistant',
-        text: response.responseText,
-        type: 'speech'
-      }]);
-      
-      // Apply mood shift if any
-      if (response.moodShift) {
-        actions.applyMoodShift(response.moodShift);
-      }
-      
-      setCurrentThought(response.internalThought || response.responseText.slice(0, 100) + '...');
-      
+
     } catch (error) {
       console.error('[Conversation] Input error:', error);
       setSystemError(normalizeError(error));

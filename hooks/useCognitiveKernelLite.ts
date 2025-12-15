@@ -21,7 +21,6 @@ import { eventBus } from '../core/EventBus';
 import { AgentType, PacketType, CognitiveError, TraitVector, NeurotransmitterState } from '../types';
 import { generateUUID } from '../utils/uuid';
 import { MIN_TICK_MS, MAX_TICK_MS } from '../core/constants';
-import { CortexSystem } from '../core/systems/CortexSystem';
 import { EventLoop } from '../core/systems/EventLoop';
 import { DreamConsolidationService } from '../services/DreamConsolidationService';
 import { executeWakeProcess } from '../core/services/WakeService';
@@ -555,56 +554,79 @@ export const useCognitiveKernelLite = (loadedIdentity?: AgentIdentity | null) =>
       
       // Dispatch to kernel
       actions.processUserInput(userInput);
-      
-      // Process through CortexSystem
+
+      // SINGLE SOURCE OF TRUTH: EventLoop is the only place allowed to call CortexSystem.
+      // We run a reactive single step here (autonomy disabled for this path).
       const state = getCognitiveState();
-      const response = await CortexSystem.processUserMessage({
-        text: userInput,
-        currentLimbic: state.limbic,
-        currentSoma: state.soma,
-        conversationHistory: conversation.map(c => ({
-          role: c.role as 'user' | 'assistant',
-          content: c.text
-        })),
-        identity: loadedIdentityRef.current ? {
+      const ctx: EventLoop.LoopContext = {
+        soma: state.soma,
+        limbic: state.limbic,
+        neuro: state.neuro,
+        conversation: [
+          ...conversation.map(c => ({
+            role: c.role as 'user' | 'assistant',
+            content: c.text
+          })),
+          { role: 'user', content: userInput }
+        ],
+        autonomousMode: false,
+        lastSpeakTimestamp: state.lastSpeakTimestamp,
+        silenceStart: state.silenceStart,
+        thoughtHistory: thoughtHistoryRef.current,
+        poeticMode: state.poeticMode,
+        autonomousLimitPerMinute: 3,
+        chemistryEnabled: state.chemistryEnabled,
+        goalState: state.goalState,
+        traitVector: state.traitVector,
+        consecutiveAgentSpeeches: state.consecutiveAgentSpeeches,
+        ticksSinceLastReward: state.ticksSinceLastReward,
+        hadExternalRewardThisTick: false,
+        agentIdentity: loadedIdentityRef.current ? {
           name: loadedIdentityRef.current.name,
           persona: loadedIdentityRef.current.persona || '',
+          coreValues: loadedIdentityRef.current.core_values || [],
           traitVector: loadedIdentityRef.current.trait_vector,
-          coreValues: loadedIdentityRef.current.core_values || []
-        } : undefined
-      });
-      
-      // Add response to conversation
-      setConversation(prev => [...prev, {
-        role: 'assistant',
-        text: response.responseText,
-        type: 'speech'
-      }]);
-      
-      // LOG: Agent spoke to EventBus
-      eventBus.publish({
-        id: generateUUID(),
-        timestamp: Date.now(),
-        source: AgentType.CORTEX_FLOW,
-        type: PacketType.THOUGHT_CANDIDATE,
-        payload: {
-          event: 'AGENT_SPOKE',
-          speech_content: response.responseText,
-          internal_thought: response.internalThought || '',
-          agentName: loadedIdentityRef.current?.name || 'Unknown'
+          voiceStyle: loadedIdentityRef.current.voice_style || 'balanced',
+          language: loadedIdentityRef.current.language || 'English',
+          stylePrefs: loadedIdentityRef.current.style_prefs
+        } : undefined,
+        socialDynamics: state.socialDynamics,
+        userStylePrefs: loadedIdentityRef.current?.style_prefs || {}
+      };
+
+      const nextCtx = await EventLoop.runSingleStep(ctx, userInput, {
+        onMessage: (role, text, type) => {
+          if (role === 'assistant' && type === 'speech') {
+            setConversation(prev => [...prev, { role, text, type }]);
+
+            eventBus.publish({
+              id: generateUUID(),
+              timestamp: Date.now(),
+              source: AgentType.CORTEX_FLOW,
+              type: PacketType.THOUGHT_CANDIDATE,
+              payload: {
+                event: 'AGENT_SPOKE',
+                speech_content: text,
+                agentName: loadedIdentityRef.current?.name || 'Unknown'
+              },
+              priority: 0.9
+            });
+
+            logPhysiologySnapshot('POST_RESPONSE');
+            setCurrentThought(text.slice(0, 100) + '...');
+          } else if (role === 'assistant' && type === 'thought') {
+            setCurrentThought(text);
+          }
         },
-        priority: 0.9
+        onThought: (thought) => {
+          setCurrentThought(thought);
+        },
+        onSomaUpdate: (soma) => actions.hydrate({ soma }),
+        onLimbicUpdate: (limbic) => actions.hydrate({ limbic })
       });
-      
-      // LOG: Physiology snapshot after response
-      logPhysiologySnapshot('POST_RESPONSE');
-      
-      // Apply mood shift if any
-      if (response.moodShift) {
-        actions.applyMoodShift(response.moodShift);
-      }
-      
-      setCurrentThought(response.internalThought || response.responseText.slice(0, 100) + '...');
+
+      // Sync context back (keep refs consistent)
+      silenceStartRef.current = nextCtx.silenceStart;
       
     } catch (error) {
       console.error('[KernelLite] Input error:', error);

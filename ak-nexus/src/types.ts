@@ -22,7 +22,9 @@ export enum Tier {
   SOCIAL = "Tier 7: Social Intelligence",
   SUPERPOWERS = "Tier 8: Superpowers",
   EVOLUTION = "Tier 9: Evolution",
-  TRANSCENDENCE = "Tier 10: Transcendence"
+  TRANSCENDENCE = "Tier 10: Transcendence",
+  META_LEARNING = "Tier 11: Meta-Learning",
+  TRANSFER = "Tier 12: Transfer & Generalization"
 }
 
 export enum Priority {
@@ -153,7 +155,7 @@ export interface HistoryEntry {
 // AI ACTION PROTOCOL (for Windsurf/Cursor integration)
 // ─────────────────────────────────────────────────────────────────
 
-export type AIActionType = 
+export type AIActionType =
   | 'ADD_TASK'
   | 'UPDATE_TASK'
   | 'DELETE_TASK'

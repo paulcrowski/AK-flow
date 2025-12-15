@@ -194,6 +194,128 @@ W `notes[]` dodaj:
 
 ---
 
+## 🧰 Procedura Refactor / Plumbing Audit (ALARM-3)
+
+> Używaj po refactorach w core (Kernel/EventLoop/DB/Identity). To jest check „czy nic nie jest rozpięte / rozrzucone”.
+
+### Checklist (copy/paste)
+
+```
+═══════════════════════════════════════════════════════════════════════════
+🧰 REFACTOR / PLUMBING AUDIT
+═══════════════════════════════════════════════════════════════════════════
+
+□ 0. SCOPE (czy to był refactor krytyczny?)
+   └─ Dotknięte: core/kernel/*, core/systems/*, core/config/*, services/supabase, hooks, stores
+   └─ Jeśli NIE → wystarczy normalny Day Close
+
+□ 1. SINGLE SOURCE OF TRUTH (centralizacja logiki)
+   └─ Logika stanu tylko w reducerze (KernelEngine). Brak update'ów "na boku".
+   └─ UI/hooks/stores: tylko dispatch + render, bez reguł biznesowych.
+   └─ Config: tylko `core/config/systemConfig.ts` (zero lokalnych `ENABLED = true`).
+
+□ 2. PLUMBING / WIRING (czy wszystko jest PODPIĘTE)
+   └─ `npm test -- --run __tests__/integration/IntegrationWiring.test.ts`
+   └─ `npm test -- --run __tests__/integration/WiringValidator.test.ts`
+   └─ Uruchom app i sprawdź log: `validateWiring()` → ALL ACTIVE
+   └─ Zasada: "zdefiniowane ≠ używane" (szukaj martwych funkcji / niepodpiętych ścieżek)
+
+□ 3. DOUBLE BRAIN / RACE / SZEPT (split-brain symptoms)
+   └─ Jedna ścieżka user-input: `dispatch(USER_INPUT)` → dalej pipeline (bez równoległych calli)
+   └─ Jedna pętla tick: `dispatch(TICK)` w jednym miejscu, bez duplikatów
+   └─ Brak zdublowanych update'ów (np. "ulga" albo "decay" odpalane w 2 miejscach)
+   └─ Jeśli React StrictMode: upewnij się, że mechanizmy są idempotentne
+
+□ 4. INVARIANTS / HOMEOSTASIS (anomalia / ujemne / NaN)
+   └─ Każdy parametr z floor/ceiling (clamp) w miejscu update (nie w UI)
+   └─ Brak wartości ujemnych dla: budżetów/liczników/czasów
+   └─ Brak NaN/Infinity (szczególnie przy dzieleniu przez czas, decay, threshold)
+   └─ Baseline'y nie spadają do 0 jeśli system tego nie zakłada (np. socialCost baseline)
+
+□ 5. OBSERVABILITY (czy to da się diagnozować)
+   └─ Logi na BLOKADACH (gating) + reason + debug fields
+   └─ Logi na kluczowych przejściach: sleep/wake, autonomy gate, critical errors
+   └─ Brak spam-logów w pętli bez limitu (jeśli tak → obniż priority / warunkuj)
+
+□ 6. MODULARNOŚĆ (czy nie ma "wydmuszek" i rozrzutu)
+   └─ Każdy nowy moduł ma jasno: wejście/wyjście, odpowiedzialność, call-site
+   └─ Brak cyklicznych importów / "utils" jako śmietnik
+   └─ Jeśli dodałeś helper — upewnij się, że NIE duplikuje logiki z innego miejsca
+
+□ 7. DB / SUPABASE (czy baza jest bezpieczna i spójna)
+   └─ Jeśli zmiana schematu: migration w `supabase/migrations/*` (commitowana)
+   └─ Brak hardcodowanych sekretów/API keys
+   └─ RLS: upewnij się, że publiczne dane nie wyciekają przez błędne policy
+   └─ Error handling: brak "swallow errors" w krytycznych zapisach
+
+□ 8. TESTY (czy refactor nie jest "bez pokrycia")
+   └─ `npm test` (całość)
+   └─ Jeśli dotykałeś refactor core: dodaj/aktualizuj min 1-2 testy integracyjne
+   └─ Testy nie mogą być zależne od "magicznych liczb" jeśli parametry są dynamiczne
+
+□ 9. REGRESSION SEARCH (szybkie wykrywanie starych ścieżek)
+   └─ Szukaj starych pól/API które miały zniknąć (np. nazwy payloadów):
+      - `silenceMs`
+      - inne zdeprecjonowane pola
+   └─ Szukaj lokalnych flag: `ENABLED = true`
+
+□ 9.5. IMPROVEMENT PASS (szukanie lepszych rozwiązań, nie tylko błędów)
+   └─ Usuń niedeterministyczność z core (np. `Math.random()`); losowość tylko w runtime (probabilistic outputs)
+   └─ Zmniejsz liczbę miejsc update tej samej zmiennej (jeden reducer / jedna funkcja)
+   └─ Usuń duplikaty (ten sam algorytm w 2 plikach = przyszły błąd)
+   └─ Redukcja linii:
+      - czy da się skrócić flow bez utraty czytelności?
+      - czy helper nie jest "wydmuszką" (wrapper bez wartości)?
+   └─ Modułowość:
+      - każdy moduł ma jeden powód zmiany (SRP), jasny kontrakt wej./wyj.
+      - brak przecieków warstw (UI nie zna reguł, core nie zna UI)
+   └─ API i typy:
+      - payloady minimalne (nie przenoś danych, których reducer nie używa)
+      - usuń martwe pola/typy, nie trzymaj "na przyszłość"
+   └─ Bezpieczeństwo:
+      - czy nowy kod nie omija guardów (PersonaGuard/FactEcho/DecisionGate)?
+      - czy nowe logi nie wyciekają wrażliwych danych?
+
+□ 10. DOCS / CLOSE
+   └─ Jeśli zmienił się kontrakt/flow: ARCHITECTURE_MAP + (opcjonalnie) SYSTEM_MANIFEST
+   └─ Daily log: dopisz co zmienione + jak zweryfikowane
+
+═══════════════════════════════════════════════════════════════════════════
+```
+
+### Template: Refactor Audit Report (do daily log)
+
+```markdown
+## 🧰 Refactor / Plumbing Audit
+
+**Zakres:** [core/kernel | EventLoop | DB | UI | inne]
+
+**Wiring:**
+- validateWiring(): [PASS/FAIL]
+- IntegrationWiring.test.ts: [PASS/FAIL]
+
+**Ryzyka / symptomy split-brain:**
+- [ ] brak
+- [ ] wykryto: ...
+
+**Invariants (clamp/ujemne/NaN):**
+- [ ] OK
+- [ ] do poprawy: ...
+
+**DB / bezpieczeństwo:**
+- [ ] OK
+- [ ] do poprawy: ...
+
+**Testy:**
+- npm test: [PASS/FAIL]
+- build: [PASS/FAIL]
+
+**Opportunities / simplifications (1-5 punktów):**
+- ...
+```
+
+---
+
 ## 🚀 Procedura Przed Wdrożeniem
 
 ```
