@@ -93,15 +93,26 @@ const cleanJSON = <T>(text: string | undefined, defaultVal: T, validator?: (data
     try {
         let parsed: any;
         
-        // 0. Pre-clean: Remove common LLM prefixes that break JSON parsing
-        // Models sometimes say "Here is the JSON requested" or similar before actual JSON
-        let cleaned = text
-            .replace(/^[\s\S]*?(?=\{)/m, '')  // Remove everything before first {
-            .trim();
-        
-        // If no { found, try original text
-        if (!cleaned.startsWith('{')) {
-            cleaned = text;
+        // 0. Fast-path: If model emitted a prefixed explanation ("Here is...")
+        // cut everything before the first '{' or '['.
+        const trimmed = text.trim();
+        let cleaned = trimmed;
+
+        const firstObj = trimmed.indexOf('{');
+        const firstArr = trimmed.indexOf('[');
+        const firstJsonIdx =
+            firstObj === -1 ? firstArr :
+            firstArr === -1 ? firstObj :
+            Math.min(firstObj, firstArr);
+
+        if (firstJsonIdx > 0) {
+            cleaned = trimmed.slice(firstJsonIdx).trim();
+        }
+
+        // Fail-fast: if we still don't start with JSON, do not try to be clever.
+        // This prevents repeatedly parsing "Here is" and similar non-JSON junk.
+        if (!cleaned.startsWith('{') && !cleaned.startsWith('[')) {
+            throw new Error('Non-JSON output (missing {/[ prefix)');
         }
         
         // 1. Try direct parse first
@@ -109,7 +120,7 @@ const cleanJSON = <T>(text: string | undefined, defaultVal: T, validator?: (data
             parsed = JSON.parse(cleaned);
         } catch (e) {
             // 2. Extract JSON block using regex
-            const match = text.match(/\{[\s\S]*\}/);
+            const match = text.match(/\{[\s\S]*\}|\[[\s\S]*\]/);
             if (match) {
                 parsed = JSON.parse(match[0]);
             } else {
