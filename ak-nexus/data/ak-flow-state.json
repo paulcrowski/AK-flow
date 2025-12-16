@@ -1,7 +1,7 @@
 {
   "version": "1.0.0",
-  "lastUpdated": "2025-12-16T08:53:00.000Z",
-  "lastModified": "2025-12-16T08:53:00.000Z",
+  "lastUpdated": "2025-12-16T10:47:00.000Z",
+  "lastModified": "2025-12-16T10:47:00.000Z",
   "modifiedBy": "AI_WINDSURF",
   "project": "AK-Flow",
   "dailyGoal": "PROTOCOL: ALBERTO FIRST CONTACT (Vision, Orientation, Memory)",
@@ -310,6 +310,43 @@
       "subtasks": [],
       "createdAt": "2025-12-15T21:41:00.000Z",
       "updatedAt": "2025-12-15T21:41:00.000Z"
+    },
+    {
+      "id": "task-agent-trajectory-001",
+      "content": "AgentTrajectory v1.0 (Execution-First Autonomy)",
+      "details": "WERSJA: 1.0 FINAL\nSTATUS: DO IMPLEMENTACJI\n\nCEL: Zamienić \"autonomię jako mówienie\" w \"autonomię jako działanie\" bez cofania stabilizacji:\n- Gate nadal chroni przed spamem\n- JSON nadal fail-closed (cisza > bzdury)\n- UnifiedContext wspólny dla reactive i autonomy\n- Nowość: trajektoria: goal -> micro-step -> wynik -> tarcie -> kolejny krok\n\nDEFINICJE:\n- Trajektoria = activeGoal + nextStep + mode (EXECUTE/CLARIFY/CONSOLIDATE/RECOVER/IDLE) + progress/friction + lastTouchedAt + lastOutcome\n- Działanie ≠ mowa: domyślnie internal step (journal/memory/plan), mowa to wyjątek\n\nTWARDE ZASADY:\n1) Fail-closed zawsze: parsing fail => speech_content=\"\", voice_pressure=0, action=SILENCE, log TRAJ_FAIL_CLOSED\n2) Jedna bramka mowy: tylko ExecutiveGate.decide()\n3) EXPLORE tylko gdy silence>60s AND hasActiveTopic==false AND trajectory.mode==IDLE\n4) Reactive ma absolutny priorytet (trajectory aktualizuje się, ale nie przebija reakcji)\n\nARCHITEKTURA (WPINAMY W OBECNE):\n1) ctx.trajectory w runtime state (obok goalState)\n2) UnifiedContextBuilder dostaje sekcję TRAJECTORY (source of truth)\n3) Kolejność: AutonomyRepertoire.selectAction(ctx) -> TrajectoryPlanner.selectNextStep(ctx, action) -> (SILENCE => skip LLM) -> LLM TrajectoryPacket -> validateSpeech() + ExecutiveGate\n\nTrajectoryPacket (LLM JSON ONLY):\n{\n  \"mode\": \"EXECUTE|CLARIFY|CONSOLIDATE|RECOVER|IDLE\",\n  \"active_goal\": { \"id\": \"string\", \"title\": \"string\", \"why_now\": \"string\", \"horizon_minutes\": 120, \"priority\": 0.0 },\n  \"next_step\": { \"type\": \"INTERNAL|ASK_USER|PLAN|MEMORY|JOURNAL\", \"title\": \"string\", \"success_criteria\": \"string\", \"requires_user\": false },\n  \"internal_action\": { \"journal\": \"string\", \"memory_write\": { \"enabled\": false, \"tag\": \"string\", \"content\": \"string\" } },\n  \"speech\": { \"allowed\": false, \"content\": \"\" },\n  \"metrics\": { \"friction_delta\": 0.0, \"progress_delta\": 0.0, \"confidence\": 0.0 }\n}\n\nKRYTERIUM SUKCESU: w logach widać nextStep/progress/friction/mode, autonomia milczy zamiast gadać bzdury, cele stają się mikro-krokami.",
+      "priority": "CRITICAL",
+      "type": "BACKLOG",
+      "isCompleted": false,
+      "subtasks": [
+        {
+          "id": "traj-01",
+          "content": "core/systems/AgentTrajectory.ts: selectNextStep/applyOutcome/updateFrictionProgress/shouldRequestUser",
+          "isCompleted": false
+        },
+        {
+          "id": "traj-02",
+          "content": "UnifiedContextBuilder: dodać sekcję TRAJECTORY (source of truth) do UnifiedContext + prompt",
+          "isCompleted": false
+        },
+        {
+          "id": "traj-03",
+          "content": "EventLoop: kolejność AutonomyRepertoire -> TrajectoryPlanner -> (SILENCE skip) -> LLM TrajectoryPacket -> validateSpeech + ExecutiveGate",
+          "isCompleted": false
+        },
+        {
+          "id": "traj-04",
+          "content": "Gemini: nowy endpoint/func do TrajectoryPacket (fail-closed, log TRAJ_FAIL_CLOSED)",
+          "isCompleted": false
+        },
+        {
+          "id": "traj-05",
+          "content": "Testy: JSON fail->silence; internal step->no speech; CLARIFY single question; EXPLORE veto; friction loop->RECOVER",
+          "isCompleted": false
+        }
+      ],
+      "createdAt": "2025-12-16T10:47:00.000Z",
+      "updatedAt": "2025-12-16T10:47:00.000Z"
     }
   ],
   "roadmap": [
@@ -381,6 +418,16 @@
       "completionPercentage": 100,
       "createdAt": "2025-12-15T10:00:00.000Z",
       "updatedAt": "2025-12-15T10:00:00.000Z"
+    },
+    {
+      "id": "rm-agent-trajectory-001",
+      "title": "AgentTrajectory (Execution-First Autonomy)",
+      "description": "Trajektoria: activeGoal -> nextStep -> outcome -> friction/progress. Autonomia domyślnie wykonuje internal actions (journal/memory/plan), mowa jest wyjątkiem i przechodzi przez ExecutiveGate.",
+      "tier": "Tier 2: Proactive Behaviors",
+      "status": "NOT_STARTED",
+      "completionPercentage": 0,
+      "createdAt": "2025-12-16T10:47:00.000Z",
+      "updatedAt": "2025-12-16T10:47:00.000Z"
     },
     {
       "id": "rm-t3-01",
@@ -793,8 +840,8 @@
     "currentPhase": "FAZA 6.2: Kernel Stabilization",
     "todayCompleted": 1,
     "streak": 6,
-    "testsTotal": 318,
-    "testsPassing": 318,
+    "testsTotal": 461,
+    "testsPassing": 461,
     "blocked": 0,
     "notImplemented": 14
   },
