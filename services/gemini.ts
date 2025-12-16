@@ -9,6 +9,7 @@ import { generateFromCortexState } from "../core/inference";
 import { guardLegacyResponse, isPrismEnabled } from "../core/systems/PrismPipeline";
 import { guardLegacyWithFactEcho, isFactEchoPipelineEnabled } from "../core/systems/FactEchoPipeline";
 import { UnifiedContextBuilder, type UnifiedContext, type ContextBuilderInput } from "../core/context";
+import { applyAutonomyV2RawContract } from "../core/systems/RawContract";
 
 // 1. Safe Environment Access & Initialization (Vite)
 const apiKey = import.meta.env.VITE_GEMINI_API_KEY as string | undefined;
@@ -710,6 +711,43 @@ OUTPUT FORMAT:
             
             const rawForLog = (response.text || '').slice(0, 2000);
             console.log("AV_V2 RAW:", rawForLog);
+
+            if (isFeatureEnabled('USE_ONE_MIND_PIPELINE')) {
+                const contracted = applyAutonomyV2RawContract(response.text, {
+                    maxRawLen: 20000,
+                    maxInternalMonologueLen: 1200,
+                    maxSpeechLen: 1200
+                });
+
+                if (!contracted.ok) {
+                    eventBus.publish({
+                        id: generateUUID(),
+                        timestamp: Date.now(),
+                        source: AgentType.CORTEX_FLOW,
+                        type: PacketType.PREDICTION_ERROR,
+                        payload: {
+                            metric: 'AV_V2_RAW_CONTRACT_FAILURE',
+                            reason: contracted.reason,
+                            details: contracted.details,
+                            action: 'SILENCED'
+                        },
+                        priority: 0.8
+                    });
+
+                    return {
+                        internal_monologue: `[RAW_CONTRACT_FAIL] ${contracted.reason || 'UNKNOWN'}`,
+                        voice_pressure: 0,
+                        speech_content: ''
+                    };
+                }
+
+                const v = contracted.value;
+                return {
+                    internal_monologue: v.internal_monologue || 'Thinking... ',
+                    voice_pressure: Math.max(0, Math.min(1, v.voice_pressure ?? 0)),
+                    speech_content: (v.speech_content || '').slice(0, 1200)
+                };
+            }
             
             const parseResult = parseJSONStrict<{
                 internal_monologue: string;
