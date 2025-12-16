@@ -40,7 +40,12 @@ export enum PacketType {
   COGNITIVE_METRIC = 'COGNITIVE_METRIC', // NEW: Input analysis (complexity, surprise)
   STATE_UPDATE = 'STATE_UPDATE', // NEW: Limbic/Soma state changes
   CONFESSION_REPORT = 'CONFESSION_REPORT', // NEW: Self-reported honesty check
-  TRAIT_EVOLUTION_SIGNAL = 'TRAIT_EVOLUTION_SIGNAL' // v2: Long-term personality evolution
+  TRAIT_EVOLUTION_SIGNAL = 'TRAIT_EVOLUTION_SIGNAL', // v2: Long-term personality evolution
+  // P0 13/10: Tool lifecycle events
+  TOOL_INTENT = 'TOOL_INTENT',
+  TOOL_RESULT = 'TOOL_RESULT',
+  TOOL_ERROR = 'TOOL_ERROR',
+  TOOL_TIMEOUT = 'TOOL_TIMEOUT'
 }
 
 // 2. Internal State Definitions

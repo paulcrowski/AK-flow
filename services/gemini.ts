@@ -88,7 +88,12 @@ const parseJSONStrict = <T>(text: string | undefined, validator?: (data: any) =>
     }
 };
 
-const cleanJSON = <T>(text: string | undefined, defaultVal: T, validator?: (data: any) => boolean): T => {
+const cleanJSON = <T>(
+    text: string | undefined,
+    defaultVal: T,
+    validator?: (data: any) => boolean,
+    callsite?: string
+): T => {
     if (!text) return defaultVal;
     try {
         let parsed: any;
@@ -139,9 +144,13 @@ const cleanJSON = <T>(text: string | undefined, defaultVal: T, validator?: (data
         }
 
     } catch (e2) {
-        console.warn("JSON Parse Error. Using default. Raw text:", text);
+        const hasBrace = text?.includes('{') ?? false;
+        const hasBracket = text?.includes('[') ?? false;
+        const first60 = text?.substring(0, 60) || 'EMPTY';
+        
+        console.warn(`[JSON_PARSE_FAILURE] callsite=${callsite || 'unknown'} hasBrace=${hasBrace} hasBracket=${hasBracket} first60="${first60}"`);
 
-        // DEBUG: Log the raw failure to EventBus so we can see what the model actually said
+        // Telemetry: structured failure log for debugging
         eventBus.publish({
             id: generateUUID(),
             timestamp: Date.now(),
@@ -149,7 +158,10 @@ const cleanJSON = <T>(text: string | undefined, defaultVal: T, validator?: (data
             type: PacketType.PREDICTION_ERROR,
             payload: {
                 metric: "JSON_PARSE_FAILURE",
-                raw_output: text?.substring(0, 500) || "EMPTY_RESPONSE",
+                callsite: callsite || 'unknown',
+                has_brace: hasBrace,
+                has_bracket: hasBracket,
+                first_60_chars: first60,
                 error: (e2 as any).message
             },
             priority: 0.9
@@ -390,7 +402,7 @@ OUTPUT FORMAT:
                 }
             });
             logUsage('assessInput', response);
-            return cleanJSON(response.text, safeDefault);
+            return cleanJSON(response.text, safeDefault, undefined, 'assessInput');
         });
     },
 
@@ -529,7 +541,7 @@ OUTPUT FORMAT:
             });
 
             logUsage('generateResponse', response);
-            const json = cleanJSON(response.text, safeDefault);
+            const json = cleanJSON(response.text, safeDefault, undefined, 'generateResponse');
 
             return {
                 text: json.response_text || safeDefault.response_text,
@@ -774,7 +786,7 @@ OUTPUT FORMAT:
                 }
             });
             logUsage('structuredDialogue', response);
-            return cleanJSON(response.text, safeDefault);
+            return cleanJSON(response.text, safeDefault, undefined, 'structuredDialogue');
         });
     },
 
@@ -826,7 +838,7 @@ OUTPUT FORMAT:
             });
 
             // logUsage('detectIntent', response); // Optional: don't spam logs with micro-transactions
-            return cleanJSON(response.text, safeDefault);
+            return cleanJSON(response.text, safeDefault, undefined, 'detectIntent');
         }, 1, 500); // Fast retry, short timeout
     },
 
@@ -855,7 +867,7 @@ OUTPUT FORMAT:
                 }
             });
             logUsage('generateJSON', response);
-            return cleanJSON(response.text, defaultValue);
+            return cleanJSON(response.text, defaultValue, undefined, 'generateJSON');
         }, 2, 2000);
     }
 };
