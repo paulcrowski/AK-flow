@@ -25,9 +25,11 @@ import { EventLoop } from '../core/systems/EventLoop';
 import { DreamConsolidationService } from '../services/DreamConsolidationService';
 import { executeWakeProcess } from '../core/services/WakeService';
 import { MemoryService } from '../services/supabase';
+import { getConversationHistory } from '../services/ConversationArchive';
 import { createProcessOutputForTools } from '../utils/toolParser';
 import { createRng } from '../core/utils/rng';
 import { SYSTEM_CONFIG } from '../core/config/systemConfig';
+import { isFeatureEnabled } from '../core/config/featureFlags';
 import {
   loadConversationSnapshot,
   saveConversationSnapshot,
@@ -235,6 +237,66 @@ export const useCognitiveKernelLite = (loadedIdentity?: AgentIdentity | null) =>
         );
       } else {
         setConversation([]);
+        if (isFeatureEnabled('USE_CONV_SUPABASE_FALLBACK')) {
+          const agentId = loadedIdentity.id;
+          eventBus.publish({
+            id: generateUUID(),
+            timestamp: Date.now(),
+            source: AgentType.CORTEX_FLOW,
+            type: PacketType.SYSTEM_ALERT,
+            payload: { event: 'CONV_FALLBACK_DB_ATTEMPT', agentId },
+            priority: 0.2
+          });
+
+          void (async () => {
+            try {
+              const turns = await getConversationHistory(agentId, undefined, 25);
+              if (!turns || turns.length === 0) {
+                eventBus.publish({
+                  id: generateUUID(),
+                  timestamp: Date.now(),
+                  source: AgentType.CORTEX_FLOW,
+                  type: PacketType.SYSTEM_ALERT,
+                  payload: { event: 'CONV_FALLBACK_DB_EMPTY', agentId },
+                  priority: 0.2
+                });
+                return;
+              }
+
+              const ordered = [...turns].reverse();
+              const mapped = ordered
+                .map((t) => ({
+                  role: t.role,
+                  text: t.content,
+                  type: t.role === 'assistant' ? 'speech' : 'speech'
+                }))
+                .filter((t) => t.role && t.text);
+
+              if (loadedIdentityRef.current?.id !== agentId) return;
+
+              setConversation(mapped);
+              saveConversationSnapshot(agentId, mapped.map((m) => ({ role: m.role, text: m.text, type: m.type })));
+
+              eventBus.publish({
+                id: generateUUID(),
+                timestamp: Date.now(),
+                source: AgentType.CORTEX_FLOW,
+                type: PacketType.SYSTEM_ALERT,
+                payload: { event: 'CONV_FALLBACK_DB_OK', agentId, count: mapped.length },
+                priority: 0.2
+              });
+            } catch (err) {
+              eventBus.publish({
+                id: generateUUID(),
+                timestamp: Date.now(),
+                source: AgentType.CORTEX_FLOW,
+                type: PacketType.SYSTEM_ALERT,
+                payload: { event: 'CONV_FALLBACK_DB_FAIL', agentId, error: String((err as any)?.message ?? err) },
+                priority: 0.2
+              });
+            }
+          })();
+        }
       }
 
       // Hydrate kernel with identity traits

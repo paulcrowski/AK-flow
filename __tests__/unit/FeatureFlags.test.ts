@@ -34,6 +34,10 @@ describe('FeatureFlags', () => {
       expect('USE_TRACE_AUTO_INJECT' in FEATURE_FLAGS).toBe(true);
     });
 
+    it('should have USE_CONV_SUPABASE_FALLBACK flag', () => {
+      expect('USE_CONV_SUPABASE_FALLBACK' in FEATURE_FLAGS).toBe(true);
+    });
+
     it('should have USE_CORTEX_STATE_BUILDER flag', () => {
       expect('USE_CORTEX_STATE_BUILDER' in FEATURE_FLAGS).toBe(true);
     });
@@ -46,6 +50,7 @@ describe('FeatureFlags', () => {
       expect(FEATURE_FLAGS.USE_MINIMAL_CORTEX_PROMPT).toBe(true); // MVP enabled
       expect(FEATURE_FLAGS.USE_ONE_MIND_PIPELINE).toBe(false);
       expect(FEATURE_FLAGS.USE_TRACE_AUTO_INJECT).toBe(false);
+      expect(FEATURE_FLAGS.USE_CONV_SUPABASE_FALLBACK).toBe(false);
       expect(FEATURE_FLAGS.USE_CORTEX_STATE_BUILDER).toBe(false);
     });
   });

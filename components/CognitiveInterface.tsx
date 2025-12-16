@@ -52,6 +52,7 @@ export function CognitiveInterface() {
     const { userId, agentId, currentAgent, getAgentIdentity, logout } = useSession();
 
     const [traceHudOpen, setTraceHudOpen] = useState(false);
+    const [traceHudCopyState, setTraceHudCopyState] = useState<'idle' | 'ok' | 'fail'>('idle');
     const [traceHud, setTraceHud] = useState<{
         traceId?: string;
         tickNumber?: number;
@@ -335,6 +336,51 @@ export function CognitiveInterface() {
     const isCritical = somaState.energy < 5;
     const isSleeping = somaState.isSleeping;
 
+    const copyCurrentTrace = async () => {
+        try {
+            const traceId = traceHud?.traceId;
+            if (!traceId) return;
+
+            const all = eventBus.getHistory();
+            const events = all
+                .filter((p: any) => p?.traceId === traceId)
+                .slice(-300);
+
+            const exportPayload = JSON.stringify(
+                {
+                    traceId,
+                    tickNumber: traceHud?.tickNumber,
+                    exportedAt: Date.now(),
+                    events
+                },
+                null,
+                2
+            );
+
+            if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+                await navigator.clipboard.writeText(exportPayload);
+            } else if (typeof document !== 'undefined') {
+                const el = document.createElement('textarea');
+                el.value = exportPayload;
+                el.setAttribute('readonly', '');
+                el.style.position = 'fixed';
+                el.style.left = '-9999px';
+                document.body.appendChild(el);
+                el.select();
+                document.execCommand('copy');
+                document.body.removeChild(el);
+            } else {
+                throw new Error('clipboard_unavailable');
+            }
+
+            setTraceHudCopyState('ok');
+            setTimeout(() => setTraceHudCopyState('idle'), 1500);
+        } catch {
+            setTraceHudCopyState('fail');
+            setTimeout(() => setTraceHudCopyState('idle'), 2000);
+        }
+    };
+
     return (
         <div className={`flex h-screen text-gray-100 font-sans transition-all duration-[2000ms] overflow-hidden 
         ${isSleeping ? 'brightness-50 grayscale-[0.5]' : ''} 
@@ -498,12 +544,29 @@ export function CognitiveInterface() {
                             <div className="absolute top-[52px] right-0 w-[420px] bg-[#0a0c10]/95 backdrop-blur-md border border-gray-800 rounded-xl shadow-xl p-4 z-50">
                                 <div className="flex items-center justify-between mb-3">
                                     <div className="text-[10px] font-mono tracking-widest text-gray-400">TRACE HUD</div>
-                                    <button
-                                        onClick={() => setTraceHudOpen(false)}
-                                        className="text-gray-500 hover:text-gray-300 transition-colors text-[11px]"
-                                    >
-                                        CLOSE
-                                    </button>
+                                    <div className="flex items-center gap-2">
+                                        <button
+                                            onClick={copyCurrentTrace}
+                                            className={`px-2 py-1 rounded border text-[10px] font-mono tracking-widest transition-colors ${traceHud?.traceId
+                                                ? traceHudCopyState === 'ok'
+                                                    ? 'border-green-500/40 text-green-300 bg-green-900/10'
+                                                    : traceHudCopyState === 'fail'
+                                                        ? 'border-red-500/40 text-red-300 bg-red-900/10'
+                                                        : 'border-gray-700 text-gray-300 hover:bg-gray-900/40'
+                                                : 'border-gray-800 text-gray-600 cursor-not-allowed'
+                                                }`}
+                                            title="Copy trace events (JSON)"
+                                            disabled={!traceHud?.traceId}
+                                        >
+                                            {traceHudCopyState === 'ok' ? 'COPIED' : traceHudCopyState === 'fail' ? 'COPY FAIL' : 'COPY TRACE'}
+                                        </button>
+                                        <button
+                                            onClick={() => setTraceHudOpen(false)}
+                                            className="text-gray-500 hover:text-gray-300 transition-colors text-[11px]"
+                                        >
+                                            CLOSE
+                                        </button>
+                                    </div>
                                 </div>
                                 <div className="space-y-2 text-[11px] font-mono">
                                     <div className="flex justify-between gap-3">

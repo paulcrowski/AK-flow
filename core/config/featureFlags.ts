@@ -45,6 +45,13 @@ const FEATURE_FLAG_DEFINITIONS: Record<string, FeatureFlagDefinition> = {
     addedAt: '2025-12-16',
     experimental: true
   },
+
+  USE_CONV_SUPABASE_FALLBACK: {
+    enabled: false,
+    description: 'Fallback: hydrate conversation from Supabase archive when localStorage snapshot is empty',
+    addedAt: '2025-12-16',
+    experimental: true
+  },
   
   USE_CORTEX_STATE_BUILDER: {
     enabled: false,
