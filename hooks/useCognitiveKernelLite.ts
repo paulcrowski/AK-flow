@@ -30,6 +30,7 @@ import { createProcessOutputForTools } from '../utils/toolParser';
 import { createRng } from '../core/utils/rng';
 import { SYSTEM_CONFIG } from '../core/config/systemConfig';
 import { isFeatureEnabled } from '../core/config/featureFlags';
+import { getStartupTraceId } from '../core/trace/TraceContext';
 import {
   loadConversationSnapshot,
   saveConversationSnapshot,
@@ -239,8 +240,10 @@ export const useCognitiveKernelLite = (loadedIdentity?: AgentIdentity | null) =>
         setConversation([]);
         if (isFeatureEnabled('USE_CONV_SUPABASE_FALLBACK')) {
           const agentId = loadedIdentity.id;
+          const startupTraceId = getStartupTraceId();
           eventBus.publish({
             id: generateUUID(),
+            traceId: startupTraceId,
             timestamp: Date.now(),
             source: AgentType.CORTEX_FLOW,
             type: PacketType.SYSTEM_ALERT,
@@ -254,6 +257,7 @@ export const useCognitiveKernelLite = (loadedIdentity?: AgentIdentity | null) =>
               if (!turns || turns.length === 0) {
                 eventBus.publish({
                   id: generateUUID(),
+                  traceId: startupTraceId,
                   timestamp: Date.now(),
                   source: AgentType.CORTEX_FLOW,
                   type: PacketType.SYSTEM_ALERT,
@@ -268,7 +272,7 @@ export const useCognitiveKernelLite = (loadedIdentity?: AgentIdentity | null) =>
                 .map((t) => ({
                   role: t.role,
                   text: t.content,
-                  type: t.role === 'assistant' ? 'speech' : 'speech'
+                  type: 'speech' as const
                 }))
                 .filter((t) => t.role && t.text);
 
@@ -279,6 +283,7 @@ export const useCognitiveKernelLite = (loadedIdentity?: AgentIdentity | null) =>
 
               eventBus.publish({
                 id: generateUUID(),
+                traceId: startupTraceId,
                 timestamp: Date.now(),
                 source: AgentType.CORTEX_FLOW,
                 type: PacketType.SYSTEM_ALERT,
@@ -288,6 +293,7 @@ export const useCognitiveKernelLite = (loadedIdentity?: AgentIdentity | null) =>
             } catch (err) {
               eventBus.publish({
                 id: generateUUID(),
+                traceId: startupTraceId,
                 timestamp: Date.now(),
                 source: AgentType.CORTEX_FLOW,
                 type: PacketType.SYSTEM_ALERT,

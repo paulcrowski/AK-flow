@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { eventBus } from '../core/EventBus';
+import { getStartupTraceId } from '../core/trace/TraceContext';
 import { AgentType, PacketType } from '../types';
 import { generateUUID } from '../utils/uuid';
 import { setCurrentAgentId } from '../services/supabase';
@@ -187,6 +188,7 @@ export function CognitiveInterface() {
                     // FAZA 5: Publish IDENTITY_LOADED event to EventBus
                     eventBus.publish({
                         id: generateUUID(),
+                        traceId: getStartupTraceId(),
                         timestamp: Date.now(),
                         source: AgentType.CORTEX_FLOW,
                         type: PacketType.SYSTEM_ALERT,

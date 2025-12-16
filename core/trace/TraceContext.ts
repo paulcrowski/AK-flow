@@ -16,6 +16,16 @@ export function generateExternalTraceId(timestamp: number = Date.now()): string 
   return `ext-${timestamp}-${externalTraceCounter}`;
 }
 
+let startupTraceCounter = 0;
+let startupTraceId: string | null = null;
+
+export function getStartupTraceId(timestamp: number = Date.now()): string {
+  if (startupTraceId) return startupTraceId;
+  startupTraceCounter = (startupTraceCounter + 1) % 1000000;
+  startupTraceId = `boot-${timestamp}-${startupTraceCounter}`;
+  return startupTraceId;
+}
+
 const traceStack: string[] = [];
 
 export function pushTraceId(traceId: string): void {

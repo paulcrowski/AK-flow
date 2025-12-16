@@ -13,6 +13,7 @@ import { AgentType, PacketType } from '../types';
 import { generateUUID } from '../utils/uuid';
 import { useCognitiveActions } from '../stores/cognitiveStore';
 import type { AgentIdentity } from './useCognitiveKernelLite';
+import { getStartupTraceId } from '../core/trace/TraceContext';
 
 interface UseIdentitySyncConfig {
   identity: AgentIdentity | null | undefined;
@@ -49,6 +50,7 @@ export const useIdentitySync = ({ identity, onNameChange, onPersonaChange }: Use
     
     eventBus.publish({
       id: generateUUID(),
+      traceId: getStartupTraceId(),
       timestamp: Date.now(),
       source: AgentType.CORTEX_FLOW,
       type: PacketType.SYSTEM_ALERT,
@@ -67,6 +69,7 @@ export const useIdentitySync = ({ identity, onNameChange, onPersonaChange }: Use
     
     eventBus.publish({
       id: generateUUID(),
+      traceId: getStartupTraceId(),
       timestamp: Date.now(),
       source: AgentType.CORTEX_FLOW,
       type: PacketType.SYSTEM_ALERT,
