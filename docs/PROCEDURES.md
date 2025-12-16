@@ -37,12 +37,12 @@
 ══════════════════════════════════════════════════════════════════════════
 
 □ 1. CONFIG
-   └─ Dodaj przełącznik do core/config/systemConfig.ts
+   └─ Dodaj przełącznik do core/config/featureFlags.ts (feature flags) lub core/config/systemConfig.ts (parametry runtime)
    └─ NIE twórz lokalnych const ENABLED = true
    
 □ 2. INVARIANT
    └─ Jeśli system krytyczny → dodaj do CRITICAL_SYSTEMS w wiringValidator.ts
-   └─ Dodaj test do __tests__/IntegrationWiring.test.ts
+   └─ Dodaj test do __tests__/integration/IntegrationWiring.test.ts
    
 □ 3. TELEMETRY
    └─ Dodaj log na wejściu: [ModuleName] ACTION: details
@@ -57,7 +57,7 @@
    └─ Integration test dla wiring
    
 □ 6. DOCUMENTATION
-   └─ docs/FEATURE_FLAGS.md - jeśli nowy flag
+   └─ docs/management/FEATURE_FLAGS.md - jeśli nowy flag
    └─ docs/STATUS.md - aktualizuj "Co działa"
 
 ══════════════════════════════════════════════════════════════════════════
@@ -215,8 +215,8 @@ W `notes[]` dodaj:
    └─ Config: tylko `core/config/systemConfig.ts` (zero lokalnych `ENABLED = true`).
 
 □ 2. PLUMBING / WIRING (czy wszystko jest PODPIĘTE)
-   └─ `npm test -- --run __tests__/integration/IntegrationWiring.test.ts`
-   └─ `npm test -- --run __tests__/integration/WiringValidator.test.ts`
+   └─ `npm test -- --run IntegrationWiring`
+   └─ `npm test -- --run WiringValidator`
    └─ Uruchom app i sprawdź log: `validateWiring()` → ALL ACTIVE
    └─ Zasada: "zdefiniowane ≠ używane" (szukaj martwych funkcji / niepodpiętych ścieżek)
 
@@ -326,6 +326,8 @@ W `notes[]` dodaj:
 □ 1. npm test -- --run
    └─ WSZYSTKIE testy MUSZĄ przechodzić
    └─ Zero failures, zero errors
+   └─ (Wiring) `npm test -- --run IntegrationWiring`
+   └─ (Wiring) `npm test -- --run WiringValidator`
 
 □ 2. npm run dev
    └─ Sprawdź logi przy starcie
@@ -416,7 +418,8 @@ W `notes[]` dodaj:
 
 □ 5. TESTS
    └─ npm test -- --run
-   └─ Sprawdź __tests__/IntegrationWiring.test.ts
+   └─ `npm test -- --run IntegrationWiring`
+   └─ `npm test -- --run WiringValidator`
 
 □ 6. MANUAL
    └─ Test imienia
