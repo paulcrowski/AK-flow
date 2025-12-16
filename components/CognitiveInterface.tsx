@@ -5,7 +5,6 @@ import { generateUUID } from '../utils/uuid';
 import { setCurrentAgentId } from '../services/supabase';
 import { NeuroMonitor } from './NeuroMonitor';
 import { useCognitiveKernelLite, AgentIdentity } from '../hooks/useCognitiveKernelLite';
-import { ComponentErrorBoundary } from './ComponentErrorBoundary';
 import { useSession, Agent } from '../contexts/SessionContext';
 import { AgentSelector } from './AgentSelector';
 import { confessionService } from '../services/ConfessionService';
@@ -14,7 +13,7 @@ import { successSignalService } from '../services/SuccessSignalService';
 import { setCachedIdentity } from '../core/builders';
 // IDENTITY-LITE: Import fetchNarrativeSelf for fallback chain
 import { fetchNarrativeSelf } from '../core/services/IdentityDataService';
-import { Brain, Send, Moon, Sun, Loader2, Zap, Power, AlertTriangle, RefreshCw, EyeOff, Image as ImageIcon, Sparkles, Globe, FileText } from 'lucide-react';
+import { Brain, Send, Moon, Sun, Loader2, Zap, Power, AlertTriangle, RefreshCw, EyeOff, Image as ImageIcon, Sparkles, Globe, FileText, LogOut } from 'lucide-react';
 
 // Convert Agent from SessionContext to AgentIdentity for Kernel
 const agentToIdentity = (agent: Agent | null): AgentIdentity | null => {
@@ -50,7 +49,7 @@ const getAgentDescription = (persona: string | undefined, narrativeSelfSummary: 
 
 export function CognitiveInterface() {
     // --- SESSION (Multi-Agent) ---
-    const { userId, agentId, currentAgent, getAgentIdentity } = useSession();
+    const { userId, agentId, currentAgent, getAgentIdentity, logout } = useSession();
 
     // FAZA 5: Load full agent identity from DB
     const [loadedIdentity, setLoadedIdentity] = useState<AgentIdentity | null>(null);
@@ -276,6 +275,105 @@ export function CognitiveInterface() {
                 <div className="absolute inset-0 z-40 backdrop-blur-sm pointer-events-none animate-pulse bg-[#0a0c10]/40"></div>
             )}
 
+            {/* LEFT SIDEBAR: Session/Settings/Conversation (desktop only) */}
+            <div className="hidden xl:flex w-[320px] h-full border-r border-gray-800 bg-[#0f1219] flex-col relative z-10">
+                {/* Session Info */}
+                <div className="p-4 border-b border-gray-800 bg-[#0a0c10]">
+                    <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                            <div className="w-2.5 h-2.5 rounded-full bg-cyan-400 shadow-[0_0_10px_#38bdf8]" />
+                            <div className="text-[10px] font-mono tracking-widest text-gray-300">SESSION</div>
+                        </div>
+                        <button
+                            onClick={() => logout()}
+                            className="text-gray-500 hover:text-red-400 transition-colors"
+                            title="Logout"
+                        >
+                            <LogOut size={14} />
+                        </button>
+                    </div>
+                    <div className="mt-3 space-y-1">
+                        <div className="text-[10px] text-gray-500 font-mono truncate">{userId || '—'}</div>
+                        <div className="text-sm text-gray-200 font-semibold truncate">{currentAgent?.name || 'No agent selected'}</div>
+                    </div>
+                    <div className="mt-3">
+                        <AgentSelector />
+                    </div>
+                </div>
+
+                {/* Quick Settings */}
+                <div className="p-4 border-b border-gray-800">
+                    <div className="text-[10px] font-mono tracking-widest text-gray-500 mb-3">QUICK SETTINGS</div>
+                    <div className="grid grid-cols-1 gap-2">
+                        <button
+                            onClick={toggleAutonomy}
+                            className={`flex items-center justify-between px-3 py-2 rounded-lg border text-[11px] font-mono transition-colors ${autonomousMode ? 'border-green-500/50 bg-green-900/20 text-green-300' : 'border-gray-700 bg-gray-900/30 text-gray-400 hover:bg-gray-900/60'}`}
+                        >
+                            <span className="flex items-center gap-2"><Power size={12} /> AUTONOMY</span>
+                            <span>{autonomousMode ? 'ON' : 'OFF'}</span>
+                        </button>
+
+                        <button
+                            onClick={toggleSleep}
+                            className={`flex items-center justify-between px-3 py-2 rounded-lg border text-[11px] font-mono transition-colors ${isSleeping ? 'border-indigo-500/50 bg-indigo-900/20 text-indigo-300' : 'border-gray-700 bg-gray-900/30 text-gray-400 hover:bg-gray-900/60'}`}
+                        >
+                            <span className="flex items-center gap-2">{isSleeping ? <Sun size={12} /> : <Moon size={12} />} SLEEP</span>
+                            <span>{isSleeping ? 'ON' : 'OFF'}</span>
+                        </button>
+
+                        {typeof chemistryEnabled === 'boolean' && (
+                            <button
+                                onClick={toggleChemistry}
+                                className={`flex items-center justify-between px-3 py-2 rounded-lg border text-[11px] font-mono transition-colors ${chemistryEnabled ? 'border-purple-500/50 bg-purple-900/20 text-purple-300' : 'border-gray-700 bg-gray-900/30 text-gray-400 hover:bg-gray-900/60'}`}
+                            >
+                                <span className="flex items-center gap-2"><Zap size={12} /> CHEM</span>
+                                <span>{chemistryEnabled ? 'ON' : 'OFF'}</span>
+                            </button>
+                        )}
+
+                        <button
+                            onClick={resetKernel}
+                            className="flex items-center justify-between px-3 py-2 rounded-lg border border-gray-700 bg-gray-900/30 text-[11px] font-mono text-gray-400 hover:bg-gray-900/60 transition-colors"
+                        >
+                            <span className="flex items-center gap-2"><RefreshCw size={12} /> RESET</span>
+                            <span>NOW</span>
+                        </button>
+                    </div>
+                </div>
+
+                {/* Last Conversation Preview */}
+                <div className="flex-1 overflow-y-auto p-4">
+                    <div className="flex items-center justify-between mb-2">
+                        <div className="text-[10px] font-mono tracking-widest text-gray-500">LAST CONVERSATION</div>
+                        <div className="text-[10px] font-mono text-gray-600">{conversation.length}</div>
+                    </div>
+                    <div className="space-y-2">
+                        {conversation.slice(-25).reverse().map((msg, idx) => (
+                            <div
+                                key={`sidebar-${msg.role}-${idx}`}
+                                className={`rounded-lg border px-3 py-2 text-[11px] leading-snug ${msg.role === 'user'
+                                    ? 'border-blue-900/30 bg-blue-900/10 text-blue-100'
+                                    : msg.type === 'thought'
+                                        ? 'border-gray-800 bg-gray-900/30 text-gray-400 italic'
+                                        : 'border-gray-800 bg-gray-900/20 text-gray-200'
+                                    }`}
+                            >
+                                <div className="flex items-center justify-between mb-1">
+                                    <span className="text-[9px] font-mono uppercase tracking-wider text-gray-500">{msg.role}</span>
+                                    <span className="text-[9px] font-mono text-gray-600">{msg.type || 'speech'}</span>
+                                </div>
+                                <div className="break-words opacity-90">
+                                    {String(msg.text || '').slice(0, 140)}{String(msg.text || '').length > 140 ? '…' : ''}
+                                </div>
+                            </div>
+                        ))}
+                        {conversation.length === 0 && (
+                            <div className="text-[11px] text-gray-600 italic">No messages yet.</div>
+                        )}
+                    </div>
+                </div>
+            </div>
+
             <div className="flex-1 flex flex-col relative z-10">
                 {/* Header */}
                 <header className={`h-16 border-b flex items-center justify-between px-6 transition-colors duration-1000 ${isFatigued ? 'bg-[#151010] border-red-900/20' : 'bg-brain-dark border-gray-700'}`}>
@@ -499,18 +597,16 @@ export function CognitiveInterface() {
 
             {/* RIGHT: NEURO-MONITOR */}
             <div className="w-[500px] h-full border-l border-gray-800 hidden lg:block">
-                <ComponentErrorBoundary componentName="NeuroMonitor">
-                    <NeuroMonitor
-                        limbicState={limbicState}
-                        somaState={somaState}
-                        resonanceField={resonanceField}
-                        injectStateOverride={injectStateOverride}
-                        neuroState={neuroState}
-                        chemistryEnabled={chemistryEnabled}
-                        onToggleChemistry={toggleChemistry}
-                        goalState={goalState}
-                    />
-                </ComponentErrorBoundary>
+                <NeuroMonitor
+                    limbicState={limbicState}
+                    somaState={somaState}
+                    resonanceField={resonanceField}
+                    injectStateOverride={injectStateOverride}
+                    neuroState={neuroState}
+                    chemistryEnabled={chemistryEnabled}
+                    onToggleChemistry={toggleChemistry}
+                    goalState={goalState}
+                />
             </div>
         </div>
     );

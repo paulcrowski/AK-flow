@@ -24,8 +24,8 @@ interface State {
  *   </ComponentErrorBoundary>
  */
 export class ComponentErrorBoundary extends Component<Props, State> {
-    constructor(props: Props) {
-        super(props);
+    constructor(props: any) {
+        super(props as Props);
         this.state = {
             hasError: false,
             error: null,
@@ -37,7 +37,7 @@ export class ComponentErrorBoundary extends Component<Props, State> {
         return { hasError: true, error };
     }
 
-    componentDidCatch(error: Error, errorInfo: React.ErrorInfo): void {
+    componentDidCatch(error: Error, errorInfo: ErrorInfo): void {
         const componentName = this.props.componentName || 'Unknown';
         
         // Log error with full context
@@ -55,7 +55,7 @@ export class ComponentErrorBoundary extends Component<Props, State> {
         this.setState({ hasError: false, error: null, errorInfo: null });
     };
 
-    render(): React.ReactNode {
+    render(): ReactNode {
         if (this.state.hasError) {
             if (this.props.fallback) {
                 return this.props.fallback;
