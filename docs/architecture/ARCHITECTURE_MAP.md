@@ -5,6 +5,27 @@
 
 ---
 
+## 🆕 FAZA 6.4: ONE MIND Observability + UX Stability (2025-12-16)
+
+**Cel:** każdy tick jest korelowalny, a decyzja o mowie przechodzi przez jedną bramkę. UI ma narzędzia diagnostyczne bez dotykania logiki rdzenia.
+
+**Mechanika (rdzeń):**
+- TraceId deterministyczny per tick: `core/trace/TraceContext.ts`
+- Trace scope (push/pop) w ticku: `core/systems/EventLoop.ts`
+- EventBus auto-inject `traceId` (feature flag `USE_TRACE_AUTO_INJECT`): `core/EventBus.ts` + `core/config/featureFlags.ts`
+- Think mode selection (telemetry): `core/systems/EventLoop.ts` (`THINK_MODE_SELECTED`)
+- Commit layer mowy: `core/systems/TickCommitter.ts` (telemetry: `TICK_COMMIT`, dedupe/blocked/counters)
+
+**Mechanika (UI / obserwowalność):**
+- Trace HUD: `components/CognitiveInterface.tsx` (subskrypcja `PacketType.SYSTEM_ALERT`)
+- Export debug: `COPY TRACE` eksportuje `eventBus.getHistory()` przefiltrowane po `traceId`
+
+**UX pamięć rozmowy:**
+- Snapshot rozmowy per agent: `core/utils/conversationSnapshot.ts` + `hooks/useCognitiveKernelLite.ts`
+- Fallback z archiwum Supabase (feature flag `USE_CONV_SUPABASE_FALLBACK`): `services/ConversationArchive.ts`
+
+---
+
 ## 🆕 FAZA 6.3: Hybrid + Soft Homeostasis (Social Dynamics) (2025-12-15)
 
 **Cel:** agent nie spamuje autonomicznie gdy user nie odpowiada (bez twardych cooldownów).

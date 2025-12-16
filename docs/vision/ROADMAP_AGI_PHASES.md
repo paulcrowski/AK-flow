@@ -6,6 +6,31 @@
 
 ---
 
+## 🎓 Master Thesis Focus (P0): ONE MIND – THREE PHASES jako kontrakt wykonawczy
+
+**Problem badawczy:** w systemach agentowych często powstaje „split brain”: różne ścieżki logiki i UI generują rozjazd między tym, co system „myśli”, co „decyduje” i co finalnie „mówi”. Taki układ jest trudny do zdebugowania i trudny do porównywania eksperymentów.
+
+**Hipoteza H1:** minimalny kontrakt epizodu (tick) z deterministycznym `traceId` + jedna bramka mowy (commit) zwiększa obserwowalność i redukuje niejednoznaczność przy analizie zachowań.
+
+**Hipoteza H2:** jawna telemetria trybu myślenia (`reactive/goal_driven/autonomous/idle`) poprawia możliwość przypisania zachowania do fazy w pipeline (bez zgadywania z tekstu modelu).
+
+**Hipoteza H3 (UX/eksperymenty):** utrzymanie stabilnej pamięci rozmowy w UI (snapshot per agent) redukuje artefakty eksperymentalne (np. „pusty kontekst po refreshu”).
+
+**Metryki / artefakty do ewaluacji:**
+- Korelacja zdarzeń: wszystkie kluczowe eventy w ticku mają `traceId`.
+- Gating mowy: obecność eventu `TICK_COMMIT` z `blocked/deduped/blockReason`.
+- Diagnostyka: eksport `COPY TRACE` pozwala odtworzyć sekwencję zdarzeń dla jednego ticka.
+- Stabilność: `npm test` + testy wiring (`IntegrationWiring`, `WiringValidator`) jako check "zdefiniowane = używane".
+
+**Gdzie jest dowód w repo (reproducible evidence):**
+- Trace/telemetria: `core/trace/TraceContext.ts`, `core/systems/EventLoop.ts`, `core/EventBus.ts`
+- Commit layer: `core/systems/TickCommitter.ts`
+- UI debug: `components/CognitiveInterface.tsx` (Trace HUD + COPY TRACE)
+- UX pamięć rozmowy: `core/utils/conversationSnapshot.ts`, `hooks/useCognitiveKernelLite.ts`
+- Wiring i testy: `__tests__/integration/IntegrationWiring.test.ts`, `__tests__/integration/WiringValidator.test.ts`
+
+---
+
 ## FAZA 1: Napraw Chemię (Dziś) ✅ PARTIALLY DONE
 
 ### Problem

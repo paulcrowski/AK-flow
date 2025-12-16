@@ -1,8 +1,50 @@
 # AK-FLOW: Cognitive Agent Architecture Manifest
-**System Version:** 6.3 (Hybrid + Soft Homeostasis)  
-**Last Updated:** 2025-12-15  
+**System Version:** 6.4 (ONE MIND Observability + UX Stability)  
+**Last Updated:** 2025-12-16  
 **Architecture Type:** Active Inference (Friston) + Global Workspace Theory + Multi-Modal RAG + **Stateless Inference Engine**  
 **Status:** Autonomous / Stateful / Modular / Self-Aware / Goal-Driven / Personality-Driven / **Emergent Identity**
+
+---
+
+## 🆕 What's New in V6.4 (2025-12-16)
+
+### ONE MIND – THREE PHASES (P0) jako praktyczny kontrakt (nie teoria)
+
+**Cel (do pracy magisterskiej):** zredukować „split brain” do jednej, obserwowalnej osi czasu. System może generować wiele sygnałów, ale:
+- tick ma **jeden identyfikator** (`traceId`),
+- tryb myślenia jest **jawny** (telemetria),
+- mowa przechodzi przez **jedną bramkę commit**.
+
+**Wkład (engineering contribution):**
+- **TraceId deterministyczny per tick** (korelacja diagnostyczna).
+- **Trace scope** (push/pop) + **EventBus auto-inject** `traceId` (feature-flagged: `USE_TRACE_AUTO_INJECT`).
+- **Think mode selection**: `reactive | goal_driven | autonomous | idle` + telemetria `THINK_MODE_SELECTED`.
+- **TickCommitter v1**: dedupe przed mową, `blocked/blockReason`, liczniki i telemetria `TICK_COMMIT`.
+
+**Dlaczego to ma znaczenie naukowo:** to jest minimalna implementacja „globalnego identyfikatora epizodu” (tick) i „jednej bramki wykonawczej” (commit) – dzięki temu można mierzyć i porównywać przebiegi, zamiast interpretować luźne logi.
+
+### UX Stability: pamięć rozmowy i diagnostyka bez dotykania rdzenia
+
+**Cel:** UI nie może gubić kontekstu (refresh / zmiana agenta), a debug musi być tani.
+
+**Wkład:**
+- Snapshot rozmowy per-agent w localStorage (sanitize+clamp, fail-closed).
+- Fallback z Supabase archive gdy snapshot pusty (feature-flagged: `USE_CONV_SUPABASE_FALLBACK`).
+- Trace HUD w UI + `COPY TRACE` (eksportuje historię EventBus przefiltrowaną po `traceId`).
+
+### Weryfikacja (ALARM-3)
+
+**Automatyczna:**
+- `npm run build`
+- `npm test`
+- Wiring:
+  - `npm test -- --run IntegrationWiring`
+  - `npm test -- --run WiringValidator`
+
+**Manualna (minimalna):**
+- Refresh UI → rozmowa nie znika (local snapshot).
+- Nowe urządzenie/incognito → jeśli flaga włączona, rozmowa dogrywa się z archiwum.
+- Trace HUD → `COPY TRACE` daje JSON z eventami jednego ticka.
 
 ---
 
