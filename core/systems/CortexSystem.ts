@@ -297,6 +297,15 @@ export namespace CortexSystem {
                 };
                 
                 const emotionDeltas = EmotionEngine.computeDeltas(emotionSignals, currentLimbic);
+
+                const emotionAfter = LimbicSystem.updateEmotionalState(currentLimbic, emotionDeltas);
+
+                EpisodicMemoryService.detectAndStore(agentId, {
+                    event: `User said: "${text.slice(0, 100)}..." | Agent responded about: ${gateResult.modifiedOutput.internal_thought?.slice(0, 50) || 'interaction'}`,
+                    emotionBefore: currentLimbic,
+                    emotionAfter,
+                    context: recentHistory.slice(-2).map(t => t.text).join(' | ')
+                }).catch(err => console.warn('[CortexSystem] Episode detection failed:', err));
                 
                 return {
                     responseText: output.speech_content,
