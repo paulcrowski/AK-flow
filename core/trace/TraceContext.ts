@@ -9,6 +9,13 @@ export function generateTraceId(startedAt: number, tickNumber: number): string {
   return `tick-${startedAt}-${tickNumber}`;
 }
 
+let externalTraceCounter = 0;
+
+export function generateExternalTraceId(timestamp: number = Date.now()): string {
+  externalTraceCounter = (externalTraceCounter + 1) % 1000000;
+  return `ext-${timestamp}-${externalTraceCounter}`;
+}
+
 const traceStack: string[] = [];
 
 export function pushTraceId(traceId: string): void {

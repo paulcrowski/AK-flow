@@ -46,6 +46,20 @@ const FEATURE_FLAG_DEFINITIONS: Record<string, FeatureFlagDefinition> = {
     experimental: true
   },
 
+  USE_TRACE_HANDLER_SCOPE: {
+    enabled: false,
+    description: 'Propagate packet.traceId into TraceContext while executing EventBus handlers (async/UI/background)',
+    addedAt: '2025-12-16',
+    experimental: true
+  },
+
+  USE_TRACE_EXTERNAL_IDS: {
+    enabled: false,
+    description: 'Generate external traceId for packets emitted outside any active tick scope (UI/async/background)',
+    addedAt: '2025-12-16',
+    experimental: true
+  },
+
   USE_CONV_SUPABASE_FALLBACK: {
     enabled: false,
     description: 'Fallback: hydrate conversation from Supabase archive when localStorage snapshot is empty',

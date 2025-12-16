@@ -1,6 +1,6 @@
 import { CognitivePacket, EventHandler, PacketType } from "../types";
 import { isFeatureEnabled } from './config/featureFlags';
-import { getCurrentTraceId } from './trace/TraceContext';
+import { getCurrentTraceId, pushTraceId, popTraceId, generateExternalTraceId } from './trace/TraceContext';
 
 class CognitiveBus {
 
@@ -26,6 +26,11 @@ class CognitiveBus {
       if (active) nextPacket = { ...packet, traceId: active };
     }
 
+    if (isFeatureEnabled('USE_TRACE_EXTERNAL_IDS') && !nextPacket.traceId) {
+      const active = getCurrentTraceId();
+      if (!active) nextPacket = { ...nextPacket, traceId: generateExternalTraceId(nextPacket.timestamp) };
+    }
+
     // Log to history (Short term buffer)
     this.history.push(nextPacket);
     // Increased buffer to 1000 to support meaningful session exports
@@ -34,7 +39,26 @@ class CognitiveBus {
     if (this.listeners[nextPacket.type]) {
       this.listeners[nextPacket.type].forEach(handler => {
         // Asynchronous execution to simulate distributed processing
-        setTimeout(() => handler(nextPacket), 0);
+        setTimeout(() => {
+          if (isFeatureEnabled('USE_TRACE_HANDLER_SCOPE') && nextPacket.traceId) {
+            pushTraceId(nextPacket.traceId);
+            try {
+              const result = (handler as any)(nextPacket);
+              if (result && typeof result.finally === 'function') {
+                result.finally(() => popTraceId(nextPacket.traceId!));
+                return;
+              }
+
+              popTraceId(nextPacket.traceId);
+              return;
+            } catch (err) {
+              popTraceId(nextPacket.traceId);
+              throw err;
+            }
+          }
+
+          handler(nextPacket);
+        }, 0);
       });
     }
   }
@@ -50,11 +74,35 @@ class CognitiveBus {
       if (active) nextPacket = { ...packet, traceId: active };
     }
 
+    if (isFeatureEnabled('USE_TRACE_EXTERNAL_IDS') && !nextPacket.traceId) {
+      const active = getCurrentTraceId();
+      if (!active) nextPacket = { ...nextPacket, traceId: generateExternalTraceId(nextPacket.timestamp) };
+    }
+
     this.history.push(nextPacket);
     if (this.history.length > 1000) this.history.shift();
 
     if (this.listeners[nextPacket.type]) {
-      this.listeners[nextPacket.type].forEach(handler => handler(nextPacket));
+      this.listeners[nextPacket.type].forEach(handler => {
+        if (isFeatureEnabled('USE_TRACE_HANDLER_SCOPE') && nextPacket.traceId) {
+          pushTraceId(nextPacket.traceId);
+          try {
+            const result = (handler as any)(nextPacket);
+            if (result && typeof result.finally === 'function') {
+              result.finally(() => popTraceId(nextPacket.traceId!));
+              return;
+            }
+
+            popTraceId(nextPacket.traceId);
+            return;
+          } catch (err) {
+            popTraceId(nextPacket.traceId);
+            throw err;
+          }
+        }
+
+        handler(nextPacket);
+      });
     }
   }
 
