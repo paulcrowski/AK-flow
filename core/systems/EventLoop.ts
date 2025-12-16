@@ -27,6 +27,7 @@ import { AutonomyRepertoire, type ActionDecision } from './AutonomyRepertoire';
 import { generateTraceId, type TraceContext } from '../trace/TraceContext';
 import { getCurrentAgentId } from '../../services/supabase';
 import { createMemorySpace } from './MemorySpace';
+import { TickCommitter } from './TickCommitter';
 
 let lastAutonomyActionSignature: string | null = null;
 let lastAutonomyActionLogAt = 0;
@@ -328,7 +329,21 @@ export namespace EventLoop {
                 }
 
                 if (goalGateDecision.should_speak && goalGateDecision.winner) {
-                    callbacks.onMessage('assistant', goalGateDecision.winner.speech_content, 'speech');
+                    const speechText = goalGateDecision.winner.speech_content;
+
+                    const commit = isFeatureEnabled('USE_ONE_MIND_PIPELINE')
+                        ? TickCommitter.commitSpeech({
+                            agentId: trace.agentId!,
+                            traceId: trace.traceId,
+                            tickNumber: trace.tickNumber,
+                            origin: 'goal_driven',
+                            speechText
+                        })
+                        : { committed: true, blocked: false, deduped: false };
+
+                    if (commit.committed) {
+                        callbacks.onMessage('assistant', speechText, 'speech');
+                    }
                 } else {
                     // Goal speech suppressed - log it
                     callbacks.onThought(`[GOAL SUPPRESSED] ${result.responseText?.slice(0, 50)}...`);
@@ -678,7 +693,19 @@ export namespace EventLoop {
                     
                     // Only emit if text remains after filtering
                     if (styleResult.text.length > styleCfg.minTextLength) {
-                        callbacks.onMessage('assistant', styleResult.text, 'speech');
+                        const commit = isFeatureEnabled('USE_ONE_MIND_PIPELINE')
+                            ? TickCommitter.commitSpeech({
+                                agentId: trace.agentId!,
+                                traceId: trace.traceId,
+                                tickNumber: trace.tickNumber,
+                                origin: 'autonomous',
+                                speechText: styleResult.text
+                            })
+                            : { committed: true, blocked: false, deduped: false };
+
+                        if (commit.committed) {
+                            callbacks.onMessage('assistant', styleResult.text, 'speech');
+                        }
                         ctx.lastSpeakTimestamp = Date.now();
                         ctx.silenceStart = Date.now();
                         ctx.thoughtHistory.push(gateDecision.winner.internal_thought);
@@ -693,6 +720,16 @@ export namespace EventLoop {
                         ctx.limbic = LimbicSystem.applySpeechResponse(ctx.limbic);
                         callbacks.onLimbicUpdate(ctx.limbic);
                     } else {
+                        if (isFeatureEnabled('USE_ONE_MIND_PIPELINE')) {
+                            TickCommitter.commitSpeech({
+                                agentId: trace.agentId!,
+                                traceId: trace.traceId,
+                                tickNumber: trace.tickNumber,
+                                origin: 'autonomous',
+                                speechText: '',
+                                blockReason: 'FILTERED_TOO_SHORT'
+                            });
+                        }
                         // Text too short after filtering - suppress
                         callbacks.onThought(`[STYLE_FILTERED] ${gateDecision.winner.internal_thought}`);
                     }
