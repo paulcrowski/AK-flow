@@ -1,0 +1,47 @@
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { TTLCache, createMemorySpace } from '../../core/systems/MemorySpace';
+
+describe('MemorySpace', () => {
+    beforeEach(() => {
+        vi.useFakeTimers();
+        vi.setSystemTime(new Date('2025-01-01T00:00:00.000Z'));
+    });
+
+    afterEach(() => {
+        vi.useRealTimers();
+    });
+
+    it('TTLCache should expire entries after ttlMs', async () => {
+        const cache = new TTLCache<number>();
+
+        cache.set('a', 123, 1000);
+        expect(cache.get('a')).toBe(123);
+
+        vi.advanceTimersByTime(999);
+        expect(cache.get('a')).toBe(123);
+
+        vi.advanceTimersByTime(1);
+        expect(cache.get('a')).toBeUndefined();
+    });
+
+    it('hot.semanticSearch should dedupe in-flight calls but not cache settled results', async () => {
+        const provider = {
+            semanticSearch: vi.fn(async (_query: string) => {
+                await Promise.resolve();
+                return [{ content: 'x' } as any];
+            })
+        };
+
+        const memorySpace = createMemorySpace('test-agent', { semanticSearchProvider: provider });
+
+        const p1 = memorySpace.hot.semanticSearch('Hello');
+        const p2 = memorySpace.hot.semanticSearch('Hello');
+
+        expect(p1).toBe(p2);
+        await Promise.all([p1, p2]);
+        expect(provider.semanticSearch).toHaveBeenCalledTimes(1);
+
+        await memorySpace.hot.semanticSearch('Hello');
+        expect(provider.semanticSearch).toHaveBeenCalledTimes(2);
+    });
+});

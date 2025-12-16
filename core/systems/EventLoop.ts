@@ -25,6 +25,7 @@ import { UnifiedContextBuilder, type StylePrefs, type BasePersona } from '../con
 import { AutonomyRepertoire, type ActionDecision } from './AutonomyRepertoire';
 import { generateTraceId, type TraceContext } from '../trace/TraceContext';
 import { getCurrentAgentId } from '../../services/supabase';
+import { createMemorySpace } from './MemorySpace';
 
 let lastAutonomyActionSignature: string | null = null;
 let lastAutonomyActionLogAt = 0;
@@ -141,6 +142,8 @@ export namespace EventLoop {
                 return ctx;
             }
 
+            const memorySpace = createMemorySpace(trace.agentId);
+
             // 1. Apply emotional homeostasis
             const cooledLimbic = LimbicSystem.applyHomeostasis(ctx.limbic);
             ctx.limbic = cooledLimbic;
@@ -155,7 +158,8 @@ export namespace EventLoop {
                 conversationHistory: ctx.conversation,
                 // FAZA 5: Pass identity context
                 identity: ctx.agentIdentity,
-                sessionOverlay: ctx.sessionOverlay
+                sessionOverlay: ctx.sessionOverlay,
+                memorySpace
             });
 
             // SEMANTIC INTENT DETECTION (Bonus 11/10)

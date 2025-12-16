@@ -24,6 +24,7 @@ import { isFeatureEnabled } from '../config';
 import { eventBus } from '../EventBus';
 import { processDecisionGate, resetTurnState } from './DecisionGate';
 import { guardCortexOutput, isPrismEnabled } from './PrismPipeline';
+import type { MemorySpace } from './MemorySpace';
 
 export interface ConversationTurn {
     role: string;
@@ -140,6 +141,7 @@ export namespace CortexSystem {
         // FAZA 5: Optional identity context
         identity?: AgentIdentityContext;
         sessionOverlay?: SessionOverlay;
+        memorySpace?: MemorySpace;
     }
 
     export interface ProcessResult {
@@ -202,13 +204,15 @@ export namespace CortexSystem {
     export async function processUserMessage(
         params: ProcessInputParams
     ): Promise<ProcessResult> {
-        const { text, currentLimbic, currentSoma, conversationHistory, identity, sessionOverlay } = params;
+        const { text, currentLimbic, currentSoma, conversationHistory, identity, sessionOverlay, memorySpace } = params;
 
         // 0. Context Diet: Slice history to recent turns only
         const recentHistory = conversationHistory.slice(-12);
 
         // 1. Retrieve relevant memories (RAG)
-        const memories = await MemoryService.semanticSearch(text);
+        const memories = memorySpace
+            ? await memorySpace.hot.semanticSearch(text)
+            : await MemoryService.semanticSearch(text);
 
         // --- NEW FLOW: PERSONA-LESS CORTEX (TAGGED COGNITION) ---
         if (isFeatureEnabled('USE_MINIMAL_CORTEX_PROMPT')) {
