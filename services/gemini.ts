@@ -10,6 +10,7 @@ import { guardLegacyResponse, isPrismEnabled } from "../core/systems/PrismPipeli
 import { guardLegacyWithFactEcho, isFactEchoPipelineEnabled } from "../core/systems/FactEchoPipeline";
 import { UnifiedContextBuilder, type UnifiedContext, type ContextBuilderInput } from "../core/context";
 import { applyAutonomyV2RawContract } from "../core/systems/RawContract";
+import { parseDetectedIntent } from "../core/systems/IntentContract";
 
 // 1. Safe Environment Access & Initialization (Vite)
 const apiKey = import.meta.env.VITE_GEMINI_API_KEY as string | undefined;
@@ -844,10 +845,17 @@ OUTPUT FORMAT:
         // 1. Cache/Optimization: Skip for very short inputs
         if (!input || input.trim().length < 3) return safeDefault;
 
-        return withRetry(async () => {
-            const response = await ai.models.generateContent({
-                model: 'gemini-2.5-flash', // Fast model
-                contents: `
+        const schema = {
+            type: Type.OBJECT,
+            properties: {
+                style: { type: Type.STRING, enum: ["POETIC", "SIMPLE", "ACADEMIC", "NEUTRAL"] },
+                command: { type: Type.STRING, enum: ["NONE", "SEARCH", "VISUALIZE", "SYSTEM_CONTROL"] },
+                urgency: { type: Type.STRING, enum: ["LOW", "MEDIUM", "HIGH"] }
+            },
+            required: ["style", "command", "urgency"]
+        };
+
+        const basePrompt = `
                 TASK: Analyze user input for implicit intents.
                 INPUT: "${input}"
                 
@@ -863,26 +871,65 @@ OUTPUT FORMAT:
                 "Hello" -> { "style": "NEUTRAL", "command": "NONE", "urgency": "LOW" }
 
                 OUTPUT JSON ONLY.
-                `,
-                config: {
-                    temperature: 0.1, // Deterministic
-                    maxOutputTokens: 128,
-                    responseMimeType: 'application/json',
-                    responseSchema: {
-                        type: Type.OBJECT,
-                        properties: {
-                            style: { type: Type.STRING, enum: ["POETIC", "SIMPLE", "ACADEMIC", "NEUTRAL"] },
-                            command: { type: Type.STRING, enum: ["NONE", "SEARCH", "VISUALIZE", "SYSTEM_CONTROL"] },
-                            urgency: { type: Type.STRING, enum: ["LOW", "MEDIUM", "HIGH"] }
-                        },
-                        required: ["style", "command", "urgency"]
+        `;
+
+        const strictRetryPrompt = `
+                OUTPUT RULES (CRITICAL):
+                - Output ONLY a raw JSON object. No prose. No markdown.
+                - First character MUST be '{'.
+                - Keys must be: style, command, urgency.
+                
+        ${basePrompt}
+        `;
+
+        return withRetry(async () => {
+            const makeCall = async (contents: string) => {
+                return ai.models.generateContent({
+                    model: 'gemini-2.5-flash',
+                    contents,
+                    config: {
+                        temperature: 0.1,
+                        maxOutputTokens: 128,
+                        responseMimeType: 'application/json',
+                        responseSchema: schema
                     }
-                }
+                });
+            };
+
+            const first = await makeCall(basePrompt);
+            const parsed1 = parseDetectedIntent(first.text, safeDefault);
+            if (parsed1.ok) return parsed1.value;
+
+            eventBus.publish({
+                id: generateUUID(),
+                timestamp: Date.now(),
+                source: AgentType.CORTEX_FLOW,
+                type: PacketType.PREDICTION_ERROR,
+                payload: {
+                    metric: 'DETECT_INTENT_RETRY',
+                    reason: parsed1.reason
+                },
+                priority: 0.2
             });
 
-            // logUsage('detectIntent', response); // Optional: don't spam logs with micro-transactions
-            return cleanJSON(response.text, safeDefault, undefined, 'detectIntent');
-        }, 1, 500); // Fast retry, short timeout
+            const second = await makeCall(strictRetryPrompt);
+            const parsed2 = parseDetectedIntent(second.text, safeDefault);
+            if (parsed2.ok) return parsed2.value;
+
+            eventBus.publish({
+                id: generateUUID(),
+                timestamp: Date.now(),
+                source: AgentType.CORTEX_FLOW,
+                type: PacketType.PREDICTION_ERROR,
+                payload: {
+                    metric: 'DETECT_INTENT_PARSE_FAILURE',
+                    reason: parsed2.reason
+                },
+                priority: 0.2
+            });
+
+            return safeDefault;
+        }, 1, 500);
     },
 
     /**
