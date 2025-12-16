@@ -4,6 +4,7 @@
  * Common helpers for all tests in AK-FLOW
  */
 import { eventBus } from '../core/EventBus';
+import { vi, expect, type Mocked, type MockedFunction, type MockInstance } from 'vitest';
 
 // Wait for async EventBus handlers
 export const waitForEventBus = (ms: number = 50) => new Promise(resolve => setTimeout(resolve, ms));
@@ -26,24 +27,24 @@ export const clearEventBus = async () => {
 };
 
 // Create a mock function with typing
-export const createMockFunction = <T extends (...args: any[]) => any>(fn?: T): jest.MockedFunction<T> => {
-    return fn ? jest.fn(fn) as jest.MockedFunction<T> : jest.fn() as jest.MockedFunction<T>;
+export const createMockFunction = <T extends (...args: any[]) => any>(fn?: T): MockedFunction<T> => {
+    return fn ? vi.fn(fn) as unknown as MockedFunction<T> : vi.fn() as unknown as MockedFunction<T>;
 };
 
 // Create a mock object with typed methods
-export const createMockObject = <T extends object>(partialMock: Partial<T> = {}): jest.Mocked<T> => {
+export const createMockObject = <T extends object>(partialMock: Partial<T> = {}): Mocked<T> => {
     return {
         ...partialMock,
         // Add any missing methods as mocks
         ...Object.fromEntries(
-            Object.keys(partialMock).map(key => [key, jest.fn(partialMock[key as keyof T])])
+            Object.keys(partialMock).map(key => [key, vi.fn(partialMock[key as keyof T] as any)])
         )
-    } as jest.Mocked<T>;
+    } as unknown as Mocked<T>;
 };
 
 // Assert that a function was called with specific arguments
 export const expectCalledWith = <T extends (...args: any[]) => any>(
-    mockFn: jest.MockedFunction<T>,
+    mockFn: MockedFunction<T>,
     expectedArgs: Parameters<T>
 ) => {
     expect(mockFn).toHaveBeenCalledWith(...expectedArgs);
@@ -51,7 +52,7 @@ export const expectCalledWith = <T extends (...args: any[]) => any>(
 
 // Assert that a function was called exactly once with specific arguments
 export const expectCalledOnceWith = <T extends (...args: any[]) => any>(
-    mockFn: jest.MockedFunction<T>,
+    mockFn: MockedFunction<T>,
     expectedArgs: Parameters<T>
 ) => {
     expect(mockFn).toHaveBeenCalledTimes(1);
@@ -63,8 +64,12 @@ export const spyOnMethod = <T extends object, K extends keyof T>(
     obj: T,
     method: K,
     mockImplementation?: (...args: any[]) => any
-): jest.SpyInstance => {
-    return jest.spyOn(obj, method as any).mockImplementation(mockImplementation);
+): MockInstance => {
+    const spy = vi.spyOn(obj as any, method as any);
+    if (mockImplementation) {
+        spy.mockImplementation(mockImplementation);
+    }
+    return spy;
 };
 
 // Test helper for async operations with timeout
@@ -73,7 +78,7 @@ export const withTimeout = async <T>(
     timeoutMs: number = 2000,
     timeoutMessage: string = 'Operation timed out'
 ): Promise<T> => {
-    let timeoutHandle: NodeJS.Timeout;
+    let timeoutHandle: ReturnType<typeof setTimeout> | null = null;
     
     const timeoutPromise = new Promise<never>((_, reject) => {
         timeoutHandle = setTimeout(() => {
@@ -83,10 +88,10 @@ export const withTimeout = async <T>(
     
     try {
         const result = await Promise.race([promise, timeoutPromise]);
-        clearTimeout(timeoutHandle);
+        if (timeoutHandle) clearTimeout(timeoutHandle);
         return result;
     } catch (error) {
-        clearTimeout(timeoutHandle);
+        if (timeoutHandle) clearTimeout(timeoutHandle);
         throw error;
     }
 };

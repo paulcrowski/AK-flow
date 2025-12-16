@@ -28,6 +28,7 @@ import { TraceContext, generateTraceId, pushTraceId, popTraceId } from '../trace
 import { getCurrentAgentId } from '../../services/supabase';
 import { createMemorySpace } from './MemorySpace';
 import { TickCommitter } from './TickCommitter';
+import { publishTickStart, publishTickSkipped, publishThinkModeSelected, publishTickEnd } from './TickLifecycleTelemetry';
 
 let lastAutonomyActionSignature: string | null = null;
 let lastAutonomyActionLogAt = 0;
@@ -119,18 +120,7 @@ export namespace EventLoop {
         let skipped = false;
         let skipReason: string | null = null;
 
-        eventBus.publish({
-            id: `tick-start-${trace.tickNumber}-${trace.startedAt}`,
-            traceId: trace.traceId,
-            timestamp: trace.startedAt,
-            source: AgentType.CORTEX_FLOW,
-            type: PacketType.SYSTEM_ALERT,
-            payload: {
-                event: 'TICK_START',
-                tickNumber: trace.tickNumber
-            },
-            priority: 1
-        });
+        publishTickStart(trace.traceId, trace.tickNumber, trace.startedAt);
 
         try {
             // P0 ONE MIND: Hard gate when no agent is selected.
@@ -139,19 +129,7 @@ export namespace EventLoop {
                 skipped = true;
                 skipReason = 'NO_AGENT_ID';
 
-                eventBus.publish({
-                    id: `tick-skipped-${trace.tickNumber}-${Date.now()}`,
-                    traceId: trace.traceId,
-                    timestamp: Date.now(),
-                    source: AgentType.CORTEX_FLOW,
-                    type: PacketType.SYSTEM_ALERT,
-                    payload: {
-                        event: 'TICK_SKIPPED',
-                        tickNumber: trace.tickNumber,
-                        reason: skipReason
-                    },
-                    priority: 1
-                });
+                publishTickSkipped(trace.traceId, trace.tickNumber, Date.now(), skipReason);
 
                 return ctx;
             }
@@ -159,19 +137,7 @@ export namespace EventLoop {
             const memorySpace = createMemorySpace(trace.agentId);
 
             const thinkMode = selectThinkMode(ctx, input);
-            eventBus.publish({
-                id: `think-mode-${trace.tickNumber}-${Date.now()}`,
-                traceId: trace.traceId,
-                timestamp: Date.now(),
-                source: AgentType.CORTEX_FLOW,
-                type: PacketType.SYSTEM_ALERT,
-                payload: {
-                    event: 'THINK_MODE_SELECTED',
-                    tickNumber: trace.tickNumber,
-                    mode: thinkMode
-                },
-                priority: 0.6
-            });
+            publishThinkModeSelected(trace.traceId, trace.tickNumber, Date.now(), thinkMode);
 
             // 1. Apply emotional homeostasis
             const cooledLimbic = LimbicSystem.applyHomeostasis(ctx.limbic);
@@ -773,20 +739,15 @@ export namespace EventLoop {
             return ctx;
         } finally {
             const endedAt = Date.now();
-            eventBus.publish({
-                id: `tick-end-${trace.tickNumber}-${endedAt}`,
-                traceId: trace.traceId,
-                timestamp: endedAt,
-                source: AgentType.CORTEX_FLOW,
-                type: PacketType.SYSTEM_ALERT,
-                payload: {
-                    event: 'TICK_END',
-                    tickNumber: trace.tickNumber,
-                    durationMs: endedAt - trace.startedAt,
-                    ...(skipped ? { skipped: true, skipReason } : {})
-                },
-                priority: 1
-            });
+
+            publishTickEnd(
+                trace.traceId,
+                trace.tickNumber,
+                endedAt,
+                endedAt - trace.startedAt,
+                skipped,
+                skipReason
+            );
 
             popTraceId(trace.traceId);
         }

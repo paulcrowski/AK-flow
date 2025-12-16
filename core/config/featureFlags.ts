@@ -7,6 +7,8 @@
  * @module core/config/featureFlags
  */
 
+import { SYSTEM_CONFIG } from './systemConfig';
+
 /**
  * Definicja feature flag z metadanymi
  */
@@ -26,70 +28,70 @@ interface FeatureFlagDefinition {
  */
 const FEATURE_FLAG_DEFINITIONS: Record<string, FeatureFlagDefinition> = {
   USE_MINIMAL_CORTEX_PROMPT: {
-    enabled: true,  // ✅ ENABLED - MVP with minimal payload
+    enabled: SYSTEM_CONFIG.features.USE_MINIMAL_CORTEX_PROMPT,
     description: 'Use new Persona-Less Cortex architecture with stateless LLM',
     addedAt: '2025-12-08',
     experimental: true
   },
 
   USE_ONE_MIND_PIPELINE: {
-    enabled: false,
+    enabled: SYSTEM_CONFIG.features.USE_ONE_MIND_PIPELINE,
     description: 'P0 (13/10): ONE MIND – THREE PHASES pipeline (trace+gate+memory+contract)',
     addedAt: '2025-12-16',
     experimental: true
   },
 
   USE_TRACE_AUTO_INJECT: {
-    enabled: false,
+    enabled: SYSTEM_CONFIG.features.USE_TRACE_AUTO_INJECT,
     description: 'Auto-inject current traceId into EventBus packets when missing',
     addedAt: '2025-12-16',
     experimental: true
   },
 
   USE_TRACE_HANDLER_SCOPE: {
-    enabled: false,
+    enabled: SYSTEM_CONFIG.features.USE_TRACE_HANDLER_SCOPE,
     description: 'Propagate packet.traceId into TraceContext while executing EventBus handlers (async/UI/background)',
     addedAt: '2025-12-16',
     experimental: true
   },
 
   USE_TRACE_EXTERNAL_IDS: {
-    enabled: false,
+    enabled: SYSTEM_CONFIG.features.USE_TRACE_EXTERNAL_IDS,
     description: 'Generate external traceId for packets emitted outside any active tick scope (UI/async/background)',
     addedAt: '2025-12-16',
     experimental: true
   },
 
   USE_CONV_SUPABASE_FALLBACK: {
-    enabled: false,
+    enabled: SYSTEM_CONFIG.features.USE_CONV_SUPABASE_FALLBACK,
     description: 'Fallback: hydrate conversation from Supabase archive when localStorage snapshot is empty',
     addedAt: '2025-12-16',
     experimental: true
   },
   
   USE_CORTEX_STATE_BUILDER: {
-    enabled: false,
+    enabled: SYSTEM_CONFIG.features.USE_CORTEX_STATE_BUILDER,
     description: 'Build CortexState from database instead of hardcoded prompts',
     addedAt: '2025-12-08',
     experimental: true
   },
   
   USE_META_STATE_HOMEOSTASIS: {
-    enabled: false,
+    enabled: SYSTEM_CONFIG.features.USE_META_STATE_HOMEOSTASIS,
     description: 'Apply homeostasis to meta-states (energy, confidence, stress)',
     addedAt: '2025-12-08',
     experimental: true
   },
   
   USE_IDENTITY_COHERENCE_CHECK: {
-    enabled: false,
+    enabled: SYSTEM_CONFIG.features.USE_IDENTITY_COHERENCE_CHECK,
     description: 'Check shard coherence before adding new identity shards',
     addedAt: '2025-12-08',
     experimental: true
   },
   
   USE_STYLE_EXAMPLES: {
-    enabled: false,
+    enabled: SYSTEM_CONFIG.features.USE_STYLE_EXAMPLES,
     description: 'Include style examples from past SELF_SPEECH in payload',
     addedAt: '2025-12-08',
     experimental: true
@@ -100,21 +102,29 @@ const FEATURE_FLAG_DEFINITIONS: Record<string, FeatureFlagDefinition> = {
  * Eksportowane flagi - proste boolean do użycia w kodzie
  */
 export const FEATURE_FLAGS = Object.fromEntries(
-  Object.entries(FEATURE_FLAG_DEFINITIONS).map(([key, def]) => [key, def.enabled])
+  Object.entries(FEATURE_FLAG_DEFINITIONS).map(([key]) => [key, (SYSTEM_CONFIG.features as Record<string, boolean>)[key] ?? false])
 ) as Record<keyof typeof FEATURE_FLAG_DEFINITIONS, boolean>;
 
 /**
  * Sprawdza czy flaga jest włączona
  */
 export function isFeatureEnabled(flagName: keyof typeof FEATURE_FLAGS): boolean {
-  return FEATURE_FLAGS[flagName] ?? false;
+  const key = flagName as unknown as string;
+  return (SYSTEM_CONFIG.features as Record<string, boolean>)[key] ?? false;
 }
 
 /**
  * Pobiera wszystkie definicje flag (do debugowania/UI)
  */
 export function getAllFeatureFlags(): Record<string, FeatureFlagDefinition> {
-  return { ...FEATURE_FLAG_DEFINITIONS };
+  const flags: Record<string, FeatureFlagDefinition> = {};
+  for (const [key, def] of Object.entries(FEATURE_FLAG_DEFINITIONS)) {
+    flags[key] = {
+      ...def,
+      enabled: (SYSTEM_CONFIG.features as Record<string, boolean>)[key] ?? def.enabled
+    };
+  }
+  return flags;
 }
 
 /**
@@ -127,5 +137,7 @@ export function setFeatureFlagForTesting(
   if (process.env.NODE_ENV !== 'test') {
     console.warn('[FeatureFlags] setFeatureFlagForTesting should only be used in tests');
   }
-  (FEATURE_FLAGS as Record<string, boolean>)[flagName] = value;
+  const key = flagName as unknown as string;
+  (SYSTEM_CONFIG.features as Record<string, boolean>)[key] = value;
+  (FEATURE_FLAGS as Record<string, boolean>)[key] = value;
 }

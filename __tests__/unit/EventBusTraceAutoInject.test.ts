@@ -4,6 +4,8 @@ import { AgentType, PacketType, type CognitivePacket } from '../../types';
 import { setFeatureFlagForTesting } from '../../core/config/featureFlags';
 import { pushTraceId, popTraceId } from '../../core/trace/TraceContext';
 
+const ORIGINAL_USE_TRACE_AUTO_INJECT = true;
+
 describe('EventBus trace auto-inject', () => {
   afterEach(() => {
     try {
@@ -12,7 +14,7 @@ describe('EventBus trace auto-inject', () => {
       // ignore
     }
     eventBus.clear();
-    setFeatureFlagForTesting('USE_TRACE_AUTO_INJECT', false);
+    setFeatureFlagForTesting('USE_TRACE_AUTO_INJECT', ORIGINAL_USE_TRACE_AUTO_INJECT);
   });
 
   it('should inject current traceId when enabled and packet has no traceId', () => {

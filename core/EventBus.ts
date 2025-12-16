@@ -43,18 +43,11 @@ class CognitiveBus {
           if (isFeatureEnabled('USE_TRACE_HANDLER_SCOPE') && nextPacket.traceId) {
             pushTraceId(nextPacket.traceId);
             try {
-              const result = (handler as any)(nextPacket);
-              if (result && typeof result.finally === 'function') {
-                result.finally(() => popTraceId(nextPacket.traceId!));
-                return;
-              }
-
+              handler(nextPacket);
+            } finally {
               popTraceId(nextPacket.traceId);
-              return;
-            } catch (err) {
-              popTraceId(nextPacket.traceId);
-              throw err;
             }
+            return;
           }
 
           handler(nextPacket);
@@ -87,18 +80,11 @@ class CognitiveBus {
         if (isFeatureEnabled('USE_TRACE_HANDLER_SCOPE') && nextPacket.traceId) {
           pushTraceId(nextPacket.traceId);
           try {
-            const result = (handler as any)(nextPacket);
-            if (result && typeof result.finally === 'function') {
-              result.finally(() => popTraceId(nextPacket.traceId!));
-              return;
-            }
-
+            handler(nextPacket);
+          } finally {
             popTraceId(nextPacket.traceId);
-            return;
-          } catch (err) {
-            popTraceId(nextPacket.traceId);
-            throw err;
           }
+          return;
         }
 
         handler(nextPacket);

@@ -11,14 +11,17 @@ import {
   getAllFeatureFlags,
   setFeatureFlagForTesting
 } from '../../core/config/featureFlags';
+import { SYSTEM_CONFIG } from '../../core/config/systemConfig';
 
 describe('FeatureFlags', () => {
   // Store original values
-  const originalFlags = { ...FEATURE_FLAGS };
+  const originalFlags = { ...SYSTEM_CONFIG.features };
 
   afterEach(() => {
     // Restore original values
-    Object.assign(FEATURE_FLAGS, originalFlags);
+    for (const [key, value] of Object.entries(originalFlags)) {
+      setFeatureFlagForTesting(key as any, value as boolean);
+    }
   });
 
   describe('FEATURE_FLAGS', () => {
@@ -54,13 +57,14 @@ describe('FeatureFlags', () => {
       expect('USE_META_STATE_HOMEOSTASIS' in FEATURE_FLAGS).toBe(true);
     });
 
-    it('should have MVP flag enabled, others disabled', () => {
-      expect(FEATURE_FLAGS.USE_MINIMAL_CORTEX_PROMPT).toBe(true); // MVP enabled
-      expect(FEATURE_FLAGS.USE_ONE_MIND_PIPELINE).toBe(false);
-      expect(FEATURE_FLAGS.USE_TRACE_AUTO_INJECT).toBe(false);
-      expect(FEATURE_FLAGS.USE_TRACE_HANDLER_SCOPE).toBe(false);
-      expect(FEATURE_FLAGS.USE_TRACE_EXTERNAL_IDS).toBe(false);
-      expect(FEATURE_FLAGS.USE_CONV_SUPABASE_FALLBACK).toBe(false);
+    it('should have ONE MIND package enabled by default', () => {
+      expect(FEATURE_FLAGS.USE_MINIMAL_CORTEX_PROMPT).toBe(true);
+      expect(FEATURE_FLAGS.USE_ONE_MIND_PIPELINE).toBe(true);
+      expect(FEATURE_FLAGS.USE_TRACE_AUTO_INJECT).toBe(true);
+      expect(FEATURE_FLAGS.USE_TRACE_HANDLER_SCOPE).toBe(true);
+      expect(FEATURE_FLAGS.USE_TRACE_EXTERNAL_IDS).toBe(true);
+      expect(FEATURE_FLAGS.USE_CONV_SUPABASE_FALLBACK).toBe(true);
+
       expect(FEATURE_FLAGS.USE_CORTEX_STATE_BUILDER).toBe(false);
     });
   });

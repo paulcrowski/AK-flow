@@ -44,6 +44,21 @@ export const SYSTEM_CONFIG = {
   features: {
     /** Persona-Less Cortex - stateless LLM architecture */
     USE_MINIMAL_CORTEX_PROMPT: true,
+
+    /** P0 (13/10): ONE MIND – THREE PHASES pipeline (trace+gate+memory+contract) */
+    USE_ONE_MIND_PIPELINE: true,
+
+    /** Auto-inject current traceId into EventBus packets when missing */
+    USE_TRACE_AUTO_INJECT: true,
+
+    /** Propagate packet.traceId into TraceContext while executing EventBus handlers (async/UI/background) */
+    USE_TRACE_HANDLER_SCOPE: true,
+
+    /** Generate external traceId for packets emitted outside any active tick scope (UI/async/background) */
+    USE_TRACE_EXTERNAL_IDS: true,
+
+    /** Fallback: hydrate conversation from Supabase archive when localStorage snapshot is empty */
+    USE_CONV_SUPABASE_FALLBACK: true,
     
     /** Build CortexState from database (future) */
     USE_CORTEX_STATE_BUILDER: false,
