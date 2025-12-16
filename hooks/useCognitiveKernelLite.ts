@@ -28,6 +28,11 @@ import { MemoryService } from '../services/supabase';
 import { createProcessOutputForTools } from '../utils/toolParser';
 import { createRng } from '../core/utils/rng';
 import { SYSTEM_CONFIG } from '../core/config/systemConfig';
+import {
+  loadConversationSnapshot,
+  saveConversationSnapshot,
+  serializeConversationSnapshot
+} from '../core/utils/conversationSnapshot';
 
 // Deterministic RNG for reproducible behavior
 const rng = createRng(SYSTEM_CONFIG.rng.seed);
@@ -163,6 +168,16 @@ export const useCognitiveKernelLite = (loadedIdentity?: AgentIdentity | null) =>
   useEffect(() => {
     conversationRef.current = conversation;
   }, [conversation]);
+
+  useEffect(() => {
+    const agentId = loadedIdentityRef.current?.id;
+    if (!agentId) return;
+
+    saveConversationSnapshot(
+      agentId,
+      conversation.map((c) => ({ role: c.role, text: c.text, type: c.type }))
+    );
+  }, [conversation]);
   
   useEffect(() => {
     isProcessingRef.current = isProcessing;
@@ -211,6 +226,17 @@ export const useCognitiveKernelLite = (loadedIdentity?: AgentIdentity | null) =>
     if (loadedIdentity) {
       setAgentName(loadedIdentity.name);
       setAgentPersona(loadedIdentity.persona || agentPersona);
+
+      // Hydrate conversation snapshot per-agent (UI memory)
+      const snap = loadConversationSnapshot(loadedIdentity.id);
+      if (snap.length > 0) {
+        setConversation(
+          snap.map((t) => ({ role: t.role, text: t.text, type: t.type }))
+        );
+      } else {
+        setConversation([]);
+      }
+
       // Hydrate kernel with identity traits
       actions.hydrate({
         traitVector: loadedIdentity.trait_vector,
@@ -564,6 +590,14 @@ export const useCognitiveKernelLite = (loadedIdentity?: AgentIdentity | null) =>
     eventBus.clear();
     actions.reset();
     setConversation([]);
+    try {
+      const agentId = loadedIdentityRef.current?.id;
+      if (agentId && typeof localStorage !== 'undefined') {
+        localStorage.setItem(`ak-flow:conversation:${agentId}`, serializeConversationSnapshot([]));
+      }
+    } catch {
+      // ignore
+    }
     setIsProcessing(false);
     setCurrentThought("Initializing Synapses...");
     setSystemError(null);
