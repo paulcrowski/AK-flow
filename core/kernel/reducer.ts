@@ -589,7 +589,7 @@ function handleHydrate(state: KernelState, event: KernelEvent, outputs: KernelOu
   
   outputs.push({
     type: 'LOG',
-    payload: { message: 'STATE HYDRATED from storage' }
+    payload: { message: 'STATE HYDRATED' }
   });
   
   return { nextState, outputs };

@@ -78,8 +78,12 @@ export async function formGoal(ctx: GoalContext, goalState: GoalState): Promise<
     // = user milczy od tamtej pory = nie twórz kolejnego
     const lastCuriosity = recentCuriosity[0];
     if (lastCuriosity && lastCuriosity.timestamp >= ctx.lastUserInteractionAt) {
-        console.log('[GoalSystem] REFRACTORY: User silent since last curiosity goal. Blocking new goal.');
-        return null;
+        const refractoryMs = SYSTEM_CONFIG.goals.refractorySilenceMs ?? 2 * 60 * 1000;
+        const sinceGoalMs = ctx.now - lastCuriosity.timestamp;
+        if (sinceGoalMs < refractoryMs) {
+            console.log('[GoalSystem] REFRACTORY: User silent since last curiosity goal. Blocking new goal.');
+            return null;
+        }
     }
 
     // WARUNEK 2: Sprawdź podobieństwo do ostatnich 2-3 celów

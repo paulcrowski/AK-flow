@@ -149,6 +149,9 @@ export const SYSTEM_CONFIG = {
     
     /** Minimum silence before considering goal (ms) */
     minSilenceMs: 60_000,
+
+    /** Cooldown after a curiosity goal when the user stayed silent (ms) */
+    refractorySilenceMs: 2 * 60_000,
     
     /** Max goals per hour */
     maxPerHour: 5,

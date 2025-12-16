@@ -606,6 +606,7 @@ export const useCognitiveKernelLite = (loadedIdentity?: AgentIdentity | null) =>
     
     eventBus.publish({
       id: generateUUID(),
+      traceId: getStartupTraceId(),
       timestamp: Date.now(),
       source: AgentType.CORTEX_FLOW,
       type: PacketType.SYSTEM_ALERT,
