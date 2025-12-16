@@ -193,7 +193,30 @@ export namespace EventLoop {
             if (result.internalThought) {
                 callbacks.onMessage('assistant', result.internalThought, 'thought');
             }
-            callbacks.onMessage('assistant', result.responseText, 'speech');
+
+            if (isFeatureEnabled('USE_ONE_MIND_PIPELINE') && trace.agentId) {
+                try {
+                    const commit = TickCommitter.commitSpeech({
+                        agentId: trace.agentId,
+                        traceId: trace.traceId,
+                        tickNumber: trace.tickNumber,
+                        origin: 'reactive',
+                        speechText: result.responseText
+                    });
+
+                    if (commit.committed) {
+                        callbacks.onMessage('assistant', result.responseText, 'speech');
+                    } else {
+                        callbacks.onThought(`[REACTIVE_SUPPRESSED] ${commit.blockReason || 'UNKNOWN'}`);
+                    }
+                } catch (e) {
+                    // FAIL-OPEN: reactive user response should never be silenced due to committer errors
+                    callbacks.onThought(`[REACTIVE_COMMIT_ERROR] ${(e as Error)?.message || 'unknown'}`);
+                    callbacks.onMessage('assistant', result.responseText, 'speech');
+                }
+            } else {
+                callbacks.onMessage('assistant', result.responseText, 'speech');
+            }
 
             // Reset silence & mark user interaction for GoalSystem
             ctx.silenceStart = Date.now();

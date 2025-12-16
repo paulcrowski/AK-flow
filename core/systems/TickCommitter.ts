@@ -11,7 +11,7 @@ export interface TickCommitInput {
     agentId: string;
     traceId?: string;
     tickNumber?: number;
-    origin: 'autonomous' | 'goal_driven';
+    origin: 'autonomous' | 'goal_driven' | 'reactive';
     speechText: string;
     blockReason?: string;
 }

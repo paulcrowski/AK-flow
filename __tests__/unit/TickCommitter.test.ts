@@ -91,4 +91,17 @@ describe('TickCommitter', () => {
         expect(r.blocked).toBe(true);
         expect(r.blockReason).toBe('FILTERED_TOO_SHORT');
     });
+
+    it('should support reactive origin', () => {
+        const r = TickCommitter.commitSpeech({
+            agentId: 'a1',
+            traceId: 't1',
+            tickNumber: 1,
+            origin: 'reactive',
+            speechText: 'Hello user'
+        });
+
+        expect(r.committed).toBe(true);
+        expect(r.blocked).toBe(false);
+    });
 });
