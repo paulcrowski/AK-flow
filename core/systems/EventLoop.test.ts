@@ -104,6 +104,35 @@ describe('EventLoop', () => {
         expect(result.silenceStart).toBeGreaterThan(0);
     });
 
+    it('selectThinkMode should return reactive when input is present', () => {
+        expect(EventLoop.selectThinkMode(mockCtx, 'Hello')).toBe('reactive');
+    });
+
+    it('selectThinkMode should return idle when no input and autonomousMode is off', () => {
+        const ctx = { ...mockCtx, autonomousMode: false };
+        expect(EventLoop.selectThinkMode(ctx, null)).toBe('idle');
+    });
+
+    it('selectThinkMode should return goal_driven when activeGoal exists', () => {
+        const ctx = {
+            ...mockCtx,
+            goalState: {
+                ...mockCtx.goalState,
+                activeGoal: { id: 'g1', source: 'curiosity', description: 'x', priority: 0.7 } as any
+            }
+        };
+        expect(EventLoop.selectThinkMode(ctx, null)).toBe('goal_driven');
+    });
+
+    it('selectThinkMode should return autonomous when no input, autonomousMode on, and no activeGoal', () => {
+        const ctx = {
+            ...mockCtx,
+            autonomousMode: true,
+            goalState: { ...mockCtx.goalState, activeGoal: null }
+        };
+        expect(EventLoop.selectThinkMode(ctx, null)).toBe('autonomous');
+    });
+
     it('should skip tick when no agentId is selected', async () => {
         vi.mocked(getCurrentAgentId).mockReturnValue(null);
 

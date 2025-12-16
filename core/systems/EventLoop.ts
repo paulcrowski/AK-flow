@@ -33,6 +33,15 @@ let lastAutonomyActionSignature: string | null = null;
 let lastAutonomyActionLogAt = 0;
 
 export namespace EventLoop {
+    export type ThinkMode = 'reactive' | 'goal_driven' | 'autonomous' | 'idle';
+
+    export function selectThinkMode(ctx: LoopContext, input: string | null): ThinkMode {
+        if (input) return 'reactive';
+        if (!ctx.autonomousMode) return 'idle';
+        if (ctx.goalState?.activeGoal) return 'goal_driven';
+        return 'autonomous';
+    }
+
     export interface LoopContext {
         soma: SomaState;
         limbic: LimbicState;
@@ -145,6 +154,21 @@ export namespace EventLoop {
             }
 
             const memorySpace = createMemorySpace(trace.agentId);
+
+            const thinkMode = selectThinkMode(ctx, input);
+            eventBus.publish({
+                id: `think-mode-${trace.tickNumber}-${Date.now()}`,
+                traceId: trace.traceId,
+                timestamp: Date.now(),
+                source: AgentType.CORTEX_FLOW,
+                type: PacketType.SYSTEM_ALERT,
+                payload: {
+                    event: 'THINK_MODE_SELECTED',
+                    tickNumber: trace.tickNumber,
+                    mode: thinkMode
+                },
+                priority: 0.6
+            });
 
             // 1. Apply emotional homeostasis
             const cooledLimbic = LimbicSystem.applyHomeostasis(ctx.limbic);
