@@ -1,0 +1,328 @@
+/**
+ * AutonomyRepertoire - Grounded Autonomous Actions
+ * 
+ * ARCHITEKTURA:
+ * Autonomia NIE może robić co chce. Ma ograniczony repertuar akcji,
+ * każda z warunkami wstępnymi. Domyślnie: CONTINUE rozmowę.
+ * 
+ * REPERTUAR:
+ * 1. CONTINUE - kontynuuj aktualny temat (default)
+ * 2. CLARIFY - dopytaj o niejasność w ostatniej wypowiedzi usera
+ * 3. SUMMARIZE - podsumuj rozmowę (gdy długa i chaotyczna)
+ * 4. EXPLORE - zaproponuj nowy temat (TYLKO gdy brak aktywnego tematu)
+ * 
+ * TWARDE VETO:
+ * - EXPLORE zablokowane gdy jest aktywny temat
+ * - EXPLORE wymaga silence > 60s
+ * - Każda akcja musi być GROUNDED w kontekście
+ * 
+ * @module core/systems/AutonomyRepertoire
+ */
+
+import type { UnifiedContext } from '../context';
+
+// ═══════════════════════════════════════════════════════════════════════════
+// TYPES
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Available autonomous actions
+ */
+export type AutonomyAction = 
+  | 'CONTINUE'   // Continue current topic
+  | 'CLARIFY'    // Ask clarifying question
+  | 'SUMMARIZE'  // Summarize conversation
+  | 'EXPLORE'    // Propose new topic (restricted)
+  | 'SILENCE';   // Say nothing (default fallback)
+
+/**
+ * Action decision with reasoning
+ */
+export interface ActionDecision {
+  action: AutonomyAction;
+  allowed: boolean;
+  reason: string;
+  groundingScore: number;  // 0-1, how grounded in context
+  suggestedPrompt?: string;
+}
+
+/**
+ * Grounding analysis result
+ */
+export interface GroundingAnalysis {
+  hasActiveTopic: boolean;
+  topicSummary: string;
+  lastUserIntent?: string;
+  silenceDurationSec: number;
+  conversationDepth: number;  // Number of meaningful exchanges
+  needsClarification: boolean;
+  isConversationStale: boolean;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// CONSTANTS
+// ═══════════════════════════════════════════════════════════════════════════
+
+const CONFIG = {
+  /** Minimum silence (seconds) before EXPLORE is allowed */
+  EXPLORE_MIN_SILENCE_SEC: 60,
+  
+  /** Minimum conversation turns to allow SUMMARIZE */
+  SUMMARIZE_MIN_TURNS: 6,
+  
+  /** Silence threshold for "stale" conversation */
+  STALE_CONVERSATION_SEC: 120,
+  
+  /** Minimum grounding score to allow action */
+  MIN_GROUNDING_SCORE: 0.3,
+  
+  /** Keywords suggesting need for clarification */
+  CLARIFY_TRIGGERS: ['nie rozumiem', 'co masz na myśli', 'jak to', 'dlaczego', 'what do you mean', 'can you explain', 'I don\'t understand']
+} as const;
+
+// ═══════════════════════════════════════════════════════════════════════════
+// GROUNDING ANALYSIS
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Analyze conversation context for grounding
+ */
+export function analyzeGrounding(ctx: UnifiedContext): GroundingAnalysis {
+  const { dialogueAnchor, socialFrame } = ctx;
+  const turns = dialogueAnchor.recentTurns;
+  
+  // Check if there's an active topic
+  const hasActiveTopic = dialogueAnchor.topicSummary !== 'No prior conversation' &&
+                         dialogueAnchor.topicSummary !== 'Ongoing conversation' &&
+                         turns.length > 0;
+  
+  // Count meaningful exchanges (user-assistant pairs)
+  const conversationDepth = Math.floor(turns.filter(t => t.role === 'user').length);
+  
+  // Check if last user message needs clarification
+  const lastUserMsg = dialogueAnchor.lastUserMessage?.toLowerCase() || '';
+  const needsClarification = CONFIG.CLARIFY_TRIGGERS.some(trigger => 
+    lastUserMsg.includes(trigger.toLowerCase())
+  );
+  
+  // Check if conversation is stale
+  const isConversationStale = socialFrame.silenceDurationSec > CONFIG.STALE_CONVERSATION_SEC;
+  
+  return {
+    hasActiveTopic,
+    topicSummary: dialogueAnchor.topicSummary || 'No topic',
+    lastUserIntent: dialogueAnchor.currentIntent,
+    silenceDurationSec: socialFrame.silenceDurationSec,
+    conversationDepth,
+    needsClarification,
+    isConversationStale
+  };
+}
+
+/**
+ * Calculate grounding score for proposed speech
+ */
+export function calculateGroundingScore(
+  proposedSpeech: string,
+  ctx: UnifiedContext
+): number {
+  if (!proposedSpeech || proposedSpeech.trim().length === 0) {
+    return 0;
+  }
+  
+  const { dialogueAnchor } = ctx;
+  const recentText = dialogueAnchor.recentTurns.map(t => t.text.toLowerCase()).join(' ');
+  const proposedLower = proposedSpeech.toLowerCase();
+  
+  // Extract keywords from recent conversation
+  const recentWords = new Set(
+    recentText.split(/\s+/).filter(w => w.length > 3)
+  );
+  
+  // Count how many keywords from recent conversation appear in proposed speech
+  const proposedWords = proposedLower.split(/\s+/).filter(w => w.length > 3);
+  const matchingWords = proposedWords.filter(w => recentWords.has(w));
+  
+  if (proposedWords.length === 0) return 0.5; // Neutral for very short
+  
+  const overlapRatio = matchingWords.length / proposedWords.length;
+  
+  // Bonus for referencing user's last message
+  const lastUserMsg = dialogueAnchor.lastUserMessage?.toLowerCase() || '';
+  const referencesUser = lastUserMsg.split(/\s+/)
+    .filter(w => w.length > 3)
+    .some(w => proposedLower.includes(w));
+  
+  const baseScore = Math.min(1, overlapRatio * 2); // Scale up overlap
+  const userBonus = referencesUser ? 0.2 : 0;
+  
+  return Math.min(1, baseScore + userBonus);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ACTION SELECTION
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Select appropriate autonomous action based on context
+ */
+export function selectAction(ctx: UnifiedContext): ActionDecision {
+  const grounding = analyzeGrounding(ctx);
+  
+  // Priority 1: If user needs clarification, CLARIFY
+  if (grounding.needsClarification && grounding.hasActiveTopic) {
+    return {
+      action: 'CLARIFY',
+      allowed: true,
+      reason: 'User message suggests need for clarification',
+      groundingScore: 0.9,
+      suggestedPrompt: buildActionPrompt('CLARIFY', ctx, grounding)
+    };
+  }
+  
+  // Priority 2: If conversation is long and complex, offer SUMMARIZE
+  if (grounding.conversationDepth >= CONFIG.SUMMARIZE_MIN_TURNS && !grounding.isConversationStale) {
+    return {
+      action: 'SUMMARIZE',
+      allowed: true,
+      reason: `Conversation has ${grounding.conversationDepth} exchanges, may benefit from summary`,
+      groundingScore: 0.7,
+      suggestedPrompt: buildActionPrompt('SUMMARIZE', ctx, grounding)
+    };
+  }
+  
+  // Priority 3: If there's an active topic, CONTINUE
+  if (grounding.hasActiveTopic && !grounding.isConversationStale) {
+    return {
+      action: 'CONTINUE',
+      allowed: true,
+      reason: `Active topic: "${grounding.topicSummary}"`,
+      groundingScore: 0.8,
+      suggestedPrompt: buildActionPrompt('CONTINUE', ctx, grounding)
+    };
+  }
+  
+  // Priority 4: EXPLORE only if no active topic AND sufficient silence
+  if (!grounding.hasActiveTopic || grounding.isConversationStale) {
+    if (grounding.silenceDurationSec >= CONFIG.EXPLORE_MIN_SILENCE_SEC) {
+      return {
+        action: 'EXPLORE',
+        allowed: true,
+        reason: `No active topic, silence ${grounding.silenceDurationSec.toFixed(0)}s >= ${CONFIG.EXPLORE_MIN_SILENCE_SEC}s`,
+        groundingScore: 0.4, // Lower grounding for exploration
+        suggestedPrompt: buildActionPrompt('EXPLORE', ctx, grounding)
+      };
+    } else {
+      // EXPLORE blocked - not enough silence
+      return {
+        action: 'SILENCE',
+        allowed: true,
+        reason: `EXPLORE blocked: silence ${grounding.silenceDurationSec.toFixed(0)}s < ${CONFIG.EXPLORE_MIN_SILENCE_SEC}s required`,
+        groundingScore: 0
+      };
+    }
+  }
+  
+  // Default: SILENCE
+  return {
+    action: 'SILENCE',
+    allowed: true,
+    reason: 'No appropriate action available',
+    groundingScore: 0
+  };
+}
+
+/**
+ * Validate proposed speech against selected action
+ */
+export function validateSpeech(
+  proposedSpeech: string,
+  action: AutonomyAction,
+  ctx: UnifiedContext
+): { valid: boolean; reason: string; groundingScore: number } {
+  // Empty speech is always invalid (except for SILENCE)
+  if (!proposedSpeech || proposedSpeech.trim().length === 0) {
+    return action === 'SILENCE' 
+      ? { valid: true, reason: 'SILENCE action', groundingScore: 0 }
+      : { valid: false, reason: 'Empty speech for non-SILENCE action', groundingScore: 0 };
+  }
+  
+  const groundingScore = calculateGroundingScore(proposedSpeech, ctx);
+  
+  // EXPLORE has lower grounding requirement but still needs some
+  const minScore = action === 'EXPLORE' ? 0.1 : CONFIG.MIN_GROUNDING_SCORE;
+  
+  if (groundingScore < minScore) {
+    return {
+      valid: false,
+      reason: `Grounding score ${groundingScore.toFixed(2)} < ${minScore} required for ${action}`,
+      groundingScore
+    };
+  }
+  
+  return {
+    valid: true,
+    reason: `Grounded speech for ${action}`,
+    groundingScore
+  };
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// PROMPT BUILDING
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Build action-specific prompt addition
+ */
+function buildActionPrompt(
+  action: AutonomyAction,
+  ctx: UnifiedContext,
+  grounding: GroundingAnalysis
+): string {
+  switch (action) {
+    case 'CONTINUE':
+      return `
+ACTION: CONTINUE the current topic.
+TOPIC: "${grounding.topicSummary}"
+INSTRUCTION: Add something meaningful to this topic. Reference what was discussed.
+DO NOT: Change the subject or introduce unrelated ideas.`;
+
+    case 'CLARIFY':
+      return `
+ACTION: CLARIFY - ask a clarifying question.
+CONTEXT: User's last message may need clarification.
+INSTRUCTION: Ask ONE specific question about what the user meant.
+DO NOT: Answer your own question or change the topic.`;
+
+    case 'SUMMARIZE':
+      return `
+ACTION: SUMMARIZE the conversation so far.
+DEPTH: ${grounding.conversationDepth} exchanges
+INSTRUCTION: Briefly summarize the key points discussed.
+DO NOT: Add new information or opinions.`;
+
+    case 'EXPLORE':
+      return `
+ACTION: EXPLORE - propose a new topic.
+CONTEXT: No active topic, silence for ${grounding.silenceDurationSec.toFixed(0)}s.
+INSTRUCTION: Suggest ONE interesting topic related to your persona or previous conversations.
+DO NOT: Be random. Connect to something meaningful.`;
+
+    default:
+      return '';
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// EXPORTS
+// ═══════════════════════════════════════════════════════════════════════════
+
+export const AutonomyRepertoire = {
+  analyzeGrounding,
+  calculateGroundingScore,
+  selectAction,
+  validateSpeech,
+  CONFIG
+};
+
+export default AutonomyRepertoire;

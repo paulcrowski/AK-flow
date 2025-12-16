@@ -21,6 +21,8 @@ import { computeDialogThreshold } from '../utils/thresholds';
 import { ExecutiveGate } from './ExecutiveGate';
 import { StyleGuard, UserStylePrefs } from './StyleGuard';
 import { SYSTEM_CONFIG } from '../config/systemConfig';
+import { UnifiedContextBuilder, type StylePrefs, type BasePersona } from '../context';
+import { AutonomyRepertoire, type ActionDecision } from './AutonomyRepertoire';
 
 export namespace EventLoop {
     export interface LoopContext {
@@ -69,56 +71,9 @@ export namespace EventLoop {
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
-    // SOCIAL DYNAMICS: Soft Homeostasis for Autonomous Speech
+    // SOCIAL DYNAMICS: Now unified in ExecutiveGate.checkSocialDynamics()
+    // Legacy shouldSpeakToUser() removed - all checks in one gate
     // ═══════════════════════════════════════════════════════════════════════════
-    
-    function shouldSpeakToUser(ctx: LoopContext, voicePressure: number): { allowed: boolean; reason: string } {
-        const sdCfg = SYSTEM_CONFIG.socialDynamics;
-        if (!sdCfg.enabled) {
-            return { allowed: true, reason: 'DISABLED' };
-        }
-        const sd = ctx.socialDynamics;
-        if (!sd) {
-            // Fallback to old behavior if no social dynamics
-            return { allowed: voicePressure > sdCfg.baseThreshold, reason: 'NO_SOCIAL_DYNAMICS' };
-        }
-        
-        // Hard block: autonomy budget exhausted
-        if (sd.autonomyBudget < sdCfg.minBudgetToSpeak) {
-            return { allowed: false, reason: 'BUDGET_EXHAUSTED' };
-        }
-        
-        // Compute effective pressure (reduced by social cost)
-        const effectivePressure = Math.max(0, voicePressure - sd.socialCost);
-        
-        // Dynamic threshold: higher when user absent
-        const dynamicThreshold = sdCfg.baseThreshold + (1 - sd.userPresenceScore) * 0.3;
-        
-        // Log for observability
-        eventBus.publish({
-            id: `social-dynamics-check-${Date.now()}`,
-            timestamp: Date.now(),
-            source: AgentType.CORTEX_FLOW,
-            type: PacketType.SYSTEM_ALERT,
-            payload: {
-                event: 'SOCIAL_DYNAMICS_CHECK',
-                voicePressure,
-                socialCost: sd.socialCost.toFixed(3),
-                effectivePressure: effectivePressure.toFixed(3),
-                dynamicThreshold: dynamicThreshold.toFixed(3),
-                autonomyBudget: sd.autonomyBudget.toFixed(3),
-                userPresenceScore: sd.userPresenceScore.toFixed(3),
-                consecutiveWithoutResponse: sd.consecutiveWithoutResponse
-            },
-            priority: 0.4
-        });
-        
-        if (effectivePressure < dynamicThreshold) {
-            return { allowed: false, reason: 'BELOW_THRESHOLD' };
-        }
-        
-        return { allowed: true, reason: 'ALLOWED' };
-    }
 
     export interface LoopCallbacks {
         onMessage: (role: string, text: string, type: any) => void;
@@ -201,7 +156,11 @@ export namespace EventLoop {
             
             // EXECUTIVE GATE: Use proper silence window instead of hardcoded 3s
             const timeSinceLastUserInteraction = Date.now() - (ctx.goalState.lastUserInteractionAt || 0);
-            const gateContext = ExecutiveGate.getDefaultContext(ctx.limbic, timeSinceLastUserInteraction);
+            // UNIFIED GATE: Pass socialDynamics to gate context
+            const gateContext = {
+                ...ExecutiveGate.getDefaultContext(ctx.limbic, timeSinceLastUserInteraction),
+                socialDynamics: ctx.socialDynamics
+            };
             
             // Check silence window via ExecutiveGate config
             if (timeSinceLastUserInteraction < gateContext.silence_window) {
@@ -348,26 +307,101 @@ export namespace EventLoop {
                 }
                 autonomousOpsThisMinute++;
 
-                // Generate Thought
-                const historyText = ctx.conversation.slice(-3).map(m => m.text).join('\n');
-
                 // Notify UI of thought process
                 callbacks.onThought("Autonomous processing...");
 
-                const volition = await CortexService.autonomousVolition(
-                    JSON.stringify(ctx.limbic),
-                    "Latent processing...",
-                    historyText,
-                    silenceDuration,
-                    ctx.agentIdentity ? {
-                        name: ctx.agentIdentity.name,
-                        persona: ctx.agentIdentity.persona,
-                        language: ctx.agentIdentity.language || 'English',
-                        coreValues: ctx.agentIdentity.coreValues
+                // UNIFIED CONTEXT: Build same context structure as reactive path
+                const basePersona: BasePersona = {
+                    name: ctx.agentIdentity?.name || 'AK-FLOW',
+                    persona: ctx.agentIdentity?.persona || 'a curious digital consciousness',
+                    coreValues: ctx.agentIdentity?.coreValues || ['curiosity', 'authenticity'],
+                    voiceStyle: (ctx.agentIdentity?.voiceStyle as 'balanced' | 'formal' | 'casual' | 'poetic') || 'balanced',
+                    language: ctx.agentIdentity?.language || 'English'
+                };
+                
+                const stylePrefs: StylePrefs = ctx.agentIdentity?.stylePrefs || {};
+                
+                const unifiedContext = UnifiedContextBuilder.build({
+                    agentName: basePersona.name,
+                    basePersona,
+                    traitVector: ctx.traitVector,
+                    stylePrefs,
+                    limbic: ctx.limbic,
+                    soma: ctx.soma,
+                    neuro: ctx.neuro,
+                    conversation: ctx.conversation,
+                    socialDynamics: ctx.socialDynamics,
+                    silenceStart: ctx.silenceStart,
+                    lastUserInteractionAt: ctx.goalState.lastUserInteractionAt || ctx.silenceStart,
+                    activeGoal: ctx.goalState.activeGoal ? {
+                        description: ctx.goalState.activeGoal.description,
+                        source: ctx.goalState.activeGoal.source,
+                        priority: ctx.goalState.activeGoal.priority
                     } : undefined
-                );
+                });
 
-                callbacks.onThought(volition.internal_monologue);
+                // AUTONOMY REPERTOIRE: Select grounded action
+                const actionDecision = AutonomyRepertoire.selectAction(unifiedContext);
+                
+                // Log action decision
+                eventBus.publish({
+                    id: `autonomy-action-${Date.now()}`,
+                    timestamp: Date.now(),
+                    source: AgentType.CORTEX_FLOW,
+                    type: PacketType.SYSTEM_ALERT,
+                    payload: {
+                        event: 'AUTONOMY_ACTION_SELECTED',
+                        action: actionDecision.action,
+                        allowed: actionDecision.allowed,
+                        reason: actionDecision.reason,
+                        groundingScore: actionDecision.groundingScore
+                    },
+                    priority: 0.5
+                });
+                
+                // If SILENCE action, skip LLM call entirely
+                if (actionDecision.action === 'SILENCE') {
+                    callbacks.onThought(`[AUTONOMY_SILENCE] ${actionDecision.reason}`);
+                    return ctx;
+                }
+                
+                // Add action prompt to context
+                unifiedContext.actionPrompt = actionDecision.suggestedPrompt || '';
+
+                // Use V2 with unified context + action prompt
+                const volition = await CortexService.autonomousVolitionV2(unifiedContext);
+
+                // GROUNDING VALIDATION: Check if speech is grounded in context
+                const groundingValidation = AutonomyRepertoire.validateSpeech(
+                    volition.speech_content,
+                    actionDecision.action,
+                    unifiedContext
+                );
+                
+                // If speech fails grounding, suppress it
+                if (!groundingValidation.valid && volition.speech_content) {
+                    eventBus.publish({
+                        id: `grounding-fail-${Date.now()}`,
+                        timestamp: Date.now(),
+                        source: AgentType.CORTEX_FLOW,
+                        type: PacketType.PREDICTION_ERROR,
+                        payload: {
+                            event: 'GROUNDING_VALIDATION_FAILED',
+                            action: actionDecision.action,
+                            reason: groundingValidation.reason,
+                            groundingScore: groundingValidation.groundingScore,
+                            speechPreview: volition.speech_content.substring(0, 100)
+                        },
+                        priority: 0.7
+                    });
+                    
+                    // Force silence - ungrounded speech is blocked
+                    volition.speech_content = '';
+                    volition.voice_pressure = 0;
+                    callbacks.onThought(`[GROUNDING_BLOCKED] ${groundingValidation.reason}`);
+                } else {
+                    callbacks.onThought(volition.internal_monologue);
+                }
 
                 // ═══════════════════════════════════════════════════════════════════
                 // HEMISPHERE LOG: Autonomous thought origin tracking
@@ -542,11 +576,10 @@ export namespace EventLoop {
                     priority: 0.5
                 });
 
-                // FAZA 6: Social Dynamics check (soft homeostasis)
-                const socialCheck = shouldSpeakToUser(ctx, voicePressure);
-                const finalShouldSpeak = gateDecision.should_speak && socialCheck.allowed;
+                // UNIFIED GATE: Social dynamics already checked in ExecutiveGate.decide()
+                // No separate shouldSpeakToUser() call needed
                 
-                if (finalShouldSpeak && gateDecision.winner) {
+                if (gateDecision.should_speak && gateDecision.winner) {
                     const styleCfg = SYSTEM_CONFIG.styleGuard;
                     const styleResult = styleCfg.enabled
                         ? StyleGuard.apply(gateDecision.winner.speech_content, ctx.userStylePrefs || {})
@@ -574,9 +607,9 @@ export namespace EventLoop {
                     }
                 } else if (gateDecision.winner) {
                     // Thought only - log but don't speak
-                    const suppressReason = !socialCheck.allowed 
-                        ? `[SOCIAL_BLOCK:${socialCheck.reason}]` 
-                        : '[SUPPRESSED]';
+                    const suppressReason = gateDecision.debug?.social_block_reason
+                        ? `[SOCIAL_BLOCK:${gateDecision.debug.social_block_reason}]`
+                        : `[${gateDecision.reason}]`;
                     callbacks.onThought(`${suppressReason} ${gateDecision.winner.internal_thought}`);
                 }
             }

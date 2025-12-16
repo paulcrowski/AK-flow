@@ -24,6 +24,7 @@
  */
 
 import type { LimbicState } from '../../types';
+import type { SocialDynamics } from '../kernel/types';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // TYPES
@@ -90,6 +91,7 @@ export interface GateDecision {
     autonomous_count: number;
     voice_pressure: number;
     silence_window_ok: boolean;
+    social_block_reason?: string;
   };
 }
 
@@ -99,7 +101,9 @@ export type GateReason =
   | 'VOICE_PRESSURE_LOW'      // Autonomiczna przegrała z voice_pressure
   | 'SILENCE_WINDOW_VIOLATED' // Za wcześnie po user input
   | 'NO_CANDIDATES'           // Brak kandydatów
-  | 'EMPTY_SPEECH';           // Kandydat ma pusty speech
+  | 'EMPTY_SPEECH'            // Kandydat ma pusty speech
+  | 'SOCIAL_BUDGET_EXHAUSTED' // Autonomy budget wyczerpany
+  | 'SOCIAL_COST_TOO_HIGH';   // Effective pressure below dynamic threshold
 
 /**
  * Kontekst dla bramki
@@ -116,7 +120,22 @@ export interface GateContext {
   
   /** Próg voice_pressure dla autonomicznych */
   voice_pressure_threshold: number;
+  
+  /** Social dynamics state (optional, for unified gate) */
+  socialDynamics?: SocialDynamics;
 }
+
+/**
+ * Social dynamics config (unified with gate)
+ */
+const SOCIAL_CONFIG = {
+  /** Minimum budget to allow speech */
+  MIN_BUDGET_TO_SPEAK: 0.1,
+  /** Base threshold for voice pressure */
+  BASE_THRESHOLD: 0.6,
+  /** Max penalty from user absence */
+  ABSENCE_PENALTY: 0.3
+} as const;
 
 // ═══════════════════════════════════════════════════════════════════════════
 // CONFIGURATION
@@ -261,6 +280,20 @@ export const ExecutiveGate = {
       };
     }
     
+    // ═══════════════════════════════════════════════════════════════════════
+    // RULE 5: Social Dynamics (unified - no separate check needed)
+    // ═══════════════════════════════════════════════════════════════════════
+    const socialResult = this.checkSocialDynamics(context, voicePressure);
+    if (!socialResult.allowed) {
+      return {
+        should_speak: false,
+        winner: winner,
+        reason: socialResult.reason as GateReason,
+        losers,
+        debug: { ...debug, social_block_reason: socialResult.reason }
+      };
+    }
+    
     // Zwycięzca przeszedł wszystkie bramki
     return {
       should_speak: true,
@@ -269,6 +302,40 @@ export const ExecutiveGate = {
       losers,
       debug
     };
+  },
+  
+  /**
+   * Check social dynamics constraints.
+   * UNIFIED: Called as part of gate decision, not separately.
+   */
+  checkSocialDynamics(
+    context: GateContext,
+    voicePressure: number
+  ): { allowed: boolean; reason: string } {
+    const sd = context.socialDynamics;
+    
+    // No social dynamics = allow (backwards compatibility)
+    if (!sd) {
+      return { allowed: true, reason: 'NO_SOCIAL_DYNAMICS' };
+    }
+    
+    // Hard block: autonomy budget exhausted
+    if (sd.autonomyBudget < SOCIAL_CONFIG.MIN_BUDGET_TO_SPEAK) {
+      return { allowed: false, reason: 'SOCIAL_BUDGET_EXHAUSTED' };
+    }
+    
+    // Compute effective pressure (reduced by social cost)
+    const effectivePressure = Math.max(0, voicePressure - sd.socialCost);
+    
+    // Dynamic threshold: higher when user absent
+    const dynamicThreshold = SOCIAL_CONFIG.BASE_THRESHOLD + 
+      (1 - sd.userPresenceScore) * SOCIAL_CONFIG.ABSENCE_PENALTY;
+    
+    if (effectivePressure < dynamicThreshold) {
+      return { allowed: false, reason: 'SOCIAL_COST_TOO_HIGH' };
+    }
+    
+    return { allowed: true, reason: 'SOCIAL_ALLOWED' };
   },
   
   /**

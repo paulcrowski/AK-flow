@@ -8,6 +8,7 @@ import { buildMinimalCortexState } from "../core/builders";
 import { generateFromCortexState } from "../core/inference";
 import { guardLegacyResponse, isPrismEnabled } from "../core/systems/PrismPipeline";
 import { guardLegacyWithFactEcho, isFactEchoPipelineEnabled } from "../core/systems/FactEchoPipeline";
+import { UnifiedContextBuilder, type UnifiedContext, type ContextBuilderInput } from "../core/context";
 
 // 1. Safe Environment Access & Initialization (Vite)
 const apiKey = import.meta.env.VITE_GEMINI_API_KEY as string | undefined;
@@ -21,13 +22,71 @@ if (!apiKey) {
 const ai = new GoogleGenAI({ apiKey });
 
 // 2. Robust JSON Parsing Helper
-// 2. Robust JSON Parsing Helper
 // Generic Type Guard
 function isValidResponse<T>(data: any, validator?: (data: any) => boolean): data is T {
     if (!data || typeof data !== 'object') return false;
     if (validator) return validator(data);
     return true; // Default: just checks if it's an object
 }
+
+/**
+ * Parse result with explicit success/failure signal.
+ * FAIL-CLOSED: caller decides what to do on failure, not silent default.
+ */
+export interface JSONParseResult<T> {
+    success: boolean;
+    data: T | null;
+    error?: string;
+    rawText?: string;
+}
+
+/**
+ * Parse JSON with explicit success/failure.
+ * Returns {success: false} instead of silent default.
+ */
+const parseJSONStrict = <T>(text: string | undefined, validator?: (data: any) => boolean): JSONParseResult<T> => {
+    if (!text) {
+        return { success: false, data: null, error: 'EMPTY_RESPONSE' };
+    }
+    
+    try {
+        let parsed: any;
+        
+        // Pre-clean: Remove common LLM prefixes
+        let cleaned = text.replace(/^[\s\S]*?(?=\{)/m, '').trim();
+        if (!cleaned.startsWith('{')) {
+            cleaned = text;
+        }
+        
+        // Strategy 1: Direct parse
+        try {
+            parsed = JSON.parse(cleaned);
+        } catch {
+            // Strategy 2: Extract JSON block
+            const match = text.match(/\{[\s\S]*\}/);
+            if (match) {
+                parsed = JSON.parse(match[0]);
+            } else {
+                // Strategy 3: Aggressive cleanup
+                const clean = text.replace(/```json\n?/g, '').replace(/```/g, '').trim();
+                parsed = JSON.parse(clean);
+            }
+        }
+        
+        if (isValidResponse<T>(parsed, validator)) {
+            return { success: true, data: parsed };
+        } else {
+            return { success: false, data: null, error: 'VALIDATION_FAILED', rawText: text.substring(0, 200) };
+        }
+    } catch (e) {
+        return { 
+            success: false, 
+            data: null, 
+            error: (e as Error).message, 
+            rawText: text.substring(0, 200) 
+        };
+    }
+};
 
 const cleanJSON = <T>(text: string | undefined, defaultVal: T, validator?: (data: any) => boolean): T => {
     if (!text) return defaultVal;
@@ -544,24 +603,120 @@ OUTPUT FORMAT:
             // DEBUG: Raw Logging
             console.log("AV RAW:", response.text);
 
-            const result = cleanJSON(response.text, safeDefault);
+            // FAIL-CLOSED: Use strict parsing - if fail, autonomy stays silent
+            const parseResult = parseJSONStrict<{
+                internal_monologue: string;
+                voice_pressure: number;
+                speech_content?: string;
+                research_topic?: string;
+            }>(response.text);
+            
+            if (!parseResult.success || !parseResult.data) {
+                // FAIL-CLOSED: Log failure and return silent response
+                console.warn("[AV] JSON parse failed, autonomy silenced:", parseResult.error);
+                eventBus.publish({
+                    id: generateUUID(),
+                    timestamp: Date.now(),
+                    source: AgentType.CORTEX_FLOW,
+                    type: PacketType.PREDICTION_ERROR,
+                    payload: {
+                        metric: "AV_JSON_PARSE_FAILURE",
+                        error: parseResult.error,
+                        rawText: parseResult.rawText || response.text?.substring(0, 200),
+                        action: "SILENCED"
+                    },
+                    priority: 0.8
+                });
+                return {
+                    internal_monologue: `[PARSE_FAIL] ${parseResult.error}`,
+                    voice_pressure: 0,  // CRITICAL: Zero pressure = no speech
+                    speech_content: "" // CRITICAL: Empty = ExecutiveGate blocks
+                };
+            }
+            
+            const result = parseResult.data;
             console.log("AV PARSED:", result);
 
-            // Fallback for empty thoughts to ensure logging
-            if (!result.internal_monologue || result.internal_monologue === "Idling...") {
-                if (response.text && response.text.length > 10) {
-                    // If we have text but failed to parse/extract monologue, use a snippet
-                    result.internal_monologue = "THINKING_NO_OUTPUT (Raw: " + response.text.substring(0, 50) + "...)";
-                } else {
-                    result.internal_monologue = "THINKING_NO_OUTPUT";
-                }
-            }
-
             return {
-                internal_monologue: result.internal_monologue || safeDefault.internal_monologue,
-                voice_pressure: result.voice_pressure || 0.0,
+                internal_monologue: result.internal_monologue || "Thinking...",
+                voice_pressure: result.voice_pressure ?? 0.0,
                 speech_content: result.speech_content || ""
-                // research_topic: result.research_topic // Removed until interface is updated
+            };
+        }, 1, 3000);
+    },
+
+    /**
+     * Autonomous Volition V2 - Uses UnifiedContextBuilder
+     * 
+     * UNIFIED CONTEXT: Same context structure as reactive path.
+     * GROUNDED: Anchored in dialogue history, not random exploration.
+     */
+    async autonomousVolitionV2(
+        ctx: UnifiedContext
+    ): Promise<{
+        internal_monologue: string;
+        voice_pressure: number;
+        speech_content: string;
+    }> {
+        const prompt = UnifiedContextBuilder.formatAsPrompt(ctx, 'autonomous');
+        
+        return withRetry(async () => {
+            const response = await ai.models.generateContent({
+                model: 'gemini-2.5-flash',
+                contents: prompt,
+                config: {
+                    temperature: 0.7,
+                    maxOutputTokens: 4096,
+                    responseMimeType: 'application/json',
+                    responseSchema: {
+                        type: Type.OBJECT,
+                        properties: {
+                            internal_monologue: { type: Type.STRING },
+                            voice_pressure: { type: Type.NUMBER },
+                            speech_content: { type: Type.STRING }
+                        },
+                        required: ["internal_monologue", "voice_pressure"]
+                    }
+                }
+            });
+            logUsage('autonomousVolitionV2', response);
+            
+            console.log("AV_V2 RAW:", response.text);
+            
+            const parseResult = parseJSONStrict<{
+                internal_monologue: string;
+                voice_pressure: number;
+                speech_content?: string;
+            }>(response.text);
+            
+            if (!parseResult.success || !parseResult.data) {
+                console.warn("[AV_V2] JSON parse failed, autonomy silenced:", parseResult.error);
+                eventBus.publish({
+                    id: generateUUID(),
+                    timestamp: Date.now(),
+                    source: AgentType.CORTEX_FLOW,
+                    type: PacketType.PREDICTION_ERROR,
+                    payload: {
+                        metric: "AV_V2_JSON_PARSE_FAILURE",
+                        error: parseResult.error,
+                        action: "SILENCED"
+                    },
+                    priority: 0.8
+                });
+                return {
+                    internal_monologue: `[PARSE_FAIL] ${parseResult.error}`,
+                    voice_pressure: 0,
+                    speech_content: ""
+                };
+            }
+            
+            const result = parseResult.data;
+            console.log("AV_V2 PARSED:", result);
+            
+            return {
+                internal_monologue: result.internal_monologue || "Thinking...",
+                voice_pressure: result.voice_pressure ?? 0.0,
+                speech_content: result.speech_content || ""
             };
         }, 1, 3000);
     },
