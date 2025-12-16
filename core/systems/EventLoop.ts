@@ -21,6 +21,7 @@ import { computeDialogThreshold } from '../utils/thresholds';
 import { ExecutiveGate } from './ExecutiveGate';
 import { StyleGuard, UserStylePrefs } from './StyleGuard';
 import { SYSTEM_CONFIG } from '../config/systemConfig';
+import { isFeatureEnabled } from '../config';
 import { UnifiedContextBuilder, type StylePrefs, type BasePersona } from '../context';
 import { AutonomyRepertoire, type ActionDecision } from './AutonomyRepertoire';
 import { generateTraceId, type TraceContext } from '../trace/TraceContext';
@@ -151,6 +152,10 @@ export namespace EventLoop {
 
         // 2. Process User Input (if any)
         if (input) {
+            const prefetchedMemories = isFeatureEnabled('USE_ONE_MIND_PIPELINE')
+                ? await memorySpace.hot.semanticSearch(input)
+                : undefined;
+
             const result = await CortexSystem.processUserMessage({
                 text: input,
                 currentLimbic: ctx.limbic,
@@ -159,7 +164,8 @@ export namespace EventLoop {
                 // FAZA 5: Pass identity context
                 identity: ctx.agentIdentity,
                 sessionOverlay: ctx.sessionOverlay,
-                memorySpace
+                memorySpace,
+                prefetchedMemories
             });
 
             // SEMANTIC INTENT DETECTION (Bonus 11/10)
@@ -371,6 +377,14 @@ export namespace EventLoop {
                 };
                 
                 const stylePrefs: StylePrefs = ctx.agentIdentity?.stylePrefs || {};
+
+                const memoryQuery = isFeatureEnabled('USE_ONE_MIND_PIPELINE')
+                    ? [...ctx.conversation].reverse().find(t => t.role === 'user')?.text
+                    : null;
+
+                const semanticMatches = memoryQuery
+                    ? (await memorySpace.hot.semanticSearch(memoryQuery)).map(m => m.content)
+                    : undefined;
                 
                 const unifiedContext = UnifiedContextBuilder.build({
                     agentName: basePersona.name,
@@ -384,6 +398,7 @@ export namespace EventLoop {
                     socialDynamics: ctx.socialDynamics,
                     silenceStart: ctx.silenceStart,
                     lastUserInteractionAt: ctx.goalState.lastUserInteractionAt || ctx.silenceStart,
+                    semanticMatches,
                     activeGoal: ctx.goalState.activeGoal ? {
                         description: ctx.goalState.activeGoal.description,
                         source: ctx.goalState.activeGoal.source,

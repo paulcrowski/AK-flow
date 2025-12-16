@@ -61,15 +61,26 @@ export function createMemorySpace(
 
     const provider = deps?.semanticSearchProvider ?? MemoryService;
     const inFlight = new Map<string, Promise<MemoryTrace[]>>();
+    const resolved = new Map<string, MemoryTrace[]>();
 
     const hotSemanticSearch = (query: string): Promise<MemoryTrace[]> => {
         const key = query.trim().toLowerCase();
+
+        const cached = resolved.get(key);
+        if (cached) return Promise.resolve(cached);
+
         const existing = inFlight.get(key);
         if (existing) return existing;
 
-        const p = provider.semanticSearch(query).finally(() => {
-            inFlight.delete(key);
-        });
+        const p = provider
+            .semanticSearch(query)
+            .then((results) => {
+                resolved.set(key, results);
+                return results;
+            })
+            .finally(() => {
+                inFlight.delete(key);
+            });
         inFlight.set(key, p);
         return p;
     };

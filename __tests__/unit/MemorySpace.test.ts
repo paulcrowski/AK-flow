@@ -24,7 +24,7 @@ describe('MemorySpace', () => {
         expect(cache.get('a')).toBeUndefined();
     });
 
-    it('hot.semanticSearch should dedupe in-flight calls but not cache settled results', async () => {
+    it('hot.semanticSearch should dedupe in-flight calls and cache settled results per MemorySpace instance', async () => {
         const provider = {
             semanticSearch: vi.fn(async (_query: string) => {
                 await Promise.resolve();
@@ -42,6 +42,10 @@ describe('MemorySpace', () => {
         expect(provider.semanticSearch).toHaveBeenCalledTimes(1);
 
         await memorySpace.hot.semanticSearch('Hello');
+        expect(provider.semanticSearch).toHaveBeenCalledTimes(1);
+
+        const memorySpace2 = createMemorySpace('test-agent', { semanticSearchProvider: provider });
+        await memorySpace2.hot.semanticSearch('Hello');
         expect(provider.semanticSearch).toHaveBeenCalledTimes(2);
     });
 });
