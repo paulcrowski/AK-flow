@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { EventLoop } from './EventLoop';
-import { AgentType, PacketType } from '../../types';
+import { eventBus } from '../EventBus';
+import { getCurrentAgentId } from '../../services/supabase';
 
 // Mock dependencies
 vi.mock('./LimbicSystem', () => ({
@@ -35,6 +36,11 @@ vi.mock('../../services/gemini', () => ({
     }
 }));
 
+vi.mock('../../services/supabase', () => ({
+    getCurrentAgentId: vi.fn().mockReturnValue('test-agent'),
+    setCurrentAgentId: vi.fn()
+}));
+
 vi.mock('./VolitionSystem', () => ({
     VolitionSystem: {
         shouldInitiateThought: vi.fn().mockReturnValue(true),
@@ -48,6 +54,9 @@ describe('EventLoop', () => {
     let mockCallbacks: EventLoop.LoopCallbacks;
 
     beforeEach(() => {
+        eventBus.clear();
+        vi.mocked(getCurrentAgentId).mockReturnValue('test-agent');
+
         mockCtx = {
             soma: { energy: 100, cognitiveLoad: 0, isSleeping: false },
             limbic: { fear: 0, curiosity: 0, frustration: 0, satisfaction: 0 },
@@ -95,6 +104,25 @@ describe('EventLoop', () => {
         expect(result.silenceStart).toBeGreaterThan(0);
     });
 
+    it('should skip tick when no agentId is selected', async () => {
+        vi.mocked(getCurrentAgentId).mockReturnValue(null);
+
+        await EventLoop.runSingleStep(mockCtx, 'Hello', mockCallbacks);
+
+        expect(mockCallbacks.onMessage).not.toHaveBeenCalled();
+        expect(mockCallbacks.onThought).not.toHaveBeenCalled();
+
+        const history = eventBus.getHistory();
+        const tickStart = history.find(p => (p as any)?.payload?.event === 'TICK_START');
+        const tickSkipped = history.find(p => (p as any)?.payload?.event === 'TICK_SKIPPED');
+        const tickEnd = history.find(p => (p as any)?.payload?.event === 'TICK_END');
+
+        expect(tickStart).toBeTruthy();
+        expect(tickSkipped).toBeTruthy();
+        expect((tickEnd as any)?.payload?.skipped).toBe(true);
+        expect((tickEnd as any)?.payload?.skipReason).toBe('NO_AGENT_ID');
+    });
+
     it('should respect autonomous budget limit', async () => {
         // 1st run - should pass
         await EventLoop.runSingleStep(mockCtx, null, mockCallbacks);
@@ -104,7 +132,7 @@ describe('EventLoop', () => {
         await EventLoop.runSingleStep(mockCtx, null, mockCallbacks);
 
         // 3rd run - should be blocked by limit (2)
-        mockCallbacks.onThought.mockClear();
+        (mockCallbacks.onThought as any).mockClear();
         await EventLoop.runSingleStep(mockCtx, null, mockCallbacks);
         expect(mockCallbacks.onThought).not.toHaveBeenCalled();
     });

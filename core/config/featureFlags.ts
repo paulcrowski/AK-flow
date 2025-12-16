@@ -31,6 +31,13 @@ const FEATURE_FLAG_DEFINITIONS: Record<string, FeatureFlagDefinition> = {
     addedAt: '2025-12-08',
     experimental: true
   },
+
+  USE_ONE_MIND_PIPELINE: {
+    enabled: false,
+    description: 'P0 (13/10): ONE MIND – THREE PHASES pipeline (trace+gate+memory+contract)',
+    addedAt: '2025-12-16',
+    experimental: true
+  },
   
   USE_CORTEX_STATE_BUILDER: {
     enabled: false,

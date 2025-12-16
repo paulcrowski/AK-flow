@@ -4,6 +4,7 @@
 // 1. The Cognitive Packet (JSON Bus Data)
 export interface CognitivePacket {
   id: string;
+  traceId?: string;
   timestamp: number;
   source: AgentType;
   type: PacketType;

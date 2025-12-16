@@ -23,6 +23,8 @@ import { StyleGuard, UserStylePrefs } from './StyleGuard';
 import { SYSTEM_CONFIG } from '../config/systemConfig';
 import { UnifiedContextBuilder, type StylePrefs, type BasePersona } from '../context';
 import { AutonomyRepertoire, type ActionDecision } from './AutonomyRepertoire';
+import { generateTraceId, type TraceContext } from '../trace/TraceContext';
+import { getCurrentAgentId } from '../../services/supabase';
 
 let lastAutonomyActionSignature: string | null = null;
 let lastAutonomyActionLogAt = 0;
@@ -59,6 +61,7 @@ export namespace EventLoop {
     // Module-level Budget Tracking (counters only, limit is in context)
     let autonomousOpsThisMinute = 0;
     let lastBudgetReset = Date.now();
+    let tickCount = 0;
 
     function checkBudget(limit: number): boolean {
         const now = Date.now();
@@ -90,10 +93,58 @@ export namespace EventLoop {
         input: string | null,
         callbacks: LoopCallbacks
     ): Promise<LoopContext> {
-        // 1. Apply emotional homeostasis
-        const cooledLimbic = LimbicSystem.applyHomeostasis(ctx.limbic);
-        ctx.limbic = cooledLimbic;
-        callbacks.onLimbicUpdate(ctx.limbic);
+        const startedAt = Date.now();
+        const trace: TraceContext = {
+            traceId: generateTraceId(),
+            tickNumber: tickCount++,
+            startedAt,
+            agentId: getCurrentAgentId()
+        };
+
+        let skipped = false;
+        let skipReason: string | null = null;
+
+        eventBus.publish({
+            id: `tick-start-${trace.tickNumber}-${trace.startedAt}`,
+            traceId: trace.traceId,
+            timestamp: trace.startedAt,
+            source: AgentType.CORTEX_FLOW,
+            type: PacketType.SYSTEM_ALERT,
+            payload: {
+                event: 'TICK_START',
+                tickNumber: trace.tickNumber
+            },
+            priority: 1
+        });
+
+        try {
+            // P0 ONE MIND: Hard gate when no agent is selected.
+            // Must happen before any LLM or memory hydration.
+            if (!trace.agentId) {
+                skipped = true;
+                skipReason = 'NO_AGENT_ID';
+
+                eventBus.publish({
+                    id: `tick-skipped-${trace.tickNumber}-${Date.now()}`,
+                    traceId: trace.traceId,
+                    timestamp: Date.now(),
+                    source: AgentType.CORTEX_FLOW,
+                    type: PacketType.SYSTEM_ALERT,
+                    payload: {
+                        event: 'TICK_SKIPPED',
+                        tickNumber: trace.tickNumber,
+                        reason: skipReason
+                    },
+                    priority: 1
+                });
+
+                return ctx;
+            }
+
+            // 1. Apply emotional homeostasis
+            const cooledLimbic = LimbicSystem.applyHomeostasis(ctx.limbic);
+            ctx.limbic = cooledLimbic;
+            callbacks.onLimbicUpdate(ctx.limbic);
 
         // 2. Process User Input (if any)
         if (input) {
@@ -636,6 +687,23 @@ export namespace EventLoop {
             }
         }
 
-        return ctx;
+            return ctx;
+        } finally {
+            const endedAt = Date.now();
+            eventBus.publish({
+                id: `tick-end-${trace.tickNumber}-${endedAt}`,
+                traceId: trace.traceId,
+                timestamp: endedAt,
+                source: AgentType.CORTEX_FLOW,
+                type: PacketType.SYSTEM_ALERT,
+                payload: {
+                    event: 'TICK_END',
+                    tickNumber: trace.tickNumber,
+                    durationMs: endedAt - trace.startedAt,
+                    ...(skipped ? { skipped: true, skipReason } : {})
+                },
+                priority: 1
+            });
+        }
     }
 }
