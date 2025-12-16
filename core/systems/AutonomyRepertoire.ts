@@ -20,6 +20,7 @@
  */
 
 import type { UnifiedContext } from '../context';
+import { getAutonomyConfig } from '../config/systemConfig';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // TYPES
@@ -64,9 +65,6 @@ export interface GroundingAnalysis {
 // ═══════════════════════════════════════════════════════════════════════════
 
 const CONFIG = {
-  /** Minimum silence (seconds) before EXPLORE is allowed */
-  EXPLORE_MIN_SILENCE_SEC: 60,
-  
   /** Minimum conversation turns to allow SUMMARIZE */
   SUMMARIZE_MIN_TURNS: 6,
   
@@ -168,6 +166,7 @@ export function calculateGroundingScore(
  */
 export function selectAction(ctx: UnifiedContext): ActionDecision {
   const grounding = analyzeGrounding(ctx);
+  const { exploreMinSilenceSec } = getAutonomyConfig();
   
   // Priority 1: If user needs clarification, CLARIFY
   if (grounding.needsClarification && grounding.hasActiveTopic) {
@@ -204,11 +203,11 @@ export function selectAction(ctx: UnifiedContext): ActionDecision {
   
   // Priority 4: EXPLORE only if no active topic AND sufficient silence
   if (!grounding.hasActiveTopic || grounding.isConversationStale) {
-    if (grounding.silenceDurationSec >= CONFIG.EXPLORE_MIN_SILENCE_SEC) {
+    if (grounding.silenceDurationSec >= exploreMinSilenceSec) {
       return {
         action: 'EXPLORE',
         allowed: true,
-        reason: `No active topic, silence ${grounding.silenceDurationSec.toFixed(0)}s >= ${CONFIG.EXPLORE_MIN_SILENCE_SEC}s`,
+        reason: `No active topic, silence ${grounding.silenceDurationSec.toFixed(0)}s >= ${exploreMinSilenceSec}s`,
         groundingScore: 0.4, // Lower grounding for exploration
         suggestedPrompt: buildActionPrompt('EXPLORE', ctx, grounding)
       };
@@ -217,7 +216,7 @@ export function selectAction(ctx: UnifiedContext): ActionDecision {
       return {
         action: 'SILENCE',
         allowed: true,
-        reason: `EXPLORE blocked: silence ${grounding.silenceDurationSec.toFixed(0)}s < ${CONFIG.EXPLORE_MIN_SILENCE_SEC}s required`,
+        reason: `EXPLORE blocked: silence ${grounding.silenceDurationSec.toFixed(0)}s < ${exploreMinSilenceSec}s required`,
         groundingScore: 0
       };
     }

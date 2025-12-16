@@ -35,6 +35,16 @@ describe('P0 Tool Lifecycle', () => {
   // Helper to get events from history
   const getEvents = (): CognitivePacket[] => eventBus.getHistory();
 
+  const waitForEvent = async (predicate: (e: CognitivePacket) => boolean, timeoutMs = 50) => {
+    const start = Date.now();
+    while (Date.now() - start < timeoutMs) {
+      const found = getEvents().find(predicate);
+      if (found) return found;
+      await new Promise(resolve => setTimeout(resolve, 0));
+    }
+    return undefined;
+  };
+
   beforeEach(() => {
     vi.clearAllMocks();
     eventBus.clear();
@@ -81,8 +91,7 @@ describe('P0 Tool Lifecycle', () => {
       const processOutput = createProcessOutputForTools(mockDeps);
       await processOutput('[SEARCH: successful query]');
 
-      const events = getEvents();
-      const resultEvent = events.find(e => e.type === PacketType.TOOL_RESULT);
+      const resultEvent = await waitForEvent(e => e.type === PacketType.TOOL_RESULT);
       expect(resultEvent).toBeDefined();
       expect(resultEvent!.payload.tool).toBe('SEARCH');
       expect(resultEvent!.payload.sourcesCount).toBe(1);
@@ -94,8 +103,7 @@ describe('P0 Tool Lifecycle', () => {
       const processOutput = createProcessOutputForTools(mockDeps);
       await processOutput('[SEARCH: failing query]');
 
-      const events = getEvents();
-      const errorEvent = events.find(e => e.type === PacketType.TOOL_ERROR);
+      const errorEvent = await waitForEvent(e => e.type === PacketType.TOOL_ERROR);
       expect(errorEvent).toBeDefined();
       expect(errorEvent!.payload.tool).toBe('SEARCH');
       expect(errorEvent!.payload.error).toContain('API Error');
@@ -110,8 +118,7 @@ describe('P0 Tool Lifecycle', () => {
       const processOutput = createProcessOutputForTools(mockDeps);
       await processOutput('[SEARCH: empty result query]');
 
-      const events = getEvents();
-      const errorEvent = events.find(e => e.type === PacketType.TOOL_ERROR);
+      const errorEvent = await waitForEvent(e => e.type === PacketType.TOOL_ERROR);
       expect(errorEvent).toBeDefined();
       expect(errorEvent!.payload.error).toBe('Empty result');
     });
@@ -151,7 +158,7 @@ describe('P0 Tool Lifecycle', () => {
 
       const events = getEvents();
       const intentEvent = events.find(e => e.type === PacketType.TOOL_INTENT);
-      const resultEvent = events.find(e => e.type === PacketType.TOOL_RESULT);
+      const resultEvent = await waitForEvent(e => e.type === PacketType.TOOL_RESULT);
 
       expect(intentEvent).toBeDefined();
       expect(resultEvent).toBeDefined();
@@ -180,8 +187,7 @@ describe('P0 Tool Lifecycle', () => {
       const processOutput = createProcessOutputForTools(mockDeps);
       await processOutput('[VISUALIZE: mountain landscape]');
 
-      const events = getEvents();
-      const resultEvent = events.find(e => e.type === PacketType.TOOL_RESULT);
+      const resultEvent = await waitForEvent(e => e.type === PacketType.TOOL_RESULT);
       expect(resultEvent).toBeDefined();
       expect(resultEvent!.payload.tool).toBe('VISUALIZE');
       expect(resultEvent!.payload.hasImage).toBe(true);
@@ -193,8 +199,7 @@ describe('P0 Tool Lifecycle', () => {
       const processOutput = createProcessOutputForTools(mockDeps);
       await processOutput('[VISUALIZE: failed image]');
 
-      const events = getEvents();
-      const errorEvent = events.find(e => e.type === PacketType.TOOL_ERROR);
+      const errorEvent = await waitForEvent(e => e.type === PacketType.TOOL_ERROR);
       expect(errorEvent).toBeDefined();
       expect(errorEvent!.payload.error).toBe('Null image result');
     });
@@ -205,8 +210,7 @@ describe('P0 Tool Lifecycle', () => {
       const processOutput = createProcessOutputForTools(mockDeps);
       await processOutput('[VISUALIZE: error image]');
 
-      const events = getEvents();
-      const errorEvent = events.find(e => e.type === PacketType.TOOL_ERROR);
+      const errorEvent = await waitForEvent(e => e.type === PacketType.TOOL_ERROR);
       expect(errorEvent).toBeDefined();
       expect(errorEvent!.payload.tool).toBe('VISUALIZE');
     });
@@ -222,6 +226,8 @@ describe('P0 Tool Lifecycle', () => {
 
       const processOutput = createProcessOutputForTools(mockDeps);
       await processOutput('[SEARCH: invariant test]');
+
+      await waitForEvent(e => e.type === PacketType.TOOL_RESULT || e.type === PacketType.TOOL_ERROR || e.type === PacketType.TOOL_TIMEOUT);
 
       const events = getEvents();
       const intentEvents = events.filter(e => e.type === PacketType.TOOL_INTENT);

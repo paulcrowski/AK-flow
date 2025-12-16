@@ -28,6 +28,11 @@ export interface ModuleConfig {
   [key: string]: unknown;
 }
 
+export interface AutonomyConfig {
+  exploreMinSilenceSec: number;
+  actionLogDedupeMs: number;
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // MASTER CONFIG - JEDYNE MIEJSCE DO EDYCJI PRZEŁĄCZNIKÓW
 // ═══════════════════════════════════════════════════════════════════════════
@@ -132,6 +137,11 @@ export const SYSTEM_CONFIG = {
     
     /** Max goals per hour */
     maxPerHour: 5,
+  },
+
+  autonomy: {
+    exploreMinSilenceSec: 25,
+    actionLogDedupeMs: 5000,
   },
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -390,6 +400,10 @@ export function getExpressionConfig(): ExpressionConfig {
  */
 export function getVolitionConfig(): VolitionConfig {
   return SYSTEM_CONFIG.volition;
+}
+
+export function getAutonomyConfig(): AutonomyConfig {
+  return SYSTEM_CONFIG.autonomy as AutonomyConfig;
 }
 
 /**

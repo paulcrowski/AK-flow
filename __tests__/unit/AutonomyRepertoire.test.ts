@@ -5,7 +5,7 @@
  * 
  * Key behaviors:
  * 1. EXPLORE blocked when active topic exists
- * 2. EXPLORE requires silence > 60s
+ * 2. EXPLORE requires sufficient silence (configurable)
  * 3. Grounding score validates speech against context
  * 4. SILENCE returned when no appropriate action
  */
@@ -20,6 +20,7 @@ import {
   type AutonomyAction
 } from '../../core/systems/AutonomyRepertoire';
 import { UnifiedContextBuilder, type ContextBuilderInput, type BasePersona } from '../../core/context';
+import { getAutonomyConfig } from '../../core/config/systemConfig';
 
 describe('AutonomyRepertoire', () => {
   
@@ -158,8 +159,8 @@ describe('AutonomyRepertoire', () => {
     it('should select SILENCE when EXPLORE conditions not met', () => {
       const ctx = buildContext({
         conversation: [], // No active topic
-        silenceStart: Date.now() - 30000, // Only 30s silence (< 60s required)
-        lastUserInteractionAt: Date.now() - 30000
+        silenceStart: Date.now() - 10000, // Only 10s silence (< 25s required)
+        lastUserInteractionAt: Date.now() - 10000
       });
       
       const decision = selectAction(ctx);
@@ -168,11 +169,11 @@ describe('AutonomyRepertoire', () => {
       expect(decision.reason).toContain('EXPLORE blocked');
     });
     
-    it('should select EXPLORE when no topic AND silence > 60s', () => {
+    it('should select EXPLORE when no topic AND silence > threshold', () => {
       const ctx = buildContext({
         conversation: [], // No active topic
-        silenceStart: Date.now() - 70000, // 70s silence (> 60s required)
-        lastUserInteractionAt: Date.now() - 70000
+        silenceStart: Date.now() - 30000, // 30s silence (> 25s required)
+        lastUserInteractionAt: Date.now() - 30000
       });
       
       const decision = selectAction(ctx);
@@ -302,8 +303,8 @@ describe('AutonomyRepertoire', () => {
   
   describe('CONFIG', () => {
     
-    it('should have EXPLORE_MIN_SILENCE_SEC = 60', () => {
-      expect(AutonomyRepertoire.CONFIG.EXPLORE_MIN_SILENCE_SEC).toBe(60);
+    it('should have exploreMinSilenceSec = 25', () => {
+      expect(getAutonomyConfig().exploreMinSilenceSec).toBe(25);
     });
     
     it('should have MIN_GROUNDING_SCORE = 0.3', () => {

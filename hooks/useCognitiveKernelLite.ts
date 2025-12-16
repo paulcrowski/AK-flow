@@ -577,10 +577,12 @@ export const useCognitiveKernelLite = (loadedIdentity?: AgentIdentity | null) =>
     silenceStartRef.current = Date.now();
     
     try {
+      const processedUserInput = await processOutputForTools(userInput);
+
       // Add user message to conversation
       setConversation(prev => [...prev, { 
         role: 'user', 
-        text: userInput,
+        text: processedUserInput,
         ...(imageData ? { imageData } : {})
       }]);
       
@@ -592,14 +594,14 @@ export const useCognitiveKernelLite = (loadedIdentity?: AgentIdentity | null) =>
         type: PacketType.THOUGHT_CANDIDATE,
         payload: {
           event: 'USER_INPUT',
-          text: userInput,
+          text: processedUserInput,
           hasImage: !!imageData
         },
         priority: 0.8
       });
       
       // Dispatch to kernel
-      actions.processUserInput(userInput);
+      actions.processUserInput(processedUserInput);
 
       // SINGLE SOURCE OF TRUTH: EventLoop is the only place allowed to call CortexSystem.
       // We run a reactive single step here (autonomy disabled for this path).
@@ -614,7 +616,7 @@ export const useCognitiveKernelLite = (loadedIdentity?: AgentIdentity | null) =>
             text: c.text,
             type: c.type
           })),
-          { role: 'user', text: userInput }
+          { role: 'user', text: processedUserInput }
         ],
         autonomousMode: false,
         lastSpeakTimestamp: state.lastSpeakTimestamp,
@@ -641,7 +643,7 @@ export const useCognitiveKernelLite = (loadedIdentity?: AgentIdentity | null) =>
         userStylePrefs: loadedIdentityRef.current?.style_prefs || {}
       };
 
-      const nextCtx = await EventLoop.runSingleStep(ctx, userInput, {
+      const nextCtx = await EventLoop.runSingleStep(ctx, processedUserInput, {
         onMessage: (role, text, type) => {
           if (role === 'assistant' && type === 'speech') {
             void (async () => {

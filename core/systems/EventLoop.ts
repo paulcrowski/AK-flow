@@ -24,6 +24,9 @@ import { SYSTEM_CONFIG } from '../config/systemConfig';
 import { UnifiedContextBuilder, type StylePrefs, type BasePersona } from '../context';
 import { AutonomyRepertoire, type ActionDecision } from './AutonomyRepertoire';
 
+let lastAutonomyActionSignature: string | null = null;
+let lastAutonomyActionLogAt = 0;
+
 export namespace EventLoop {
     export interface LoopContext {
         soma: SomaState;
@@ -335,26 +338,44 @@ export namespace EventLoop {
 
                 // AUTONOMY REPERTOIRE: Select grounded action
                 const actionDecision = AutonomyRepertoire.selectAction(unifiedContext);
-                
-                // Log action decision
-                eventBus.publish({
-                    id: `autonomy-action-${Date.now()}`,
-                    timestamp: Date.now(),
-                    source: AgentType.CORTEX_FLOW,
-                    type: PacketType.SYSTEM_ALERT,
-                    payload: {
-                        event: 'AUTONOMY_ACTION_SELECTED',
-                        action: actionDecision.action,
-                        allowed: actionDecision.allowed,
-                        reason: actionDecision.reason,
-                        groundingScore: actionDecision.groundingScore
-                    },
-                    priority: 0.5
-                });
+
+                const now = Date.now();
+                const dedupeMs = SYSTEM_CONFIG.autonomy?.actionLogDedupeMs ?? 5000;
+                const silenceSec = (now - ctx.silenceStart) / 1000;
+                const silenceBucketSec = Math.floor(silenceSec / 5) * 5;
+                const signature = actionDecision.action === 'SILENCE' && actionDecision.reason.startsWith('EXPLORE blocked:')
+                    ? `SILENCE|EXPLORE_BLOCKED|${silenceBucketSec}`
+                    : `${actionDecision.action}|${actionDecision.reason}`;
+
+                const shouldLog =
+                    signature !== lastAutonomyActionSignature ||
+                    now - lastAutonomyActionLogAt > dedupeMs;
+
+                if (shouldLog) {
+                    lastAutonomyActionSignature = signature;
+                    lastAutonomyActionLogAt = now;
+
+                    eventBus.publish({
+                        id: `autonomy-action-${now}`,
+                        timestamp: now,
+                        source: AgentType.CORTEX_FLOW,
+                        type: PacketType.SYSTEM_ALERT,
+                        payload: {
+                            event: 'AUTONOMY_ACTION_SELECTED',
+                            action: actionDecision.action,
+                            allowed: actionDecision.allowed,
+                            reason: actionDecision.reason,
+                            groundingScore: actionDecision.groundingScore
+                        },
+                        priority: 0.5
+                    });
+                }
                 
                 // If SILENCE action, skip LLM call entirely
                 if (actionDecision.action === 'SILENCE') {
-                    callbacks.onThought(`[AUTONOMY_SILENCE] ${actionDecision.reason}`);
+                    if (shouldLog) {
+                        callbacks.onThought(`[AUTONOMY_SILENCE] ${actionDecision.reason}`);
+                    }
                     return ctx;
                 }
 
