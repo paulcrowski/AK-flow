@@ -254,10 +254,13 @@ export const UnifiedContextBuilder = {
     if (turns.length === 0) return 'No prior conversation';
     
     // Simple heuristic: last user message topic
-    const lastUser = [...turns].reverse().find(t => t.role === 'user');
+    const lastUser = [...turns]
+      .reverse()
+      .find(t => t.role === 'user' && typeof (t as any).text === 'string' && (t as any).text.trim().length > 0);
     if (lastUser) {
-      const words = lastUser.text.split(' ').slice(0, 10).join(' ');
-      return words.length < lastUser.text.length ? `${words}...` : words;
+      const text = String((lastUser as any).text);
+      const words = text.split(' ').slice(0, 10).join(' ');
+      return words.length < text.length ? `${words}...` : words;
     }
     
     return 'Ongoing conversation';
@@ -278,7 +281,7 @@ export const UnifiedContextBuilder = {
     
     // Format recent conversation
     const recentChat = dialogueAnchor.recentTurns
-      .map(t => `${t.role.toUpperCase()}: ${t.text}`)
+      .map(t => `${String((t as any).role || 'unknown').toUpperCase()}: ${String((t as any).text || '')}`)
       .join('\n');
     
     // Format memories

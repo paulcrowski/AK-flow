@@ -500,6 +500,52 @@ Ta faza jest bardziej analityczna/raportowa niż infrastrukturalna.
 
 ---
 
+## FAZA 6: Holograficzny Umysł Schematyczny (Memory Architecture 11/10)
+
+> **Wizja**: System, który oddycha (pobiera, trawi, przebudowuje) zamiast płaskiej tabeli.
+> **Cel**: Agent operuje na znaczeniach (Chunks), a nie na słowach (Context Window).
+
+### 1. PAMIĘĆ ROBOCZA (Working Memory) – "Stół Montażowy"
+**Problem**: Context Window zapycha się surowym tekstem.
+**Rozwiązanie**: Dynamiczne Okno Kontekstowe z mechanizmem Chunkingu.
+
+- **Chunker Process**: Tło zamienia surowe zdania na Obiekty Myślowe (Chunks).
+- **Reprezentacja**: `[Zadanie: Fix Bug #404 | Status: Trudny | Emocja: Frustracja]`
+- **Cel**: Integracja wyglądu, głosu i faktów w jedną reprezentację.
+
+### 2. PAMIĘĆ DŁUGOTRWAŁA (Long-Term Memory) – "Żywy Graf"
+**Struktura**: GraphRAG + Chemia Pamięci + Linki Hebbowskie.
+
+- **Węzeł (Wektor)**: Dopełnianie wzorca (Pattern Completion). "Pomarańczowe kółko" -> "Pomarańcza".
+- **Linki Hebbowskie**: Fizyczne połączenia (`linked_memories`). A i B użyte razem -> sztywny link. (Rozumowanie Relacyjne: Programista -> Kod == Pisarz -> Książka).
+- **Chemia (Metadane)**:
+  - `Valence` (Dobre/Złe): Czy wspomnienie dało sukces?
+  - `Arousal` (Ważność): Siła emocji.
+  - `Access_Count`: Siła nawyku.
+- **Algorytm Wyszukiwania**: `Wynik = Podobieństwo * Siła Emocji * Siła Połączeń`.
+
+### 3. MECHANIZM UCZENIA – Schematy Piageta (Serce Systemu)
+**Proces**: Akomodacja (Przebudowa) zamiast tylko Asymilacji (Dodawanie).
+
+- **Błąd Predykcji**: "Jan jest miły" vs "Jan krzyczy" -> Błąd.
+- **Rekonsolidacja**: Edycja schematu "Jan": "Jan jest miły, ALE w stresie krzyczy".
+- **Separacja Wzorca**: Rozróżnianie "Jan spokojny" vs "Jan w stresie".
+
+### 4. FAZA SNU (Konsolidacja i Hierarchia)
+**Działanie**: Kompresja danych i generalizacja w nocy.
+
+- **Poziom Epizodyczny**: Surowe logi ("User wpisał X").
+- **Ekstrakcja Zasad**: Szukanie wzorców -> Schemat Wyższego Rzędu ("Czysty Kod > Szybki Kod").
+- **Czyszczenie**: Usuwanie surowych logów, zostawienie Zasady (Mądrość).
+
+### TODO Implementacyjne:
+- [ ] **Baza Danych**: Kolumny `associations` (JSON), `valence` (float), `schema_id`.
+- [ ] **Chunker**: Proces tła streszczający rozmowę do obiektów.
+- [ ] **Write Logic**: `accomodate_schema()` - aktualizacja zamiast insertu przy sprzeczności.
+- [ ] **Read Logic**: Wyszukiwanie uwzględniające emocje i linki.
+
+---
+
 ## Metryki Sukcesu
 
 | Faza | Metryka | Cel | Jak mierzyć |
@@ -553,6 +599,7 @@ Ta faza jest bardziej analityczna/raportowa niż infrastrukturalna.
 - [ ] **FAZA 3:** ExecutiveControl z histerezą
 - [ ] **FAZA 4:** Nowe narzędzia (NOTES / READ_FILE / LEARN_FROM)
 - [ ] **FAZA 5:** Konsolidacja Refleksji
+- [ ] **FAZA 6:** Holograficzny Umysł Schematyczny (Memory 11/10)
 
 ### 📊 METRYKI:
 

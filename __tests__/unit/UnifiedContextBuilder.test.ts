@@ -85,6 +85,26 @@ describe('UnifiedContextBuilder', () => {
       expect(ctx.memoryAnchor).toBeDefined();
       expect(ctx.socialFrame).toBeDefined();
     });
+
+    it('should not crash when conversation turns have missing text/role', () => {
+      const inputWithBadTurn: ContextBuilderInput = {
+        ...baseInput,
+        conversation: [
+          { role: 'user', text: 'Hello there!' },
+          // Simulate malformed stored turn
+          { role: undefined as any, text: undefined as any },
+          { role: 'assistant', text: 'Hi!' }
+        ]
+      };
+
+      const ctx = UnifiedContextBuilder.build(inputWithBadTurn);
+
+      expect(ctx.dialogueAnchor).toBeDefined();
+      expect(ctx.dialogueAnchor.topicSummary).toBeTruthy();
+
+      const prompt = UnifiedContextBuilder.formatAsPrompt(ctx, 'reactive');
+      expect(prompt).toContain('RECENT CONVERSATION');
+    });
     
     it('should include recent conversation turns in dialogueAnchor', () => {
       const inputWithConversation: ContextBuilderInput = {

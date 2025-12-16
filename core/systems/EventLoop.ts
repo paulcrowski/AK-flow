@@ -300,13 +300,6 @@ export namespace EventLoop {
             // 3C. Autonomous Volition (only if autonomousMode is ON)
             // Check if we should think
             if (VolitionSystem.shouldInitiateThought(silenceDuration)) {
-
-                // SAFETY: Check Budget (limit from context)
-                if (!checkBudget(ctx.autonomousLimitPerMinute)) {
-                    return ctx;
-                }
-                autonomousOpsThisMinute++;
-
                 // Notify UI of thought process
                 callbacks.onThought("Autonomous processing...");
 
@@ -364,6 +357,13 @@ export namespace EventLoop {
                     callbacks.onThought(`[AUTONOMY_SILENCE] ${actionDecision.reason}`);
                     return ctx;
                 }
+
+                // SAFETY: Check Budget (limit from context)
+                // Budget should only be consumed for non-silence actions (i.e., when we actually do work).
+                if (!checkBudget(ctx.autonomousLimitPerMinute)) {
+                    return ctx;
+                }
+                autonomousOpsThisMinute++;
                 
                 // Add action prompt to context
                 unifiedContext.actionPrompt = actionDecision.suggestedPrompt || '';

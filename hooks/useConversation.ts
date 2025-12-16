@@ -78,9 +78,10 @@ export const useConversation = ({ identityRef }: UseConversationConfig) => {
         conversation: [
           ...conversation.map(c => ({
             role: c.role as 'user' | 'assistant',
-            content: c.text
+            text: c.text,
+            type: c.type
           })),
-          { role: 'user', content: userInput }
+          { role: 'user', text: userInput }
         ],
         autonomousMode: false,
         lastSpeakTimestamp: state.lastSpeakTimestamp,

@@ -25,6 +25,7 @@ import { EventLoop } from '../core/systems/EventLoop';
 import { DreamConsolidationService } from '../services/DreamConsolidationService';
 import { executeWakeProcess } from '../core/services/WakeService';
 import { MemoryService } from '../services/supabase';
+import { createProcessOutputForTools } from '../utils/toolParser';
 import { createRng } from '../core/utils/rng';
 import { SYSTEM_CONFIG } from '../core/config/systemConfig';
 
@@ -149,6 +150,9 @@ export const useCognitiveKernelLite = (loadedIdentity?: AgentIdentity | null) =>
   const thoughtHistoryRef = useRef<string[]>([]);
   const consecutiveAgentSpeechesRef = useRef(0);
   const ticksSinceLastRewardRef = useRef(0);
+  const lastVisualTimestampRef = useRef(0);
+  const visualBingeCountRef = useRef(0);
+  const toolStateRef = useRef<{ limbicState: any }>({ limbicState });
   // STALE CLOSURE FIX: Refs for values used in tick loop
   const conversationRef = useRef(conversation);
   const isProcessingRef = useRef(isProcessing);
@@ -163,6 +167,41 @@ export const useCognitiveKernelLite = (loadedIdentity?: AgentIdentity | null) =>
   useEffect(() => {
     isProcessingRef.current = isProcessing;
   }, [isProcessing]);
+  
+  useEffect(() => {
+    toolStateRef.current = { limbicState };
+  }, [limbicState]);
+  
+  const setSomaState = useCallback(
+    (updater: (prev: any) => any) => {
+      const prev = getCognitiveState().soma;
+      actions.hydrate({ soma: updater(prev) });
+    },
+    [actions]
+  );
+  
+  const setLimbicState = useCallback(
+    (updater: (prev: any) => any) => {
+      const prev = getCognitiveState().limbic;
+      actions.hydrate({ limbic: updater(prev) });
+    },
+    [actions]
+  );
+  
+  const processOutputForTools = useCallback(
+    createProcessOutputForTools({
+      setCurrentThought,
+      addMessage: (role, text, type, imageData, sources) => {
+        setConversation(prev => [...prev, { role, text, type, ...(imageData ? { imageData } : {}), ...(sources ? { sources } : {}) }]);
+      },
+      setSomaState,
+      setLimbicState,
+      lastVisualTimestampRef,
+      visualBingeCountRef,
+      stateRef: toolStateRef
+    }),
+    [setLimbicState, setSomaState]
+  );
   
   // ─────────────────────────────────────────────────────────────────────────
   // SYNC IDENTITY REF
@@ -362,7 +401,8 @@ export const useCognitiveKernelLite = (loadedIdentity?: AgentIdentity | null) =>
             neuro: state.neuro,
             conversation: conversationRef.current.map(c => ({
               role: c.role as 'user' | 'assistant',
-              content: c.text
+              text: c.text,
+              type: c.type
             })),
             autonomousMode: true,
             lastSpeakTimestamp: lastSpeakRef.current,
@@ -396,28 +436,34 @@ export const useCognitiveKernelLite = (loadedIdentity?: AgentIdentity | null) =>
           const nextCtx = await EventLoop.runSingleStep(ctx, null, {
             onMessage: (role, text, type) => {
               if (role === 'assistant' && type === 'speech') {
-                setConversation(prev => [...prev, { role, text, type }]);
-                lastSpeakRef.current = Date.now();
-                consecutiveAgentSpeechesRef.current++;
+                void (async () => {
+                  const cleaned = await processOutputForTools(text);
+                  setConversation(prev => [...prev, { role, text: cleaned, type }]);
+                  lastSpeakRef.current = Date.now();
+                  consecutiveAgentSpeechesRef.current++;
                 
-                // LOG: Autonomous speech
-                eventBus.publish({
-                  id: generateUUID(),
-                  timestamp: Date.now(),
-                  source: AgentType.CORTEX_FLOW,
-                  type: PacketType.THOUGHT_CANDIDATE,
-                  payload: {
-                    event: 'AUTONOMOUS_SPOKE',
-                    speech_content: text,
-                    agentName: loadedIdentityRef.current?.name || 'Unknown'
-                  },
-                  priority: 0.9
+                  // LOG: Autonomous speech
+                  eventBus.publish({
+                    id: generateUUID(),
+                    timestamp: Date.now(),
+                    source: AgentType.CORTEX_FLOW,
+                    type: PacketType.THOUGHT_CANDIDATE,
+                    payload: {
+                      event: 'AUTONOMOUS_SPOKE',
+                      speech_content: cleaned,
+                      agentName: loadedIdentityRef.current?.name || 'Unknown'
+                    },
+                    priority: 0.9
+                  });
+                
+                  // FAZA 6: Update social dynamics - agent spoke
+                  actions.updateSocialDynamics({ agentSpoke: true });
+                
+                  logPhysiologySnapshot('AUTONOMOUS_RESPONSE');
+                })().catch((e) => {
+                  console.warn('[KernelLite] Tool processing failed:', e);
+                  setConversation(prev => [...prev, { role, text, type }]);
                 });
-                
-                // FAZA 6: Update social dynamics - agent spoke
-                actions.updateSocialDynamics({ agentSpoke: true });
-                
-                logPhysiologySnapshot('AUTONOMOUS_RESPONSE');
               }
             },
             onThought: (thought) => {
@@ -565,9 +611,10 @@ export const useCognitiveKernelLite = (loadedIdentity?: AgentIdentity | null) =>
         conversation: [
           ...conversation.map(c => ({
             role: c.role as 'user' | 'assistant',
-            content: c.text
+            text: c.text,
+            type: c.type
           })),
-          { role: 'user', content: userInput }
+          { role: 'user', text: userInput }
         ],
         autonomousMode: false,
         lastSpeakTimestamp: state.lastSpeakTimestamp,
@@ -597,23 +644,29 @@ export const useCognitiveKernelLite = (loadedIdentity?: AgentIdentity | null) =>
       const nextCtx = await EventLoop.runSingleStep(ctx, userInput, {
         onMessage: (role, text, type) => {
           if (role === 'assistant' && type === 'speech') {
-            setConversation(prev => [...prev, { role, text, type }]);
+            void (async () => {
+              const cleaned = await processOutputForTools(text);
+              setConversation(prev => [...prev, { role, text: cleaned, type }]);
 
-            eventBus.publish({
-              id: generateUUID(),
-              timestamp: Date.now(),
-              source: AgentType.CORTEX_FLOW,
-              type: PacketType.THOUGHT_CANDIDATE,
-              payload: {
-                event: 'AGENT_SPOKE',
-                speech_content: text,
-                agentName: loadedIdentityRef.current?.name || 'Unknown'
-              },
-              priority: 0.9
+              eventBus.publish({
+                id: generateUUID(),
+                timestamp: Date.now(),
+                source: AgentType.CORTEX_FLOW,
+                type: PacketType.THOUGHT_CANDIDATE,
+                payload: {
+                  event: 'AGENT_SPOKE',
+                  speech_content: cleaned,
+                  agentName: loadedIdentityRef.current?.name || 'Unknown'
+                },
+                priority: 0.9
+              });
+
+              logPhysiologySnapshot('POST_RESPONSE');
+              setCurrentThought(text.slice(0, 100) + '...');
+            })().catch((e) => {
+              console.warn('[KernelLite] Tool processing failed:', e);
+              setConversation(prev => [...prev, { role, text, type }]);
             });
-
-            logPhysiologySnapshot('POST_RESPONSE');
-            setCurrentThought(text.slice(0, 100) + '...');
           } else if (role === 'assistant' && type === 'thought') {
             setCurrentThought(text);
           }
