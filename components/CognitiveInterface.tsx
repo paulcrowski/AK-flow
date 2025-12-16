@@ -54,6 +54,8 @@ export function CognitiveInterface() {
 
     const [traceHudOpen, setTraceHudOpen] = useState(false);
     const [traceHudCopyState, setTraceHudCopyState] = useState<'idle' | 'ok' | 'fail'>('idle');
+    const [traceHudFrozen, setTraceHudFrozen] = useState(false);
+    const traceHudFrozenRef = useRef(false);
     const [traceHud, setTraceHud] = useState<{
         traceId?: string;
         tickNumber?: number;
@@ -84,6 +86,10 @@ export function CognitiveInterface() {
         const unsubscribe = eventBus.subscribe(PacketType.SYSTEM_ALERT, (packet: any) => {
             const ev = packet?.payload?.event;
             if (!ev) return;
+
+            if (traceHudFrozenRef.current && (ev === 'TICK_START' || ev === 'TICK_SKIPPED' || ev === 'TICK_COMMIT' || ev === 'TICK_END')) {
+                return;
+            }
 
             if (ev === 'TICK_START') {
                 setTraceHud((prev) => ({
@@ -338,6 +344,35 @@ export function CognitiveInterface() {
     const isCritical = somaState.energy < 5;
     const isSleeping = somaState.isSleeping;
 
+    const copyTraceToClipboard = async (exportPayload: string) => {
+        if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+            await navigator.clipboard.writeText(exportPayload);
+            return;
+        }
+        if (typeof document !== 'undefined') {
+            const el = document.createElement('textarea');
+            el.value = exportPayload;
+            el.setAttribute('readonly', '');
+            el.style.position = 'fixed';
+            el.style.left = '-9999px';
+            document.body.appendChild(el);
+            el.select();
+            document.execCommand('copy');
+            document.body.removeChild(el);
+            return;
+        }
+        throw new Error('clipboard_unavailable');
+    };
+
+    const sanitizeTracePacketForExport = (packet: any) => {
+        const p = JSON.parse(JSON.stringify(packet));
+        if (p?.payload) {
+            if (p.payload.imageData && p.payload.imageData.length > 1000) p.payload.imageData = "[VISUAL DATA REMOVED]";
+            if (p.payload.image_data && p.payload.image_data.length > 1000) p.payload.image_data = "[VISUAL DATA REMOVED]";
+        }
+        return p;
+    };
+
     const copyCurrentTrace = async () => {
         try {
             const traceId = traceHud?.traceId;
@@ -346,34 +381,59 @@ export function CognitiveInterface() {
             const all = eventBus.getHistory();
             const events = all
                 .filter((p: any) => p?.traceId === traceId)
-                .slice(-300);
+                .map(sanitizeTracePacketForExport);
 
             const exportPayload = JSON.stringify(
                 {
                     traceId,
                     tickNumber: traceHud?.tickNumber,
                     exportedAt: Date.now(),
+                    windowMs: 0,
                     events
                 },
                 null,
                 2
             );
 
-            if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
-                await navigator.clipboard.writeText(exportPayload);
-            } else if (typeof document !== 'undefined') {
-                const el = document.createElement('textarea');
-                el.value = exportPayload;
-                el.setAttribute('readonly', '');
-                el.style.position = 'fixed';
-                el.style.left = '-9999px';
-                document.body.appendChild(el);
-                el.select();
-                document.execCommand('copy');
-                document.body.removeChild(el);
-            } else {
-                throw new Error('clipboard_unavailable');
-            }
+            await copyTraceToClipboard(exportPayload);
+
+            setTraceHudCopyState('ok');
+            setTimeout(() => setTraceHudCopyState('idle'), 1500);
+        } catch {
+            setTraceHudCopyState('fail');
+            setTimeout(() => setTraceHudCopyState('idle'), 2000);
+        }
+    };
+
+    const copyCurrentTraceWithWindow = async (windowMs: number) => {
+        try {
+            const traceId = traceHud?.traceId;
+            if (!traceId) return;
+
+            const all = eventBus.getHistory();
+            const traceEvents = all.filter((p: any) => p?.traceId === traceId);
+            const timestamps = traceEvents.map((p: any) => p?.timestamp).filter((t: any) => typeof t === 'number');
+
+            const minTs = timestamps.length ? Math.min(...timestamps) : Date.now();
+            const maxTs = timestamps.length ? Math.max(...timestamps) : Date.now();
+
+            const events = all
+                .filter((p: any) => typeof p?.timestamp === 'number' && p.timestamp >= (minTs - windowMs) && p.timestamp <= (maxTs + windowMs))
+                .map(sanitizeTracePacketForExport);
+
+            const exportPayload = JSON.stringify(
+                {
+                    traceId,
+                    tickNumber: traceHud?.tickNumber,
+                    exportedAt: Date.now(),
+                    windowMs,
+                    events
+                },
+                null,
+                2
+            );
+
+            await copyTraceToClipboard(exportPayload);
 
             setTraceHudCopyState('ok');
             setTimeout(() => setTraceHudCopyState('idle'), 1500);
@@ -548,6 +608,26 @@ export function CognitiveInterface() {
                                     <div className="text-[10px] font-mono tracking-widest text-gray-400">TRACE HUD</div>
                                     <div className="flex items-center gap-2">
                                         <button
+                                            onClick={() => {
+                                                if (!traceHud?.traceId) return;
+                                                setTraceHudFrozen((prev) => {
+                                                    const next = !prev;
+                                                    traceHudFrozenRef.current = next;
+                                                    return next;
+                                                });
+                                            }}
+                                            className={`px-2 py-1 rounded border text-[10px] font-mono tracking-widest transition-colors ${traceHud?.traceId
+                                                ? traceHudFrozen
+                                                    ? 'border-yellow-500/40 text-yellow-300 bg-yellow-900/10'
+                                                    : 'border-gray-700 text-gray-300 hover:bg-gray-900/40'
+                                                : 'border-gray-800 text-gray-600 cursor-not-allowed'
+                                                }`}
+                                            title="Freeze HUD on current traceId"
+                                            disabled={!traceHud?.traceId}
+                                        >
+                                            {traceHudFrozen ? 'FROZEN' : 'FREEZE'}
+                                        </button>
+                                        <button
                                             onClick={copyCurrentTrace}
                                             className={`px-2 py-1 rounded border text-[10px] font-mono tracking-widest transition-colors ${traceHud?.traceId
                                                 ? traceHudCopyState === 'ok'
@@ -560,7 +640,22 @@ export function CognitiveInterface() {
                                             title="Copy trace events (JSON)"
                                             disabled={!traceHud?.traceId}
                                         >
-                                            {traceHudCopyState === 'ok' ? 'COPIED' : traceHudCopyState === 'fail' ? 'COPY FAIL' : 'COPY TRACE'}
+                                            {traceHudCopyState === 'ok' ? 'COPIED' : traceHudCopyState === 'fail' ? 'COPY FAIL' : 'COPY FULL'}
+                                        </button>
+                                        <button
+                                            onClick={() => copyCurrentTraceWithWindow(2000)}
+                                            className={`px-2 py-1 rounded border text-[10px] font-mono tracking-widest transition-colors ${traceHud?.traceId
+                                                ? traceHudCopyState === 'ok'
+                                                    ? 'border-green-500/40 text-green-300 bg-green-900/10'
+                                                    : traceHudCopyState === 'fail'
+                                                        ? 'border-red-500/40 text-red-300 bg-red-900/10'
+                                                        : 'border-gray-700 text-gray-300 hover:bg-gray-900/40'
+                                                : 'border-gray-800 text-gray-600 cursor-not-allowed'
+                                                }`}
+                                            title="Copy trace events with ±2s window (captures correlated events with different traceIds)"
+                                            disabled={!traceHud?.traceId}
+                                        >
+                                            COPY +2S
                                         </button>
                                         <button
                                             onClick={() => setTraceHudOpen(false)}

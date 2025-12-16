@@ -55,7 +55,7 @@ export function kernelReducer(state: KernelState, event: KernelEvent): KernelRed
       return handleNeuroUpdate(state, event, outputs);
       
     case 'TOGGLE_AUTONOMY':
-      return handleToggleAutonomy(state, outputs);
+      return handleToggleAutonomy(state, event, outputs);
       
     case 'TOGGLE_CHEMISTRY':
       return handleToggleChemistry(state, outputs);
@@ -405,13 +405,16 @@ function handleNeuroUpdate(state: KernelState, event: KernelEvent, outputs: Kern
   return { nextState, outputs };
 }
 
-function handleToggleAutonomy(state: KernelState, outputs: KernelOutput[]): KernelReducerResult {
+function handleToggleAutonomy(state: KernelState, event: KernelEvent, outputs: KernelOutput[]): KernelReducerResult {
+  const payload = (event.payload as { enabled?: boolean } | undefined) ?? undefined;
+  const nextEnabled = typeof payload?.enabled === 'boolean' ? payload.enabled : !state.autonomousMode;
+
   const nextState = {
     ...state,
-    autonomousMode: !state.autonomousMode,
+    autonomousMode: nextEnabled,
     silenceStart: Date.now()
   };
-  
+
   return { nextState, outputs };
 }
 

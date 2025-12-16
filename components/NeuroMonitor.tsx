@@ -442,21 +442,70 @@ export const NeuroMonitor: React.FC<NeuroMonitorProps> = ({ limbicState, somaSta
     };
 
     // FILTERING LOGIC
-    const filteredPackets = packets.filter(p => {
-        if (activeTab === 'SQL' || activeTab === 'NETWORK' || activeTab === 'DEBUG') return false;
+    const matchesLogFilter = (p: CognitivePacket) => {
+        if (logFilter === 'ALL') return true;
 
+        if (logFilter === 'DREAMS') {
+            return (
+                p.source === AgentType.MEMORY_EPISODIC &&
+                p.type === PacketType.SYSTEM_ALERT &&
+                p.payload?.event === 'DREAM_CONSOLIDATION_COMPLETE'
+            );
+        }
+
+        if (logFilter === 'CHEM') {
+            return p.source === AgentType.NEUROCHEM;
+        }
+
+        if (logFilter === 'SPEECH') {
+            return (
+                p.source === AgentType.CORTEX_FLOW &&
+                p.type === PacketType.THOUGHT_CANDIDATE &&
+                (typeof p.payload?.speech_content === 'string' || p.payload?.event === 'AGENT_SPOKE' || p.payload?.event === 'AUTONOMOUS_SPOKE')
+            );
+        }
+
+        if (logFilter === 'ERRORS') {
+            return (
+                p.type === PacketType.PREDICTION_ERROR ||
+                (p.type === PacketType.SYSTEM_ALERT && (p.payload?.code || p.payload?.error))
+            );
+        }
+
+        if (logFilter === 'FLOW') {
+            const isChem = p.source === AgentType.NEUROCHEM;
+            const isSpeech = (
+                p.source === AgentType.CORTEX_FLOW &&
+                p.type === PacketType.THOUGHT_CANDIDATE &&
+                (typeof p.payload?.speech_content === 'string' || p.payload?.event === 'AGENT_SPOKE' || p.payload?.event === 'AUTONOMOUS_SPOKE')
+            );
+            return isChem || isSpeech;
+        }
+
+        if (logFilter === 'CONFESS') {
+            return p.type === PacketType.CONFESSION_REPORT;
+        }
+
+        return true;
+    };
+
+    const filteredPackets = packets.filter(p => {
         if (p.type === PacketType.FIELD_UPDATE && p.source === AgentType.GLOBAL_FIELD) return false;
 
+        // Baseline inclusion by tab
         if (activeTab === 'SYSTEM') {
-            return (
+            const include = (
                 p.type === PacketType.PREDICTION_ERROR ||
                 p.source === AgentType.SOMA ||
                 p.type === PacketType.SYSTEM_ALERT ||
-                p.source === AgentType.NEUROCHEM // show chem alerts in kernel view too
+                p.source === AgentType.NEUROCHEM
             );
+            if (!include) return false;
+            return matchesLogFilter(p);
         }
+
         if (activeTab === 'MIND') {
-            let include = (
+            const include = (
                 p.type === PacketType.THOUGHT_CANDIDATE ||
                 p.type === PacketType.VISUAL_THOUGHT ||
                 p.type === PacketType.VISUAL_PERCEPTION ||
@@ -464,55 +513,14 @@ export const NeuroMonitor: React.FC<NeuroMonitorProps> = ({ limbicState, somaSta
                 p.source === AgentType.MEMORY_EPISODIC ||
                 p.source === AgentType.VISUAL_CORTEX ||
                 p.source === AgentType.SENSORY_VISUAL ||
-                p.source === AgentType.NEUROCHEM // expose chem packets in CORTEX tab
+                p.source === AgentType.NEUROCHEM
             );
-
             if (!include) return false;
-
-            if (logFilter === 'DREAMS') {
-                return (
-                    p.source === AgentType.MEMORY_EPISODIC &&
-                    p.type === PacketType.SYSTEM_ALERT &&
-                    p.payload?.event === 'DREAM_CONSOLIDATION_COMPLETE'
-                );
-            }
-
-            if (logFilter === 'CHEM') {
-                return p.source === AgentType.NEUROCHEM;
-            }
-
-            if (logFilter === 'SPEECH') {
-                return (
-                    p.source === AgentType.CORTEX_FLOW &&
-                    p.type === PacketType.THOUGHT_CANDIDATE &&
-                    typeof p.payload?.speech_content === 'string'
-                );
-            }
-
-            if (logFilter === 'ERRORS') {
-                return (
-                    p.type === PacketType.PREDICTION_ERROR ||
-                    (p.type === PacketType.SYSTEM_ALERT && (p.payload?.code || p.payload?.error))
-                );
-            }
-
-            if (logFilter === 'FLOW') {
-                const isChem = p.source === AgentType.NEUROCHEM;
-                const isSpeech = (
-                    p.source === AgentType.CORTEX_FLOW &&
-                    p.type === PacketType.THOUGHT_CANDIDATE &&
-                    typeof p.payload?.speech_content === 'string'
-                );
-                return isChem || isSpeech;
-            }
-
-            if (logFilter === 'CONFESS') {
-                return p.type === PacketType.CONFESSION_REPORT;
-            }
-
-            return true;
+            return matchesLogFilter(p);
         }
-        return true;
+
+        // Other tabs: keep packets available (so filters don't look broken), but still allow ERROR/SPEECH/CHEM narrowing
+        return matchesLogFilter(p);
     });
 
     const bpm = 60 + (limbicState.fear * 80) + (somaState?.cognitiveLoad || 0 * 0.5);
