@@ -1,6 +1,9 @@
 import { CognitivePacket, EventHandler, PacketType } from "../types";
+import { isFeatureEnabled } from './config/featureFlags';
+import { getCurrentTraceId } from './trace/TraceContext';
 
 class CognitiveBus {
+
   private listeners: { [key: string]: EventHandler[] } = {};
   private history: CognitivePacket[] = [];
 
@@ -17,15 +20,21 @@ class CognitiveBus {
   }
 
   publish(packet: CognitivePacket) {
+    let nextPacket = packet;
+    if (isFeatureEnabled('USE_TRACE_AUTO_INJECT') && !packet.traceId) {
+      const active = getCurrentTraceId();
+      if (active) nextPacket = { ...packet, traceId: active };
+    }
+
     // Log to history (Short term buffer)
-    this.history.push(packet);
+    this.history.push(nextPacket);
     // Increased buffer to 1000 to support meaningful session exports
     if (this.history.length > 1000) this.history.shift();
 
-    if (this.listeners[packet.type]) {
-      this.listeners[packet.type].forEach(handler => {
+    if (this.listeners[nextPacket.type]) {
+      this.listeners[nextPacket.type].forEach(handler => {
         // Asynchronous execution to simulate distributed processing
-        setTimeout(() => handler(packet), 0);
+        setTimeout(() => handler(nextPacket), 0);
       });
     }
   }
@@ -35,11 +44,17 @@ class CognitiveBus {
    * Handlers execute immediately, no setTimeout.
    */
   publishSync(packet: CognitivePacket) {
-    this.history.push(packet);
+    let nextPacket = packet;
+    if (isFeatureEnabled('USE_TRACE_AUTO_INJECT') && !packet.traceId) {
+      const active = getCurrentTraceId();
+      if (active) nextPacket = { ...packet, traceId: active };
+    }
+
+    this.history.push(nextPacket);
     if (this.history.length > 1000) this.history.shift();
 
-    if (this.listeners[packet.type]) {
-      this.listeners[packet.type].forEach(handler => handler(packet));
+    if (this.listeners[nextPacket.type]) {
+      this.listeners[nextPacket.type].forEach(handler => handler(nextPacket));
     }
   }
 

@@ -24,7 +24,7 @@ import { SYSTEM_CONFIG } from '../config/systemConfig';
 import { isFeatureEnabled } from '../config';
 import { UnifiedContextBuilder, type StylePrefs, type BasePersona } from '../context';
 import { AutonomyRepertoire, type ActionDecision } from './AutonomyRepertoire';
-import { generateTraceId, type TraceContext } from '../trace/TraceContext';
+import { TraceContext, generateTraceId, pushTraceId, popTraceId } from '../trace/TraceContext';
 import { getCurrentAgentId } from '../../services/supabase';
 import { createMemorySpace } from './MemorySpace';
 import { TickCommitter } from './TickCommitter';
@@ -113,6 +113,8 @@ export namespace EventLoop {
             startedAt,
             agentId: getCurrentAgentId()
         };
+
+        pushTraceId(trace.traceId);
 
         let skipped = false;
         let skipReason: string | null = null;
@@ -785,6 +787,8 @@ export namespace EventLoop {
                 },
                 priority: 1
             });
+
+            popTraceId(trace.traceId);
         }
     }
 }
