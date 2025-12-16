@@ -106,9 +106,10 @@ export namespace EventLoop {
         callbacks: LoopCallbacks
     ): Promise<LoopContext> {
         const startedAt = Date.now();
+        const tickNumber = tickCount++;
         const trace: TraceContext = {
-            traceId: generateTraceId(),
-            tickNumber: tickCount++,
+            traceId: generateTraceId(startedAt, tickNumber),
+            tickNumber,
             startedAt,
             agentId: getCurrentAgentId()
         };

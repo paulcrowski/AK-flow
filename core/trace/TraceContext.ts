@@ -5,8 +5,6 @@ export interface TraceContext {
   agentId: string | null;
 }
 
-export function generateTraceId(): string {
-  const timestamp = Date.now();
-  const random = Math.random().toString(36).slice(2, 8);
-  return `tick-${timestamp}-${random}`;
+export function generateTraceId(startedAt: number, tickNumber: number): string {
+  return `tick-${startedAt}-${tickNumber}`;
 }
