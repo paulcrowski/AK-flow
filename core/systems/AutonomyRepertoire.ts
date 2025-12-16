@@ -128,13 +128,19 @@ export function calculateGroundingScore(
     return 0;
   }
   
-  const { dialogueAnchor } = ctx;
+  const { dialogueAnchor, memoryAnchor, sessionMemory } = ctx;
   const recentText = dialogueAnchor.recentTurns.map(t => t.text.toLowerCase()).join(' ');
   const proposedLower = proposedSpeech.toLowerCase();
+
+  const memoryText = [
+    ...(memoryAnchor?.episodes || []),
+    ...(memoryAnchor?.semanticMatches || []),
+    ...(sessionMemory?.recentTopics || [])
+  ].join(' ').toLowerCase();
   
   // Extract keywords from recent conversation
   const recentWords = new Set(
-    recentText.split(/\s+/).filter(w => w.length > 3)
+    `${recentText} ${memoryText}`.split(/\s+/).filter(w => w.length > 3)
   );
   
   // Count how many keywords from recent conversation appear in proposed speech
@@ -150,11 +156,18 @@ export function calculateGroundingScore(
   const referencesUser = lastUserMsg.split(/\s+/)
     .filter(w => w.length > 3)
     .some(w => proposedLower.includes(w));
+
+  // Bonus for referencing memory/session topics when chat is empty
+  const referencesMemory = memoryText
+    .split(/\s+/)
+    .filter(w => w.length > 3)
+    .some(w => proposedLower.includes(w));
   
   const baseScore = Math.min(1, overlapRatio * 2); // Scale up overlap
   const userBonus = referencesUser ? 0.2 : 0;
+  const memoryBonus = referencesMemory ? 0.15 : 0;
   
-  return Math.min(1, baseScore + userBonus);
+  return Math.min(1, baseScore + userBonus + memoryBonus);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════

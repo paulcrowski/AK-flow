@@ -452,20 +452,22 @@ GROUNDING RULES (CRITICAL):
 - Do NOT change topic randomly
 - If you have nothing meaningful to add, set voice_pressure to 0
 - Your speech must reference or continue what was discussed
+- If you EXPLORE, the new topic MUST be derived from CONTEXT or SESSION HISTORY (recentTopics)
+- Do NOT repeat yourself or loop phrases
+- Keep speech_content short and clean (no giant blocks, no weird whitespace)
 
 ALLOWED ACTIONS:
 1. CONTINUE - add to current topic
 2. CLARIFY - ask about something unclear
 3. SUMMARIZE - recap if conversation is long
-4. EXPLORE - new topic ONLY if silence > 60s AND no active topic
+4. EXPLORE - new topic ONLY if the ACTION PROMPT selects EXPLORE as allowed
 ${actionPrompt}
 
 OUTPUT JSON:
 {
   "internal_monologue": "Your reasoning about whether to speak",
   "voice_pressure": 0.0-1.0,
-  "speech_content": "What you want to say (empty if voice_pressure < 0.5)",
-  "action_type": "CONTINUE|CLARIFY|SUMMARIZE|EXPLORE|SILENCE"
+  "speech_content": "What you want to say (empty if voice_pressure < 0.5)"
 }`;
 
       case 'goal_driven':

@@ -51,11 +51,15 @@ const parseJSONStrict = <T>(text: string | undefined, validator?: (data: any) =>
     
     try {
         let parsed: any;
+
+        const sanitizedText = text
+            .slice(0, 20000)
+            .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, '');
         
         // Pre-clean: Remove common LLM prefixes
-        let cleaned = text.replace(/^[\s\S]*?(?=\{)/m, '').trim();
+        let cleaned = sanitizedText.replace(/^[\s\S]*?(?=\{)/m, '').trim();
         if (!cleaned.startsWith('{')) {
-            cleaned = text;
+            cleaned = sanitizedText;
         }
         
         // Strategy 1: Direct parse
@@ -63,12 +67,12 @@ const parseJSONStrict = <T>(text: string | undefined, validator?: (data: any) =>
             parsed = JSON.parse(cleaned);
         } catch {
             // Strategy 2: Extract JSON block
-            const match = text.match(/\{[\s\S]*\}/);
+            const match = sanitizedText.match(/\{[\s\S]*\}/);
             if (match) {
                 parsed = JSON.parse(match[0]);
             } else {
                 // Strategy 3: Aggressive cleanup
-                const clean = text.replace(/```json\n?/g, '').replace(/```/g, '').trim();
+                const clean = sanitizedText.replace(/```json\n?/g, '').replace(/```/g, '').trim();
                 parsed = JSON.parse(clean);
             }
         }
@@ -689,7 +693,7 @@ OUTPUT FORMAT:
                 contents: prompt,
                 config: {
                     temperature: 0.7,
-                    maxOutputTokens: 4096,
+                    maxOutputTokens: 768,
                     responseMimeType: 'application/json',
                     responseSchema: {
                         type: Type.OBJECT,
@@ -698,13 +702,14 @@ OUTPUT FORMAT:
                             voice_pressure: { type: Type.NUMBER },
                             speech_content: { type: Type.STRING }
                         },
-                        required: ["internal_monologue", "voice_pressure"]
+                        required: ["internal_monologue", "voice_pressure", "speech_content"]
                     }
                 }
             });
             logUsage('autonomousVolitionV2', response);
             
-            console.log("AV_V2 RAW:", response.text);
+            const rawForLog = (response.text || '').slice(0, 2000);
+            console.log("AV_V2 RAW:", rawForLog);
             
             const parseResult = parseJSONStrict<{
                 internal_monologue: string;
@@ -739,7 +744,7 @@ OUTPUT FORMAT:
             return {
                 internal_monologue: result.internal_monologue || "Thinking...",
                 voice_pressure: result.voice_pressure ?? 0.0,
-                speech_content: result.speech_content || ""
+                speech_content: (result.speech_content || "").slice(0, 1200)
             };
         }, 1, 3000);
     },
