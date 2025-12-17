@@ -212,9 +212,43 @@ export namespace CortexSystem {
         const recentHistory = conversationHistory.slice(-12);
 
         // 1. Retrieve relevant memories (RAG)
-        const memories = prefetchedMemories ?? (memorySpace
+        const baseMemories = prefetchedMemories ?? (memorySpace
             ? await memorySpace.hot.semanticSearch(text)
             : await MemoryService.semanticSearch(text));
+
+        // Heuristic fallback: for questions like "pamiętasz/dzisiaj/wczoraj" also include recent memories
+        let memories = baseMemories;
+        if (isFeatureEnabled('USE_MEMORY_RECALL_RECENT_FALLBACK')) {
+            const q = String(text || '').toLowerCase();
+            const looksLikeRecallQuestion =
+                q.includes('pamiętasz') ||
+                q.includes('pamietasz') ||
+                q.includes('wczoraj') ||
+                q.includes('dzis') ||
+                q.includes('dzisiaj') ||
+                q.includes('dziś') ||
+                q.includes('rozmow') ||
+                q.includes('rozmaw');
+
+            if (looksLikeRecallQuestion) {
+                try {
+                    const recent = await MemoryService.recallRecent(8);
+                    const merged = [...recent, ...baseMemories];
+                    const deduped: typeof merged = [];
+                    const seen = new Set<string>();
+                    for (const m of merged) {
+                        const key = String((m as any)?.id || (m as any)?.content || '');
+                        if (!key || seen.has(key)) continue;
+                        seen.add(key);
+                        deduped.push(m);
+                        if (deduped.length >= 12) break;
+                    }
+                    memories = deduped;
+                } catch {
+                    // silent fallback
+                }
+            }
+        }
 
         // --- NEW FLOW: PERSONA-LESS CORTEX (TAGGED COGNITION) ---
         if (isFeatureEnabled('USE_MINIMAL_CORTEX_PROMPT')) {
@@ -224,7 +258,12 @@ export namespace CortexSystem {
 
                 // Inject Retrieval Augmented Generation (RAG) into history as system context
                 if (memories.length > 0) {
-                    const ragContext = memories.map(m => `[MEMORY_RECALL]: ${m.content}`).join('\n');
+                    const ragContext = memories
+                        .map((m: any) => {
+                            const ts = typeof m?.timestamp === 'string' && m.timestamp ? ` ${m.timestamp}` : '';
+                            return `[MEMORY_RECALL${ts}]: ${m.content}`;
+                        })
+                        .join('\n');
                     formattedHistory.push(ragContext);
                 }
 

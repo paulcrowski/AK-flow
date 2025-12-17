@@ -250,11 +250,14 @@ export function CognitiveInterface() {
         resonanceField,
         neuroState,
         autonomousMode,
+        conversationSessions,
+        activeConversationSessionId,
         conversation,
         isProcessing,
         currentThought,
         systemError,
         handleInput,
+        selectConversationSession,
         retryLastAction,
         toggleAutonomy,
         toggleSleep,
@@ -523,6 +526,62 @@ export function CognitiveInterface() {
                             <span className="flex items-center gap-2"><RefreshCw size={12} /> RESET</span>
                             <span>NOW</span>
                         </button>
+                    </div>
+                </div>
+
+                <div className="p-4 border-b border-gray-800">
+                    <div className="flex items-center justify-between mb-2">
+                        <div className="text-[10px] font-mono tracking-widest text-gray-500">CONVERSATIONS</div>
+                        <div className="text-[10px] font-mono text-gray-600">{conversationSessions?.length ?? 0}</div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2 mb-3">
+                        <button
+                            onClick={() => selectConversationSession(activeConversationSessionId)}
+                            className="px-3 py-2 rounded-lg border border-gray-700 bg-gray-900/30 text-[11px] font-mono text-gray-300 hover:bg-gray-900/60 transition-colors"
+                            title="Continue active session"
+                            disabled={!activeConversationSessionId}
+                        >
+                            CONTINUE
+                        </button>
+                        <button
+                            onClick={() => selectConversationSession(null)}
+                            className="px-3 py-2 rounded-lg border border-gray-700 bg-gray-900/30 text-[11px] font-mono text-gray-300 hover:bg-gray-900/60 transition-colors"
+                            title="Start new session thread"
+                        >
+                            NEW
+                        </button>
+                    </div>
+
+                    <div className="space-y-2">
+                        {(conversationSessions || []).slice(0, 25).map((s) => {
+                            const isActive = activeConversationSessionId === s.sessionId;
+                            const label = s.preview || s.sessionId;
+                            const ts = Number.isFinite(s.lastTimestamp) ? new Date(s.lastTimestamp).toLocaleString() : '';
+                            return (
+                                <button
+                                    key={s.sessionId}
+                                    onClick={() => selectConversationSession(s.sessionId)}
+                                    className={`w-full text-left rounded-lg border px-3 py-2 text-[11px] transition-colors ${isActive
+                                        ? 'border-cyan-500/40 bg-cyan-900/10 text-cyan-100'
+                                        : 'border-gray-800 bg-gray-900/20 text-gray-200 hover:bg-gray-900/40'
+                                        }`}
+                                    title={s.sessionId}
+                                >
+                                    <div className="flex items-center justify-between gap-2 mb-1">
+                                        <span className="text-[9px] font-mono uppercase tracking-wider text-gray-500">{ts || '—'}</span>
+                                        <span className="text-[9px] font-mono text-gray-600">{s.messageCount}</span>
+                                    </div>
+                                    <div className="break-words opacity-90">
+                                        {String(label).slice(0, 120)}{String(label).length > 120 ? '…' : ''}
+                                    </div>
+                                </button>
+                            );
+                        })}
+
+                        {(conversationSessions || []).length === 0 && (
+                            <div className="text-[11px] text-gray-600 italic">No archived sessions yet.</div>
+                        )}
                     </div>
                 </div>
 

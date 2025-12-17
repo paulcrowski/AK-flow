@@ -1,6 +1,7 @@
 import { eventBus } from '../core/EventBus';
 import { CortexService } from '../services/gemini';
 import { MemoryService } from '../services/supabase';
+import { persistSearchKnowledgeChunk } from '../services/SearchKnowledgeChunker';
 import { AgentType, PacketType } from '../types';
 import { generateUUID } from './uuid';
 import * as SomaSystem from '../core/systems/SomaSystem';
@@ -166,6 +167,13 @@ export const createProcessOutputForTools = (deps: ToolParserDeps) => {
             }
 
             addMessage('assistant', research.synthesis, 'intel', undefined, research.sources);
+
+            // P0 v1.2: Persist SEARCH results as consolidated knowledge chunks (feature-flagged)
+            void persistSearchKnowledgeChunk({
+              query,
+              synthesis: research.synthesis,
+              sources: research.sources
+            });
           })
           .catch((error: any) => {
             op!.settled = true;

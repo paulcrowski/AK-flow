@@ -42,11 +42,11 @@ export const setCurrentAgentId = (agentId: string | null) => {
 export const getCurrentAgentId = () => currentAgentId;
 
 export const MemoryService = {
-  async storeMemory(memory: MemoryTrace) {
+  async storeMemory(memory: MemoryTrace): Promise<boolean> {
     try {
       if (!currentAgentId) {
         console.warn('[MemoryService] No agent selected, skipping memory store');
-        return;
+        return false;
       }
       
       const embedding = await CortexService.generateEmbedding(memory.content);
@@ -91,10 +91,14 @@ export const MemoryService = {
           if (fallbackResult.error) {
               console.error("Critical: Fallback Memory Insert also failed:", fallbackResult.error.message);
               // Swallow error to keep agent alive
+              return false;
           } else {
               console.log("Fallback Insert Successful (Legacy Mode)");
+              return true;
           }
       }
+
+      return true;
       
     } catch (error: any) {
       // FIX: Robust error serialization and swallowing so app doesn't crash
@@ -104,6 +108,7 @@ export const MemoryService = {
       } catch { errorMsg = "Unserializable DB Error"; }
       
       console.error(`Memory Store Error (Handled): ${errorMsg}`);
+      return false;
     }
   },
 

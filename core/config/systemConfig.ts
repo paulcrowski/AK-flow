@@ -71,6 +71,15 @@ export const SYSTEM_CONFIG = {
     
     /** Style examples w payload */
     USE_STYLE_EXAMPLES: false,
+
+    /** Fallback: for questions like 'pamiętasz/dzisiaj/wczoraj' also inject recent memories (recallRecent) into RAG */
+    USE_MEMORY_RECALL_RECENT_FALLBACK: true,
+
+    /** Persist SEARCH results as consolidated knowledge chunks (instead of raw logs) */
+    USE_SEARCH_KNOWLEDGE_CHUNKS: true,
+
+    /** Apply homeostasis to SEARCH knowledge chunks: dedupe/cooldown + neural_strength clamp */
+    USE_SEARCH_KNOWLEDGE_CHUNK_HOMEOSTASIS: true,
   },
 
   // ─────────────────────────────────────────────────────────────────────────

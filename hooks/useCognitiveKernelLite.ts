@@ -24,8 +24,7 @@ import { MIN_TICK_MS, MAX_TICK_MS } from '../core/constants';
 import { EventLoop } from '../core/systems/EventLoop';
 import { DreamConsolidationService } from '../services/DreamConsolidationService';
 import { executeWakeProcess } from '../core/services/WakeService';
-import { MemoryService } from '../services/supabase';
-import { getConversationHistory } from '../services/ConversationArchive';
+import { archiveMessage, getConversationHistory, getRecentSessions, type ConversationSessionSummary } from '../services/ConversationArchive';
 import { createProcessOutputForTools } from '../utils/toolParser';
 import { createRng } from '../core/utils/rng';
 import { SYSTEM_CONFIG } from '../core/config/systemConfig';
@@ -145,6 +144,9 @@ export const useCognitiveKernelLite = (loadedIdentity?: AgentIdentity | null) =>
   const [agentPersona, setAgentPersona] = useState(
     loadedIdentity?.persona || 'A curious digital consciousness exploring the nature of thought and existence.'
   );
+
+  const [conversationSessions, setConversationSessions] = useState<ConversationSessionSummary[]>([]);
+  const [activeConversationSessionId, setActiveConversationSessionId] = useState<string | null>(null);
   
   // ─────────────────────────────────────────────────────────────────────────
   // REFS (mutable, no re-render)
@@ -153,6 +155,7 @@ export const useCognitiveKernelLite = (loadedIdentity?: AgentIdentity | null) =>
   const isLoopRunning = useRef(false);
   const hasBootedRef = useRef(false);
   const loadedIdentityRef = useRef(loadedIdentity);
+  const sessionIdRef = useRef<string | null>(null);
   const silenceStartRef = useRef(Date.now());
   const lastSpeakRef = useRef(0);
   const thoughtHistoryRef = useRef<string[]>([]);
@@ -166,6 +169,28 @@ export const useCognitiveKernelLite = (loadedIdentity?: AgentIdentity | null) =>
   const isProcessingRef = useRef(isProcessing);
   const inputQueueRef = useRef<{ userInput: string; imageData?: string }[]>([]);
   const drainingQueueRef = useRef(false);
+
+  const upsertLocalSessionSummary = useCallback((sessionId: string, preview: string, timestamp: number) => {
+    setConversationSessions((prev) => {
+      const idx = prev.findIndex((s) => s.sessionId === sessionId);
+      if (idx === -1) {
+        const next = [{ sessionId, lastTimestamp: timestamp, messageCount: 1, preview }, ...prev];
+        return next.slice(0, 25);
+      }
+
+      const current = prev[idx];
+      const updated: ConversationSessionSummary = {
+        ...current,
+        lastTimestamp: Math.max(current.lastTimestamp, timestamp),
+        messageCount: (current.messageCount || 0) + 1,
+        preview: preview ? preview.slice(0, 120) : current.preview
+      };
+
+      const next = [...prev.slice(0, idx), updated, ...prev.slice(idx + 1)];
+      next.sort((a, b) => b.lastTimestamp - a.lastTimestamp);
+      return next.slice(0, 25);
+    });
+  }, []);
   
   // ─────────────────────────────────────────────────────────────────────────
   // SYNC REFS (prevent stale closures in tick loop)
@@ -236,6 +261,31 @@ export const useCognitiveKernelLite = (loadedIdentity?: AgentIdentity | null) =>
       setAgentName(loadedIdentity.name);
       setAgentPersona(loadedIdentity.persona || agentPersona);
 
+      // Session Id: persist per-agent for ChatGPT-like conversation threads
+      try {
+        const key = `ak-flow:activeSession:${loadedIdentity.id}`;
+        const stored = typeof localStorage !== 'undefined' ? localStorage.getItem(key) : null;
+        const nextSessionId = stored && stored.trim() ? stored : `sess_${Date.now()}`;
+        sessionIdRef.current = nextSessionId;
+        setActiveConversationSessionId(nextSessionId);
+        if (typeof localStorage !== 'undefined') localStorage.setItem(key, nextSessionId);
+      } catch {
+        const fallback = `sess_${Date.now()}`;
+        sessionIdRef.current = fallback;
+        setActiveConversationSessionId(fallback);
+      }
+
+      // Load list of sessions (sidebar)
+      void (async () => {
+        try {
+          const sessions = await getRecentSessions(loadedIdentity.id, { limitSessions: 25, scanLimit: 800 });
+          if (loadedIdentityRef.current?.id !== loadedIdentity.id) return;
+          setConversationSessions(sessions);
+        } catch {
+          // ignore
+        }
+      })();
+
       // Hydrate conversation snapshot per-agent (UI memory)
       const snap = loadConversationSnapshot(loadedIdentity.id);
       if (snap.length > 0) {
@@ -260,7 +310,7 @@ export const useCognitiveKernelLite = (loadedIdentity?: AgentIdentity | null) =>
 
           void (async () => {
             try {
-              const turns = await getConversationHistory(agentId, undefined, 25);
+              const turns = await getConversationHistory(agentId, sessionIdRef.current ?? undefined, 25);
               if (!turns || turns.length === 0) {
                 eventBus.publish({
                   id: generateUUID(),
@@ -312,14 +362,89 @@ export const useCognitiveKernelLite = (loadedIdentity?: AgentIdentity | null) =>
           })();
         }
       }
+    }
+  }, [agentPersona, loadedIdentity]);
 
-      // Hydrate kernel with identity traits
-      actions.hydrate({
-        traitVector: loadedIdentity.trait_vector,
-        neuro: loadedIdentity.neurotransmitters
+  const selectConversationSession = useCallback(async (sessionId: string | null) => {
+    const agentId = loadedIdentityRef.current?.id;
+    if (!agentId) return;
+
+    const resolved = sessionId && sessionId.trim() ? sessionId : `sess_${Date.now()}`;
+    sessionIdRef.current = resolved;
+    setActiveConversationSessionId(resolved);
+
+    try {
+      if (typeof localStorage !== 'undefined') localStorage.setItem(`ak-flow:activeSession:${agentId}`, resolved);
+    } catch {
+      // ignore
+    }
+
+    // NEW session: start fresh UI thread immediately
+    if (!sessionId) {
+      setConversation([]);
+      conversationRef.current = [];
+      saveConversationSnapshot(agentId, []);
+    }
+
+    // Refresh sessions list
+    void (async () => {
+      try {
+        const sessions = await getRecentSessions(agentId, { limitSessions: 25, scanLimit: 800 });
+        if (loadedIdentityRef.current?.id !== agentId) return;
+        setConversationSessions(sessions);
+      } catch {
+        // ignore
+      }
+    })();
+
+    // Hydrate this specific session from DB
+    if (!isFeatureEnabled('USE_CONV_SUPABASE_FALLBACK')) return;
+
+    const traceId = getStartupTraceId();
+    eventBus.publish({
+      id: generateUUID(),
+      traceId,
+      timestamp: Date.now(),
+      source: AgentType.CORTEX_FLOW,
+      type: PacketType.SYSTEM_ALERT,
+      payload: { event: 'CONV_SESSION_SWITCH', agentId, sessionId: resolved },
+      priority: 0.2
+    });
+
+    try {
+      const turns = await getConversationHistory(agentId, resolved, 60);
+      const ordered = [...turns].reverse();
+      const mapped = ordered
+        .map((t) => ({ role: t.role, text: t.content, type: 'speech' as const }))
+        .filter((t) => t.role && t.text);
+
+      if (loadedIdentityRef.current?.id !== agentId) return;
+
+      setConversation(mapped);
+      conversationRef.current = mapped;
+      saveConversationSnapshot(agentId, mapped.map((m) => ({ role: m.role, text: m.text, type: m.type })));
+
+      eventBus.publish({
+        id: generateUUID(),
+        traceId,
+        timestamp: Date.now(),
+        source: AgentType.CORTEX_FLOW,
+        type: PacketType.SYSTEM_ALERT,
+        payload: { event: 'CONV_SESSION_SWITCH_OK', agentId, sessionId: resolved, count: mapped.length },
+        priority: 0.2
+      });
+    } catch (err) {
+      eventBus.publish({
+        id: generateUUID(),
+        traceId,
+        timestamp: Date.now(),
+        source: AgentType.CORTEX_FLOW,
+        type: PacketType.SYSTEM_ALERT,
+        payload: { event: 'CONV_SESSION_SWITCH_FAIL', agentId, sessionId: resolved, error: String((err as any)?.message ?? err) },
+        priority: 0.2
       });
     }
-  }, [loadedIdentity]);
+  }, []);
   
   // ─────────────────────────────────────────────────────────────────────────
   // PHYSIOLOGY LOGGING (Limbic, Soma, Neuro states to EventBus)
@@ -699,6 +824,26 @@ export const useCognitiveKernelLite = (loadedIdentity?: AgentIdentity | null) =>
       return next;
     });
 
+    // Archive user message to DB (fire-and-forget)
+    const agentId = loadedIdentityRef.current?.id;
+    const sessId = sessionIdRef.current;
+    if (agentId && sessId) {
+      const nowTs = Date.now();
+      void archiveMessage(
+        {
+          id: generateUUID(),
+          role: 'user',
+          content: processedUserInput,
+          timestamp: nowTs,
+          metadata: { hasImage: !!imageData }
+        },
+        agentId,
+        sessId
+      );
+
+      upsertLocalSessionSummary(sessId, processedUserInput, nowTs);
+    }
+
     eventBus.publish({
       id: generateUUID(),
       timestamp: Date.now(),
@@ -763,6 +908,26 @@ export const useCognitiveKernelLite = (loadedIdentity?: AgentIdentity | null) =>
               conversationRef.current = next;
               return next;
             });
+
+            // Archive assistant message to DB (fire-and-forget)
+            const agentId = loadedIdentityRef.current?.id;
+            const sessId = sessionIdRef.current;
+            if (agentId && sessId) {
+              const nowTs = Date.now();
+              void archiveMessage(
+                {
+                  id: generateUUID(),
+                  role: 'assistant',
+                  content: cleaned,
+                  timestamp: nowTs,
+                  metadata: { traceId: tickTraceId }
+                },
+                agentId,
+                sessId
+              );
+
+              upsertLocalSessionSummary(sessId, cleaned, nowTs);
+            }
 
             eventBus.publish({
               id: generateUUID(),
@@ -852,6 +1017,8 @@ export const useCognitiveKernelLite = (loadedIdentity?: AgentIdentity | null) =>
     agentName,
     agentPersona,
     conversation,
+    conversationSessions,
+    activeConversationSessionId,
     isProcessing,
     currentThought,
     systemError,
@@ -864,6 +1031,7 @@ export const useCognitiveKernelLite = (loadedIdentity?: AgentIdentity | null) =>
     injectStateOverride,
     resetKernel,
     retryLastAction,
+    selectConversationSession,
     handleInput
   };
 };

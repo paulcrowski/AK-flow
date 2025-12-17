@@ -95,6 +95,27 @@ const FEATURE_FLAG_DEFINITIONS: Record<string, FeatureFlagDefinition> = {
     description: 'Include style examples from past SELF_SPEECH in payload',
     addedAt: '2025-12-08',
     experimental: true
+  },
+
+  USE_MEMORY_RECALL_RECENT_FALLBACK: {
+    enabled: SYSTEM_CONFIG.features.USE_MEMORY_RECALL_RECENT_FALLBACK,
+    description: "Fallback: for questions like 'pamiętasz/dzisiaj/wczoraj' also inject recent memories (recallRecent) into RAG",
+    addedAt: '2025-12-17',
+    experimental: true
+  },
+
+  USE_SEARCH_KNOWLEDGE_CHUNKS: {
+    enabled: SYSTEM_CONFIG.features.USE_SEARCH_KNOWLEDGE_CHUNKS,
+    description: 'Persist SEARCH results as consolidated knowledge chunks (instead of raw logs)',
+    addedAt: '2025-12-17',
+    experimental: true
+  },
+
+  USE_SEARCH_KNOWLEDGE_CHUNK_HOMEOSTASIS: {
+    enabled: SYSTEM_CONFIG.features.USE_SEARCH_KNOWLEDGE_CHUNK_HOMEOSTASIS,
+    description: 'Apply homeostasis to SEARCH knowledge chunks: dedupe/cooldown + neural_strength clamp',
+    addedAt: '2025-12-17',
+    experimental: true
   }
 } as const;
 
