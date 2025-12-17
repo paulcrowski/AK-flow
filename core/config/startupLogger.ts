@@ -32,6 +32,10 @@ interface ConfigSnapshot {
  * Call this once when app initializes.
  */
 export function logSystemConfig(): ConfigSnapshot {
+  const g = globalThis as any;
+  const shouldLog = !g.__AKFLOW_STARTUP_LOGGED__;
+  g.__AKFLOW_STARTUP_LOGGED__ = true;
+
   const snapshot: ConfigSnapshot = {
     timestamp: new Date().toISOString(),
     featureFlags: { ...FEATURE_FLAGS },
@@ -43,41 +47,43 @@ export function logSystemConfig(): ConfigSnapshot {
     }
   };
 
-  console.log('');
-  console.log('╔═══════════════════════════════════════════════════════════════╗');
-  console.log('║              AK-FLOW SYSTEM CONFIGURATION                     ║');
-  console.log('╠═══════════════════════════════════════════════════════════════╣');
-  console.log('║ FEATURE FLAGS:                                                ║');
-  
-  const flagDefs = getAllFeatureFlags();
-  for (const [key, value] of Object.entries(FEATURE_FLAGS)) {
-    const status = value ? '✅ ENABLED ' : '⏸️ DISABLED';
-    const desc = flagDefs[key]?.description || '';
-    console.log(`║   ${status} ${key.padEnd(30)} ║`);
+  if (shouldLog) {
+    console.log('');
+    console.log('╔═══════════════════════════════════════════════════════════════╗');
+    console.log('║              AK-FLOW SYSTEM CONFIGURATION                     ║');
+    console.log('╠═══════════════════════════════════════════════════════════════╣');
+    console.log('║ FEATURE FLAGS:                                                ║');
+    
+    const flagDefs = getAllFeatureFlags();
+    for (const [key, value] of Object.entries(FEATURE_FLAGS)) {
+      const status = value ? '✅ ENABLED ' : '⏸️ DISABLED';
+      const desc = flagDefs[key]?.description || '';
+      console.log(`║   ${status} ${key.padEnd(30)} ║`);
+    }
+    
+    console.log('╠═══════════════════════════════════════════════════════════════╣');
+    console.log('║ MODULE CONFIGS:                                               ║');
+    
+    // PRISM
+    console.log(`║   PRISM:                                                      ║`);
+    console.log(`║     GUARD_ENABLED:    ${PRISM_CONFIG.GUARD_ENABLED ? '✅' : '⏸️'}                                      ║`);
+    console.log(`║     RETRY_ENABLED:    ${PRISM_CONFIG.RETRY_ENABLED ? '✅' : '⏸️'}                                      ║`);
+    console.log(`║     LOG_ALL_CHECKS:   ${PRISM_CONFIG.LOG_ALL_CHECKS ? '✅' : '⏸️'}                                      ║`);
+    
+    // FactEcho
+    console.log(`║   FACT_ECHO:                                                  ║`);
+    console.log(`║     ENABLED:          ${FACT_ECHO_PIPELINE_CONFIG.ENABLED ? '✅' : '⏸️'}                                      ║`);
+    console.log(`║     STRICT_MODE:      ${FACT_ECHO_PIPELINE_CONFIG.DEFAULT_STRICT_MODE ? '✅' : '⏸️'}                                      ║`);
+    
+    // Chemistry
+    console.log(`║   CHEMISTRY_BRIDGE:                                           ║`);
+    console.log(`║     ENABLED:          ${CHEMISTRY_BRIDGE_CONFIG.ENABLED ? '✅' : '⏸️'}                                      ║`);
+    
+    console.log('╠═══════════════════════════════════════════════════════════════╣');
+    console.log(`║ Timestamp: ${snapshot.timestamp}                    ║`);
+    console.log('╚═══════════════════════════════════════════════════════════════╝');
+    console.log('');
   }
-  
-  console.log('╠═══════════════════════════════════════════════════════════════╣');
-  console.log('║ MODULE CONFIGS:                                               ║');
-  
-  // PRISM
-  console.log(`║   PRISM:                                                      ║`);
-  console.log(`║     GUARD_ENABLED:    ${PRISM_CONFIG.GUARD_ENABLED ? '✅' : '⏸️'}                                      ║`);
-  console.log(`║     RETRY_ENABLED:    ${PRISM_CONFIG.RETRY_ENABLED ? '✅' : '⏸️'}                                      ║`);
-  console.log(`║     LOG_ALL_CHECKS:   ${PRISM_CONFIG.LOG_ALL_CHECKS ? '✅' : '⏸️'}                                      ║`);
-  
-  // FactEcho
-  console.log(`║   FACT_ECHO:                                                  ║`);
-  console.log(`║     ENABLED:          ${FACT_ECHO_PIPELINE_CONFIG.ENABLED ? '✅' : '⏸️'}                                      ║`);
-  console.log(`║     STRICT_MODE:      ${FACT_ECHO_PIPELINE_CONFIG.DEFAULT_STRICT_MODE ? '✅' : '⏸️'}                                      ║`);
-  
-  // Chemistry
-  console.log(`║   CHEMISTRY_BRIDGE:                                           ║`);
-  console.log(`║     ENABLED:          ${CHEMISTRY_BRIDGE_CONFIG.ENABLED ? '✅' : '⏸️'}                                      ║`);
-  
-  console.log('╠═══════════════════════════════════════════════════════════════╣');
-  console.log(`║ Timestamp: ${snapshot.timestamp}                    ║`);
-  console.log('╚═══════════════════════════════════════════════════════════════╝');
-  console.log('');
 
   return snapshot;
 }

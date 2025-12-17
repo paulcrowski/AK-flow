@@ -695,7 +695,7 @@ OUTPUT FORMAT:
                 contents: prompt,
                 config: {
                     temperature: 0.7,
-                    maxOutputTokens: 768,
+                    maxOutputTokens: 1536,
                     responseMimeType: 'application/json',
                     responseSchema: {
                         type: Type.OBJECT,

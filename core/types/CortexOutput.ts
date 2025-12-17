@@ -91,6 +91,10 @@ export interface CortexOutput {
 
   /** Provenance of knowledge used for speech_content (observability/UI). */
   knowledge_source?: 'memory' | 'tool' | 'llm' | 'mixed' | 'system';
+
+  evidence_source?: 'memory' | 'tool' | 'system';
+
+  generator?: 'llm' | 'system';
   
   /** SYMBOLIC assessment of interaction (optional) */
   stimulus_response?: StimulusResponse;
@@ -140,6 +144,18 @@ export function isValidCortexOutput(obj: unknown): obj is CortexOutput {
     const ok = ks === 'memory' || ks === 'tool' || ks === 'llm' || ks === 'mixed' || ks === 'system';
     if (!ok) return false;
   }
+
+  const es = o.evidence_source;
+  if (es !== undefined) {
+    const ok = es === 'memory' || es === 'tool' || es === 'system';
+    if (!ok) return false;
+  }
+
+  const gen = o.generator;
+  if (gen !== undefined) {
+    const ok = gen === 'llm' || gen === 'system';
+    if (!ok) return false;
+  }
   
   // tool_intent jest opcjonalne, ale jeśli jest (i nie jest null), musi być poprawne
   if (o.tool_intent !== undefined && o.tool_intent !== null) {
@@ -171,8 +187,10 @@ export function isValidToolIntent(intent: unknown): intent is ToolIntent {
 /** Domyślny output w przypadku błędu parsowania */
 export const FALLBACK_CORTEX_OUTPUT: Readonly<CortexOutput> = {
   internal_thought: 'Parse error - using fallback',
-  speech_content: 'I encountered an issue processing that. Could you rephrase?',
+  speech_content: 'Wystąpił problem przy przetwarzaniu tej prośby. Spróbuj proszę sformułować pytanie inaczej.',
   knowledge_source: 'system',
+  evidence_source: 'system',
+  generator: 'system',
   stimulus_response: {
     valence: 'negative',
     salience: 'low',

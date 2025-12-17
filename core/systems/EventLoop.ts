@@ -95,7 +95,12 @@ export namespace EventLoop {
     // ═══════════════════════════════════════════════════════════════════════════
 
     export interface LoopCallbacks {
-        onMessage: (role: string, text: string, type: any, meta?: { knowledgeSource?: 'memory' | 'tool' | 'llm' | 'mixed' | 'system' }) => void;
+        onMessage: (role: string, text: string, type: any, meta?: {
+            knowledgeSource?: 'memory' | 'tool' | 'llm' | 'mixed' | 'system';
+            evidenceSource?: 'memory' | 'tool' | 'system';
+            evidenceDetail?: string;
+            generator?: 'llm' | 'system';
+        }) => void;
         onThought: (thought: string) => void;
         onSomaUpdate: (soma: SomaState) => void;
         onLimbicUpdate: (limbic: LimbicState) => void;
@@ -146,6 +151,9 @@ export namespace EventLoop {
 
         // 2. Process User Input (if any)
         if (input) {
+            // RACE CONDITION GUARD: Mark that user input arrived to block stale autonomous commits
+            TickCommitter.markUserInput();
+            
             const prefetchedMemories = isFeatureEnabled('USE_ONE_MIND_PIPELINE')
                 ? await memorySpace.hot.semanticSearch(input)
                 : undefined;
@@ -205,17 +213,32 @@ export namespace EventLoop {
                     });
 
                     if (commit.committed) {
-                        callbacks.onMessage('assistant', result.responseText, 'speech', { knowledgeSource: result.knowledgeSource });
+                        callbacks.onMessage('assistant', result.responseText, 'speech', {
+                            knowledgeSource: result.knowledgeSource,
+                            evidenceSource: result.evidenceSource,
+                            evidenceDetail: result.evidenceDetail,
+                            generator: result.generator
+                        });
                     } else {
                         callbacks.onThought(`[REACTIVE_SUPPRESSED] ${commit.blockReason || 'UNKNOWN'}`);
                     }
                 } catch (e) {
                     // FAIL-OPEN: reactive user response should never be silenced due to committer errors
                     callbacks.onThought(`[REACTIVE_COMMIT_ERROR] ${(e as Error)?.message || 'unknown'}`);
-                    callbacks.onMessage('assistant', result.responseText, 'speech', { knowledgeSource: result.knowledgeSource });
+                    callbacks.onMessage('assistant', result.responseText, 'speech', {
+                        knowledgeSource: result.knowledgeSource,
+                        evidenceSource: result.evidenceSource,
+                        evidenceDetail: result.evidenceDetail,
+                        generator: result.generator
+                    });
                 }
             } else {
-                callbacks.onMessage('assistant', result.responseText, 'speech', { knowledgeSource: result.knowledgeSource });
+                callbacks.onMessage('assistant', result.responseText, 'speech', {
+                    knowledgeSource: result.knowledgeSource,
+                    evidenceSource: result.evidenceSource,
+                    evidenceDetail: result.evidenceDetail,
+                    generator: result.generator
+                });
             }
 
             // Reset silence & mark user interaction for GoalSystem
@@ -358,7 +381,11 @@ export namespace EventLoop {
                         : { committed: true, blocked: false, deduped: false };
 
                     if (commit.committed) {
-                        callbacks.onMessage('assistant', speechText, 'speech', { knowledgeSource: result.knowledgeSource });
+                        callbacks.onMessage('assistant', speechText, 'speech', {
+                            knowledgeSource: result.knowledgeSource,
+                            evidenceSource: result.evidenceSource,
+                            generator: result.generator
+                        });
                     }
                 } else {
                     // Goal speech suppressed - log it
@@ -516,6 +543,25 @@ export namespace EventLoop {
                         },
                         priority: 0.7
                     });
+                    
+                    // AUTO-SEARCH FALLBACK: In strict mode, trigger SEARCH when grounding fails
+                    const lastUserMsg = unifiedContext.dialogueAnchor?.lastUserMessage;
+                    if (isFeatureEnabled('USE_GROUNDED_STRICT_MODE') && lastUserMsg) {
+                        const searchQuery = lastUserMsg.slice(0, 100);
+                        eventBus.publish({
+                            id: `grounding-auto-search-${Date.now()}`,
+                            timestamp: Date.now(),
+                            source: AgentType.CORTEX_FLOW,
+                            type: PacketType.TOOL_INTENT,
+                            payload: {
+                                tool: 'SEARCH',
+                                query: searchQuery,
+                                reason: 'AUTO_SEARCH: Grounding validation failed, triggering search for factual data'
+                            },
+                            priority: 0.8
+                        });
+                        callbacks.onThought(`[GROUNDING_AUTO_SEARCH] Triggering search for: "${searchQuery}"`);
+                    }
                     
                     // Force silence - ungrounded speech is blocked
                     volition.speech_content = '';

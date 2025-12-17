@@ -34,6 +34,27 @@ function extractJSONObject(input: string): string | null {
     return input.slice(start, end + 1);
 }
 
+/**
+ * Attempt to repair common JSON errors from LLM output:
+ * - Unquoted property names
+ * - Single quotes instead of double quotes
+ * - Trailing commas
+ */
+function repairJSON(input: string): string {
+    let result = input;
+    
+    // Replace single quotes with double quotes (but not inside strings)
+    result = result.replace(/'/g, '"');
+    
+    // Fix unquoted property names: { foo: "bar" } → { "foo": "bar" }
+    result = result.replace(/([{,]\s*)([a-zA-Z_][a-zA-Z0-9_]*)\s*:/g, '$1"$2":');
+    
+    // Remove trailing commas before } or ]
+    result = result.replace(/,(\s*[}\]])/g, '$1');
+    
+    return result;
+}
+
 function clampString(input: unknown, maxLen: number): string {
     if (typeof input !== 'string') return '';
     return sanitizeText(input, maxLen).trim();
@@ -110,12 +131,19 @@ export function applyAutonomyV2RawContract(
     try {
         parsed = JSON.parse(jsonObj);
     } catch (e) {
-        return {
-            ok: false,
-            value: silent,
-            reason: 'JSON_PARSE_ERROR',
-            details: e instanceof Error ? e.message : String(e)
-        };
+        // Try to repair common JSON errors and parse again
+        try {
+            const repaired = repairJSON(jsonObj);
+            parsed = JSON.parse(repaired);
+            console.log('[RawContract] JSON repaired successfully');
+        } catch (e2) {
+            return {
+                ok: false,
+                value: silent,
+                reason: 'JSON_PARSE_ERROR',
+                details: e instanceof Error ? e.message : String(e)
+            };
+        }
     }
 
     if (!parsed || typeof parsed !== 'object') {

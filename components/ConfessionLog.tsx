@@ -6,6 +6,8 @@ import { ShieldCheck, AlertTriangle, CheckCircle, HelpCircle, AlertOctagon, Scal
 export const ConfessionLog: React.FC = () => {
     const [reports, setReports] = useState<ConfessionReport[]>([]);
     const messagesEndRef = useRef<HTMLDivElement>(null);
+    const scrollRef = useRef<HTMLDivElement>(null);
+    const shouldAutoScrollRef = useRef(true);
 
     useEffect(() => {
         const history = eventBus.getHistory();
@@ -23,7 +25,22 @@ export const ConfessionLog: React.FC = () => {
     }, []);
 
     useEffect(() => {
-        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+        const el = scrollRef.current;
+        if (!el) return;
+
+        const onScroll = () => {
+            const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 160;
+            shouldAutoScrollRef.current = atBottom;
+        };
+
+        el.addEventListener('scroll', onScroll, { passive: true });
+        onScroll();
+        return () => el.removeEventListener('scroll', onScroll);
+    }, []);
+
+    useEffect(() => {
+        if (!shouldAutoScrollRef.current) return;
+        messagesEndRef.current?.scrollIntoView({ behavior: 'auto' });
     }, [reports]);
 
     return (
@@ -35,7 +52,7 @@ export const ConfessionLog: React.FC = () => {
                     <p className="text-[10px] mt-2">Agent has not spoken or self-reflected.</p>
                 </div>
             ) : (
-                <div className="flex-1 overflow-y-auto p-4 space-y-4">
+                <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-4">
                     {reports.map((report, idx) => (
                         <div key={idx} className="bg-[#0f1219] border border-gray-800 rounded-lg overflow-hidden animate-in fade-in slide-in-from-bottom-2 duration-500">
                             {/* Header */}

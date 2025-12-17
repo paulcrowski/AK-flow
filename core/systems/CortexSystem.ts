@@ -152,6 +152,9 @@ export namespace CortexSystem {
         internalThought: string;
         moodShift?: { fear_delta: number; curiosity_delta: number };
         knowledgeSource?: 'memory' | 'tool' | 'llm' | 'mixed' | 'system';
+        evidenceSource?: 'memory' | 'tool' | 'system';
+        evidenceDetail?: string;
+        generator?: 'llm' | 'system';
     }
 
     function buildStructuredPrompt(params: {
@@ -286,6 +289,15 @@ export namespace CortexSystem {
 
         const [baseMemories, globalRecent] = await Promise.all([semanticPromise, globalRecentPromise]);
 
+        // DEV DIAGNOSTIC: Log memory recall results
+        console.log('[MEMORY_RECALL]', {
+            query: text?.slice(0, 100),
+            semanticCount: baseMemories.length,
+            globalRecentCount: globalRecent.length,
+            semanticSamples: baseMemories.slice(0, 2).map((m: any) => m?.content?.slice(0, 80)),
+            recentSamples: globalRecent.slice(0, 2).map((m: any) => m?.content?.slice(0, 80))
+        });
+
         let memories: MemoryTrace[] = baseMemories;
         if (wantGlobalBaseline && globalRecent.length > 0) {
             const merged = [...globalRecent, ...baseMemories];
@@ -407,24 +419,51 @@ export namespace CortexSystem {
                 const gateResult = processDecisionGate(guardedOutput, currentSoma);
                 const output = gateResult.modifiedOutput;
 
+                const isParseFallback = String((output as any)?.internal_thought || '').includes('Parse error - using fallback');
+
                 const hasToolTag = /\[(SEARCH|VISUALIZE):/i.test(String(output?.speech_content || ''));
                 const strictGrounded = isFeatureEnabled('USE_GROUNDED_STRICT_MODE');
 
                 const hasMemories = memories.length > 0;
+                const hasSearchChunkMemory = hasMemories && memories.some((m: any) =>
+                    typeof m?.content === 'string' && m.content.includes('KNOWLEDGE_CHUNK (SEARCH)')
+                );
                 const evidenceKnowledgeSource: ProcessResult['knowledgeSource'] =
-                    hasToolTag
-                        ? 'tool'
-                        : hasMemories
-                            ? 'memory'
-                            : 'system';
+                    isParseFallback
+                        ? 'system'
+                        : hasToolTag
+                            ? 'tool'
+                            : hasMemories
+                                ? 'memory'
+                                : 'system';
 
                 const modelKnowledgeSource: ProcessResult['knowledgeSource'] =
                     (output as any)?.knowledge_source ||
                     (hasToolTag ? 'tool' : (hasMemories ? 'memory' : 'llm'));
 
+                const modelEvidenceSource: ProcessResult['evidenceSource'] =
+                    (output as any)?.evidence_source ||
+                    (hasToolTag ? 'tool' : (hasMemories ? 'memory' : 'system'));
+
+                const modelGenerator: ProcessResult['generator'] =
+                    (output as any)?.generator === 'system' ? 'system' : 'llm';
+
                 const derivedKnowledgeSource: ProcessResult['knowledgeSource'] = strictGrounded
                     ? evidenceKnowledgeSource
                     : modelKnowledgeSource;
+
+                const derivedEvidenceSource: ProcessResult['evidenceSource'] = strictGrounded
+                    ? evidenceKnowledgeSource
+                    : modelEvidenceSource;
+
+                const derivedEvidenceDetail: ProcessResult['evidenceDetail'] =
+                    isParseFallback
+                        ? 'parse_error'
+                        : evidenceKnowledgeSource === 'tool'
+                            ? 'live_tool'
+                            : evidenceKnowledgeSource === 'memory'
+                                ? (hasSearchChunkMemory ? 'search_chunk' : undefined)
+                                : undefined;
 
                 const shouldForceSearch = strictGrounded && derivedKnowledgeSource === 'system' && !hasToolTag && !hasMemories;
                 const finalSpeech = shouldForceSearch
@@ -492,7 +531,10 @@ export namespace CortexSystem {
                     responseText: finalSpeech,
                     internalThought: output.internal_thought,
                     moodShift: emotionDeltas,  // Computed by EmotionEngine
-                    knowledgeSource: shouldForceSearch ? 'tool' : derivedKnowledgeSource
+                    knowledgeSource: shouldForceSearch ? 'tool' : derivedKnowledgeSource,
+                    evidenceSource: shouldForceSearch ? 'system' : derivedEvidenceSource,
+                    evidenceDetail: shouldForceSearch ? 'forced_search' : derivedEvidenceDetail,
+                    generator: shouldForceSearch ? 'system' : modelGenerator
                 };
             }
         }
@@ -551,10 +593,31 @@ export namespace CortexSystem {
             }).catch(err => console.warn('[CortexSystem] Episode detection failed:', err));
         }
 
+        const legacyHasToolTag = /\[(SEARCH|VISUALIZE):/i.test(String(cortexResult.responseText || ''));
+        const strictGrounded = isFeatureEnabled('USE_GROUNDED_STRICT_MODE');
+        const legacyHasMemories = memories.length > 0;
+        const legacyEvidenceSource: ProcessResult['evidenceSource'] = legacyHasToolTag
+            ? 'tool'
+            : legacyHasMemories
+                ? 'memory'
+                : 'system';
+
+        const legacyKnowledgeSource: ProcessResult['knowledgeSource'] = strictGrounded
+            ? (legacyHasToolTag ? 'tool' : (legacyHasMemories ? 'memory' : 'system'))
+            : (legacyHasToolTag ? 'tool' : (legacyHasMemories ? 'memory' : 'llm'));
+
+        const legacyShouldForceSearch = strictGrounded && legacyEvidenceSource === 'system' && !legacyHasToolTag && !legacyHasMemories;
+        const legacyFinalSpeech = legacyShouldForceSearch
+            ? `Sprawdzę to. [SEARCH: ${String(text || '').slice(0, 160)}]`
+            : String(cortexResult.responseText || '');
+
         return {
-            responseText: cortexResult.responseText,
+            responseText: legacyFinalSpeech,
             internalThought: cortexResult.internalThought,
-            moodShift: emotionDeltas  // Now computed by EmotionEngine, not LLM
+            moodShift: emotionDeltas,  // Now computed by EmotionEngine, not LLM
+            knowledgeSource: legacyShouldForceSearch ? 'tool' : legacyKnowledgeSource,
+            evidenceSource: legacyShouldForceSearch ? 'system' : legacyEvidenceSource,
+            generator: legacyShouldForceSearch ? 'system' : 'llm'
         };
     }
 
@@ -573,6 +636,8 @@ export namespace CortexSystem {
         responseText: string;
         internalThought: string;
         knowledgeSource?: 'memory' | 'tool' | 'llm' | 'mixed' | 'system';
+        evidenceSource?: 'memory' | 'tool' | 'system';
+        generator?: 'llm' | 'system';
     }
 
     function buildGoalPrompt(params: {
@@ -705,11 +770,15 @@ export namespace CortexSystem {
         const hasToolTag = /\[(SEARCH|VISUALIZE):/i.test(String(decision.text || ''));
         const strictGrounded = isFeatureEnabled('USE_GROUNDED_STRICT_MODE');
         const knowledgeSource: GoalPursuitResult['knowledgeSource'] = hasToolTag ? 'tool' : (strictGrounded ? 'system' : 'llm');
+        const evidenceSource: GoalPursuitResult['evidenceSource'] = hasToolTag ? 'tool' : 'system';
+        const generator: GoalPursuitResult['generator'] = 'llm';
 
         return {
             responseText: decision.text,
             internalThought: cortexResult.internalThought,
-            knowledgeSource
+            knowledgeSource,
+            evidenceSource,
+            generator
         };
     }
 

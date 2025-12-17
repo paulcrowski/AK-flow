@@ -271,6 +271,8 @@ export function CognitiveInterface() {
     const [input, setInput] = useState('');
     const [sessionTokens, setSessionTokens] = useState(0);
     const chatEndRef = useRef<HTMLDivElement>(null);
+    const chatScrollRef = useRef<HTMLDivElement>(null);
+    const shouldAutoScrollRef = useRef(true);
     const lastResetSessionRef = useRef<string | null>(null); // Guard against StrictMode double-reset
 
     // --- KERNEL RESET ON SESSION CHANGE ---
@@ -316,10 +318,24 @@ export function CognitiveInterface() {
     }, []); // Empty deps - singleton, only init once
 
 
-    // --- AUTO-SCROLL ---
     useEffect(() => {
+        const el = chatScrollRef.current;
+        if (!el) return;
+
+        const onScroll = () => {
+            const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 160;
+            shouldAutoScrollRef.current = atBottom;
+        };
+
+        el.addEventListener('scroll', onScroll, { passive: true });
+        onScroll();
+        return () => el.removeEventListener('scroll', onScroll);
+    }, []);
+
+    useEffect(() => {
+        if (!shouldAutoScrollRef.current) return;
         if (chatEndRef.current) {
-            chatEndRef.current.scrollIntoView({ behavior: 'smooth' });
+            chatEndRef.current.scrollIntoView({ behavior: 'auto' });
         }
     }, [conversation]);
 
@@ -338,6 +354,7 @@ export function CognitiveInterface() {
 
     const onSend = () => {
         if (!input.trim()) return;
+        shouldAutoScrollRef.current = true;
         handleInput(input);
         setInput('');
     };
@@ -440,21 +457,37 @@ export function CognitiveInterface() {
         }
     };
 
-    const renderKnowledgeSourceBadge = (knowledgeSource?: string) => {
-        if (!knowledgeSource) return null;
+    const renderEvidenceSourceBadge = (evidenceSource?: string, evidenceDetail?: string) => {
+        if (!evidenceSource) return null;
 
-        const ks = String(knowledgeSource);
-        const label = ks.toUpperCase();
+        const es = String(evidenceSource);
+        const detail = typeof evidenceDetail === 'string' && evidenceDetail.trim() ? evidenceDetail.trim() : '';
+        const label = detail ? `EVID:${es.toUpperCase()}(${detail.toUpperCase()})` : `EVID:${es.toUpperCase()}`;
 
-        const cls = ks === 'tool'
+        const cls = es === 'tool'
             ? 'border-emerald-500/40 bg-emerald-900/10 text-emerald-300'
-            : ks === 'memory'
+            : es === 'memory'
                 ? 'border-violet-500/40 bg-violet-900/10 text-violet-300'
-                : ks === 'mixed'
-                    ? 'border-amber-500/40 bg-amber-900/10 text-amber-300'
-                    : ks === 'system'
-                        ? 'border-red-500/40 bg-red-900/10 text-red-300'
-                        : 'border-gray-500/40 bg-gray-900/10 text-gray-300';
+                : es === 'system'
+                    ? 'border-red-500/40 bg-red-900/10 text-red-300'
+                    : 'border-gray-500/40 bg-gray-900/10 text-gray-300';
+
+        return (
+            <span className={`ml-2 inline-flex items-center px-2 py-0.5 rounded border text-[9px] font-mono tracking-widest ${cls}`}>
+                {label}
+            </span>
+        );
+    };
+
+    const renderGeneratorBadge = (generator?: string) => {
+        if (!generator) return null;
+
+        const gen = String(generator);
+        const label = `GEN:${gen.toUpperCase()}`;
+
+        const cls = gen === 'system'
+            ? 'border-red-500/40 bg-red-900/10 text-red-300'
+            : 'border-gray-500/40 bg-gray-900/10 text-gray-300';
 
         return (
             <span className={`ml-2 inline-flex items-center px-2 py-0.5 rounded border text-[9px] font-mono tracking-widest ${cls}`}>
@@ -844,7 +877,7 @@ export function CognitiveInterface() {
                 </div>
 
                 {/* Chat Area */}
-                <div className="flex-1 overflow-y-auto p-6 space-y-6 bg-gradient-to-b from-brain-dark to-gray-900 scrollbar-thin relative">
+                <div ref={chatScrollRef} className="flex-1 overflow-y-auto p-6 space-y-6 bg-gradient-to-b from-brain-dark to-gray-900 scrollbar-thin relative">
                     {conversation.length === 0 && (
                         <div className="h-full flex flex-col items-center justify-center text-gray-600 opacity-50">
                             <Brain size={64} className="mb-4" />
@@ -919,7 +952,8 @@ export function CognitiveInterface() {
                                         <div className="bg-gradient-to-r from-cyan-900/30 to-transparent px-3 py-1.5 border-b border-cyan-800/30">
                                             <span className="text-[10px] text-cyan-400 uppercase tracking-widest flex items-center gap-1.5 font-bold">
                                                 <Sparkles size={10} /> COGNITIVE OUTPUT
-                                                {renderKnowledgeSourceBadge((msg as any)?.knowledgeSource)}
+                                                {renderEvidenceSourceBadge((msg as any)?.evidenceSource ?? (msg as any)?.knowledgeSource, (msg as any)?.evidenceDetail)}
+                                                {renderGeneratorBadge((msg as any)?.generator)}
                                             </span>
                                         </div>
                                     )}

@@ -136,6 +136,9 @@ export const useCognitiveKernelLite = (loadedIdentity?: AgentIdentity | null) =>
     text: string; 
     type?: 'thought' | 'speech' | 'visual' | 'intel' | 'action' | 'tool_result';
     knowledgeSource?: 'memory' | 'tool' | 'llm' | 'mixed' | 'system';
+    evidenceSource?: 'memory' | 'tool' | 'system';
+    evidenceDetail?: string;
+    generator?: 'llm' | 'system';
     imageData?: string;
     sources?: any[];
   }[]>([]);
@@ -212,7 +215,9 @@ export const useCognitiveKernelLite = (loadedIdentity?: AgentIdentity | null) =>
         role: c.role,
         text: c.text,
         type: c.type,
-        ...(c.knowledgeSource ? { knowledgeSource: c.knowledgeSource } : {})
+        ...(c.knowledgeSource ? { knowledgeSource: c.knowledgeSource } : {}),
+        ...(c.evidenceSource ? { evidenceSource: c.evidenceSource } : {}),
+        ...(c.generator ? { generator: c.generator } : {})
       }))
     );
   }, [conversation]);
@@ -302,7 +307,10 @@ export const useCognitiveKernelLite = (loadedIdentity?: AgentIdentity | null) =>
           role: t.role,
           text: t.text,
           type: t.type,
-          ...(t.knowledgeSource ? { knowledgeSource: t.knowledgeSource } : {})
+          ...(t.knowledgeSource ? { knowledgeSource: t.knowledgeSource } : {}),
+          ...(t.evidenceSource ? { evidenceSource: t.evidenceSource } : {}),
+          ...(t.evidenceDetail ? { evidenceDetail: t.evidenceDetail } : {}),
+          ...(t.generator ? { generator: t.generator } : {})
         }));
         setConversation(mapped);
         conversationRef.current = mapped;
@@ -347,6 +355,15 @@ export const useCognitiveKernelLite = (loadedIdentity?: AgentIdentity | null) =>
                   ...(typeof (t as any)?.metadata?.knowledgeSource === 'string'
                     ? { knowledgeSource: (t as any).metadata.knowledgeSource }
                     : {})
+                  ,...(typeof (t as any)?.metadata?.evidenceSource === 'string'
+                    ? { evidenceSource: (t as any).metadata.evidenceSource }
+                    : {})
+                  ,...(typeof (t as any)?.metadata?.evidenceDetail === 'string'
+                    ? { evidenceDetail: (t as any).metadata.evidenceDetail }
+                    : {})
+                  ,...(typeof (t as any)?.metadata?.generator === 'string'
+                    ? { generator: (t as any).metadata.generator }
+                    : {})
                 }))
                 .filter((t) => t.role && t.text);
 
@@ -358,7 +375,10 @@ export const useCognitiveKernelLite = (loadedIdentity?: AgentIdentity | null) =>
                 role: m.role,
                 text: m.text,
                 type: m.type,
-                ...(m.knowledgeSource ? { knowledgeSource: m.knowledgeSource } : {})
+                ...(m.knowledgeSource ? { knowledgeSource: m.knowledgeSource } : {}),
+                ...(m.evidenceSource ? { evidenceSource: m.evidenceSource } : {}),
+                ...(m.evidenceDetail ? { evidenceDetail: m.evidenceDetail } : {}),
+                ...(m.generator ? { generator: m.generator } : {})
               })));
 
               eventBus.publish({
@@ -444,6 +464,15 @@ export const useCognitiveKernelLite = (loadedIdentity?: AgentIdentity | null) =>
           ...(typeof (t as any)?.metadata?.knowledgeSource === 'string'
             ? { knowledgeSource: (t as any).metadata.knowledgeSource }
             : {})
+          ,...(typeof (t as any)?.metadata?.evidenceSource === 'string'
+            ? { evidenceSource: (t as any).metadata.evidenceSource }
+            : {})
+          ,...(typeof (t as any)?.metadata?.evidenceDetail === 'string'
+            ? { evidenceDetail: (t as any).metadata.evidenceDetail }
+            : {})
+          ,...(typeof (t as any)?.metadata?.generator === 'string'
+            ? { generator: (t as any).metadata.generator }
+            : {})
         }))
         .filter((t) => t.role && t.text);
 
@@ -455,7 +484,10 @@ export const useCognitiveKernelLite = (loadedIdentity?: AgentIdentity | null) =>
         role: m.role,
         text: m.text,
         type: m.type,
-        ...(m.knowledgeSource ? { knowledgeSource: m.knowledgeSource } : {})
+        ...(m.knowledgeSource ? { knowledgeSource: m.knowledgeSource } : {}),
+        ...(m.evidenceSource ? { evidenceSource: m.evidenceSource } : {}),
+        ...(m.evidenceDetail ? { evidenceDetail: m.evidenceDetail } : {}),
+        ...(m.generator ? { generator: m.generator } : {})
       })));
 
       eventBus.publish({
@@ -914,7 +946,15 @@ export const useCognitiveKernelLite = (loadedIdentity?: AgentIdentity | null) =>
           void (async () => {
             const cleaned = await processOutputForTools(text);
             setConversation(prev => {
-              const next = [...prev, { role, text: cleaned, type, ...(meta?.knowledgeSource ? { knowledgeSource: meta.knowledgeSource } : {}) }];
+              const next = [...prev, {
+                role,
+                text: cleaned,
+                type,
+                ...(meta?.knowledgeSource ? { knowledgeSource: meta.knowledgeSource } : {}),
+                ...(meta?.evidenceSource ? { evidenceSource: meta.evidenceSource } : {}),
+                ...(meta?.evidenceDetail ? { evidenceDetail: meta.evidenceDetail } : {}),
+                ...(meta?.generator ? { generator: meta.generator } : {})
+              }];
               conversationRef.current = next;
               return next;
             });
@@ -929,7 +969,13 @@ export const useCognitiveKernelLite = (loadedIdentity?: AgentIdentity | null) =>
                   role: 'assistant',
                   content: cleaned,
                   timestamp: nowTs,
-                  metadata: { traceId: tickTraceId, ...(meta?.knowledgeSource ? { knowledgeSource: meta.knowledgeSource } : {}) }
+                  metadata: {
+                    traceId: tickTraceId,
+                    ...(meta?.knowledgeSource ? { knowledgeSource: meta.knowledgeSource } : {}),
+                    ...(meta?.evidenceSource ? { evidenceSource: meta.evidenceSource } : {}),
+                    ...(meta?.evidenceDetail ? { evidenceDetail: meta.evidenceDetail } : {}),
+                    ...(meta?.generator ? { generator: meta.generator } : {})
+                  }
                 },
                 agentId,
                 sessId

@@ -8,10 +8,28 @@ import { ComponentErrorBoundary } from './components/ComponentErrorBoundary';
 import { Brain, Loader2 } from 'lucide-react';
 import { setCurrentAgentId } from './services/supabase';
 import { logSystemConfig, validateWiring } from './core/config';
+import { eventBus } from './core/EventBus';
+import { PacketType } from './types';
 
 // ALARM 3: Log system config and validate wiring at startup
 // This runs ONCE when the module is loaded
 logSystemConfig();
+
+if (import.meta.env.DEV) {
+  const g = globalThis as any;
+  if (!g.__AKFLOW_CONSOLE_PACKET_LOGGER__) {
+    g.__AKFLOW_CONSOLE_PACKET_LOGGER__ = true;
+    eventBus.subscribe(PacketType.SYSTEM_ALERT, (packet: any) => {
+      console.log('[SYSTEM_ALERT]', packet?.payload?.event ?? packet?.payload, packet);
+    });
+    eventBus.subscribe(PacketType.THOUGHT_CANDIDATE, (packet: any) => {
+      console.log('[THOUGHT]', packet?.payload?.event ?? packet?.payload, packet);
+    });
+    eventBus.subscribe(PacketType.PREDICTION_ERROR, (packet: any) => {
+      console.warn('[PREDICTION_ERROR]', packet?.payload?.metric ?? packet?.payload?.event ?? packet?.payload, packet);
+    });
+  }
+}
 
 // Validate critical systems are wired correctly
 // This catches "plumbing errors" before they cause runtime issues

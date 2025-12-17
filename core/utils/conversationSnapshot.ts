@@ -3,6 +3,9 @@ export type ConversationSnapshotTurn = {
   text: string;
   type?: 'thought' | 'speech' | 'visual' | 'intel' | 'action' | 'tool_result';
   knowledgeSource?: 'memory' | 'tool' | 'llm' | 'mixed' | 'system';
+  evidenceSource?: 'memory' | 'tool' | 'system';
+  evidenceDetail?: string;
+  generator?: 'llm' | 'system';
 };
 
 function sanitizeText(input: string, maxLen: number): string {
@@ -59,7 +62,34 @@ export function parseConversationSnapshot(raw: string | null | undefined, opts?:
         ? (rawKnowledgeSource as ConversationSnapshotTurn['knowledgeSource'])
         : undefined;
 
-    out.push({ role, text, type, ...(knowledgeSource ? { knowledgeSource } : {}) });
+    const rawEvidenceSource = (item as any).evidenceSource;
+    const evidenceSource =
+      rawEvidenceSource === 'memory' ||
+      rawEvidenceSource === 'tool' ||
+      rawEvidenceSource === 'system'
+        ? (rawEvidenceSource as ConversationSnapshotTurn['evidenceSource'])
+        : undefined;
+
+    const rawEvidenceDetail = (item as any).evidenceDetail;
+    const evidenceDetail = typeof rawEvidenceDetail === 'string' && rawEvidenceDetail.trim()
+      ? sanitizeText(rawEvidenceDetail, 64)
+      : undefined;
+
+    const rawGenerator = (item as any).generator;
+    const generator =
+      rawGenerator === 'llm' || rawGenerator === 'system'
+        ? (rawGenerator as ConversationSnapshotTurn['generator'])
+        : undefined;
+
+    out.push({
+      role,
+      text,
+      type,
+      ...(knowledgeSource ? { knowledgeSource } : {}),
+      ...(evidenceSource ? { evidenceSource } : {}),
+      ...(evidenceDetail ? { evidenceDetail } : {}),
+      ...(generator ? { generator } : {})
+    });
     if (out.length >= maxTurns) break;
   }
 
@@ -79,7 +109,10 @@ export function serializeConversationSnapshot(
       role: sanitizeText(String(t.role ?? ''), 32),
       text: sanitizeText(String(t.text ?? ''), maxTextLen),
       type: typeof t.type === 'string' && ALLOWED_TYPES.has(t.type) ? t.type : 'speech',
-      ...(t.knowledgeSource ? { knowledgeSource: t.knowledgeSource } : {})
+      ...(t.knowledgeSource ? { knowledgeSource: t.knowledgeSource } : {}),
+      ...(t.evidenceSource ? { evidenceSource: t.evidenceSource } : {}),
+      ...(t.evidenceDetail ? { evidenceDetail: sanitizeText(String(t.evidenceDetail), 64) } : {}),
+      ...(t.generator ? { generator: t.generator } : {})
     }))
     .filter((t) => t.role && t.text);
 

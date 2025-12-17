@@ -31,14 +31,43 @@ let dedupedCommits = 0;
 
 const lastSpeechByAgent = new Map<string, { signature: string; at: number }>();
 
+// RACE CONDITION GUARD: Track when user input arrived to block stale autonomous commits
+let lastUserInputAt = 0;
+
 function signatureFor(text: string): string {
     return text.trim().replace(/\s+/g, ' ').toLowerCase();
 }
 
 export const TickCommitter = {
+    /**
+     * Mark that user input has arrived - blocks stale autonomous/goal-driven commits
+     */
+    markUserInput(): void {
+        lastUserInputAt = Date.now();
+    },
+
     commitSpeech(input: TickCommitInput): TickCommitResult {
         const now = Date.now();
         const normalized = signatureFor(input.speechText);
+
+        // RACE CONDITION GUARD: Block autonomous/goal-driven if user input arrived recently
+        // This prevents "Niesamowite, prawda" when user asked about Einstein
+        if (input.origin !== 'reactive' && lastUserInputAt > 0) {
+            const staleness = now - lastUserInputAt;
+            if (staleness < 2000) {  // Within 2s of user input = stale autonomous
+                blockedCommits++;
+                totalCommits++;
+                
+                this.publishCommitEvent(input, {
+                    committed: false,
+                    blocked: true,
+                    blockReason: 'STALE_AUTONOMOUS',
+                    deduped: false
+                });
+                
+                return { committed: false, blocked: true, blockReason: 'STALE_AUTONOMOUS', deduped: false };
+            }
+        }
 
         if (input.blockReason) {
             blockedCommits++;
