@@ -25,6 +25,32 @@
 
 ---
 
+## Problem #24: Strict Grounded Mode — provenance confusion + parse fallback
+
+**Data:** 2025-12-17
+**Trudność:** 3/5
+**Status:** 🟡 Częściowo rozwiązany (provenance/parse fallback fixed; DETECT_INTENT NO_JSON nadal otwarte)
+
+### Objawy
+- W strict mode pojawiały się nieczytelne/mylące etykiety źródeł (np. `EVID:MEMORY` przy zachowaniu systemowym).
+- Przy błędach parsowania JSON z LLM użytkownik dostawał twardy fallback po angielsku, bez jasnego powodu.
+
+### Diagnoza
+1. Fallback parsowania jest hardcoded i trafia do pipeline bez dodatkowego doprecyzowania metadanych.
+2. Brak granularnego rozróżnienia "memory z SEARCH" vs "episodic/other" w warstwie UI powodował mylne wnioski.
+3. Dodatkowo `DETECT_INTENT` czasem zwraca `NO_JSON` / `PARSE_ERROR` (osobny kontrakt do utwardzenia).
+
+### Rozwiązanie (część 1: observability)
+- Dodano `evidenceDetail` i przepchnięto przez pipeline do UI.
+- Parse fallback:
+  - lokalizacja na PL,
+  - wymuszenie `EVID:SYSTEM(PARSE_ERROR)`.
+
+### Otwarte (część 2: kontrakt intentów)
+- `DETECT_INTENT NO_JSON` — do utwardzenia przez JSON extract/repair (jak RawContract) + fail-closed.
+
+---
+
 ## Problem #23: Rapid Input Drop + Stale Closure (UX/KernelLite Desync)
 
 **Data:** 2025-12-16

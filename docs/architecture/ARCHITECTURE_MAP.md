@@ -5,6 +5,24 @@
 
 ---
 
+## 🆕 FAZA 6.5: Grounded Strict + Provenance + Dream Topic Shards (2025-12-17)
+
+**Cel:** strict grounded mode ma być jednoznaczny w obserwowalności (skąd pochodzą fakty), a sen ma zostawiać ślad „tematów dnia”, nie tylko narrative-self.
+
+**Provenance (UI + pipeline):**
+- Metadane wypowiedzi: `knowledgeSource`, `evidenceSource`, `generator` + nowe `evidenceDetail`.
+- `evidenceDetail` rozróżnia m.in.:
+  - `SEARCH_CHUNK` (pamięć po wcześniejszym SEARCH)
+  - `LIVE_TOOL` (narzędzie w tej turze)
+  - `PARSE_ERROR` (fallback po błędzie parsowania)
+
+**Dream Topic Shards:**
+- Feature flag: `USE_DREAM_TOPIC_SHARDS`.
+- `DreamConsolidationService.storeTopicShardsFromRecent()`:
+  - Wejście: `MemoryService.recallRecent(60)`
+  - Wyjście: max 3 wpisy `TOPIC_SHARD: <topic>`
+  - Homeostaza: cooldown 12h + clamp strength 14..24
+
 ## 🆕 FAZA 6.4: ONE MIND Observability + UX Stability (2025-12-16)
 
 **Cel:** każdy tick jest korelowalny, a decyzja o mowie przechodzi przez jedną bramkę. UI ma narzędzia diagnostyczne bez dotykania logiki rdzenia.

@@ -1,10 +1,26 @@
 # AK-FLOW: Cognitive Agent Architecture Manifest
-**System Version:** 6.4 (ONE MIND Observability + UX Stability)  
-**Last Updated:** 2025-12-16  
+**System Version:** 6.5 (Grounded Strict + Provenance + Dream Topic Shards)  
+**Last Updated:** 2025-12-17  
 **Architecture Type:** Active Inference (Friston) + Global Workspace Theory + Multi-Modal RAG + **Stateless Inference Engine**  
 **Status:** Autonomous / Stateful / Modular / Self-Aware / Goal-Driven / Personality-Driven / **Emergent Identity**
 
 ---
+
+## 🆕 What's New in V6.5 (2025-12-17)
+
+### Grounded Strict: lepsza obserwowalność źródeł (provenance)
+
+**Wkład:**
+- Metadane odpowiedzi rozszerzone o `evidenceDetail` (np. `SEARCH_CHUNK`, `LIVE_TOOL`, `PARSE_ERROR`) dla czytelności w UI.
+- Parse fallback jest lokalizowany (PL) i wymusza jednoznaczne źródło: `EVID:SYSTEM(PARSE_ERROR)`.
+
+### Dream Consolidation: Topic Shards (pamięć tematów dnia)
+
+**Cel:** sen ma zostawiać ślad tematyczny (np. „fizyka”), nawet jeśli epizody z wysokim `neural_strength` są rzadkie.
+
+**Wkład:**
+- Feature flag: `USE_DREAM_TOPIC_SHARDS`.
+- Mechanika: analiza `recallRecent(60)` → zapis max 1–3 `TOPIC_SHARD` z homeostazą (cooldown 12h + clamp strength 14..24).
 
 ## 🆕 What's New in V6.4 (2025-12-16)
 

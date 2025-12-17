@@ -2,9 +2,22 @@
 description: Procedura Zamknięcia Dnia (AK-FLOW)
 ---
 
-# 🌙 Procedura Zamknięcia Dnia
+# 🌙 Procedura Zamknięcia Dnia (Day Close)
 
-Wykonuj to na końcu każdej sesji pracy.
+Cel: na końcu dnia masz zawsze:
+- build/test evidence,
+- daily log + (opcjonalnie) session log,
+- zaktualizowany NEXUS (`ak-flow-state.json`),
+- uzupełnione docs tylko tam, gdzie to ma sens.
+
+Zasada: **Ty odpalasz testy, ja wypełniam papierologię.**
+
+## 0) Nazwy plików (standaryzacja)
+
+- Daily log: `docs/daily logs/YYYY-MM-DD.md`
+- Session log (opcjonalny): `docs/daily logs/SESSION_YYYY-MM-DD_<slug>.md`
+
+Nie twórz nowych plików w formacie `SESSION_LOG_...`.
 
 ## 1) TESTY
 
@@ -32,6 +45,10 @@ Dopisz:
 - jak zweryfikowane (build/test)
 - co dalej
 
+Jeśli było kilka niezależnych wątków — dopisz też session log:
+
+- `docs/daily logs/SESSION_YYYY-MM-DD_<slug>.md`
+
 ## 4) CHALLENGES (tylko gdy zaszło „nowe zjawisko”)
 
 Jeśli był nowy problem / przełom: dopisz do:
@@ -45,7 +62,7 @@ Jeśli był nowy problem / przełom: dopisz do:
 
 ## 6) NEXUS (ak-flow-state.json)
 
-Zaktualizuj w `ak-flow-state.json`:
+Zaktualizuj w `ak-nexus/data/ak-flow-state.json`:
 
 - `lastModified`
 - dodaj note: `Daily Close: YYYY-MM-DD` (krótko: co, testy, co dalej)

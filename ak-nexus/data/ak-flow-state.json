@@ -1,7 +1,7 @@
 {
   "version": "1.0.0",
-  "lastUpdated": "2025-12-16T21:11:00.000Z",
-  "lastModified": "2025-12-16T21:11:00.000Z",
+  "lastUpdated": "2025-12-17T16:33:00.000Z",
+  "lastModified": "2025-12-17T16:33:00.000Z",
   "modifiedBy": "AI_WINDSURF",
   "project": "AK-Flow",
   "dailyGoal": "PROTOCOL: ALBERTO FIRST CONTACT (Vision, Orientation, Memory)",
@@ -840,6 +840,17 @@
       ],
       "createdAt": "2025-12-16T21:11:00.000Z",
       "updatedAt": "2025-12-16T21:11:00.000Z"
+    },
+    {
+      "id": "note-010",
+      "title": "Daily Close: 2025-12-17",
+      "content": "DONE: Strict grounded mode + provenance: doprecyzowane EVID/GEN w UI (evidenceDetail) oraz fallback parse error zlokalizowany po polsku i oznaczony jako SYSTEM(PARSE_ERROR). DONE: DreamConsolidation wzmocnione przez topic shards (USE_DREAM_TOPIC_SHARDS) — zapis 1-3 TOPIC_SHARD na bazie recallRecent(60) z cooldown 12h i clamp strength 14..24.\nVERIFY: npm run build PASS. npm test PASS (514/514).\nCOMMITS: 5192ccd.\nNEXT: Fix DETECT_INTENT NO_JSON (hardening kontraktu JSON jak RawContract).",
+      "category": "INSIGHT",
+      "tags": [
+        "daily_close"
+      ],
+      "createdAt": "2025-12-17T16:33:00.000Z",
+      "updatedAt": "2025-12-17T16:33:00.000Z"
     }
   ],
   "stats": {
@@ -851,8 +862,8 @@
     "currentPhase": "FAZA 6.2: Kernel Stabilization",
     "todayCompleted": 2,
     "streak": 6,
-    "testsTotal": 504,
-    "testsPassing": 504,
+    "testsTotal": 514,
+    "testsPassing": 514,
     "blocked": 0,
     "notImplemented": 14
   },
