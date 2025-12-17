@@ -247,7 +247,8 @@ export const useCognitiveKernelLite = (loadedIdentity?: AgentIdentity | null) =>
       setLimbicState,
       lastVisualTimestampRef,
       visualBingeCountRef,
-      stateRef: toolStateRef
+      stateRef: toolStateRef,
+      getActiveSessionId: () => sessionIdRef.current
     }),
     [setLimbicState, setSomaState]
   );

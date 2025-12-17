@@ -144,6 +144,7 @@ export interface MemoryTrace {
   lastAccessed?: string;
   imageData?: string; // NEW: Base64 image string for visual thoughts
   isVisualDream?: boolean; // NEW: Flag for dream content
+  metadata?: Record<string, any>; // NEW: provenance (origin/session_id/traceId/tool/etc.)
 }
 
 // NEW: Structured Error Handling

@@ -3,12 +3,24 @@ import { createClient } from '@supabase/supabase-js';
 import { MemoryTrace } from '../types';
 import { CortexService } from './gemini';
 import { RLSDiagnostics } from './RLSDiagnostics';
+import { eventBus } from '../core/EventBus';
+import { AgentType, PacketType } from '../types';
+import { generateUUID } from '../utils/uuid';
 
 const getEnv = (key: string) => typeof process !== 'undefined' ? process.env[key] : undefined;
 const SUPABASE_URL = getEnv('SUPABASE_URL') || 'https://qgnpsfoauhvddbxsoikj.supabase.co';
 const SUPABASE_KEY = getEnv('SUPABASE_KEY') || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFnbnBzZm9hdWh2ZGRieHNvaWtqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjM2MjY5NDEsImV4cCI6MjA3OTIwMjk0MX0.ZuCrnI6cFb_lD8U3th5zkMAXeEj-iohnmjq0pEEGEfI';
 
 export const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+
+const sanitizeJson = (input: unknown): Record<string, any> => {
+  if (!input || typeof input !== 'object') return {};
+  try {
+    return JSON.parse(JSON.stringify(input)) as Record<string, any>;
+  } catch {
+    return {};
+  }
+};
 
 // Compression Utility
 const compressNeuralImage = async (base64Str: string): Promise<string | null> => {
@@ -70,34 +82,124 @@ export const MemoryService = {
         event_id: memory.id
       };
 
-      // V3.1 Extended Payload
-      const extendedPayload = {
+      const wantsMetadata = Boolean(memory.metadata && typeof memory.metadata === 'object' && Object.keys(memory.metadata as any).length > 0);
+      const metadataSafe = wantsMetadata ? sanitizeJson(memory.metadata) : {};
+
+      // V3.2 Extended Payload (metadata + optional image/dream)
+      const extendedPayloadV32 = {
+        ...basePayload,
+        metadata: metadataSafe,
+        image_data: optimizedImage || null,
+        is_visual_dream: Boolean(memory.isVisualDream)
+      };
+
+      // ATTEMPT 1: Try Extended Insert (V3.2)
+      const resultV32 = await supabase.from('memories').insert([extendedPayloadV32]);
+
+      if (resultV32.error) {
+        if (wantsMetadata) {
+          eventBus.publish({
+            id: generateUUID(),
+            timestamp: Date.now(),
+            source: AgentType.CORTEX_FLOW,
+            type: PacketType.SYSTEM_ALERT,
+            payload: {
+              event: 'MEMORY_STORE_MODE',
+              mode: 'v32_fail',
+              error: resultV32.error.message
+            },
+            priority: 0.2
+          });
+        }
+        console.warn(
+          'Database Schema Mismatch (V3.2 columns may be missing). Attempting V3.1 Fallback. Error:',
+          resultV32.error.message
+        );
+
+        // ATTEMPT 2: Fallback to Extended Payload (V3.1: image_data + is_visual_dream)
+        const extendedPayloadV31 = {
           ...basePayload,
           image_data: optimizedImage || null,
           is_visual_dream: Boolean(memory.isVisualDream)
-      };
+        };
 
-      // ATTEMPT 1: Try Extended Insert (V3.1)
-      // We explicitly ignore the error inside the query builder and handle it in the catch/check block
-      const result = await supabase.from('memories').insert([extendedPayload]);
-      
-      if (result.error) {
-          // Log but don't crash yet
-          console.warn("Database Schema Mismatch (V3.1 columns may be missing). Attempting V3.0 Fallback. Error:", result.error.message);
-          
-          // ATTEMPT 2: Fallback to Base Payload (V3.0 Compatibility Mode)
-          const fallbackResult = await supabase.from('memories').insert([basePayload]);
-          
-          if (fallbackResult.error) {
-              console.error("Critical: Fallback Memory Insert also failed:", fallbackResult.error.message);
-              // Swallow error to keep agent alive
-              return false;
-          } else {
-              console.log("Fallback Insert Successful (Legacy Mode)");
-              return true;
+        const resultV31 = await supabase.from('memories').insert([extendedPayloadV31]);
+
+        if (resultV31.error) {
+          if (wantsMetadata) {
+            eventBus.publish({
+              id: generateUUID(),
+              timestamp: Date.now(),
+              source: AgentType.CORTEX_FLOW,
+              type: PacketType.SYSTEM_ALERT,
+              payload: {
+                event: 'MEMORY_STORE_MODE',
+                mode: 'v31_fail',
+                error: resultV31.error.message
+              },
+              priority: 0.2
+            });
           }
+          console.warn(
+            'Database Schema Mismatch (V3.1 columns may be missing). Attempting V3.0 Fallback. Error:',
+            resultV31.error.message
+          );
+
+          // ATTEMPT 3: Fallback to Base Payload (V3.0 Compatibility Mode)
+          const fallbackResult = await supabase.from('memories').insert([basePayload]);
+
+          if (fallbackResult.error) {
+            console.error('Critical: Fallback Memory Insert also failed:', fallbackResult.error.message);
+            return false;
+          }
+
+          console.log('Fallback Insert Successful (Legacy Mode)');
+          if (wantsMetadata) {
+            eventBus.publish({
+              id: generateUUID(),
+              timestamp: Date.now(),
+              source: AgentType.CORTEX_FLOW,
+              type: PacketType.SYSTEM_ALERT,
+              payload: {
+                event: 'MEMORY_STORE_MODE',
+                mode: 'v30_ok'
+              },
+              priority: 0.2
+            });
+          }
+          return true;
+        }
+
+        console.log('Fallback Insert Successful (V3.1 Mode)');
+        if (wantsMetadata) {
+          eventBus.publish({
+            id: generateUUID(),
+            timestamp: Date.now(),
+            source: AgentType.CORTEX_FLOW,
+            type: PacketType.SYSTEM_ALERT,
+            payload: {
+              event: 'MEMORY_STORE_MODE',
+              mode: 'v31_ok'
+            },
+            priority: 0.2
+          });
+        }
+        return true;
       }
 
+      if (wantsMetadata) {
+        eventBus.publish({
+          id: generateUUID(),
+          timestamp: Date.now(),
+          source: AgentType.CORTEX_FLOW,
+          type: PacketType.SYSTEM_ALERT,
+          payload: {
+            event: 'MEMORY_STORE_MODE',
+            mode: 'v32_ok'
+          },
+          priority: 0.2
+        });
+      }
       return true;
       
     } catch (error: any) {

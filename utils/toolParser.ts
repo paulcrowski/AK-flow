@@ -3,6 +3,7 @@ import { CortexService } from '../services/gemini';
 import { MemoryService } from '../services/supabase';
 import { persistSearchKnowledgeChunk } from '../services/SearchKnowledgeChunker';
 import { AgentType, PacketType } from '../types';
+import { getCurrentTraceId } from '../core/trace/TraceContext';
 import { generateUUID } from './uuid';
 import * as SomaSystem from '../core/systems/SomaSystem';
 import * as LimbicSystem from '../core/systems/LimbicSystem';
@@ -27,6 +28,9 @@ type InFlightOp<T> = {
   intentIds: Set<string>;
   timeoutEmitted: Set<string>;
   settled: boolean;
+  primaryIntentId?: string;
+  startedTraceId?: string;
+  startedSessionId?: string;
 };
 
 const searchInFlight = new Map<string, InFlightOp<any>>();
@@ -72,6 +76,7 @@ export interface ToolParserDeps {
   lastVisualTimestampRef: { current: number };
   visualBingeCountRef: { current: number };
   stateRef: { current: any };
+  getActiveSessionId?: () => string | null | undefined;
 }
 
 export const createProcessOutputForTools = (deps: ToolParserDeps) => {
@@ -119,13 +124,19 @@ export const createProcessOutputForTools = (deps: ToolParserDeps) => {
         addMessage('assistant', `Invoking SEARCH for: "${query}"`, 'action');
         setCurrentThought(`Researching: ${query}...`);
 
+        const startedTraceId = getCurrentTraceId() ?? undefined;
+        const startedSessionId = deps.getActiveSessionId?.() ?? undefined;
+
         const promise = CortexService.performDeepResearch(query, 'User requested data.');
         op = {
           promise,
           startedAt: Date.now(),
           intentIds: new Set<string>([intentId]),
           timeoutEmitted: new Set<string>(),
-          settled: false
+          settled: false,
+          primaryIntentId: intentId,
+          startedTraceId,
+          startedSessionId
         };
         searchInFlight.set(key, op);
 
@@ -172,7 +183,10 @@ export const createProcessOutputForTools = (deps: ToolParserDeps) => {
             void persistSearchKnowledgeChunk({
               query,
               synthesis: research.synthesis,
-              sources: research.sources
+              sources: research.sources,
+              traceId: op!.startedTraceId,
+              sessionId: op!.startedSessionId,
+              toolIntentId: op!.primaryIntentId
             });
           })
           .catch((error: any) => {

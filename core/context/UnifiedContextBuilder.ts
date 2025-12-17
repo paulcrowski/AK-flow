@@ -88,6 +88,7 @@ export interface HardFacts {
   date: string;
   time: string;
   agentName: string;
+  language?: string;
   energy: number;
   isSleeping: boolean;
   mode: 'awake' | 'sleep' | 'dream';
@@ -183,12 +184,15 @@ export const UnifiedContextBuilder = {
    */
   build(input: ContextBuilderInput): UnifiedContext {
     const now = new Date();
+
+    const desiredLanguage = input.stylePrefs?.language ?? input.basePersona.language ?? 'English';
     
     // Hard facts (immutable)
     const hardFacts: HardFacts = {
       date: now.toLocaleDateString('pl-PL'),
       time: now.toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' }),
       agentName: input.agentName,
+      language: desiredLanguage,
       energy: input.soma.energy,
       isSleeping: input.soma.isSleeping,
       mode: input.soma.isSleeping ? 'sleep' : 'awake'
@@ -229,7 +233,7 @@ export const UnifiedContextBuilder = {
       noCaps: input.stylePrefs?.noCaps ?? false,
       maxLength: input.stylePrefs?.maxLength,
       formalTone: input.stylePrefs?.formalTone ?? false,
-      language: input.stylePrefs?.language ?? input.basePersona.language ?? 'English'
+      language: desiredLanguage
     };
     
     return {
@@ -296,6 +300,7 @@ HARD FACTS (immutable):
 - Date: ${hardFacts.date}
 - Time: ${hardFacts.time}
 - Agent: ${hardFacts.agentName}
+- Language: ${String((hardFacts as any).language || 'English')}
 - Energy: ${hardFacts.energy.toFixed(0)}%
 - Mode: ${hardFacts.mode}
 
@@ -429,6 +434,7 @@ ACTIVE GOAL (${activeGoal.source.toUpperCase()}):
       case 'reactive':
         return `
 TASK: Respond to the user's message as ${hardFacts.agentName}.
+- You MUST respond in ${(hardFacts as any).language || 'English'}
 - Stay true to your persona and values
 - Address what the user said directly
 - Be helpful and authentic
@@ -446,6 +452,7 @@ OUTPUT JSON:
         const actionPrompt = ctx.actionPrompt || '';
         return `
 TASK: As ${hardFacts.agentName}, decide if you want to speak.
+- You MUST respond in ${(hardFacts as any).language || 'English'} (if you speak)
 
 GROUNDING RULES (CRITICAL):
 - You MUST stay grounded in the recent conversation
@@ -475,6 +482,7 @@ OUTPUT JSON:
 TASK: As ${hardFacts.agentName}, execute ONE action to advance this goal:
 "${activeGoal?.description || 'No goal'}"
 
+- You MUST respond in ${(hardFacts as any).language || 'English'}
 - Stay true to your persona
 - Be concise - one clear utterance
 - Connect to the conversation context

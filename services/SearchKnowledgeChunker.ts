@@ -126,12 +126,18 @@ export async function persistSearchKnowledgeChunk(input: {
   query: string;
   synthesis: string;
   sources?: SourceRef[];
+  traceId?: string;
+  sessionId?: string;
+  toolIntentId?: string;
 }): Promise<void> {
   if (!isFeatureEnabled('USE_SEARCH_KNOWLEDGE_CHUNKS')) return;
 
   const query = String(input.query || '').trim();
   const synthesis = String(input.synthesis || '').trim();
   const sources = Array.isArray(input.sources) ? input.sources : [];
+  const traceId = input.traceId ? String(input.traceId).trim() : undefined;
+  const sessionId = input.sessionId ? String(input.sessionId).trim() : undefined;
+  const toolIntentId = input.toolIntentId ? String(input.toolIntentId).trim() : undefined;
 
   if (!query || !synthesis) return;
 
@@ -179,6 +185,14 @@ export async function persistSearchKnowledgeChunk(input: {
     ? Math.max(strengthFloor, Math.min(strengthCeiling, 22))
     : 35;
 
+  const sourcesForMetadata = sources
+    .filter(Boolean)
+    .slice(0, 12)
+    .map((s) => ({
+      title: s?.title ? String(s.title).trim() : undefined,
+      uri: s?.uri ? String(s.uri).trim() : undefined
+    }));
+
   try {
     const ok = await MemoryService.storeMemory({
       id: generateUUID(),
@@ -186,7 +200,17 @@ export async function persistSearchKnowledgeChunk(input: {
       emotionalContext: { fear: 0, curiosity: 0, frustration: 0, satisfaction: 0 },
       timestamp: new Date().toISOString(),
       neuralStrength,
-      isCoreMemory: false
+      isCoreMemory: false,
+      metadata: {
+        origin: 'search',
+        kind: 'KNOWLEDGE_CHUNK',
+        chunk_version: '1.3',
+        query,
+        sources: sourcesForMetadata,
+        ...(traceId ? { traceId } : {}),
+        ...(sessionId ? { session_id: sessionId } : {}),
+        ...(toolIntentId ? { tool_intent_id: toolIntentId } : {})
+      }
     });
 
     eventBus.publish({
