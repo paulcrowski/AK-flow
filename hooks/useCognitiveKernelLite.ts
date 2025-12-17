@@ -131,6 +131,7 @@ export const useCognitiveKernelLite = (loadedIdentity?: AgentIdentity | null) =>
   // LOCAL REACT STATE (UI-specific, not in kernel)
   // ─────────────────────────────────────────────────────────────────────────
   const [conversation, setConversation] = useState<{ 
+    id?: string;
     role: string; 
     text: string; 
     type?: 'thought' | 'speech' | 'visual' | 'intel' | 'action' | 'tool_result';
@@ -167,8 +168,9 @@ export const useCognitiveKernelLite = (loadedIdentity?: AgentIdentity | null) =>
   // STALE CLOSURE FIX: Refs for values used in tick loop
   const conversationRef = useRef(conversation);
   const isProcessingRef = useRef(isProcessing);
-  const inputQueueRef = useRef<{ userInput: string; imageData?: string }[]>([]);
+  const inputQueueRef = useRef<{ clientMessageId: string; userInput: string; imageData?: string }[]>([]);
   const drainingQueueRef = useRef(false);
+  const lastEnqueueRef = useRef<{ text: string; at: number } | null>(null);
 
   const upsertLocalSessionSummary = useCallback((sessionId: string, preview: string, timestamp: number) => {
     setConversationSessions((prev) => {
@@ -808,15 +810,29 @@ export const useCognitiveKernelLite = (loadedIdentity?: AgentIdentity | null) =>
     hasBootedRef.current = false;
   }, [actions]);
 
-  const processSingleInput = useCallback(async (userInput: string, imageData?: string) => {
+  const processSingleInput = useCallback(async (clientMessageId: string, userInput: string, imageData?: string) => {
     silenceStartRef.current = Date.now();
 
     const processedUserInput = await processOutputForTools(userInput);
 
     const beforeConversation = conversationRef.current;
 
-    setConversation(prev => {
+    setConversation((prev) => {
+      const idx = prev.findIndex((m) => m?.id === clientMessageId);
+      if (idx !== -1) {
+        const updated = {
+          ...prev[idx],
+          role: 'user',
+          text: processedUserInput,
+          ...(imageData ? { imageData } : {})
+        };
+        const next = [...prev.slice(0, idx), updated, ...prev.slice(idx + 1)];
+        conversationRef.current = next;
+        return next;
+      }
+
       const next = [...prev, {
+        id: clientMessageId,
         role: 'user',
         text: processedUserInput,
         ...(imageData ? { imageData } : {})
@@ -832,7 +848,7 @@ export const useCognitiveKernelLite = (loadedIdentity?: AgentIdentity | null) =>
       const nowTs = Date.now();
       void archiveMessage(
         {
-          id: generateUUID(),
+          id: clientMessageId,
           role: 'user',
           content: processedUserInput,
           timestamp: nowTs,
@@ -978,7 +994,7 @@ export const useCognitiveKernelLite = (loadedIdentity?: AgentIdentity | null) =>
       while (inputQueueRef.current.length > 0) {
         const next = inputQueueRef.current.shift();
         if (!next) break;
-        await processSingleInput(next.userInput, next.imageData);
+        await processSingleInput(next.clientMessageId, next.userInput, next.imageData);
       }
     } catch (error) {
       inputQueueRef.current = [];
@@ -991,8 +1007,31 @@ export const useCognitiveKernelLite = (loadedIdentity?: AgentIdentity | null) =>
   }, [processSingleInput]);
 
   const handleInput = useCallback(async (userInput: string, imageData?: string) => {
-    inputQueueRef.current.push({ userInput, imageData });
-    await drainInputQueue();
+    const trimmed = (userInput || '').trim();
+    if (!trimmed) return;
+
+    const now = Date.now();
+    const last = lastEnqueueRef.current;
+    if (last && last.text === trimmed && (now - last.at) < 600) {
+      return;
+    }
+    lastEnqueueRef.current = { text: trimmed, at: now };
+
+    const clientMessageId = generateUUID();
+
+    setConversation((prev) => {
+      const next = [...prev, {
+        id: clientMessageId,
+        role: 'user',
+        text: trimmed,
+        ...(imageData ? { imageData } : {})
+      }];
+      conversationRef.current = next;
+      return next;
+    });
+
+    inputQueueRef.current.push({ clientMessageId, userInput: trimmed, imageData });
+    void drainInputQueue();
   }, [drainInputQueue]);
   
   const retryLastAction = useCallback(() => {

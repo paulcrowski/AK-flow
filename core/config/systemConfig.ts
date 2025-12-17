@@ -82,6 +82,8 @@ export const SYSTEM_CONFIG = {
 
     /** Apply homeostasis to SEARCH knowledge chunks: dedupe/cooldown + neural_strength clamp */
     USE_SEARCH_KNOWLEDGE_CHUNK_HOMEOSTASIS: true,
+
+    USE_GLOBAL_RECALL_DEFAULT: true,
   },
 
   // ─────────────────────────────────────────────────────────────────────────

@@ -26,6 +26,7 @@ import { processDecisionGate, resetTurnState } from './DecisionGate';
 import { guardCortexOutput, isPrismEnabled } from './PrismPipeline';
 import type { MemorySpace } from './MemorySpace';
 import type { MemoryTrace } from '../../types';
+import { getCurrentTraceId } from '../trace/TraceContext';
 
 export interface ConversationTurn {
     role: string;
@@ -211,13 +212,108 @@ export namespace CortexSystem {
         // 0. Context Diet: Slice history to recent turns only
         const recentHistory = conversationHistory.slice(-12);
 
+        const normalizeMemoryText = (input: unknown): string => {
+            const s = String(input ?? '').trim();
+            if (!s) return '';
+            return s.length > 900 ? `${s.slice(0, 900)}…` : s;
+        };
+
+        const withTimeout = async <T,>(p: Promise<T>, timeoutMs: number): Promise<{ ok: true; value: T } | { ok: false; reason: 'timeout' | 'error' }> => {
+            try {
+                const timeoutSymbol = Symbol('timeout');
+                const raced = await Promise.race([
+                    p,
+                    new Promise<typeof timeoutSymbol>((resolve) => setTimeout(() => resolve(timeoutSymbol), Math.max(0, timeoutMs)))
+                ]);
+
+                if (raced === timeoutSymbol) return { ok: false, reason: 'timeout' };
+                return { ok: true, value: raced as unknown as T };
+            } catch {
+                return { ok: false, reason: 'error' };
+            }
+        };
+
         // 1. Retrieve relevant memories (RAG)
-        const baseMemories = prefetchedMemories ?? (memorySpace
-            ? await memorySpace.hot.semanticSearch(text)
-            : await MemoryService.semanticSearch(text));
+        const semanticPromise: Promise<MemoryTrace[]> = prefetchedMemories
+            ? Promise.resolve(prefetchedMemories)
+            : (memorySpace
+                ? memorySpace.hot.semanticSearch(text)
+                : MemoryService.semanticSearch(text));
+
+        const wantGlobalBaseline = isFeatureEnabled('USE_GLOBAL_RECALL_DEFAULT');
+        const agentIdForCache = memorySpace?.agentId ?? getCurrentAgentId();
+        const globalRecentLimit = 4;
+        const globalRecentCacheTtlMs = 60_000;
+        const globalRecallTimeoutMs = 700;
+
+        const globalRecentPromise: Promise<MemoryTrace[]> = wantGlobalBaseline && agentIdForCache
+            ? (async () => {
+                const cache = memorySpace?.cold?.cache;
+                const key = `global_recent:${agentIdForCache}:${globalRecentLimit}`;
+
+                const load = () => MemoryService.recallRecent(globalRecentLimit);
+                const p = cache
+                    ? cache.getOrLoad(key, globalRecentCacheTtlMs, load).then((v) => (v as any as MemoryTrace[]))
+                    : load();
+
+                const startedAt = Date.now();
+                const res = await withTimeout(p, globalRecallTimeoutMs);
+                if (!res.ok) {
+                    eventBus.publish({
+                        id: generateUUID(),
+                        traceId: getCurrentTraceId() ?? undefined,
+                        timestamp: Date.now(),
+                        source: AgentType.CORTEX_FLOW,
+                        type: PacketType.SYSTEM_ALERT,
+                        payload: {
+                            event: 'GLOBAL_RECALL_TIMEOUT',
+                            reason: 'reason' in res ? res.reason : 'error',
+                            tookMs: Date.now() - startedAt
+                        },
+                        priority: 0.2
+                    });
+                    return [];
+                }
+                return Array.isArray(res.value) ? res.value : [];
+            })()
+            : Promise.resolve([]);
+
+        const [baseMemories, globalRecent] = await Promise.all([semanticPromise, globalRecentPromise]);
+
+        let memories: MemoryTrace[] = baseMemories;
+        if (wantGlobalBaseline && globalRecent.length > 0) {
+            const merged = [...globalRecent, ...baseMemories];
+            const deduped: MemoryTrace[] = [];
+            const seen = new Set<string>();
+            for (const m of merged) {
+                const key = String((m as any)?.id || (m as any)?.content || '');
+                if (!key || seen.has(key)) continue;
+                seen.add(key);
+                deduped.push({
+                    ...(m as any),
+                    content: normalizeMemoryText((m as any)?.content)
+                });
+                if (deduped.length >= 12) break;
+            }
+            memories = deduped;
+
+            eventBus.publish({
+                id: generateUUID(),
+                traceId: getCurrentTraceId() ?? undefined,
+                timestamp: Date.now(),
+                source: AgentType.CORTEX_FLOW,
+                type: PacketType.SYSTEM_ALERT,
+                payload: {
+                    event: 'GLOBAL_RECALL_USED',
+                    globalRecentCount: globalRecent.length,
+                    semanticCount: baseMemories.length,
+                    mergedCount: memories.length
+                },
+                priority: 0.2
+            });
+        }
 
         // Heuristic fallback: for questions like "pamiętasz/dzisiaj/wczoraj" also include recent memories
-        let memories = baseMemories;
         if (isFeatureEnabled('USE_MEMORY_RECALL_RECENT_FALLBACK')) {
             const q = String(text || '').toLowerCase();
             const looksLikeRecallQuestion =
@@ -233,7 +329,7 @@ export namespace CortexSystem {
             if (looksLikeRecallQuestion) {
                 try {
                     const recent = await MemoryService.recallRecent(8);
-                    const merged = [...recent, ...baseMemories];
+                    const merged = [...recent, ...memories];
                     const deduped: typeof merged = [];
                     const seen = new Set<string>();
                     for (const m of merged) {

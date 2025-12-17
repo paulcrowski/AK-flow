@@ -123,6 +123,13 @@ const FEATURE_FLAG_DEFINITIONS: Record<string, FeatureFlagDefinition> = {
     description: 'Apply homeostasis to SEARCH knowledge chunks: dedupe/cooldown + neural_strength clamp',
     addedAt: '2025-12-17',
     experimental: true
+  },
+
+  USE_GLOBAL_RECALL_DEFAULT: {
+    enabled: (SYSTEM_CONFIG.features as Record<string, boolean>).USE_GLOBAL_RECALL_DEFAULT ?? false,
+    description: 'Always inject a small cross-session global memory baseline (recallRecent) into RAG, with cache+timeout',
+    addedAt: '2025-12-17',
+    experimental: true
   }
 } as const;
 
