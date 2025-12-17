@@ -1,6 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import {
+  getConversationSnapshotStorageKey,
+  loadConversationSnapshot,
   parseConversationSnapshot,
+  saveConversationSnapshot,
   serializeConversationSnapshot
 } from '../../core/utils/conversationSnapshot';
 
@@ -44,5 +47,40 @@ describe('conversationSnapshot', () => {
     expect(parsed.length).toBe(2);
     expect(parsed[0].role).toBe('user');
     expect(parsed[1].role).toBe('assistant');
+  });
+
+  it('getConversationSnapshotStorageKey should be stable', () => {
+    expect(getConversationSnapshotStorageKey('abc')).toBe('ak-flow:conversation:abc');
+  });
+
+  it('saveConversationSnapshot/loadConversationSnapshot should roundtrip through localStorage', () => {
+    const store = new Map<string, string>();
+    (globalThis as any).localStorage = {
+      getItem: (k: string) => store.get(k) ?? null,
+      setItem: (k: string, v: string) => {
+        store.set(k, v);
+      }
+    };
+
+    saveConversationSnapshot('agent1', [
+      { role: 'user', text: 'hi', type: 'speech' },
+      { role: 'assistant', text: 'ok', type: 'speech' }
+    ]);
+
+    const loaded = loadConversationSnapshot('agent1');
+    expect(loaded.length).toBe(2);
+    expect(loaded[0].role).toBe('user');
+    expect(loaded[1].role).toBe('assistant');
+  });
+
+  it('loadConversationSnapshot should fail closed when localStorage throws', () => {
+    (globalThis as any).localStorage = {
+      getItem: () => {
+        throw new Error('boom');
+      }
+    };
+
+    const loaded = loadConversationSnapshot('agent1');
+    expect(loaded).toEqual([]);
   });
 });
