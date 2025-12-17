@@ -1,5 +1,5 @@
 import { AgentType, CognitivePacket, EventHandler, PacketType } from "../types";
-import { isFeatureEnabled } from './config/featureFlags';
+import { isOneMindSubEnabled } from './config/featureFlags';
 import { getCurrentTraceId, pushTraceId, popTraceId, generateExternalTraceId } from './trace/TraceContext';
 import { generateUUID } from '../utils/uuid';
 
@@ -24,7 +24,7 @@ class CognitiveBus {
     let nextPacket = packet;
     let traceInjected = false;
     let injectionMode: 'active_scope' | 'external' | null = null;
-    if (isFeatureEnabled('USE_TRACE_AUTO_INJECT') && !packet.traceId) {
+    if (isOneMindSubEnabled('traceAutoInject') && !packet.traceId) {
       const active = getCurrentTraceId();
       if (active) {
         nextPacket = { ...packet, traceId: active };
@@ -33,7 +33,7 @@ class CognitiveBus {
       }
     }
 
-    if (isFeatureEnabled('USE_TRACE_EXTERNAL_IDS') && !nextPacket.traceId) {
+    if (isOneMindSubEnabled('traceExternalIds') && !nextPacket.traceId) {
       const active = getCurrentTraceId();
       if (!active) {
         nextPacket = { ...nextPacket, traceId: generateExternalTraceId(nextPacket.timestamp) };
@@ -42,7 +42,7 @@ class CognitiveBus {
       }
     }
 
-    if (isFeatureEnabled('USE_TRACE_MISSING_ALERT') && traceInjected && injectionMode && nextPacket.traceId) {
+    if (isOneMindSubEnabled('traceMissingAlert') && traceInjected && injectionMode && nextPacket.traceId) {
       this.publish({
         id: generateUUID(),
         traceId: nextPacket.traceId,
@@ -70,7 +70,7 @@ class CognitiveBus {
       this.listeners[nextPacket.type].forEach(handler => {
         // Asynchronous execution to simulate distributed processing
         setTimeout(() => {
-          if (isFeatureEnabled('USE_TRACE_HANDLER_SCOPE') && nextPacket.traceId) {
+          if (isOneMindSubEnabled('traceHandlerScope') && nextPacket.traceId) {
             pushTraceId(nextPacket.traceId);
             try {
               handler(nextPacket);
@@ -94,7 +94,7 @@ class CognitiveBus {
     let nextPacket = packet;
     let traceInjected = false;
     let injectionMode: 'active_scope' | 'external' | null = null;
-    if (isFeatureEnabled('USE_TRACE_AUTO_INJECT') && !packet.traceId) {
+    if (isOneMindSubEnabled('traceAutoInject') && !packet.traceId) {
       const active = getCurrentTraceId();
       if (active) {
         nextPacket = { ...packet, traceId: active };
@@ -103,7 +103,7 @@ class CognitiveBus {
       }
     }
 
-    if (isFeatureEnabled('USE_TRACE_EXTERNAL_IDS') && !nextPacket.traceId) {
+    if (isOneMindSubEnabled('traceExternalIds') && !nextPacket.traceId) {
       const active = getCurrentTraceId();
       if (!active) {
         nextPacket = { ...nextPacket, traceId: generateExternalTraceId(nextPacket.timestamp) };
@@ -112,7 +112,7 @@ class CognitiveBus {
       }
     }
 
-    if (isFeatureEnabled('USE_TRACE_MISSING_ALERT') && traceInjected && injectionMode && nextPacket.traceId) {
+    if (isOneMindSubEnabled('traceMissingAlert') && traceInjected && injectionMode && nextPacket.traceId) {
       this.publishSync({
         id: generateUUID(),
         traceId: nextPacket.traceId,
@@ -136,7 +136,7 @@ class CognitiveBus {
 
     if (this.listeners[nextPacket.type]) {
       this.listeners[nextPacket.type].forEach(handler => {
-        if (isFeatureEnabled('USE_TRACE_HANDLER_SCOPE') && nextPacket.traceId) {
+        if (isOneMindSubEnabled('traceHandlerScope') && nextPacket.traceId) {
           pushTraceId(nextPacket.traceId);
           try {
             handler(nextPacket);

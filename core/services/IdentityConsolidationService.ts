@@ -31,7 +31,7 @@ import {
   parseCoherenceResponse
 } from './IdentityCoherenceService';
 
-import { isFeatureEnabled } from '../config/featureFlags';
+import { isCortexSubEnabled } from '../config/featureFlags';
 
 // ═══════════════════════════════════════════════════════════════
 // TYPES
@@ -67,7 +67,7 @@ export async function consolidateIdentity(
   input: ConsolidationInput
 ): Promise<IdentityConsolidationResult> {
   // Check feature flag
-  if (!isFeatureEnabled('USE_MINIMAL_CORTEX_PROMPT')) {
+  if (!isCortexSubEnabled('minimalPrompt')) {
     console.log('[IdentityConsolidation] Feature disabled, skipping');
     return {
       narrativeSelfUpdated: false,

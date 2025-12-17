@@ -20,6 +20,40 @@ export type OneMindSub = keyof typeof SYSTEM_CONFIG.oneMind;
 export type MemorySub = keyof typeof SYSTEM_CONFIG.memory;
 export type CortexSub = keyof typeof SYSTEM_CONFIG.cortex;
 
+const LEGACY_MAIN_MAP: Partial<Record<MainFeature, keyof typeof SYSTEM_CONFIG.features>> = {
+  ONE_MIND_ENABLED: 'USE_ONE_MIND_PIPELINE',
+  GROUNDED_MODE: 'USE_GROUNDED_STRICT_MODE',
+  DREAM_ENABLED: 'USE_DREAM_TOPIC_SHARDS'
+};
+
+const LEGACY_ONE_MIND_SUB_MAP: Partial<Record<OneMindSub, keyof typeof SYSTEM_CONFIG.features>> = {
+  traceAutoInject: 'USE_TRACE_AUTO_INJECT',
+  traceHandlerScope: 'USE_TRACE_HANDLER_SCOPE',
+  traceExternalIds: 'USE_TRACE_EXTERNAL_IDS',
+  traceMissingAlert: 'USE_TRACE_MISSING_ALERT'
+};
+
+const LEGACY_MEMORY_SUB_MAP: Partial<Record<MemorySub, keyof typeof SYSTEM_CONFIG.features>> = {
+  supabaseFallback: 'USE_CONV_SUPABASE_FALLBACK',
+  recallRecentFallback: 'USE_MEMORY_RECALL_RECENT_FALLBACK',
+  globalRecallDefault: 'USE_GLOBAL_RECALL_DEFAULT',
+  searchKnowledgeChunks: 'USE_SEARCH_KNOWLEDGE_CHUNKS',
+  chunkHomeostasis: 'USE_SEARCH_KNOWLEDGE_CHUNK_HOMEOSTASIS'
+};
+
+const LEGACY_CORTEX_SUB_MAP: Partial<Record<CortexSub, keyof typeof SYSTEM_CONFIG.features>> = {
+  minimalPrompt: 'USE_MINIMAL_CORTEX_PROMPT',
+  stateBuilder: 'USE_CORTEX_STATE_BUILDER',
+  metaStateHomeostasis: 'USE_META_STATE_HOMEOSTASIS',
+  identityCoherence: 'USE_IDENTITY_COHERENCE_CHECK',
+  styleExamples: 'USE_STYLE_EXAMPLES'
+};
+
+function legacyFlagValue(key: keyof typeof SYSTEM_CONFIG.features | undefined, fallback: boolean): boolean {
+  if (!key) return fallback;
+  return (SYSTEM_CONFIG.features as Record<string, boolean>)[key] ?? fallback;
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // NOWE ACCESSORY (5 GŁÓWNYCH FLAG)
 // ═══════════════════════════════════════════════════════════════════════════
@@ -29,7 +63,9 @@ export type CortexSub = keyof typeof SYSTEM_CONFIG.cortex;
  * @example isMainFeatureEnabled('ONE_MIND_ENABLED')
  */
 export function isMainFeatureEnabled(flag: MainFeature): boolean {
-  return SYSTEM_CONFIG.mainFeatures[flag] ?? false;
+  const base = SYSTEM_CONFIG.mainFeatures[flag] ?? false;
+  const legacyKey = LEGACY_MAIN_MAP[flag];
+  return base && legacyFlagValue(legacyKey, true);
 }
 
 /**
@@ -38,7 +74,9 @@ export function isMainFeatureEnabled(flag: MainFeature): boolean {
  */
 export function isOneMindSubEnabled(sub: OneMindSub): boolean {
   if (!SYSTEM_CONFIG.mainFeatures.ONE_MIND_ENABLED) return false;
-  return SYSTEM_CONFIG.oneMind[sub] ?? false;
+  const base = SYSTEM_CONFIG.oneMind[sub] ?? false;
+  const legacyKey = LEGACY_ONE_MIND_SUB_MAP[sub];
+  return base && legacyFlagValue(legacyKey, true);
 }
 
 /**
@@ -46,7 +84,9 @@ export function isOneMindSubEnabled(sub: OneMindSub): boolean {
  * @example isMemorySubEnabled('supabaseFallback')
  */
 export function isMemorySubEnabled(sub: MemorySub): boolean {
-  return SYSTEM_CONFIG.memory[sub] ?? false;
+  const base = SYSTEM_CONFIG.memory[sub] ?? false;
+  const legacyKey = LEGACY_MEMORY_SUB_MAP[sub];
+  return base && legacyFlagValue(legacyKey, true);
 }
 
 /**
@@ -54,7 +94,9 @@ export function isMemorySubEnabled(sub: MemorySub): boolean {
  * @example isCortexSubEnabled('minimalPrompt')
  */
 export function isCortexSubEnabled(sub: CortexSub): boolean {
-  return SYSTEM_CONFIG.cortex[sub] ?? false;
+  const base = SYSTEM_CONFIG.cortex[sub] ?? false;
+  const legacyKey = LEGACY_CORTEX_SUB_MAP[sub];
+  return base && legacyFlagValue(legacyKey, true);
 }
 
 /**

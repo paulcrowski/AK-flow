@@ -3,7 +3,7 @@ import { eventBus } from "../core/EventBus";
 import { AgentType, PacketType, CognitiveError, DetectedIntent, StylePreference, CommandType, UrgencyLevel } from "../types";
 import { generateUUID } from "../utils/uuid";
 import { getCurrentAgentId } from "./supabase";
-import { isFeatureEnabled } from "../core/config";
+import { isCortexSubEnabled, isMainFeatureEnabled } from "../core/config/featureFlags";
 import { buildMinimalCortexState } from "../core/builders";
 import { generateFromCortexState } from "../core/inference";
 import { guardLegacyResponse, isPrismEnabled } from "../core/systems/PrismPipeline";
@@ -431,7 +431,7 @@ OUTPUT FORMAT:
         };
 
         // --- NEW FLOW: PERSONA-LESS CORTEX (MVP) ---
-        if (isFeatureEnabled('USE_MINIMAL_CORTEX_PROMPT')) {
+        if (isCortexSubEnabled('minimalPrompt')) {
             return withRetry(async () => {
                 const agentId = getCurrentAgentId();
                 if (!agentId) throw new Error("Agent ID missing for Cortex flow");
@@ -713,7 +713,7 @@ OUTPUT FORMAT:
             const rawForLog = (response.text || '').slice(0, 2000);
             console.log("AV_V2 RAW:", rawForLog);
 
-            if (isFeatureEnabled('USE_ONE_MIND_PIPELINE')) {
+            if (isMainFeatureEnabled('ONE_MIND_ENABLED')) {
                 const contracted = applyAutonomyV2RawContract(response.text, {
                     maxRawLen: 20000,
                     maxInternalMonologueLen: 1200,

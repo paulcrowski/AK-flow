@@ -20,7 +20,7 @@ import { EmotionEngine } from './EmotionEngine';
 import { mapStimulusResponseToWeights } from '../inference/CortexInference';
 import { buildMinimalCortexState } from '../builders';
 import { generateFromCortexState } from '../inference';
-import { isFeatureEnabled } from '../config';
+import { isCortexSubEnabled, isMainFeatureEnabled, isMemorySubEnabled } from '../config/featureFlags';
 import { eventBus } from '../EventBus';
 import { processDecisionGate, resetTurnState } from './DecisionGate';
 import { guardCortexOutput, isPrismEnabled } from './PrismPipeline';
@@ -244,7 +244,7 @@ export namespace CortexSystem {
                 ? memorySpace.hot.semanticSearch(text)
                 : MemoryService.semanticSearch(text));
 
-        const wantGlobalBaseline = isFeatureEnabled('USE_GLOBAL_RECALL_DEFAULT');
+        const wantGlobalBaseline = isMemorySubEnabled('globalRecallDefault');
         const agentIdForCache = memorySpace?.agentId ?? getCurrentAgentId();
         const globalRecentLimit = 12;
         const globalRecentCacheTtlMs = 60_000;
@@ -332,7 +332,7 @@ export namespace CortexSystem {
         }
 
         // Heuristic fallback: for questions like "pamiętasz/dzisiaj/wczoraj" also include recent memories
-        if (isFeatureEnabled('USE_MEMORY_RECALL_RECENT_FALLBACK')) {
+        if (isMemorySubEnabled('recallRecentFallback')) {
             const q = String(text || '').toLowerCase();
             const looksLikeRecallQuestion =
                 q.includes('pamiętasz') ||
@@ -365,7 +365,7 @@ export namespace CortexSystem {
         }
 
         // --- NEW FLOW: PERSONA-LESS CORTEX (TAGGED COGNITION) ---
-        if (isFeatureEnabled('USE_MINIMAL_CORTEX_PROMPT')) {
+        if (isCortexSubEnabled('minimalPrompt')) {
             const agentId = getCurrentAgentId();
             if (agentId) {
                 const formattedHistory = formatHistoryForCortex(recentHistory);
@@ -422,7 +422,7 @@ export namespace CortexSystem {
                 const isParseFallback = String((output as any)?.internal_thought || '').includes('Parse error - using fallback');
 
                 const hasToolTag = /\[(SEARCH|VISUALIZE):/i.test(String(output?.speech_content || ''));
-                const strictGrounded = isFeatureEnabled('USE_GROUNDED_STRICT_MODE');
+                const strictGrounded = isMainFeatureEnabled('GROUNDED_MODE');
 
                 const hasMemories = memories.length > 0;
                 const hasSearchChunkMemory = hasMemories && memories.some((m: any) =>
@@ -594,7 +594,7 @@ export namespace CortexSystem {
         }
 
         const legacyHasToolTag = /\[(SEARCH|VISUALIZE):/i.test(String(cortexResult.responseText || ''));
-        const strictGrounded = isFeatureEnabled('USE_GROUNDED_STRICT_MODE');
+        const strictGrounded = isMainFeatureEnabled('GROUNDED_MODE');
         const legacyHasMemories = memories.length > 0;
         const legacyEvidenceSource: ProcessResult['evidenceSource'] = legacyHasToolTag
             ? 'tool'
@@ -768,7 +768,7 @@ export namespace CortexSystem {
         });
 
         const hasToolTag = /\[(SEARCH|VISUALIZE):/i.test(String(decision.text || ''));
-        const strictGrounded = isFeatureEnabled('USE_GROUNDED_STRICT_MODE');
+        const strictGrounded = isMainFeatureEnabled('GROUNDED_MODE');
         const knowledgeSource: GoalPursuitResult['knowledgeSource'] = hasToolTag ? 'tool' : (strictGrounded ? 'system' : 'llm');
         const evidenceSource: GoalPursuitResult['evidenceSource'] = hasToolTag ? 'tool' : 'system';
         const generator: GoalPursuitResult['generator'] = 'llm';

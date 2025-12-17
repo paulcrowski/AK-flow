@@ -21,7 +21,6 @@ import { computeDialogThreshold } from '../utils/thresholds';
 import { ExecutiveGate } from './ExecutiveGate';
 import { StyleGuard, UserStylePrefs } from './StyleGuard';
 import { SYSTEM_CONFIG } from '../config/systemConfig';
-import { isFeatureEnabled } from '../config';
 import { UnifiedContextBuilder, type StylePrefs, type BasePersona } from '../context';
 import { AutonomyRepertoire, type ActionDecision } from './AutonomyRepertoire';
 import { TraceContext, generateTraceId, pushTraceId, popTraceId } from '../trace/TraceContext';
@@ -29,6 +28,7 @@ import { getCurrentAgentId } from '../../services/supabase';
 import { createMemorySpace } from './MemorySpace';
 import { TickCommitter } from './TickCommitter';
 import { publishTickStart, publishTickSkipped, publishThinkModeSelected, publishTickEnd } from './TickLifecycleTelemetry';
+import { isMainFeatureEnabled } from '../config/featureFlags';
 
 let lastAutonomyActionSignature: string | null = null;
 let lastAutonomyActionLogAt = 0;
@@ -154,7 +154,7 @@ export namespace EventLoop {
             // RACE CONDITION GUARD: Mark that user input arrived to block stale autonomous commits
             TickCommitter.markUserInput();
             
-            const prefetchedMemories = isFeatureEnabled('USE_ONE_MIND_PIPELINE')
+            const prefetchedMemories = isMainFeatureEnabled('ONE_MIND_ENABLED')
                 ? await memorySpace.hot.semanticSearch(input)
                 : undefined;
 
@@ -202,7 +202,7 @@ export namespace EventLoop {
                 callbacks.onMessage('assistant', result.internalThought, 'thought');
             }
 
-            if (isFeatureEnabled('USE_ONE_MIND_PIPELINE') && trace.agentId) {
+            if (isMainFeatureEnabled('ONE_MIND_ENABLED') && trace.agentId) {
                 try {
                     const commit = TickCommitter.commitSpeech({
                         agentId: trace.agentId,
@@ -370,7 +370,7 @@ export namespace EventLoop {
                 if (goalGateDecision.should_speak && goalGateDecision.winner) {
                     const speechText = goalGateDecision.winner.speech_content;
 
-                    const commit = isFeatureEnabled('USE_ONE_MIND_PIPELINE')
+                    const commit = isMainFeatureEnabled('ONE_MIND_ENABLED')
                         ? TickCommitter.commitSpeech({
                             agentId: trace.agentId!,
                             traceId: trace.traceId,
@@ -436,7 +436,7 @@ export namespace EventLoop {
                 
                 const stylePrefs: StylePrefs = ctx.agentIdentity?.stylePrefs || {};
 
-                const memoryQuery = isFeatureEnabled('USE_ONE_MIND_PIPELINE')
+                const memoryQuery = isMainFeatureEnabled('ONE_MIND_ENABLED')
                     ? [...ctx.conversation].reverse().find(t => t.role === 'user')?.text
                     : null;
 
@@ -546,7 +546,7 @@ export namespace EventLoop {
                     
                     // AUTO-SEARCH FALLBACK: In strict mode, trigger SEARCH when grounding fails
                     const lastUserMsg = unifiedContext.dialogueAnchor?.lastUserMessage;
-                    if (isFeatureEnabled('USE_GROUNDED_STRICT_MODE') && lastUserMsg) {
+                    if (isMainFeatureEnabled('GROUNDED_MODE') && lastUserMsg) {
                         const searchQuery = lastUserMsg.slice(0, 100);
                         eventBus.publish({
                             id: `grounding-auto-search-${Date.now()}`,
@@ -755,7 +755,7 @@ export namespace EventLoop {
                     
                     // Only emit if text remains after filtering
                     if (styleResult.text.length > styleCfg.minTextLength) {
-                        const commit = isFeatureEnabled('USE_ONE_MIND_PIPELINE')
+                        const commit = isMainFeatureEnabled('ONE_MIND_ENABLED')
                             ? TickCommitter.commitSpeech({
                                 agentId: trace.agentId!,
                                 traceId: trace.traceId,
@@ -782,7 +782,7 @@ export namespace EventLoop {
                         ctx.limbic = LimbicSystem.applySpeechResponse(ctx.limbic);
                         callbacks.onLimbicUpdate(ctx.limbic);
                     } else {
-                        if (isFeatureEnabled('USE_ONE_MIND_PIPELINE')) {
+                        if (isMainFeatureEnabled('ONE_MIND_ENABLED')) {
                             TickCommitter.commitSpeech({
                                 agentId: trace.agentId!,
                                 traceId: trace.traceId,

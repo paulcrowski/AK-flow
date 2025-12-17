@@ -28,13 +28,9 @@ import { archiveMessage, getConversationHistory, getRecentSessions, type Convers
 import { createProcessOutputForTools } from '../utils/toolParser';
 import { createRng } from '../core/utils/rng';
 import { SYSTEM_CONFIG } from '../core/config/systemConfig';
-import { isFeatureEnabled } from '../core/config/featureFlags';
+import { isMemorySubEnabled } from '../core/config/featureFlags';
 import { getCurrentTraceId, getStartupTraceId } from '../core/trace/TraceContext';
-import {
-  loadConversationSnapshot,
-  saveConversationSnapshot,
-  serializeConversationSnapshot
-} from '../core/utils/conversationSnapshot';
+import { loadConversation, loadConversationForSession, syncToLocalStorage } from '../core/memory/ConversationStore';
 
 // Deterministic RNG for reproducible behavior
 const rng = createRng(SYSTEM_CONFIG.rng.seed);
@@ -209,17 +205,7 @@ export const useCognitiveKernelLite = (loadedIdentity?: AgentIdentity | null) =>
     const agentId = loadedIdentityRef.current?.id;
     if (!agentId) return;
 
-    saveConversationSnapshot(
-      agentId,
-      conversation.map((c) => ({
-        role: c.role,
-        text: c.text,
-        type: c.type,
-        ...(c.knowledgeSource ? { knowledgeSource: c.knowledgeSource } : {}),
-        ...(c.evidenceSource ? { evidenceSource: c.evidenceSource } : {}),
-        ...(c.generator ? { generator: c.generator } : {})
-      }))
-    );
+    syncToLocalStorage(agentId, conversation);
   }, [conversation]);
   
   useEffect(() => {
@@ -300,110 +286,30 @@ export const useCognitiveKernelLite = (loadedIdentity?: AgentIdentity | null) =>
         }
       })();
 
-      // Hydrate conversation snapshot per-agent (UI memory)
-      const snap = loadConversationSnapshot(loadedIdentity.id);
-      if (snap.length > 0) {
-        const mapped = snap.map((t) => ({
+      void (async () => {
+        const agentId = loadedIdentity.id;
+        const sessionId = sessionIdRef.current ?? undefined;
+        const res = await loadConversation(agentId, sessionId, {
+          traceId: getStartupTraceId(),
+          emitTelemetry: true,
+          limit: 25
+        });
+
+        if (loadedIdentityRef.current?.id !== agentId) return;
+
+        const mapped = res.turns.map((t) => ({
           role: t.role,
           text: t.text,
-          type: t.type,
+          type: (t.type ?? 'speech') as any,
           ...(t.knowledgeSource ? { knowledgeSource: t.knowledgeSource } : {}),
           ...(t.evidenceSource ? { evidenceSource: t.evidenceSource } : {}),
           ...(t.evidenceDetail ? { evidenceDetail: t.evidenceDetail } : {}),
           ...(t.generator ? { generator: t.generator } : {})
         }));
+
         setConversation(mapped);
         conversationRef.current = mapped;
-      } else {
-        setConversation([]);
-        conversationRef.current = [];
-        if (isFeatureEnabled('USE_CONV_SUPABASE_FALLBACK')) {
-          const agentId = loadedIdentity.id;
-          const startupTraceId = getStartupTraceId();
-          eventBus.publish({
-            id: generateUUID(),
-            traceId: startupTraceId,
-            timestamp: Date.now(),
-            source: AgentType.CORTEX_FLOW,
-            type: PacketType.SYSTEM_ALERT,
-            payload: { event: 'CONV_FALLBACK_DB_ATTEMPT', agentId },
-            priority: 0.2
-          });
-
-          void (async () => {
-            try {
-              const turns = await getConversationHistory(agentId, sessionIdRef.current ?? undefined, 25);
-              if (!turns || turns.length === 0) {
-                eventBus.publish({
-                  id: generateUUID(),
-                  traceId: startupTraceId,
-                  timestamp: Date.now(),
-                  source: AgentType.CORTEX_FLOW,
-                  type: PacketType.SYSTEM_ALERT,
-                  payload: { event: 'CONV_FALLBACK_DB_EMPTY', agentId },
-                  priority: 0.2
-                });
-                return;
-              }
-
-              const ordered = [...turns].reverse();
-              const mapped = ordered
-                .map((t) => ({
-                  role: t.role,
-                  text: t.content,
-                  type: 'speech' as const,
-                  ...(typeof (t as any)?.metadata?.knowledgeSource === 'string'
-                    ? { knowledgeSource: (t as any).metadata.knowledgeSource }
-                    : {})
-                  ,...(typeof (t as any)?.metadata?.evidenceSource === 'string'
-                    ? { evidenceSource: (t as any).metadata.evidenceSource }
-                    : {})
-                  ,...(typeof (t as any)?.metadata?.evidenceDetail === 'string'
-                    ? { evidenceDetail: (t as any).metadata.evidenceDetail }
-                    : {})
-                  ,...(typeof (t as any)?.metadata?.generator === 'string'
-                    ? { generator: (t as any).metadata.generator }
-                    : {})
-                }))
-                .filter((t) => t.role && t.text);
-
-              if (loadedIdentityRef.current?.id !== agentId) return;
-
-              setConversation(mapped);
-              conversationRef.current = mapped;
-              saveConversationSnapshot(agentId, mapped.map((m) => ({
-                role: m.role,
-                text: m.text,
-                type: m.type,
-                ...(m.knowledgeSource ? { knowledgeSource: m.knowledgeSource } : {}),
-                ...(m.evidenceSource ? { evidenceSource: m.evidenceSource } : {}),
-                ...(m.evidenceDetail ? { evidenceDetail: m.evidenceDetail } : {}),
-                ...(m.generator ? { generator: m.generator } : {})
-              })));
-
-              eventBus.publish({
-                id: generateUUID(),
-                traceId: startupTraceId,
-                timestamp: Date.now(),
-                source: AgentType.CORTEX_FLOW,
-                type: PacketType.SYSTEM_ALERT,
-                payload: { event: 'CONV_FALLBACK_DB_OK', agentId, count: mapped.length },
-                priority: 0.2
-              });
-            } catch (err) {
-              eventBus.publish({
-                id: generateUUID(),
-                traceId: startupTraceId,
-                timestamp: Date.now(),
-                source: AgentType.CORTEX_FLOW,
-                type: PacketType.SYSTEM_ALERT,
-                payload: { event: 'CONV_FALLBACK_DB_FAIL', agentId, error: String((err as any)?.message ?? err) },
-                priority: 0.2
-              });
-            }
-          })();
-        }
-      }
+      })();
     }
   }, [agentPersona, loadedIdentity]);
 
@@ -425,7 +331,7 @@ export const useCognitiveKernelLite = (loadedIdentity?: AgentIdentity | null) =>
     if (!sessionId) {
       setConversation([]);
       conversationRef.current = [];
-      saveConversationSnapshot(agentId, []);
+      syncToLocalStorage(agentId, []);
     }
 
     // Refresh sessions list
@@ -440,7 +346,7 @@ export const useCognitiveKernelLite = (loadedIdentity?: AgentIdentity | null) =>
     })();
 
     // Hydrate this specific session from DB
-    if (!isFeatureEnabled('USE_CONV_SUPABASE_FALLBACK')) return;
+    if (!isMemorySubEnabled('supabaseFallback')) return;
 
     const traceId = getStartupTraceId();
     eventBus.publish({
@@ -454,41 +360,21 @@ export const useCognitiveKernelLite = (loadedIdentity?: AgentIdentity | null) =>
     });
 
     try {
-      const turns = await getConversationHistory(agentId, resolved, 60);
-      const ordered = [...turns].reverse();
-      const mapped = ordered
-        .map((t) => ({
-          role: t.role,
-          text: t.content,
-          type: 'speech' as const,
-          ...(typeof (t as any)?.metadata?.knowledgeSource === 'string'
-            ? { knowledgeSource: (t as any).metadata.knowledgeSource }
-            : {})
-          ,...(typeof (t as any)?.metadata?.evidenceSource === 'string'
-            ? { evidenceSource: (t as any).metadata.evidenceSource }
-            : {})
-          ,...(typeof (t as any)?.metadata?.evidenceDetail === 'string'
-            ? { evidenceDetail: (t as any).metadata.evidenceDetail }
-            : {})
-          ,...(typeof (t as any)?.metadata?.generator === 'string'
-            ? { generator: (t as any).metadata.generator }
-            : {})
-        }))
-        .filter((t) => t.role && t.text);
+      const res = await loadConversationForSession(agentId, resolved, { traceId, emitTelemetry: true, limit: 60 });
+      const mapped = res.turns.map((t) => ({
+        role: t.role,
+        text: t.text,
+        type: (t.type ?? 'speech') as any,
+        ...(t.knowledgeSource ? { knowledgeSource: t.knowledgeSource } : {}),
+        ...(t.evidenceSource ? { evidenceSource: t.evidenceSource } : {}),
+        ...(t.evidenceDetail ? { evidenceDetail: t.evidenceDetail } : {}),
+        ...(t.generator ? { generator: t.generator } : {})
+      }));
 
       if (loadedIdentityRef.current?.id !== agentId) return;
 
       setConversation(mapped);
       conversationRef.current = mapped;
-      saveConversationSnapshot(agentId, mapped.map((m) => ({
-        role: m.role,
-        text: m.text,
-        type: m.type,
-        ...(m.knowledgeSource ? { knowledgeSource: m.knowledgeSource } : {}),
-        ...(m.evidenceSource ? { evidenceSource: m.evidenceSource } : {}),
-        ...(m.evidenceDetail ? { evidenceDetail: m.evidenceDetail } : {}),
-        ...(m.generator ? { generator: m.generator } : {})
-      })));
 
       eventBus.publish({
         id: generateUUID(),
@@ -614,7 +500,7 @@ export const useCognitiveKernelLite = (loadedIdentity?: AgentIdentity | null) =>
     if (agentId) {
       setConversation([]);
       conversationRef.current = [];
-      saveConversationSnapshot(agentId, []);
+      syncToLocalStorage(agentId, []);
     }
   }, [actions]);
   

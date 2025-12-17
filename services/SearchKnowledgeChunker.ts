@@ -1,5 +1,5 @@
 import { eventBus } from '../core/EventBus';
-import { isFeatureEnabled } from '../core/config/featureFlags';
+import { isMemorySubEnabled } from '../core/config/featureFlags';
 import { AgentType, PacketType } from '../types';
 import { MemoryService } from './supabase';
 import { generateUUID } from '../utils/uuid';
@@ -130,7 +130,7 @@ export async function persistSearchKnowledgeChunk(input: {
   sessionId?: string;
   toolIntentId?: string;
 }): Promise<void> {
-  if (!isFeatureEnabled('USE_SEARCH_KNOWLEDGE_CHUNKS')) return;
+  if (!isMemorySubEnabled('searchKnowledgeChunks')) return;
 
   const query = String(input.query || '').trim();
   const synthesis = String(input.synthesis || '').trim();
@@ -142,7 +142,7 @@ export async function persistSearchKnowledgeChunk(input: {
   if (!query || !synthesis) return;
 
   // Homeostasis: prevent chunk spam per query (cooldown) + keep weight clamped
-  if (isFeatureEnabled('USE_SEARCH_KNOWLEDGE_CHUNK_HOMEOSTASIS')) {
+  if (isMemorySubEnabled('chunkHomeostasis')) {
     try {
       if (typeof localStorage !== 'undefined') {
         const key = `ak-flow:searchChunk:last:${query.toLowerCase()}`;
@@ -181,7 +181,7 @@ export async function persistSearchKnowledgeChunk(input: {
 
   const strengthFloor = 18;
   const strengthCeiling = 28;
-  const neuralStrength = isFeatureEnabled('USE_SEARCH_KNOWLEDGE_CHUNK_HOMEOSTASIS')
+  const neuralStrength = isMemorySubEnabled('chunkHomeostasis')
     ? Math.max(strengthFloor, Math.min(strengthCeiling, 22))
     : 35;
 

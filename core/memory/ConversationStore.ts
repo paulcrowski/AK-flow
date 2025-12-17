@@ -28,6 +28,10 @@ import {
   parseConversationSnapshot
 } from '../utils/conversationSnapshot';
 import { getConversationHistory } from '../../services/ConversationArchive';
+import { eventBus } from '../EventBus';
+import { AgentType, PacketType } from '../../types';
+import { generateUUID } from '../../utils/uuid';
+import { getStartupTraceId } from '../trace/TraceContext';
 import { isMemorySubEnabled } from '../config/featureFlags';
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -49,6 +53,14 @@ export interface ConversationTurn {
 export interface LoadResult {
   turns: ConversationTurn[];
   source: 'localStorage' | 'supabase' | 'empty';
+}
+
+export interface LoadOptions {
+  sessionId?: string;
+  prefer?: 'localStorage' | 'supabase';
+  limit?: number;
+  traceId?: string;
+  emitTelemetry?: boolean;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -92,21 +104,41 @@ function turnToSnapshot(turn: ConversationTurn): ConversationSnapshotTurn {
  */
 export async function loadConversation(
   agentId: string,
-  sessionId?: string
+  sessionId?: string,
+  opts?: Omit<LoadOptions, 'sessionId'>
 ): Promise<LoadResult> {
+  const prefer = opts?.prefer ?? 'localStorage';
+
   // 1. Try localStorage first (fast, offline-capable)
-  const localSnap = loadConversationSnapshot(agentId);
-  if (localSnap.length > 0) {
-    return {
-      turns: localSnap.map(snapshotToTurn),
-      source: 'localStorage'
-    };
+  if (prefer !== 'supabase') {
+    const localSnap = loadConversationSnapshot(agentId);
+    if (localSnap.length > 0) {
+      return {
+        turns: localSnap.map(snapshotToTurn),
+        source: 'localStorage'
+      };
+    }
   }
 
   // 2. If localStorage empty and Supabase fallback enabled, try DB
   if (sessionId && isMemorySubEnabled('supabaseFallback')) {
+    const traceId = opts?.traceId ?? getStartupTraceId();
+    const emit = opts?.emitTelemetry ?? true;
+
+    if (emit) {
+      eventBus.publish({
+        id: generateUUID(),
+        traceId,
+        timestamp: Date.now(),
+        source: AgentType.CORTEX_FLOW,
+        type: PacketType.SYSTEM_ALERT,
+        payload: { event: 'CONV_FALLBACK_DB_ATTEMPT', agentId, sessionId },
+        priority: 0.2
+      });
+    }
+
     try {
-      const dbHistory = await getConversationHistory(agentId, sessionId, 50);
+      const dbHistory = await getConversationHistory(agentId, sessionId, opts?.limit ?? 50);
       if (dbHistory.length > 0) {
         const turns: ConversationTurn[] = dbHistory.map(msg => ({
           id: msg.id,
@@ -124,8 +156,49 @@ export async function loadConversation(
           source: 'supabase'
         };
       }
+
+      if (emit) {
+        eventBus.publish({
+          id: generateUUID(),
+          traceId,
+          timestamp: Date.now(),
+          source: AgentType.CORTEX_FLOW,
+          type: PacketType.SYSTEM_ALERT,
+          payload: { event: 'CONV_FALLBACK_DB_EMPTY', agentId, sessionId },
+          priority: 0.2
+        });
+      }
     } catch (err) {
       console.warn('[ConversationStore] Supabase fallback failed:', err);
+
+      const traceId = opts?.traceId ?? getStartupTraceId();
+      const emit = opts?.emitTelemetry ?? true;
+      if (emit) {
+        eventBus.publish({
+          id: generateUUID(),
+          traceId,
+          timestamp: Date.now(),
+          source: AgentType.CORTEX_FLOW,
+          type: PacketType.SYSTEM_ALERT,
+          payload: {
+            event: 'CONV_FALLBACK_DB_FAIL',
+            agentId,
+            sessionId,
+            error: String((err as any)?.message ?? err)
+          },
+          priority: 0.2
+        });
+      }
+    }
+  }
+
+  if (prefer === 'supabase') {
+    const localSnap = loadConversationSnapshot(agentId);
+    if (localSnap.length > 0) {
+      return {
+        turns: localSnap.map(snapshotToTurn),
+        source: 'localStorage'
+      };
     }
   }
 
@@ -134,6 +207,17 @@ export async function loadConversation(
     turns: [],
     source: 'empty'
   };
+}
+
+/**
+ * Load a specific session (DB-first), falling back to local cache if DB is empty/unavailable.
+ */
+export async function loadConversationForSession(
+  agentId: string,
+  sessionId: string,
+  opts?: Omit<LoadOptions, 'sessionId'>
+): Promise<LoadResult> {
+  return loadConversation(agentId, sessionId, { ...opts, prefer: 'supabase' });
 }
 
 /**

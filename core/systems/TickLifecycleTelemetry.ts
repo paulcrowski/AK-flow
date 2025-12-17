@@ -1,6 +1,6 @@
 import { eventBus } from '../EventBus';
 import { AgentType, PacketType } from '../../types';
-import { isFeatureEnabled } from '../config/featureFlags';
+import { isMainFeatureEnabled } from '../config/featureFlags';
 
 export type ThinkMode = 'reactive' | 'goal_driven' | 'autonomous' | 'idle';
 
@@ -21,7 +21,7 @@ function publishTickPacket(packet: {
         priority: packet.priority
     };
 
-    if (isFeatureEnabled('USE_ONE_MIND_PIPELINE')) {
+    if (isMainFeatureEnabled('ONE_MIND_ENABLED')) {
         eventBus.publishSync(base);
         return;
     }

@@ -24,7 +24,7 @@ import { extractSummary } from '../utils/AIResponseParser';
 import { consolidateIdentity } from '../core/services/IdentityConsolidationService';
 // REFACTOR: Import from centralized source (Single Source of Truth)
 import { INITIAL_LIMBIC } from '../core/kernel/initialState';
-import { isFeatureEnabled } from '../core/config/featureFlags';
+import { isMainFeatureEnabled } from '../core/config/featureFlags';
 
 // --- TYPES ---
 
@@ -180,7 +180,7 @@ export const DreamConsolidationService = {
             // Step 4: Store self-summary as core memory
             await this.storeSelfSummary(selfSummary, currentLimbic);
 
-            if (agentId && isFeatureEnabled('USE_DREAM_TOPIC_SHARDS')) {
+            if (agentId && isMainFeatureEnabled('DREAM_ENABLED')) {
                 await this.storeTopicShardsFromRecent(agentId, currentLimbic);
             }
 

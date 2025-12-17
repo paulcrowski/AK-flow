@@ -13,6 +13,13 @@ export {
 } from './featureFlags';
 
 export {
+  isMainFeatureEnabled,
+  isOneMindSubEnabled,
+  isMemorySubEnabled,
+  isCortexSubEnabled
+} from './featureFlags';
+
+export {
   logSystemConfig,
   getConfigSnapshot,
   logFlagChange
