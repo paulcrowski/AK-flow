@@ -10,6 +10,15 @@ import { eventBus } from '../core/EventBus';
 import { AgentType, PacketType } from '../types';
 import { generateUUID } from '../utils/uuid';
 
+ const sanitizeJson = (input: unknown): Record<string, any> => {
+   if (!input || typeof input !== 'object') return {};
+   try {
+     return JSON.parse(JSON.stringify(input)) as Record<string, any>;
+   } catch {
+     return {};
+   }
+ };
+
 export interface ConversationTurn {
   id: string;
   role: 'user' | 'assistant' | 'system';
@@ -40,19 +49,41 @@ export async function archiveMessage(
   }
   
   try {
-    const { error } = await supabase
+    const wantsMetadata = Boolean(
+      message.metadata &&
+        typeof message.metadata === 'object' &&
+        Object.keys(message.metadata as any).length > 0
+    );
+
+    const basePayload = {
+      id: message.id,
+      agent_id: agentId,
+      session_id: sessionId,
+      role: message.role,
+      content: message.content,
+      timestamp: message.timestamp
+    };
+
+    const payloadWithMetadata = wantsMetadata
+      ? { ...basePayload, metadata: sanitizeJson(message.metadata) }
+      : { ...basePayload, metadata: {} };
+
+    const attempt1 = await supabase
       .from('conversation_archive')
-      .upsert({
-        id: message.id,
-        agent_id: agentId,
-        session_id: sessionId,
-        role: message.role,
-        content: message.content,
-        timestamp: message.timestamp,
-        metadata: message.metadata || {},
-      }, {
+      .upsert(payloadWithMetadata, {
         onConflict: 'id'
       });
+
+    let error = attempt1.error;
+
+    if (error && wantsMetadata) {
+      const attempt2 = await supabase
+        .from('conversation_archive')
+        .upsert(basePayload, {
+          onConflict: 'id'
+        });
+      error = attempt2.error;
+    }
     
     if (error) {
       console.error('[ConversationArchive] ARCHIVE_FAIL:', error.message);
