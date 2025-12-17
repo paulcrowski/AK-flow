@@ -26,22 +26,18 @@ export interface GoalContext {
   limbic: LimbicState;
 }
 
-// DEPRECATED: Use SYSTEM_CONFIG.goals instead
-const GOAL_SYSTEM_ENABLED = () => SYSTEM_CONFIG.goals.enabled;
-const GOAL_MIN_SILENCE_MS = () => SYSTEM_CONFIG.goals.minSilenceMs;
-const GOAL_MAX_PER_HOUR = () => SYSTEM_CONFIG.goals.maxPerHour;
-
 export function shouldConsiderGoal(ctx: GoalContext, goalState: GoalState): boolean {
-  if (!GOAL_SYSTEM_ENABLED()) return false;
+  const goalsConfig = SYSTEM_CONFIG.goals;
+  if (!goalsConfig.enabled) return false;
 
   const silenceMs = ctx.now - ctx.lastUserInteractionAt;
 
-  const enoughSilence = silenceMs > GOAL_MIN_SILENCE_MS();
+  const enoughSilence = silenceMs > goalsConfig.minSilenceMs;
   const enoughEnergy = ctx.soma.energy > 30;
   const notOverwhelmed = ctx.limbic.frustration < 0.8 && ctx.limbic.fear < 0.9;
   const cutoff = ctx.now - 60 * 60 * 1000;
   const recentGoals = (goalState.goalsFormedTimestamps || []).filter(t => t >= cutoff);
-  const underHourlyLimit = recentGoals.length < GOAL_MAX_PER_HOUR();
+  const underHourlyLimit = recentGoals.length < goalsConfig.maxPerHour;
 
   return enoughSilence && enoughEnergy && notOverwhelmed && underHourlyLimit;
 }

@@ -8,10 +8,7 @@
  */
 
 import { FEATURE_FLAGS, getAllFeatureFlags } from './featureFlags';
-import { PRISM_CONFIG } from '../systems/PrismIntegration';
-import { PIPELINE_CONFIG } from '../systems/PrismPipeline';
-import { FACT_ECHO_PIPELINE_CONFIG } from '../systems/FactEchoPipeline';
-import { CHEMISTRY_BRIDGE_CONFIG } from '../systems/ChemistryBridge';
+import { SYSTEM_CONFIG } from './systemConfig';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Types
@@ -40,10 +37,10 @@ export function logSystemConfig(): ConfigSnapshot {
     timestamp: new Date().toISOString(),
     featureFlags: { ...FEATURE_FLAGS },
     moduleConfigs: {
-      PRISM: { ...PRISM_CONFIG },
-      PIPELINE: { ...PIPELINE_CONFIG },
-      FACT_ECHO: { ...FACT_ECHO_PIPELINE_CONFIG },
-      CHEMISTRY_BRIDGE: { ...CHEMISTRY_BRIDGE_CONFIG }
+      PRISM: { ...SYSTEM_CONFIG.prism },
+      PIPELINE: { ...SYSTEM_CONFIG.prismPipeline },
+      FACT_ECHO: { ...SYSTEM_CONFIG.factEcho },
+      CHEMISTRY_BRIDGE: { ...SYSTEM_CONFIG.chemistryBridge }
     }
   };
 
@@ -66,18 +63,18 @@ export function logSystemConfig(): ConfigSnapshot {
     
     // PRISM
     console.log(`║   PRISM:                                                      ║`);
-    console.log(`║     GUARD_ENABLED:    ${PRISM_CONFIG.GUARD_ENABLED ? '✅' : '⏸️'}                                      ║`);
-    console.log(`║     RETRY_ENABLED:    ${PRISM_CONFIG.RETRY_ENABLED ? '✅' : '⏸️'}                                      ║`);
-    console.log(`║     LOG_ALL_CHECKS:   ${PRISM_CONFIG.LOG_ALL_CHECKS ? '✅' : '⏸️'}                                      ║`);
+    console.log(`║     guardEnabled:     ${SYSTEM_CONFIG.prism.guardEnabled ? '✅' : '⏸️'}                                      ║`);
+    console.log(`║     retryEnabled:     ${SYSTEM_CONFIG.prism.retryEnabled ? '✅' : '⏸️'}                                      ║`);
+    console.log(`║     logAllChecks:     ${SYSTEM_CONFIG.prism.logAllChecks ? '✅' : '⏸️'}                                      ║`);
     
     // FactEcho
     console.log(`║   FACT_ECHO:                                                  ║`);
-    console.log(`║     ENABLED:          ${FACT_ECHO_PIPELINE_CONFIG.ENABLED ? '✅' : '⏸️'}                                      ║`);
-    console.log(`║     STRICT_MODE:      ${FACT_ECHO_PIPELINE_CONFIG.DEFAULT_STRICT_MODE ? '✅' : '⏸️'}                                      ║`);
+    console.log(`║     enabled:          ${SYSTEM_CONFIG.factEcho.enabled ? '✅' : '⏸️'}                                      ║`);
+    console.log(`║     strictMode:       ${SYSTEM_CONFIG.factEcho.strictMode ? '✅' : '⏸️'}                                      ║`);
     
     // Chemistry
     console.log(`║   CHEMISTRY_BRIDGE:                                           ║`);
-    console.log(`║     ENABLED:          ${CHEMISTRY_BRIDGE_CONFIG.ENABLED ? '✅' : '⏸️'}                                      ║`);
+    console.log(`║     enabled:          ${SYSTEM_CONFIG.chemistryBridge.enabled ? '✅' : '⏸️'}                                      ║`);
     
     console.log('╠═══════════════════════════════════════════════════════════════╣');
     console.log(`║ Timestamp: ${snapshot.timestamp}                    ║`);
@@ -97,10 +94,10 @@ export function getConfigSnapshot(): ConfigSnapshot {
     timestamp: new Date().toISOString(),
     featureFlags: { ...FEATURE_FLAGS },
     moduleConfigs: {
-      PRISM: { ...PRISM_CONFIG },
-      PIPELINE: { ...PIPELINE_CONFIG },
-      FACT_ECHO: { ...FACT_ECHO_PIPELINE_CONFIG },
-      CHEMISTRY_BRIDGE: { ...CHEMISTRY_BRIDGE_CONFIG }
+      PRISM: { ...SYSTEM_CONFIG.prism },
+      PIPELINE: { ...SYSTEM_CONFIG.prismPipeline },
+      FACT_ECHO: { ...SYSTEM_CONFIG.factEcho },
+      CHEMISTRY_BRIDGE: { ...SYSTEM_CONFIG.chemistryBridge }
     }
   };
 }
