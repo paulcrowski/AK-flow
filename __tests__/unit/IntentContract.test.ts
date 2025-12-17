@@ -34,4 +34,26 @@ describe('IntentContract', () => {
         expect(r.ok).toBe(false);
         expect(r.reason).toBe('NO_JSON');
     });
+
+    it('should repair single quotes and parse', () => {
+        const text = "{'style':'SIMPLE','command':'NONE','urgency':'LOW'}";
+        const r = parseDetectedIntent(text, safeDefault);
+        expect(r.ok).toBe(true);
+        expect(r.value.style).toBe('SIMPLE');
+    });
+
+    it('should repair unquoted keys and parse', () => {
+        const text = '{style:"ACADEMIC",command:"SEARCH",urgency:"MEDIUM"}';
+        const r = parseDetectedIntent(text, safeDefault);
+        expect(r.ok).toBe(true);
+        expect(r.value.style).toBe('ACADEMIC');
+        expect(r.value.command).toBe('SEARCH');
+    });
+
+    it('should repair trailing commas and parse', () => {
+        const text = '{"style":"NEUTRAL","command":"NONE","urgency":"HIGH",}';
+        const r = parseDetectedIntent(text, safeDefault);
+        expect(r.ok).toBe(true);
+        expect(r.value.urgency).toBe('HIGH');
+    });
 });

@@ -246,7 +246,7 @@ export namespace CortexSystem {
 
         const wantGlobalBaseline = isFeatureEnabled('USE_GLOBAL_RECALL_DEFAULT');
         const agentIdForCache = memorySpace?.agentId ?? getCurrentAgentId();
-        const globalRecentLimit = 4;
+        const globalRecentLimit = 12;
         const globalRecentCacheTtlMs = 60_000;
         const globalRecallTimeoutMs = 700;
 
