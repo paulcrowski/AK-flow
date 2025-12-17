@@ -11,18 +11,20 @@ import {
   guardLegacyResponse,
   isPrismEnabled,
   enablePipeline,
-  disablePipeline,
-  PIPELINE_CONFIG
+  disablePipeline
 } from '../../core/systems/PrismPipeline';
 import { evaluationBus } from '../../core/systems/EvaluationBus';
+import { SYSTEM_CONFIG } from '../../core/config/systemConfig';
 
 describe('PrismPipeline', () => {
   beforeEach(() => {
     evaluationBus.clear();
     enablePipeline();
+    (SYSTEM_CONFIG.prismPipeline as any).enabled = true;
   });
 
   afterEach(() => {
+    (SYSTEM_CONFIG.prismPipeline as any).enabled = true;
     enablePipeline(); // Restore default
   });
 

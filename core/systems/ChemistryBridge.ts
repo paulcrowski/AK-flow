@@ -21,22 +21,22 @@ import { clampNeuro } from './NeurotransmitterSystem';
 import { SYSTEM_CONFIG } from '../config/systemConfig';
 
 // DEPRECATED: Use SYSTEM_CONFIG.chemistryBridge instead
-export const CHEMISTRY_BRIDGE_CONFIG = {
+const CHEMISTRY_BRIDGE_CONFIG = {
   get ENABLED() { return SYSTEM_CONFIG.chemistryBridge.enabled; },
   set ENABLED(v: boolean) { (SYSTEM_CONFIG.chemistryBridge as any).enabled = v; },
   
   get MAX_DOPAMINE_DELTA() { return SYSTEM_CONFIG.chemistryBridge.maxDopamineDelta; },
-  MAX_SEROTONIN_DELTA: 5,
+  get MAX_SEROTONIN_DELTA() { return SYSTEM_CONFIG.chemistryBridge.maxSerotoninDelta; },
   
   // Stage-aware weights (from 13/10 spec)
   STAGE_WEIGHTS: EVALUATION_CONFIG.STAGE_WEIGHTS,
   
   // Baseline targets
-  DOPAMINE_BASELINE: 55,
-  SEROTONIN_BASELINE: 60,
+  get DOPAMINE_BASELINE() { return SYSTEM_CONFIG.chemistryBridge.dopamineBaseline; },
+  get SEROTONIN_BASELINE() { return SYSTEM_CONFIG.chemistryBridge.serotoninBaseline; },
   
   // Log all chemistry changes
-  LOG_ENABLED: true
+  get LOG_ENABLED() { return SYSTEM_CONFIG.chemistryBridge.logEnabled; }
 };
 
 // ═══════════════════════════════════════════════════════════════════════════

@@ -23,7 +23,7 @@ import { canApplyPenalty, recordPenalty, logArchitectureIssue } from './PrismMet
 import { SYSTEM_CONFIG } from '../config/systemConfig';
 
 // DEPRECATED: Use SYSTEM_CONFIG.factEcho instead
-export const FACT_ECHO_PIPELINE_CONFIG = {
+const FACT_ECHO_PIPELINE_CONFIG = {
   get ENABLED() { return SYSTEM_CONFIG.factEcho.enabled; },
   set ENABLED(v: boolean) { (SYSTEM_CONFIG.factEcho as any).enabled = v; },
   

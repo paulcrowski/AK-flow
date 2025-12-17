@@ -12,11 +12,11 @@ import {
   enableChemistryBridge,
   disableChemistryBridge,
   isChemistryBridgeEnabled,
-  getChemistryBridgeStats,
-  CHEMISTRY_BRIDGE_CONFIG
+  getChemistryBridgeStats
 } from '../../core/systems/ChemistryBridge';
 import { evaluationBus, createEvaluationEvent } from '../../core/systems/EvaluationBus';
-import { NeurotransmitterState } from '../types';
+import { NeurotransmitterState } from '../../types';
+import { SYSTEM_CONFIG } from '../../core/config/systemConfig';
 
 describe('ChemistryBridge', () => {
   beforeEach(() => {
@@ -101,7 +101,7 @@ describe('ChemistryBridge', () => {
       const delta = calculateChemistryDelta();
 
       expect(Math.abs(delta.dopamine)).toBeLessThanOrEqual(
-        CHEMISTRY_BRIDGE_CONFIG.MAX_DOPAMINE_DELTA
+        SYSTEM_CONFIG.chemistryBridge.maxDopamineDelta
       );
     });
 

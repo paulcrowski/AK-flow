@@ -11,12 +11,12 @@ import {
   enableFactEchoPipeline,
   disableFactEchoPipeline,
   isFactEchoPipelineEnabled,
-  setDefaultStrictMode,
-  FACT_ECHO_PIPELINE_CONFIG
+  setDefaultStrictMode
 } from '../../core/systems/FactEchoPipeline';
 import { CortexOutput } from '../../core/types/CortexOutput';
 import { evaluationBus } from '../../core/systems/EvaluationBus';
 import { clearArchitectureIssues } from '../../core/systems/PrismMetrics';
+import { SYSTEM_CONFIG } from '../../core/config/systemConfig';
 
 describe('FactEchoPipeline', () => {
   beforeEach(() => {
@@ -24,11 +24,13 @@ describe('FactEchoPipeline', () => {
     clearArchitectureIssues();
     enableFactEchoPipeline();
     setDefaultStrictMode(false);
+    (SYSTEM_CONFIG.factEcho as any).enabled = true;
   });
 
   afterEach(() => {
     enableFactEchoPipeline();
     setDefaultStrictMode(false);
+    (SYSTEM_CONFIG.factEcho as any).enabled = true;
   });
 
   describe('guardCortexOutputWithFactEcho', () => {

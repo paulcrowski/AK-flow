@@ -12,7 +12,7 @@
 
 import { HardFacts, SomaState, NeurotransmitterState, LimbicState } from '../../types';
 import { buildHardFacts } from './HardFactsBuilder';
-import { checkResponse, PRISM_CONFIG } from './PrismIntegration';
+import { checkResponse } from './PrismIntegration';
 import { personaGuard } from './PersonaGuard';
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -22,7 +22,7 @@ import { personaGuard } from './PersonaGuard';
 import { SYSTEM_CONFIG } from '../config/systemConfig';
 
 // DEPRECATED: Use SYSTEM_CONFIG.prismPipeline instead
-export const PIPELINE_CONFIG = {
+const PIPELINE_CONFIG = {
   get ENABLED() { return SYSTEM_CONFIG.prismPipeline.enabled; },
   set ENABLED(v: boolean) { (SYSTEM_CONFIG.prismPipeline as any).enabled = v; },
   
@@ -170,7 +170,7 @@ function logPipelineResult(action: string, wasModified: boolean): void {
  * Check if Prism pipeline is enabled
  */
 export function isPrismEnabled(): boolean {
-  return PIPELINE_CONFIG.ENABLED && PRISM_CONFIG.GUARD_ENABLED;
+  return PIPELINE_CONFIG.ENABLED && SYSTEM_CONFIG.prism.guardEnabled;
 }
 
 /**

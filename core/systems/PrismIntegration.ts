@@ -25,7 +25,7 @@ import { SYSTEM_CONFIG } from '../config/systemConfig';
 
 // DEPRECATED: Use SYSTEM_CONFIG.prism instead
 // This is kept for backward compatibility but reads from central config
-export const PRISM_CONFIG = {
+const PRISM_CONFIG = {
   // Feature flag: Enable PersonaGuard checking
   get GUARD_ENABLED() { return SYSTEM_CONFIG.prism.guardEnabled; },
   set GUARD_ENABLED(v: boolean) { (SYSTEM_CONFIG.prism as any).guardEnabled = v; },

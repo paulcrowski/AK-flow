@@ -7,17 +7,17 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import {
   checkResponse,
-  needsGuardCheck,
-  PRISM_CONFIG
+  needsGuardCheck
 } from '../../core/systems/PrismIntegration';
 import { HardFacts } from '../../types';
 import { evaluationBus } from '../../core/systems/EvaluationBus';
+import { SYSTEM_CONFIG } from '../../core/config/systemConfig';
 
 describe('PrismIntegration', () => {
   beforeEach(() => {
     evaluationBus.clear();
     // Ensure guard is enabled for tests
-    PRISM_CONFIG.GUARD_ENABLED = true;
+    (SYSTEM_CONFIG.prism as any).guardEnabled = true;
   });
 
   describe('checkResponse', () => {
@@ -69,7 +69,7 @@ describe('PrismIntegration', () => {
     });
 
     it('respects GUARD_ENABLED flag', () => {
-      PRISM_CONFIG.GUARD_ENABLED = false;
+      (SYSTEM_CONFIG.prism as any).guardEnabled = false;
 
       const hardFacts: HardFacts = { energy: 50 };
       const response = 'As an AI, I have lots of energy!';
@@ -80,7 +80,7 @@ describe('PrismIntegration', () => {
       expect(result.wasModified).toBe(false);
 
       // Restore
-      PRISM_CONFIG.GUARD_ENABLED = true;
+      (SYSTEM_CONFIG.prism as any).guardEnabled = true;
     });
 
     it('uses custom agent name', () => {
