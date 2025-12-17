@@ -38,55 +38,95 @@ export interface AutonomyConfig {
 // ═══════════════════════════════════════════════════════════════════════════
 
 export const SYSTEM_CONFIG = {
+  // ═══════════════════════════════════════════════════════════════════════════
+  // 5 GŁÓWNYCH FLAG (jedyne które można wyłączyć w produkcji)
+  // ═══════════════════════════════════════════════════════════════════════════
+  mainFeatures: {
+    /** MASTER: ONE MIND architecture (trace+gate+memory+contract) */
+    ONE_MIND_ENABLED: true,
+
+    /** MASTER: Force evidence from memory/tools (no hallucinations) */
+    GROUNDED_MODE: true,
+
+    /** MASTER: Allow autonomous speech without user prompt */
+    AUTONOMY_ENABLED: true,
+
+    /** MASTER: Dream consolidation & topic shards */
+    DREAM_ENABLED: true,
+
+    /** MASTER: Verbose logging + trace overlay */
+    DEBUG_MODE: false,
+  },
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // SUB-CONFIG: ONE MIND (hardcoded ON when ONE_MIND_ENABLED)
+  // ═══════════════════════════════════════════════════════════════════════════
+  oneMind: {
+    traceAutoInject: true,      // Był: USE_TRACE_AUTO_INJECT
+    traceHandlerScope: true,    // Był: USE_TRACE_HANDLER_SCOPE
+    traceExternalIds: true,     // Był: USE_TRACE_EXTERNAL_IDS
+    traceMissingAlert: true,    // Był: USE_TRACE_MISSING_ALERT
+  },
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // SUB-CONFIG: MEMORY (hardcoded ON)
+  // ═══════════════════════════════════════════════════════════════════════════
+  memory: {
+    supabaseFallback: true,       // Był: USE_CONV_SUPABASE_FALLBACK
+    recallRecentFallback: true,   // Był: USE_MEMORY_RECALL_RECENT_FALLBACK
+    globalRecallDefault: true,    // Był: USE_GLOBAL_RECALL_DEFAULT
+    searchKnowledgeChunks: true,  // Był: USE_SEARCH_KNOWLEDGE_CHUNKS
+    chunkHomeostasis: true,       // Był: USE_SEARCH_KNOWLEDGE_CHUNK_HOMEOSTASIS
+  },
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // SUB-CONFIG: CORTEX (minimalPrompt always ON, rest future)
+  // ═══════════════════════════════════════════════════════════════════════════
+  cortex: {
+    minimalPrompt: true,          // Był: USE_MINIMAL_CORTEX_PROMPT (always ON)
+    stateBuilder: false,          // Był: USE_CORTEX_STATE_BUILDER (future)
+    metaStateHomeostasis: false,  // Był: USE_META_STATE_HOMEOSTASIS (future)
+    identityCoherence: false,     // Był: USE_IDENTITY_COHERENCE_CHECK (future)
+    styleExamples: false,         // Był: USE_STYLE_EXAMPLES (future)
+  },
+
   // ─────────────────────────────────────────────────────────────────────────
-  // FEATURE FLAGS (Główne funkcje)
+  // LEGACY FEATURE FLAGS (backward compat - do usunięcia po migracji)
   // ─────────────────────────────────────────────────────────────────────────
   features: {
-    /** Persona-Less Cortex - stateless LLM architecture */
+    /** @deprecated Use mainFeatures.ONE_MIND_ENABLED */
     USE_MINIMAL_CORTEX_PROMPT: true,
-
-    /** P0 (13/10): ONE MIND – THREE PHASES pipeline (trace+gate+memory+contract) */
+    /** @deprecated Use mainFeatures.ONE_MIND_ENABLED */
     USE_ONE_MIND_PIPELINE: true,
-
-    /** Auto-inject current traceId into EventBus packets when missing */
+    /** @deprecated Use oneMind.traceAutoInject */
     USE_TRACE_AUTO_INJECT: true,
-
-    /** Propagate packet.traceId into TraceContext while executing EventBus handlers (async/UI/background) */
+    /** @deprecated Use oneMind.traceHandlerScope */
     USE_TRACE_HANDLER_SCOPE: true,
-
-    /** Generate external traceId for packets emitted outside any active tick scope (UI/async/background) */
+    /** @deprecated Use oneMind.traceExternalIds */
     USE_TRACE_EXTERNAL_IDS: true,
-
+    /** @deprecated Use oneMind.traceMissingAlert */
     USE_TRACE_MISSING_ALERT: true,
-
-    /** Fallback: hydrate conversation from Supabase archive when localStorage snapshot is empty */
+    /** @deprecated Use memory.supabaseFallback */
     USE_CONV_SUPABASE_FALLBACK: true,
-    
-    /** Build CortexState from database (future) */
+    /** @deprecated Use cortex.stateBuilder */
     USE_CORTEX_STATE_BUILDER: false,
-    
-    /** Homeostasis dla meta-states */
+    /** @deprecated Use cortex.metaStateHomeostasis */
     USE_META_STATE_HOMEOSTASIS: false,
-    
-    /** Sprawdzanie koherencji shardów przed dodaniem */
+    /** @deprecated Use cortex.identityCoherence */
     USE_IDENTITY_COHERENCE_CHECK: false,
-    
-    /** Style examples w payload */
+    /** @deprecated Use cortex.styleExamples */
     USE_STYLE_EXAMPLES: false,
-
-    /** Fallback: for questions like 'pamiętasz/dzisiaj/wczoraj' also inject recent memories (recallRecent) into RAG */
+    /** @deprecated Use memory.recallRecentFallback */
     USE_MEMORY_RECALL_RECENT_FALLBACK: true,
-
-    /** Persist SEARCH results as consolidated knowledge chunks (instead of raw logs) */
+    /** @deprecated Use memory.searchKnowledgeChunks */
     USE_SEARCH_KNOWLEDGE_CHUNKS: true,
-
-    /** Apply homeostasis to SEARCH knowledge chunks: dedupe/cooldown + neural_strength clamp */
+    /** @deprecated Use memory.chunkHomeostasis */
     USE_SEARCH_KNOWLEDGE_CHUNK_HOMEOSTASIS: true,
-
+    /** @deprecated Use memory.globalRecallDefault */
     USE_GLOBAL_RECALL_DEFAULT: true,
-
+    /** @deprecated Use mainFeatures.GROUNDED_MODE */
     USE_GROUNDED_STRICT_MODE: true,
-
+    /** @deprecated Use mainFeatures.DREAM_ENABLED */
     USE_DREAM_TOPIC_SHARDS: true,
   },
 

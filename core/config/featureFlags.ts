@@ -1,13 +1,61 @@
 /**
  * Feature Flags - Kontrola wdrażania nowych funkcji
  * 
- * Pozwala na bezpieczny rollback w przypadku problemów.
- * Każda flaga ma opis i domyślną wartość.
+ * NOWA ARCHITEKTURA (2025-12-17):
+ * - 5 GŁÓWNYCH FLAG w mainFeatures (jedyne do produkcyjnego toggle)
+ * - SUB-CONFIG w oneMind/memory/cortex (hardcoded gdy parent ON)
+ * - LEGACY features[] dla backward compatibility (do usunięcia)
  * 
  * @module core/config/featureFlags
  */
 
 import { SYSTEM_CONFIG } from './systemConfig';
+
+// ═══════════════════════════════════════════════════════════════════════════
+// NOWE TYPY
+// ═══════════════════════════════════════════════════════════════════════════
+
+export type MainFeature = keyof typeof SYSTEM_CONFIG.mainFeatures;
+export type OneMindSub = keyof typeof SYSTEM_CONFIG.oneMind;
+export type MemorySub = keyof typeof SYSTEM_CONFIG.memory;
+export type CortexSub = keyof typeof SYSTEM_CONFIG.cortex;
+
+// ═══════════════════════════════════════════════════════════════════════════
+// NOWE ACCESSORY (5 GŁÓWNYCH FLAG)
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Sprawdza główną flagę (5 flag produkcyjnych)
+ * @example isMainFeatureEnabled('ONE_MIND_ENABLED')
+ */
+export function isMainFeatureEnabled(flag: MainFeature): boolean {
+  return SYSTEM_CONFIG.mainFeatures[flag] ?? false;
+}
+
+/**
+ * Sprawdza sub-flagę ONE MIND (zawsze true gdy ONE_MIND_ENABLED)
+ * @example isOneMindSubEnabled('traceAutoInject')
+ */
+export function isOneMindSubEnabled(sub: OneMindSub): boolean {
+  if (!SYSTEM_CONFIG.mainFeatures.ONE_MIND_ENABLED) return false;
+  return SYSTEM_CONFIG.oneMind[sub] ?? false;
+}
+
+/**
+ * Sprawdza sub-flagę MEMORY
+ * @example isMemorySubEnabled('supabaseFallback')
+ */
+export function isMemorySubEnabled(sub: MemorySub): boolean {
+  return SYSTEM_CONFIG.memory[sub] ?? false;
+}
+
+/**
+ * Sprawdza sub-flagę CORTEX
+ * @example isCortexSubEnabled('minimalPrompt')
+ */
+export function isCortexSubEnabled(sub: CortexSub): boolean {
+  return SYSTEM_CONFIG.cortex[sub] ?? false;
+}
 
 /**
  * Definicja feature flag z metadanymi
@@ -154,8 +202,13 @@ export const FEATURE_FLAGS = Object.fromEntries(
   Object.entries(FEATURE_FLAG_DEFINITIONS).map(([key]) => [key, (SYSTEM_CONFIG.features as Record<string, boolean>)[key] ?? false])
 ) as Record<keyof typeof FEATURE_FLAG_DEFINITIONS, boolean>;
 
+// ═══════════════════════════════════════════════════════════════════════════
+// LEGACY ACCESSOR (backward compat - stopniowo migrować do nowych)
+// ═══════════════════════════════════════════════════════════════════════════
+
 /**
- * Sprawdza czy flaga jest włączona
+ * @deprecated Użyj isMainFeatureEnabled(), isOneMindSubEnabled(), isMemorySubEnabled() lub isCortexSubEnabled()
+ * Sprawdza czy legacy flaga jest włączona (dla backward compatibility)
  */
 export function isFeatureEnabled(flagName: keyof typeof FEATURE_FLAGS): boolean {
   const key = flagName as unknown as string;
