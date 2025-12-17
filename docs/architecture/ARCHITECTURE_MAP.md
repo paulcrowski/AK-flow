@@ -16,13 +16,22 @@
 - Think mode selection (telemetry): `core/systems/EventLoop.ts` (`THINK_MODE_SELECTED`)
 - Commit layer mowy: `core/systems/TickCommitter.ts` (telemetry: `TICK_COMMIT`, dedupe/blocked/counters)
 
+**Stabilność (UI → tick context):**
+- FIFO input queue (brak dropów przy szybkich sendach): `hooks/useCognitiveKernelLite.ts`
+- `conversationRef` w sync (eliminuje stale-closure): `hooks/useCognitiveKernelLite.ts`
+
 **Mechanika (UI / obserwowalność):**
 - Trace HUD: `components/CognitiveInterface.tsx` (subskrypcja `PacketType.SYSTEM_ALERT`)
 - Export debug: `COPY TRACE` eksportuje `eventBus.getHistory()` przefiltrowane po `traceId`
+- Trace HUD upgrade: `FREEZE` + `COPY FULL` (bez limitu) + `COPY +2S` (okno korelacyjne)
+- NeuroMonitor: filtry logów działają spójnie (ALL/DREAMS/CHEM/SPEECH/ERRORS/FLOW/CONFESS)
 
 **UX pamięć rozmowy:**
 - Snapshot rozmowy per agent: `core/utils/conversationSnapshot.ts` + `hooks/useCognitiveKernelLite.ts`
 - Fallback z archiwum Supabase (feature flag `USE_CONV_SUPABASE_FALLBACK`): `services/ConversationArchive.ts`
+
+**DreamConsolidation reliability:**
+- Detekcja i zapis epizodów działa także w ścieżce `USE_MINIMAL_CORTEX_PROMPT`: `core/systems/CortexSystem.ts`
 
 ---
 

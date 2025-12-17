@@ -31,6 +31,20 @@
 - Snapshot rozmowy per-agent w localStorage (sanitize+clamp, fail-closed).
 - Fallback z Supabase archive gdy snapshot pusty (feature-flagged: `USE_CONV_SUPABASE_FALLBACK`).
 - Trace HUD w UI + `COPY TRACE` (eksportuje historię EventBus przefiltrowaną po `traceId`).
+- Input queue w `useCognitiveKernelLite`: szybkie sendy nie dropią (FIFO).
+- `conversationRef` utrzymywane w sync (eliminuje stale-closure przy budowie kontekstu ticka).
+- Trace HUD upgrade: `FREEZE` + `COPY FULL` (bez limitu) + `COPY +2S` (okno korelacyjne).
+- NeuroMonitor: filtry logów działają spójnie (ALL/DREAMS/CHEM/SPEECH/ERRORS/FLOW/CONFESS).
+
+### Sleep/Memories: DreamConsolidation reliability
+
+**Wkład:**
+- W ścieżce `USE_MINIMAL_CORTEX_PROMPT` działa detekcja i zapis epizodów (`detectAndStore`), więc konsolidacja nie widzi stale „0 epizodów”.
+
+### Kernel UX: deterministyczny kill-switch autonomii
+
+**Wkład:**
+- `TOGGLE_AUTONOMY` respektuje `payload.enabled` (zamiast zawsze flip) → mniej desync UI ↔ runtime.
 
 ### Weryfikacja (ALARM-3)
 

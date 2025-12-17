@@ -1,7 +1,7 @@
 {
   "version": "1.0.0",
-  "lastUpdated": "2025-12-16T18:23:19.261Z",
-  "lastModified": "2025-12-16T18:23:19.261Z",
+  "lastUpdated": "2025-12-16T21:11:00.000Z",
+  "lastModified": "2025-12-16T21:11:00.000Z",
   "modifiedBy": "AI_WINDSURF",
   "project": "AK-Flow",
   "dailyGoal": "PROTOCOL: ALBERTO FIRST CONTACT (Vision, Orientation, Memory)",
@@ -833,13 +833,13 @@
     {
       "id": "note-009",
       "title": "Daily Close: 2025-12-16",
-      "content": "DONE: ONE MIND observability + UX stability. TraceId deterministyczny + trace scope + EventBus trace auto-inject (flagged). TickCommitter v1 (dedupe/blocked + telemetry). THINK_MODE_SELECTED telemetry. UI: Trace HUD + COPY TRACE export, sidebar + per-agent conversation snapshot (localStorage), Supabase fallback gdy localStorage puste (flagged).\nVERIFY: npm run build PASS; npm test PASS (500/500); IntegrationWiring PASS; WiringValidator PASS.\nNEXT: trace coverage poza tickiem (async/UI/background) + rollout flags + AgentTrajectory start.",
+      "content": "DONE: Stabilizacja UX i obserwowalności. Fix: szybkie sendy (Enter, Enter) nie dropią (kolejka FIFO w useCognitiveKernelLite) + conversationRef w sync. Fix: DreamConsolidation wróciło do życia (detectAndStore także w USE_MINIMAL_CORTEX_PROMPT). Fix: Autonomy toggle deterministyczny (payload.enabled, bez flip) — mniejszy desync UI↔runtime. UI: Trace HUD upgrade (FREEZE + COPY FULL bez limitu + COPY +2S window) + NeuroMonitor filtry ALL/DREAMS/CHEM/SPEECH/ERRORS/FLOW/CONFESS działają.\nVERIFY: npm test PASS (504/504). npm run build: PENDING (do odpalenia po ostatnich commitach).\nCOMMITS: c05cfb0, 9a9793d.\nNEXT: trace coverage poza tickiem (async/UI/background) + rollout flags + AgentTrajectory start.",
       "category": "INSIGHT",
       "tags": [
         "daily_close"
       ],
-      "createdAt": "2025-12-16T18:23:19.261Z",
-      "updatedAt": "2025-12-16T18:23:19.261Z"
+      "createdAt": "2025-12-16T21:11:00.000Z",
+      "updatedAt": "2025-12-16T21:11:00.000Z"
     }
   ],
   "stats": {
@@ -851,8 +851,8 @@
     "currentPhase": "FAZA 6.2: Kernel Stabilization",
     "todayCompleted": 2,
     "streak": 6,
-    "testsTotal": 500,
-    "testsPassing": 500,
+    "testsTotal": 504,
+    "testsPassing": 504,
     "blocked": 0,
     "notImplemented": 14
   },

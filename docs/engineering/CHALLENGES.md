@@ -17,11 +17,39 @@
 
 | Metryka | Wartość |
 |---------|---------|
-| Rozwiązanych problemów | 16 |
+| Rozwiązanych problemów | 17 |
 | Całkowity czas | ~48 godzin |
 | Średnia trudność | 3.9/5 |
 | Największy przełom | FactEcho Guard (FAZA 6.0) |
 | Najdłuższy problem | Monolityczny Kernel (8h) |
+
+---
+
+## Problem #23: Rapid Input Drop + Stale Closure (UX/KernelLite Desync)
+
+**Data:** 2025-12-16
+**Trudność:** 4/5
+**Status:** ✅ Rozwiązany (FIFO Input Queue + ConversationRef Sync)
+
+### Objawy
+- Szybkie wysłanie 2 wiadomości pod rząd (np. `Enter, Enter`) potrafiło zgubić drugi input.
+- Zdarzały się sytuacje, gdzie context ticka budowany był na starej rozmowie (stale closure), co psuło deterministykę i trace korelację.
+
+### Diagnoza
+Mieliśmy klasyczny konflikt concurrency w warstwie UI:
+1. Guard typu `isProcessing` blokował kolejne wejścia, ale nie kolejkując ich (drop).
+2. Async callbacki opierały się o snapshot `conversation` z momentu zamknięcia (closure), a nie o źródło prawdy.
+
+### Rozwiązanie
+- **FIFO queue** w `useCognitiveKernelLite`: wejścia są kolejkowane i przetwarzane sekwencyjnie.
+- **`conversationRef` w sync**: źródło prawdy aktualizowane razem z `setConversation`.
+
+### Efekt
+- Brak dropów przy szybkich sendach.
+- Stabilniejszy kontekst dla ticka (mniej „ghost state”).
+
+### Pliki
+- `hooks/useCognitiveKernelLite.ts`
 
 ---
 
