@@ -102,9 +102,9 @@ describe('Shadow Agent "Holodeck" E2E', () => {
 
         // Capture callbacks to verify EventLoop logic
         const callbacks: EventLoop.LoopCallbacks = {
-            onMessage: vi.fn(async (role, text) => {
+            onMessage: vi.fn(async (role, text, type) => {
                 // SIMULATE REAL EFFECT: When agent speaks, it saves to DB
-                if (role === 'assistant') {
+                if (role === 'assistant' && type === 'speech') {
                     await MemoryService.storeMemory({
                         content: text,
                         emotionalContext: ctx.limbic,
@@ -123,7 +123,14 @@ describe('Shadow Agent "Holodeck" E2E', () => {
 
         // 4. VERIFICATION (The "Truth")
         // Did the EventLoop invoke callbacks?
-        expect(callbacks.onMessage).toHaveBeenCalledWith('assistant', 'Response from Warsaw', 'speech');
+        expect(callbacks.onMessage).toHaveBeenNthCalledWith(1, 'assistant', 'I verified the plumbing.', 'thought');
+        expect(callbacks.onMessage).toHaveBeenNthCalledWith(
+            2,
+            'assistant',
+            'Response from Warsaw',
+            'speech',
+            expect.objectContaining({ knowledgeSource: undefined })
+        );
 
         // Did it land in the DB? 
         const memoryFromDb = await shadow.fetchLatestMemory();

@@ -408,12 +408,25 @@ export namespace CortexSystem {
                 const output = gateResult.modifiedOutput;
 
                 const hasToolTag = /\[(SEARCH|VISUALIZE):/i.test(String(output?.speech_content || ''));
-                const derivedKnowledgeSource: ProcessResult['knowledgeSource'] =
-                    (output as any)?.knowledge_source ||
-                    (hasToolTag ? 'tool' : (memories.length > 0 ? 'memory' : 'llm'));
-
                 const strictGrounded = isFeatureEnabled('USE_GROUNDED_STRICT_MODE');
-                const shouldForceSearch = strictGrounded && derivedKnowledgeSource === 'llm' && memories.length === 0 && !hasToolTag;
+
+                const hasMemories = memories.length > 0;
+                const evidenceKnowledgeSource: ProcessResult['knowledgeSource'] =
+                    hasToolTag
+                        ? 'tool'
+                        : hasMemories
+                            ? 'memory'
+                            : 'system';
+
+                const modelKnowledgeSource: ProcessResult['knowledgeSource'] =
+                    (output as any)?.knowledge_source ||
+                    (hasToolTag ? 'tool' : (hasMemories ? 'memory' : 'llm'));
+
+                const derivedKnowledgeSource: ProcessResult['knowledgeSource'] = strictGrounded
+                    ? evidenceKnowledgeSource
+                    : modelKnowledgeSource;
+
+                const shouldForceSearch = strictGrounded && derivedKnowledgeSource === 'system' && !hasToolTag && !hasMemories;
                 const finalSpeech = shouldForceSearch
                     ? `Sprawdzę to. [SEARCH: ${String(text || '').slice(0, 160)}]`
                     : String(output.speech_content || '');
@@ -690,7 +703,8 @@ export namespace CortexSystem {
         });
 
         const hasToolTag = /\[(SEARCH|VISUALIZE):/i.test(String(decision.text || ''));
-        const knowledgeSource: GoalPursuitResult['knowledgeSource'] = hasToolTag ? 'tool' : 'llm';
+        const strictGrounded = isFeatureEnabled('USE_GROUNDED_STRICT_MODE');
+        const knowledgeSource: GoalPursuitResult['knowledgeSource'] = hasToolTag ? 'tool' : (strictGrounded ? 'system' : 'llm');
 
         return {
             responseText: decision.text,

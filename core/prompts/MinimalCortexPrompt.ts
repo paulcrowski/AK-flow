@@ -149,11 +149,12 @@ CRITICAL RULES:
 - Always include knowledge_source in output:
   - "memory" if answer is grounded only in memory_context / recalled memories.
   - "tool" if answer is grounded only in tool results from this session.
-  - "mixed" if you used both memory and tools.
+  - "mixed" if you used both memory and tools (hybrid mode only).
   - "llm" only if epistemic_mode is "hybrid" and you used training knowledge.
 
 - If hard_facts.epistemic_mode = "grounded_strict":
   - DO NOT use training knowledge.
+  - Do NOT emit "mixed". Prefer "tool" if any tool results were used; otherwise "memory".
   - If memory/tool context is insufficient, execute SEARCH.
 
 - If user asks for FRESH, time-sensitive, or highly precise facts (news, weather now, prices now, live data), you MUST use SEARCH.
