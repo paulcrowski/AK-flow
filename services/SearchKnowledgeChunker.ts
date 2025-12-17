@@ -6,6 +6,122 @@ import { generateUUID } from '../utils/uuid';
 
 type SourceRef = { title?: string; uri?: string };
 
+export function extractFactsFromSynthesis(synthesis: string, maxFacts: number = 10): string[] {
+  const text = String(synthesis || '').trim();
+  if (!text) return [];
+
+  const rawParts = text
+    .replace(/\r/g, '')
+    .split(/\n+|(?<=[.!?])\s+(?=[A-ZĄĆĘŁŃÓŚŹŻ0-9])/g)
+    .map((p) => p.trim())
+    .filter(Boolean);
+
+  const candidates = rawParts
+    .map((p) => p.replace(/^[-*•]+\s*/, '').trim())
+    .filter((p) => p.length >= 25 && p.length <= 220);
+
+  const unitRe = /(\bkm\b|\bm\b|\bmln\b|\bmld\b|\b%\b|\bUSD\b|\bEUR\b|\bPLN\b|°C|\bCelsjusza\b|\bppm\b|\bkg\b|\bcm\b|\bmm\b|\bha\b)/i;
+  const yearRe = /\b(19\d{2}|20\d{2})\b/;
+  const properNounPhraseRe = /\b[A-ZĄĆĘŁŃÓŚŹŻ][a-ząćęłńóśźż]{2,}\s+[A-ZĄĆĘŁŃÓŚŹŻ][a-ząćęłńóśźż]{2,}/;
+
+  const scored = candidates.map((fact) => {
+    let score = 0;
+    if (/\d/.test(fact)) score += 3;
+    if (yearRe.test(fact)) score += 2;
+    if (unitRe.test(fact)) score += 2;
+    if (properNounPhraseRe.test(fact)) score += 2;
+    return { fact, score };
+  });
+
+  const minScore = 2;
+
+  scored.sort((a, b) => {
+    if (b.score !== a.score) return b.score - a.score;
+    return a.fact.length - b.fact.length;
+  });
+
+  const seen = new Set<string>();
+  const out: string[] = [];
+
+  for (const item of scored) {
+    if (item.score < minScore) continue;
+    const norm = item.fact
+      .toLowerCase()
+      .replace(/[^a-z0-9ąćęłńóśźż]+/gi, ' ')
+      .trim()
+      .slice(0, 120);
+
+    if (!norm) continue;
+    if (seen.has(norm)) continue;
+    seen.add(norm);
+
+    out.push(item.fact);
+    if (out.length >= Math.max(0, maxFacts)) break;
+  }
+
+  return out;
+}
+
+export function buildSearchKnowledgeChunkContent(input: {
+  query: string;
+  synthesis: string;
+  sources?: SourceRef[];
+  timestampIso?: string;
+  maxFacts?: number;
+}): string {
+  const query = String(input.query || '').trim();
+  const synthesis = String(input.synthesis || '').trim();
+  const sources = Array.isArray(input.sources) ? input.sources : [];
+  const ts = input.timestampIso || new Date().toISOString();
+  const facts = extractFactsFromSynthesis(synthesis, input.maxFacts ?? 10);
+
+  const lines = synthesis
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter(Boolean);
+
+  const summary = lines.slice(0, 10).join('\n');
+
+  const sourcesText = sources
+    .filter(Boolean)
+    .slice(0, 12)
+    .map((s) => {
+      const title = String(s?.title || '').trim();
+      const uri = String(s?.uri || '').trim();
+      if (title && uri) return `- ${title} — ${uri}`;
+      if (uri) return `- ${uri}`;
+      if (title) return `- ${title}`;
+      return null;
+    })
+    .filter(Boolean)
+    .join('\n');
+
+  const maxSynthesisChars = 2600;
+  const synthesisTrimmed = synthesis.length > maxSynthesisChars ? `${synthesis.slice(0, maxSynthesisChars)}…` : synthesis;
+
+  const factsText = facts.length ? facts.map((f) => `- ${f}`).join('\n') : '';
+
+  return [
+    'KNOWLEDGE_CHUNK (SEARCH)',
+    `TOPIC: ${query}`,
+    `TS: ${ts}`,
+    '',
+    'SUMMARY:',
+    summary || synthesisTrimmed,
+    '',
+    factsText ? 'FACTS:' : null,
+    factsText || null,
+    factsText ? '' : null,
+    'DETAIL:',
+    synthesisTrimmed,
+    '',
+    sourcesText ? 'SOURCES:' : null,
+    sourcesText || null
+  ]
+    .filter((p) => p !== null)
+    .join('\n');
+}
+
 export async function persistSearchKnowledgeChunk(input: {
   query: string;
   synthesis: string;
@@ -49,46 +165,13 @@ export async function persistSearchKnowledgeChunk(input: {
     }
   }
 
-  const lines = synthesis
-    .split(/\r?\n/)
-    .map((l) => l.trim())
-    .filter(Boolean);
-
-  const summary = lines.slice(0, 14).join('\n');
-
-  const sourcesText = sources
-    .filter(Boolean)
-    .slice(0, 12)
-    .map((s) => {
-      const title = String(s?.title || '').trim();
-      const uri = String(s?.uri || '').trim();
-      if (title && uri) return `- ${title} — ${uri}`;
-      if (uri) return `- ${uri}`;
-      if (title) return `- ${title}`;
-      return null;
-    })
-    .filter(Boolean)
-    .join('\n');
-
-  const maxSynthesisChars = 2600;
-  const synthesisTrimmed = synthesis.length > maxSynthesisChars ? `${synthesis.slice(0, maxSynthesisChars)}…` : synthesis;
-
-  const content = [
-    'KNOWLEDGE_CHUNK (SEARCH)',
-    `TOPIC: ${query}`,
-    `TS: ${new Date().toISOString()}`,
-    '',
-    'SUMMARY:',
-    summary || synthesisTrimmed,
-    '',
-    'DETAIL:',
-    synthesisTrimmed,
-    '',
-    sourcesText ? 'SOURCES:' : null,
-    sourcesText || null
-  ]
-    .filter((p) => p !== null)
-    .join('\n');
+  const content = buildSearchKnowledgeChunkContent({
+    query,
+    synthesis,
+    sources,
+    timestampIso: new Date().toISOString(),
+    maxFacts: 10
+  });
 
   const strengthFloor = 18;
   const strengthCeiling = 28;
