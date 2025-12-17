@@ -86,6 +86,8 @@ export const SYSTEM_CONFIG = {
     USE_GLOBAL_RECALL_DEFAULT: true,
 
     USE_GROUNDED_STRICT_MODE: true,
+
+    USE_DREAM_TOPIC_SHARDS: true,
   },
 
   // ─────────────────────────────────────────────────────────────────────────

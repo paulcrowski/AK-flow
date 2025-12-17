@@ -137,6 +137,13 @@ const FEATURE_FLAG_DEFINITIONS: Record<string, FeatureFlagDefinition> = {
     description: 'Strict grounded mode: disallow training-knowledge fallback, prefer memory/tool-only provenance',
     addedAt: '2025-12-17',
     experimental: true
+  },
+
+  USE_DREAM_TOPIC_SHARDS: {
+    enabled: (SYSTEM_CONFIG.features as Record<string, boolean>).USE_DREAM_TOPIC_SHARDS ?? false,
+    description: 'Dream consolidation: store/reinforce topic shards in memory based on repeated conversation themes',
+    addedAt: '2025-12-17',
+    experimental: true
   }
 } as const;
 
