@@ -1,6 +1,7 @@
-import { CognitivePacket, EventHandler, PacketType } from "../types";
+import { AgentType, CognitivePacket, EventHandler, PacketType } from "../types";
 import { isFeatureEnabled } from './config/featureFlags';
 import { getCurrentTraceId, pushTraceId, popTraceId, generateExternalTraceId } from './trace/TraceContext';
+import { generateUUID } from '../utils/uuid';
 
 class CognitiveBus {
 
@@ -21,14 +22,43 @@ class CognitiveBus {
 
   publish(packet: CognitivePacket) {
     let nextPacket = packet;
+    let traceInjected = false;
+    let injectionMode: 'active_scope' | 'external' | null = null;
     if (isFeatureEnabled('USE_TRACE_AUTO_INJECT') && !packet.traceId) {
       const active = getCurrentTraceId();
-      if (active) nextPacket = { ...packet, traceId: active };
+      if (active) {
+        nextPacket = { ...packet, traceId: active };
+        traceInjected = true;
+        injectionMode = 'active_scope';
+      }
     }
 
     if (isFeatureEnabled('USE_TRACE_EXTERNAL_IDS') && !nextPacket.traceId) {
       const active = getCurrentTraceId();
-      if (!active) nextPacket = { ...nextPacket, traceId: generateExternalTraceId(nextPacket.timestamp) };
+      if (!active) {
+        nextPacket = { ...nextPacket, traceId: generateExternalTraceId(nextPacket.timestamp) };
+        traceInjected = true;
+        injectionMode = 'external';
+      }
+    }
+
+    if (isFeatureEnabled('USE_TRACE_MISSING_ALERT') && traceInjected && injectionMode && nextPacket.traceId) {
+      this.publish({
+        id: generateUUID(),
+        traceId: nextPacket.traceId,
+        timestamp: Date.now(),
+        source: AgentType.CORTEX_FLOW,
+        type: PacketType.SYSTEM_ALERT,
+        payload: {
+          event: 'TRACE_MISSING',
+          originalPacketId: packet.id,
+          originalSource: packet.source,
+          originalType: packet.type,
+          injectedTraceId: nextPacket.traceId,
+          injectionMode
+        },
+        priority: 0.2
+      });
     }
 
     // Log to history (Short term buffer)
@@ -62,14 +92,43 @@ class CognitiveBus {
    */
   publishSync(packet: CognitivePacket) {
     let nextPacket = packet;
+    let traceInjected = false;
+    let injectionMode: 'active_scope' | 'external' | null = null;
     if (isFeatureEnabled('USE_TRACE_AUTO_INJECT') && !packet.traceId) {
       const active = getCurrentTraceId();
-      if (active) nextPacket = { ...packet, traceId: active };
+      if (active) {
+        nextPacket = { ...packet, traceId: active };
+        traceInjected = true;
+        injectionMode = 'active_scope';
+      }
     }
 
     if (isFeatureEnabled('USE_TRACE_EXTERNAL_IDS') && !nextPacket.traceId) {
       const active = getCurrentTraceId();
-      if (!active) nextPacket = { ...nextPacket, traceId: generateExternalTraceId(nextPacket.timestamp) };
+      if (!active) {
+        nextPacket = { ...nextPacket, traceId: generateExternalTraceId(nextPacket.timestamp) };
+        traceInjected = true;
+        injectionMode = 'external';
+      }
+    }
+
+    if (isFeatureEnabled('USE_TRACE_MISSING_ALERT') && traceInjected && injectionMode && nextPacket.traceId) {
+      this.publishSync({
+        id: generateUUID(),
+        traceId: nextPacket.traceId,
+        timestamp: Date.now(),
+        source: AgentType.CORTEX_FLOW,
+        type: PacketType.SYSTEM_ALERT,
+        payload: {
+          event: 'TRACE_MISSING',
+          originalPacketId: packet.id,
+          originalSource: packet.source,
+          originalType: packet.type,
+          injectedTraceId: nextPacket.traceId,
+          injectionMode
+        },
+        priority: 0.2
+      });
     }
 
     this.history.push(nextPacket);

@@ -376,27 +376,59 @@ export function CognitiveInterface() {
         return p;
     };
 
+    const buildTraceExportPayload = (packets: any[], meta: { windowMs: number; traceId?: string | null }) => {
+        const traceId = meta.traceId ?? null;
+        const traceEvents = traceId ? packets.filter((p: any) => p?.traceId === traceId) : [];
+        const timestamps = traceEvents.map((p: any) => p?.timestamp).filter((t: any) => typeof t === 'number');
+        const minTs = timestamps.length ? Math.min(...timestamps) : null;
+        const maxTs = timestamps.length ? Math.max(...timestamps) : null;
+
+        return JSON.stringify(
+            {
+                traceId,
+                tickNumber: traceHud?.tickNumber ?? null,
+                durationMs: typeof traceHud?.durationMs === 'number' ? traceHud?.durationMs : null,
+                exportedAt: Date.now(),
+                windowMs: meta.windowMs,
+                tickEnvelope: traceId
+                    ? {
+                        traceId,
+                        minTs,
+                        maxTs,
+                        eventCount: traceEvents.length
+                    }
+                    : null,
+                events: packets.map(sanitizeTracePacketForExport)
+            },
+            null,
+            2
+        );
+    };
+
+    const dedupeAndSortPackets = (packets: any[]) => {
+        const seen = new Set<string>();
+        const out: any[] = [];
+        for (const p of packets) {
+            const id = p?.id;
+            if (typeof id !== 'string') continue;
+            if (seen.has(id)) continue;
+            seen.add(id);
+            out.push(p);
+        }
+        out.sort((a: any, b: any) => {
+            const at = typeof a?.timestamp === 'number' ? a.timestamp : 0;
+            const bt = typeof b?.timestamp === 'number' ? b.timestamp : 0;
+            return at - bt;
+        });
+        return out;
+    };
+
     const copyCurrentTrace = async () => {
         try {
-            const traceId = traceHud?.traceId;
-            if (!traceId) return;
-
-            const all = eventBus.getHistory();
-            const events = all
-                .filter((p: any) => p?.traceId === traceId)
-                .map(sanitizeTracePacketForExport);
-
-            const exportPayload = JSON.stringify(
-                {
-                    traceId,
-                    tickNumber: traceHud?.tickNumber,
-                    exportedAt: Date.now(),
-                    windowMs: 0,
-                    events
-                },
-                null,
-                2
-            );
+            const traceId = traceHud?.traceId ?? null;
+            const snapA = eventBus.getHistory().slice();
+            const merged = dedupeAndSortPackets(snapA);
+            const exportPayload = buildTraceExportPayload(merged, { windowMs: 0, traceId });
 
             await copyTraceToClipboard(exportPayload);
 
@@ -410,31 +442,12 @@ export function CognitiveInterface() {
 
     const copyCurrentTraceWithWindow = async (windowMs: number) => {
         try {
-            const traceId = traceHud?.traceId;
-            if (!traceId) return;
-
-            const all = eventBus.getHistory();
-            const traceEvents = all.filter((p: any) => p?.traceId === traceId);
-            const timestamps = traceEvents.map((p: any) => p?.timestamp).filter((t: any) => typeof t === 'number');
-
-            const minTs = timestamps.length ? Math.min(...timestamps) : Date.now();
-            const maxTs = timestamps.length ? Math.max(...timestamps) : Date.now();
-
-            const events = all
-                .filter((p: any) => typeof p?.timestamp === 'number' && p.timestamp >= (minTs - windowMs) && p.timestamp <= (maxTs + windowMs))
-                .map(sanitizeTracePacketForExport);
-
-            const exportPayload = JSON.stringify(
-                {
-                    traceId,
-                    tickNumber: traceHud?.tickNumber,
-                    exportedAt: Date.now(),
-                    windowMs,
-                    events
-                },
-                null,
-                2
-            );
+            const traceId = traceHud?.traceId ?? null;
+            const snapA = eventBus.getHistory().slice();
+            await new Promise((r) => setTimeout(r, Math.max(0, windowMs)));
+            const snapB = eventBus.getHistory().slice();
+            const merged = dedupeAndSortPackets([...snapA, ...snapB]);
+            const exportPayload = buildTraceExportPayload(merged, { windowMs, traceId });
 
             await copyTraceToClipboard(exportPayload);
 

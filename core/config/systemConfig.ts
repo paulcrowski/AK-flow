@@ -57,6 +57,8 @@ export const SYSTEM_CONFIG = {
     /** Generate external traceId for packets emitted outside any active tick scope (UI/async/background) */
     USE_TRACE_EXTERNAL_IDS: true,
 
+    USE_TRACE_MISSING_ALERT: true,
+
     /** Fallback: hydrate conversation from Supabase archive when localStorage snapshot is empty */
     USE_CONV_SUPABASE_FALLBACK: true,
     

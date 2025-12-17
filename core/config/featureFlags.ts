@@ -62,6 +62,13 @@ const FEATURE_FLAG_DEFINITIONS: Record<string, FeatureFlagDefinition> = {
     experimental: true
   },
 
+  USE_TRACE_MISSING_ALERT: {
+    enabled: (SYSTEM_CONFIG.features as Record<string, boolean>).USE_TRACE_MISSING_ALERT ?? false,
+    description: 'Emit SYSTEM_ALERT TRACE_MISSING when EventBus auto-injects a missing traceId',
+    addedAt: '2025-12-17',
+    experimental: true
+  },
+
   USE_CONV_SUPABASE_FALLBACK: {
     enabled: SYSTEM_CONFIG.features.USE_CONV_SUPABASE_FALLBACK,
     description: 'Fallback: hydrate conversation from Supabase archive when localStorage snapshot is empty',
