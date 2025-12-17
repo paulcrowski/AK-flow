@@ -88,6 +88,9 @@ export interface CortexOutput {
   
   /** Treść do wypowiedzenia (pokazywana userowi) */
   speech_content: string;
+
+  /** Provenance of knowledge used for speech_content (observability/UI). */
+  knowledge_source?: 'memory' | 'tool' | 'llm' | 'mixed' | 'system';
   
   /** SYMBOLIC assessment of interaction (optional) */
   stimulus_response?: StimulusResponse;
@@ -129,6 +132,14 @@ export function isValidCortexOutput(obj: unknown): obj is CortexOutput {
     typeof o.internal_thought === 'string' &&
     typeof o.speech_content === 'string'
   );
+
+  if (!baseValid) return false;
+
+  const ks = o.knowledge_source;
+  if (ks !== undefined) {
+    const ok = ks === 'memory' || ks === 'tool' || ks === 'llm' || ks === 'mixed' || ks === 'system';
+    if (!ok) return false;
+  }
   
   // tool_intent jest opcjonalne, ale jeśli jest (i nie jest null), musi być poprawne
   if (o.tool_intent !== undefined && o.tool_intent !== null) {
@@ -138,10 +149,10 @@ export function isValidCortexOutput(obj: unknown): obj is CortexOutput {
       typeof ti.query === 'string' &&
       typeof ti.reason === 'string'
     );
-    return baseValid && toolValid;
+    return toolValid;
   }
   
-  return baseValid;
+  return true;
 }
 
 /**
@@ -161,6 +172,7 @@ export function isValidToolIntent(intent: unknown): intent is ToolIntent {
 export const FALLBACK_CORTEX_OUTPUT: Readonly<CortexOutput> = {
   internal_thought: 'Parse error - using fallback',
   speech_content: 'I encountered an issue processing that. Could you rephrase?',
+  knowledge_source: 'system',
   stimulus_response: {
     valence: 'negative',
     salience: 'low',

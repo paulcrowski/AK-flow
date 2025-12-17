@@ -95,7 +95,7 @@ export namespace EventLoop {
     // ═══════════════════════════════════════════════════════════════════════════
 
     export interface LoopCallbacks {
-        onMessage: (role: string, text: string, type: any) => void;
+        onMessage: (role: string, text: string, type: any, meta?: { knowledgeSource?: 'memory' | 'tool' | 'llm' | 'mixed' | 'system' }) => void;
         onThought: (thought: string) => void;
         onSomaUpdate: (soma: SomaState) => void;
         onLimbicUpdate: (limbic: LimbicState) => void;
@@ -205,17 +205,17 @@ export namespace EventLoop {
                     });
 
                     if (commit.committed) {
-                        callbacks.onMessage('assistant', result.responseText, 'speech');
+                        callbacks.onMessage('assistant', result.responseText, 'speech', { knowledgeSource: result.knowledgeSource });
                     } else {
                         callbacks.onThought(`[REACTIVE_SUPPRESSED] ${commit.blockReason || 'UNKNOWN'}`);
                     }
                 } catch (e) {
                     // FAIL-OPEN: reactive user response should never be silenced due to committer errors
                     callbacks.onThought(`[REACTIVE_COMMIT_ERROR] ${(e as Error)?.message || 'unknown'}`);
-                    callbacks.onMessage('assistant', result.responseText, 'speech');
+                    callbacks.onMessage('assistant', result.responseText, 'speech', { knowledgeSource: result.knowledgeSource });
                 }
             } else {
-                callbacks.onMessage('assistant', result.responseText, 'speech');
+                callbacks.onMessage('assistant', result.responseText, 'speech', { knowledgeSource: result.knowledgeSource });
             }
 
             // Reset silence & mark user interaction for GoalSystem
@@ -358,7 +358,7 @@ export namespace EventLoop {
                         : { committed: true, blocked: false, deduped: false };
 
                     if (commit.committed) {
-                        callbacks.onMessage('assistant', speechText, 'speech');
+                        callbacks.onMessage('assistant', speechText, 'speech', { knowledgeSource: result.knowledgeSource });
                     }
                 } else {
                     // Goal speech suppressed - log it

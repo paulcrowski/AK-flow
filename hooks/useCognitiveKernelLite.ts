@@ -135,6 +135,7 @@ export const useCognitiveKernelLite = (loadedIdentity?: AgentIdentity | null) =>
     role: string; 
     text: string; 
     type?: 'thought' | 'speech' | 'visual' | 'intel' | 'action' | 'tool_result';
+    knowledgeSource?: 'memory' | 'tool' | 'llm' | 'mixed' | 'system';
     imageData?: string;
     sources?: any[];
   }[]>([]);
@@ -207,7 +208,12 @@ export const useCognitiveKernelLite = (loadedIdentity?: AgentIdentity | null) =>
 
     saveConversationSnapshot(
       agentId,
-      conversation.map((c) => ({ role: c.role, text: c.text, type: c.type }))
+      conversation.map((c) => ({
+        role: c.role,
+        text: c.text,
+        type: c.type,
+        ...(c.knowledgeSource ? { knowledgeSource: c.knowledgeSource } : {})
+      }))
     );
   }, [conversation]);
   
@@ -292,7 +298,12 @@ export const useCognitiveKernelLite = (loadedIdentity?: AgentIdentity | null) =>
       // Hydrate conversation snapshot per-agent (UI memory)
       const snap = loadConversationSnapshot(loadedIdentity.id);
       if (snap.length > 0) {
-        const mapped = snap.map((t) => ({ role: t.role, text: t.text, type: t.type }));
+        const mapped = snap.map((t) => ({
+          role: t.role,
+          text: t.text,
+          type: t.type,
+          ...(t.knowledgeSource ? { knowledgeSource: t.knowledgeSource } : {})
+        }));
         setConversation(mapped);
         conversationRef.current = mapped;
       } else {
@@ -332,7 +343,10 @@ export const useCognitiveKernelLite = (loadedIdentity?: AgentIdentity | null) =>
                 .map((t) => ({
                   role: t.role,
                   text: t.content,
-                  type: 'speech' as const
+                  type: 'speech' as const,
+                  ...(typeof (t as any)?.metadata?.knowledgeSource === 'string'
+                    ? { knowledgeSource: (t as any).metadata.knowledgeSource }
+                    : {})
                 }))
                 .filter((t) => t.role && t.text);
 
@@ -340,7 +354,12 @@ export const useCognitiveKernelLite = (loadedIdentity?: AgentIdentity | null) =>
 
               setConversation(mapped);
               conversationRef.current = mapped;
-              saveConversationSnapshot(agentId, mapped.map((m) => ({ role: m.role, text: m.text, type: m.type })));
+              saveConversationSnapshot(agentId, mapped.map((m) => ({
+                role: m.role,
+                text: m.text,
+                type: m.type,
+                ...(m.knowledgeSource ? { knowledgeSource: m.knowledgeSource } : {})
+              })));
 
               eventBus.publish({
                 id: generateUUID(),
@@ -418,14 +437,26 @@ export const useCognitiveKernelLite = (loadedIdentity?: AgentIdentity | null) =>
       const turns = await getConversationHistory(agentId, resolved, 60);
       const ordered = [...turns].reverse();
       const mapped = ordered
-        .map((t) => ({ role: t.role, text: t.content, type: 'speech' as const }))
+        .map((t) => ({
+          role: t.role,
+          text: t.content,
+          type: 'speech' as const,
+          ...(typeof (t as any)?.metadata?.knowledgeSource === 'string'
+            ? { knowledgeSource: (t as any).metadata.knowledgeSource }
+            : {})
+        }))
         .filter((t) => t.role && t.text);
 
       if (loadedIdentityRef.current?.id !== agentId) return;
 
       setConversation(mapped);
       conversationRef.current = mapped;
-      saveConversationSnapshot(agentId, mapped.map((m) => ({ role: m.role, text: m.text, type: m.type })));
+      saveConversationSnapshot(agentId, mapped.map((m) => ({
+        role: m.role,
+        text: m.text,
+        type: m.type,
+        ...(m.knowledgeSource ? { knowledgeSource: m.knowledgeSource } : {})
+      })));
 
       eventBus.publish({
         id: generateUUID(),
@@ -517,6 +548,42 @@ export const useCognitiveKernelLite = (loadedIdentity?: AgentIdentity | null) =>
       }
     });
     return () => unsubscribe();
+  }, [actions]);
+
+  const toggleAutonomy = useCallback(() => {
+    actions.toggleAutonomousMode(!getCognitiveState().autonomousMode);
+  }, [actions]);
+
+  const toggleSleep = useCallback(() => {
+    const sleeping = Boolean(getCognitiveState().soma?.isSleeping);
+    if (sleeping) actions.wake();
+    else actions.triggerSleep();
+  }, [actions]);
+
+  const toggleChemistry = useCallback(() => {
+    actions.dispatch({ type: 'TOGGLE_CHEMISTRY', timestamp: Date.now() });
+  }, [actions]);
+
+  const injectStateOverride = useCallback((target: 'limbic' | 'soma' | 'neuro', key: string, value: number) => {
+    actions.dispatch({
+      type: 'STATE_OVERRIDE',
+      timestamp: Date.now(),
+      payload: { target, key, value }
+    });
+  }, [actions]);
+
+  const resetKernel = useCallback(() => {
+    actions.reset();
+    setSystemError(null);
+    setIsProcessing(false);
+    setCurrentThought('Idle');
+
+    const agentId = loadedIdentityRef.current?.id;
+    if (agentId) {
+      setConversation([]);
+      conversationRef.current = [];
+      saveConversationSnapshot(agentId, []);
+    }
   }, [actions]);
   
   // ─────────────────────────────────────────────────────────────────────────
@@ -658,20 +725,22 @@ export const useCognitiveKernelLite = (loadedIdentity?: AgentIdentity | null) =>
             } : undefined,
             // FAZA 6: Social Dynamics for soft homeostasis
             socialDynamics: state.socialDynamics,
-            // FAZA 6: StylePrefs from identity (fallback to empty = permissive)
             userStylePrefs: loadedIdentityRef.current?.style_prefs || {}
           };
           
           // Run EventLoop for autonomous cognition
           const nextCtx = await EventLoop.runSingleStep(ctx, null, {
-            onMessage: (role, text, type) => {
+            onMessage: (role, text, type, meta) => {
               if (role === 'assistant' && type === 'speech') {
                 void (async () => {
                   const cleaned = await processOutputForTools(text);
-                  setConversation(prev => [...prev, { role, text: cleaned, type }]);
-                  lastSpeakRef.current = Date.now();
+                  setConversation(prev => {
+                    const next = [...prev, { role, text: cleaned, type, ...(meta?.knowledgeSource ? { knowledgeSource: meta.knowledgeSource } : {}) }];
+                    conversationRef.current = next;
+                    return next;
+                  });
                   consecutiveAgentSpeechesRef.current++;
-                
+                  
                   // LOG: Autonomous speech
                   eventBus.publish({
                     id: generateUUID(),
@@ -685,20 +754,25 @@ export const useCognitiveKernelLite = (loadedIdentity?: AgentIdentity | null) =>
                     },
                     priority: 0.9
                   });
-                
+                  
                   // FAZA 6: Update social dynamics - agent spoke
                   actions.updateSocialDynamics({ agentSpoke: true });
-                
+                  
                   logPhysiologySnapshot('AUTONOMOUS_RESPONSE');
                 })().catch((e) => {
                   console.warn('[KernelLite] Tool processing failed:', e);
-                  setConversation(prev => [...prev, { role, text, type }]);
+                  setConversation(prev => {
+                    const next = [...prev, { role, text, type }];
+                    conversationRef.current = next;
+                    return next;
+                  });
                 });
+              } else if (role === 'assistant' && type === 'thought') {
+                setCurrentThought(text);
               }
             },
             onThought: (thought) => {
               setCurrentThought(thought);
-              thoughtHistoryRef.current = [...thoughtHistoryRef.current.slice(-9), thought];
             },
             onSomaUpdate: (soma) => actions.hydrate({ soma }),
             onLimbicUpdate: (limbic) => actions.hydrate({ limbic })
@@ -730,92 +804,11 @@ export const useCognitiveKernelLite = (loadedIdentity?: AgentIdentity | null) =>
       isLoopRunning.current = false;
     };
   }, [autonomousMode, actions]);
-  
-  // ─────────────────────────────────────────────────────────────────────────
-  // BOOT SEQUENCE
-  // ─────────────────────────────────────────────────────────────────────────
-  useEffect(() => {
-    if (hasBootedRef.current) return;
-    hasBootedRef.current = true;
-    
-    console.log('🧠 [KernelLite] BOOT SEQUENCE');
-    
-    eventBus.publish({
-      id: generateUUID(),
-      traceId: getStartupTraceId(),
-      timestamp: Date.now(),
-      source: AgentType.CORTEX_FLOW,
-      type: PacketType.SYSTEM_ALERT,
-      payload: {
-        event: "KERNEL_BOOT",
-        architecture: "KernelEngine + Zustand + React",
-        message: "🧠 Cognitive Kernel Lite Activated"
-      },
-      priority: 1.0
-    });
-  }, []);
-  
-  // ─────────────────────────────────────────────────────────────────────────
-  // IDENTITY SNAPSHOT - REMOVED (duplicate of IDENTITY_LOADED in CognitiveInterface)
-  // ─────────────────────────────────────────────────────────────────────────
-  
-  // ─────────────────────────────────────────────────────────────────────────
-  // ACTIONS (compatible with legacy hook API)
-  // ─────────────────────────────────────────────────────────────────────────
-  
-  const toggleAutonomy = useCallback(() => {
-    actions.toggleAutonomousMode(!autonomousMode);
-  }, [autonomousMode, actions]);
-  
-  const toggleSleep = useCallback(() => {
-    if (isSleeping) {
-      actions.wake();
-    } else {
-      actions.triggerSleep();
-    }
-  }, [isSleeping, actions]);
-  
-  const toggleChemistry = useCallback(() => {
-    dispatchCognitiveEvent({
-      type: 'TOGGLE_CHEMISTRY',
-      timestamp: Date.now()
-    });
-  }, []);
-  
-  const injectStateOverride = useCallback((target: 'limbic' | 'soma' | 'neuro', key: string, value: number) => {
-    dispatchCognitiveEvent({
-      type: 'STATE_OVERRIDE',
-      timestamp: Date.now(),
-      payload: { target, key, value }
-    });
-  }, []);
-  
-  const resetKernel = useCallback(() => {
-    console.log('[KernelLite] RESET');
-    eventBus.clear();
-    actions.reset();
-    setConversation([]);
-    conversationRef.current = [];
-    try {
-      const agentId = loadedIdentityRef.current?.id;
-      if (agentId && typeof localStorage !== 'undefined') {
-        localStorage.setItem(`ak-flow:conversation:${agentId}`, serializeConversationSnapshot([]));
-      }
-    } catch {
-      // ignore
-    }
-    setIsProcessing(false);
-    setCurrentThought("Initializing Synapses...");
-    setSystemError(null);
-    hasBootedRef.current = false;
-  }, [actions]);
 
   const processSingleInput = useCallback(async (clientMessageId: string, userInput: string, imageData?: string) => {
     silenceStartRef.current = Date.now();
 
     const processedUserInput = await processOutputForTools(userInput);
-
-    const beforeConversation = conversationRef.current;
 
     setConversation((prev) => {
       const idx = prev.findIndex((m) => m?.id === clientMessageId);
@@ -841,7 +834,6 @@ export const useCognitiveKernelLite = (loadedIdentity?: AgentIdentity | null) =>
       return next;
     });
 
-    // Archive user message to DB (fire-and-forget)
     const agentId = loadedIdentityRef.current?.id;
     const sessId = sessionIdRef.current;
     if (agentId && sessId) {
@@ -877,6 +869,7 @@ export const useCognitiveKernelLite = (loadedIdentity?: AgentIdentity | null) =>
     actions.processUserInput(processedUserInput);
 
     const state = getCognitiveState();
+    const beforeConversation = conversationRef.current;
     const ctx: EventLoop.LoopContext = {
       soma: state.soma,
       limbic: state.limbic,
@@ -915,18 +908,17 @@ export const useCognitiveKernelLite = (loadedIdentity?: AgentIdentity | null) =>
     };
 
     const nextCtx = await EventLoop.runSingleStep(ctx, processedUserInput, {
-      onMessage: (role, text, type) => {
+      onMessage: (role, text, type, meta) => {
         if (role === 'assistant' && type === 'speech') {
           const tickTraceId = getCurrentTraceId() ?? undefined;
           void (async () => {
             const cleaned = await processOutputForTools(text);
             setConversation(prev => {
-              const next = [...prev, { role, text: cleaned, type }];
+              const next = [...prev, { role, text: cleaned, type, ...(meta?.knowledgeSource ? { knowledgeSource: meta.knowledgeSource } : {}) }];
               conversationRef.current = next;
               return next;
             });
 
-            // Archive assistant message to DB (fire-and-forget)
             const agentId = loadedIdentityRef.current?.id;
             const sessId = sessionIdRef.current;
             if (agentId && sessId) {
@@ -937,7 +929,7 @@ export const useCognitiveKernelLite = (loadedIdentity?: AgentIdentity | null) =>
                   role: 'assistant',
                   content: cleaned,
                   timestamp: nowTs,
-                  metadata: { traceId: tickTraceId }
+                  metadata: { traceId: tickTraceId, ...(meta?.knowledgeSource ? { knowledgeSource: meta.knowledgeSource } : {}) }
                 },
                 agentId,
                 sessId
@@ -982,7 +974,7 @@ export const useCognitiveKernelLite = (loadedIdentity?: AgentIdentity | null) =>
     });
 
     silenceStartRef.current = nextCtx.silenceStart;
-  }, [actions, processOutputForTools]);
+  }, [actions, processOutputForTools, upsertLocalSessionSummary, logPhysiologySnapshot]);
 
   const drainInputQueue = useCallback(async () => {
     if (drainingQueueRef.current) return;

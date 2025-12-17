@@ -2,6 +2,7 @@ export type ConversationSnapshotTurn = {
   role: string;
   text: string;
   type?: 'thought' | 'speech' | 'visual' | 'intel' | 'action' | 'tool_result';
+  knowledgeSource?: 'memory' | 'tool' | 'llm' | 'mixed' | 'system';
 };
 
 function sanitizeText(input: string, maxLen: number): string {
@@ -48,7 +49,17 @@ export function parseConversationSnapshot(raw: string | null | undefined, opts?:
     const rawType = (item as any).type;
     const type = typeof rawType === 'string' && ALLOWED_TYPES.has(rawType) ? (rawType as any) : 'speech';
 
-    out.push({ role, text, type });
+    const rawKnowledgeSource = (item as any).knowledgeSource;
+    const knowledgeSource =
+      rawKnowledgeSource === 'memory' ||
+      rawKnowledgeSource === 'tool' ||
+      rawKnowledgeSource === 'llm' ||
+      rawKnowledgeSource === 'mixed' ||
+      rawKnowledgeSource === 'system'
+        ? (rawKnowledgeSource as ConversationSnapshotTurn['knowledgeSource'])
+        : undefined;
+
+    out.push({ role, text, type, ...(knowledgeSource ? { knowledgeSource } : {}) });
     if (out.length >= maxTurns) break;
   }
 
@@ -67,7 +78,8 @@ export function serializeConversationSnapshot(
     .map((t) => ({
       role: sanitizeText(String(t.role ?? ''), 32),
       text: sanitizeText(String(t.text ?? ''), maxTextLen),
-      type: typeof t.type === 'string' && ALLOWED_TYPES.has(t.type) ? t.type : 'speech'
+      type: typeof t.type === 'string' && ALLOWED_TYPES.has(t.type) ? t.type : 'speech',
+      ...(t.knowledgeSource ? { knowledgeSource: t.knowledgeSource } : {})
     }))
     .filter((t) => t.role && t.text);
 

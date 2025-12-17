@@ -213,6 +213,7 @@ INSTRUCTIONS:
           properties: {
             internal_thought: { type: Type.STRING },
             speech_content: { type: Type.STRING },
+            knowledge_source: { type: Type.STRING, nullable: true },
             // PIONEER ARCHITECTURE (13/10): stimulus_response replaces mood_shift
             // LLM classifies SYMBOLICALLY, EmotionEngine computes NUMERICALLY
             stimulus_response: {

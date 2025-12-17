@@ -151,6 +151,7 @@ export namespace CortexSystem {
         responseText: string;
         internalThought: string;
         moodShift?: { fear_delta: number; curiosity_delta: number };
+        knowledgeSource?: 'memory' | 'tool' | 'llm' | 'mixed' | 'system';
     }
 
     function buildStructuredPrompt(params: {
@@ -251,9 +252,14 @@ export namespace CortexSystem {
                 const cache = memorySpace?.cold?.cache;
                 const key = `global_recent:${agentIdForCache}:${globalRecentLimit}`;
 
-                const load = () => MemoryService.recallRecent(globalRecentLimit);
-                const p = cache
-                    ? cache.getOrLoad(key, globalRecentCacheTtlMs, load).then((v) => (v as any as MemoryTrace[]))
+                const load = async (): Promise<MemoryTrace[]> => {
+                    const recent = await MemoryService.recallRecent(globalRecentLimit);
+                    return recent as any as MemoryTrace[];
+                };
+
+                const typedCache = cache as unknown as { getOrLoad: (k: string, ttl: number, loader: () => Promise<MemoryTrace[]>) => Promise<MemoryTrace[]> } | undefined;
+                const p: Promise<MemoryTrace[]> = typedCache
+                    ? typedCache.getOrLoad(key, globalRecentCacheTtlMs, load)
                     : load();
 
                 const startedAt = Date.now();
@@ -401,6 +407,33 @@ export namespace CortexSystem {
                 const gateResult = processDecisionGate(guardedOutput, currentSoma);
                 const output = gateResult.modifiedOutput;
 
+                const hasToolTag = /\[(SEARCH|VISUALIZE):/i.test(String(output?.speech_content || ''));
+                const derivedKnowledgeSource: ProcessResult['knowledgeSource'] =
+                    (output as any)?.knowledge_source ||
+                    (hasToolTag ? 'tool' : (memories.length > 0 ? 'memory' : 'llm'));
+
+                const strictGrounded = isFeatureEnabled('USE_GROUNDED_STRICT_MODE');
+                const shouldForceSearch = strictGrounded && derivedKnowledgeSource === 'llm' && memories.length === 0 && !hasToolTag;
+                const finalSpeech = shouldForceSearch
+                    ? `Sprawdzę to. [SEARCH: ${String(text || '').slice(0, 160)}]`
+                    : String(output.speech_content || '');
+
+                if (shouldForceSearch) {
+                    eventBus.publish({
+                        id: generateUUID(),
+                        traceId: getCurrentTraceId() ?? undefined,
+                        timestamp: Date.now(),
+                        source: AgentType.CORTEX_FLOW,
+                        type: PacketType.SYSTEM_ALERT,
+                        payload: {
+                            event: 'GROUNDED_STRICT_FORCED_SEARCH',
+                            reason: 'llm_fallback_disallowed',
+                            userInput: String(text || '').slice(0, 200)
+                        },
+                        priority: 0.2
+                    });
+                }
+
                 // Log telemetry
                 if (gateResult.telemetry.violation) {
                     console.warn('[CortexSystem] Cognitive violation detected and corrected');
@@ -412,7 +445,7 @@ export namespace CortexSystem {
 
                 // 4. Persist interaction (Legacy style for now)
                 await MemoryService.storeMemory({
-                    content: `User: ${text} | Agent: ${output.speech_content}`,
+                    content: `User: ${text} | Agent: ${finalSpeech}`,
                     emotionalContext: currentLimbic,
                     timestamp: new Date().toISOString(),
                     id: generateUUID()
@@ -443,9 +476,10 @@ export namespace CortexSystem {
                 }).catch(err => console.warn('[CortexSystem] Episode detection failed:', err));
                 
                 return {
-                    responseText: output.speech_content,
+                    responseText: finalSpeech,
                     internalThought: output.internal_thought,
-                    moodShift: emotionDeltas  // Computed by EmotionEngine
+                    moodShift: emotionDeltas,  // Computed by EmotionEngine
+                    knowledgeSource: shouldForceSearch ? 'tool' : derivedKnowledgeSource
                 };
             }
         }
@@ -525,6 +559,7 @@ export namespace CortexSystem {
     export interface GoalPursuitResult {
         responseText: string;
         internalThought: string;
+        knowledgeSource?: 'memory' | 'tool' | 'llm' | 'mixed' | 'system';
     }
 
     function buildGoalPrompt(params: {
@@ -654,9 +689,13 @@ export namespace CortexSystem {
             id: generateUUID()
         });
 
+        const hasToolTag = /\[(SEARCH|VISUALIZE):/i.test(String(decision.text || ''));
+        const knowledgeSource: GoalPursuitResult['knowledgeSource'] = hasToolTag ? 'tool' : 'llm';
+
         return {
             responseText: decision.text,
-            internalThought: cortexResult.internalThought
+            internalThought: cortexResult.internalThought,
+            knowledgeSource
         };
     }
 

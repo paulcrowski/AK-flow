@@ -440,6 +440,29 @@ export function CognitiveInterface() {
         }
     };
 
+    const renderKnowledgeSourceBadge = (knowledgeSource?: string) => {
+        if (!knowledgeSource) return null;
+
+        const ks = String(knowledgeSource);
+        const label = ks.toUpperCase();
+
+        const cls = ks === 'tool'
+            ? 'border-emerald-500/40 bg-emerald-900/10 text-emerald-300'
+            : ks === 'memory'
+                ? 'border-violet-500/40 bg-violet-900/10 text-violet-300'
+                : ks === 'mixed'
+                    ? 'border-amber-500/40 bg-amber-900/10 text-amber-300'
+                    : ks === 'system'
+                        ? 'border-red-500/40 bg-red-900/10 text-red-300'
+                        : 'border-gray-500/40 bg-gray-900/10 text-gray-300';
+
+        return (
+            <span className={`ml-2 inline-flex items-center px-2 py-0.5 rounded border text-[9px] font-mono tracking-widest ${cls}`}>
+                {label}
+            </span>
+        );
+    };
+
     const copyCurrentTraceWithWindow = async (windowMs: number) => {
         try {
             const traceId = traceHud?.traceId ?? null;
@@ -896,6 +919,7 @@ export function CognitiveInterface() {
                                         <div className="bg-gradient-to-r from-cyan-900/30 to-transparent px-3 py-1.5 border-b border-cyan-800/30">
                                             <span className="text-[10px] text-cyan-400 uppercase tracking-widest flex items-center gap-1.5 font-bold">
                                                 <Sparkles size={10} /> COGNITIVE OUTPUT
+                                                {renderKnowledgeSourceBadge((msg as any)?.knowledgeSource)}
                                             </span>
                                         </div>
                                     )}

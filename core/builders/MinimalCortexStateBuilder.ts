@@ -15,6 +15,7 @@ import { DEFAULT_TRAIT_VECTOR } from '../types/TraitVector';
 import { DEFAULT_INTERACTION_MODE } from '../types/InteractionMode';
 import { DEFAULT_RELATIONSHIP } from '../types/Relationship';
 import { buildHardFacts } from '../systems/HardFactsBuilder';
+import { isFeatureEnabled } from '../config/featureFlags';
 
 // ═══════════════════════════════════════════════════════════════
 // CACHE - Tożsamość ładowana RAZ, nie przy każdym zapytaniu
@@ -193,7 +194,10 @@ export function buildMinimalCortexState(
     // LLM MUST read these, not hallucinate dates or names
     hard_facts: buildHardFacts({
       agentName: coreIdentity.name,
-      language: language
+      language: language,
+      worldFacts: {
+        epistemic_mode: isFeatureEnabled('USE_GROUNDED_STRICT_MODE') ? 'grounded_strict' : 'hybrid'
+      }
       // Note: soma/neuro not available here, will be added by caller if needed
     })
   };

@@ -130,6 +130,13 @@ const FEATURE_FLAG_DEFINITIONS: Record<string, FeatureFlagDefinition> = {
     description: 'Always inject a small cross-session global memory baseline (recallRecent) into RAG, with cache+timeout',
     addedAt: '2025-12-17',
     experimental: true
+  },
+
+  USE_GROUNDED_STRICT_MODE: {
+    enabled: (SYSTEM_CONFIG.features as Record<string, boolean>).USE_GROUNDED_STRICT_MODE ?? false,
+    description: 'Strict grounded mode: disallow training-knowledge fallback, prefer memory/tool-only provenance',
+    addedAt: '2025-12-17',
+    experimental: true
   }
 } as const;
 
