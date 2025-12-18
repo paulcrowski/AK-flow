@@ -133,6 +133,33 @@ describe('CognitiveStore', () => {
       expect(getCognitiveState().goalState.activeGoal).toBeNull();
     });
 
+    it('setWorkingSet() should set working set with steps and cursor=0', () => {
+      const { setWorkingSet } = useCognitiveStore.getState() as any;
+      setWorkingSet(['Step A', 'Step B'], 'Test Plan');
+      const ws = (getCognitiveState() as any).workingSet;
+      expect(ws).not.toBeNull();
+      expect(ws.title).toBe('Test Plan');
+      expect(ws.cursor).toBe(0);
+      expect(ws.steps.length).toBe(2);
+      expect(ws.steps[0].done).toBe(false);
+    });
+
+    it('advanceWorkingSet() should mark current step done and advance cursor', () => {
+      const { setWorkingSet, advanceWorkingSet } = useCognitiveStore.getState() as any;
+      setWorkingSet(['S1', 'S2']);
+      advanceWorkingSet();
+      const ws = (getCognitiveState() as any).workingSet;
+      expect(ws.steps[0].done).toBe(true);
+      expect(ws.cursor).toBe(1);
+    });
+
+    it('clearWorkingSet() should clear working set', () => {
+      const { setWorkingSet, clearWorkingSet } = useCognitiveStore.getState() as any;
+      setWorkingSet(['S1']);
+      clearWorkingSet();
+      expect((getCognitiveState() as any).workingSet).toBeNull();
+    });
+
     it('addThought() should add to thought history', () => {
       const { addThought } = useCognitiveStore.getState();
       

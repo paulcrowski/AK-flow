@@ -86,6 +86,7 @@ export const createInitialKernelState = (overrides?: Partial<KernelState>): Kern
     // Personality & Goals
     traitVector: DEFAULT_TRAIT_VECTOR,
     goalState: { ...INITIAL_GOAL_STATE, lastUserInteractionAt: now },
+    workingSet: null,
     
     // Mode flags
     autonomousMode: false,      // SECURITY: Default OFF

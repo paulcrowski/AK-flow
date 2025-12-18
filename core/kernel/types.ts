@@ -34,6 +34,21 @@ export interface SocialDynamics {
   consecutiveWithoutResponse: number;    // Counter for speeches without user reply
 }
 
+export interface WorkingSetStep {
+  id: string;
+  text: string;
+  done: boolean;
+}
+
+export interface WorkingSet {
+  id: string;
+  title?: string;
+  steps: WorkingSetStep[];
+  cursor: number; // index of current step
+  createdAt: number;
+  updatedAt: number;
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // KERNEL STATE - Immutable snapshot of cognitive system
 // ═══════════════════════════════════════════════════════════════════════════
@@ -48,6 +63,7 @@ export interface KernelState {
   // Personality & Goals
   traitVector: TraitVector;
   goalState: GoalState;
+  workingSet: WorkingSet | null;
 
   // Mode flags
   autonomousMode: boolean;
@@ -96,6 +112,9 @@ export type KernelEventType =
   | 'STATE_OVERRIDE'          // Debug: manual state injection
   | 'ADD_MESSAGE'             // Add message to conversation
   | 'CLEAR_CONVERSATION'      // Clear conversation history
+  | 'WORKING_SET_SET'         // Set/replace working plan
+  | 'WORKING_SET_ADVANCE'     // Mark current step done and advance cursor
+  | 'WORKING_SET_CLEAR'       // Clear working set
   | 'SOCIAL_DYNAMICS_UPDATE'  // Update social dynamics (soft homeostasis)
   | 'RESET';                  // Full kernel reset
 
@@ -118,6 +137,7 @@ export type KernelEventPayload =
   | NeuroUpdatePayload
   | StateOverridePayload
   | GoalPayload
+  | WorkingSetSetPayload
   | AddMessagePayload
   | SocialDynamicsPayload
   | EmptyPayload;
@@ -159,6 +179,11 @@ export interface StateOverridePayload {
 export interface GoalPayload {
   goalId?: string;
   description?: string;
+}
+
+export interface WorkingSetSetPayload {
+  title?: string;
+  steps: string[];
 }
 
 export interface AddMessagePayload {

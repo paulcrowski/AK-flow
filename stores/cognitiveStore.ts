@@ -51,6 +51,9 @@ interface CognitiveStoreState extends KernelState {
   updateNeuro: (neuro: Partial<NeurotransmitterState>) => void;
   formGoal: (goal: string, priority: number) => void;
   completeGoal: () => void;
+  setWorkingSet: (steps: string[], title?: string) => void;
+  advanceWorkingSet: () => void;
+  clearWorkingSet: () => void;
   addThought: (thought: string) => void;
   addMessage: (role: 'user' | 'assistant', text: string, type?: 'thought' | 'speech' | 'visual' | 'intel' | 'action' | 'tool_result', imageData?: string, sources?: any[]) => void;
   clearConversation: () => void;
@@ -172,6 +175,22 @@ export const useCognitiveStore = create<CognitiveStoreState>()(
 
         completeGoal: () => {
           get().dispatch({ type: 'GOAL_COMPLETED', timestamp: Date.now() });
+        },
+
+        setWorkingSet: (steps: string[], title?: string) => {
+          get().dispatch({
+            type: 'WORKING_SET_SET',
+            timestamp: Date.now(),
+            payload: { steps, ...(title ? { title } : {}) }
+          });
+        },
+
+        advanceWorkingSet: () => {
+          get().dispatch({ type: 'WORKING_SET_ADVANCE', timestamp: Date.now() });
+        },
+
+        clearWorkingSet: () => {
+          get().dispatch({ type: 'WORKING_SET_CLEAR', timestamp: Date.now() });
         },
 
         addThought: (thought: string) => {
@@ -299,6 +318,9 @@ export const useCognitiveActions = () => useCognitiveStore(useShallow((s) => ({
   updateNeuro: s.updateNeuro,
   formGoal: s.formGoal,
   completeGoal: s.completeGoal,
+  setWorkingSet: s.setWorkingSet,
+  advanceWorkingSet: s.advanceWorkingSet,
+  clearWorkingSet: s.clearWorkingSet,
   addThought: s.addThought,
   addMessage: s.addMessage,
   clearConversation: s.clearConversation,

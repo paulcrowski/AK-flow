@@ -7,8 +7,8 @@
  * @module core/kernel/reducer
  */
 
-import type { KernelState, KernelEvent, KernelReducerResult, KernelOutput, ConversationTurn } from './types';
-import type { MoodShiftPayload, NeuroUpdatePayload, StateOverridePayload, UserInputPayload, AgentSpokePayload, ToolResultPayload, AddMessagePayload, SocialDynamicsPayload, SocialDynamics } from './types';
+import type { KernelState, KernelEvent, KernelReducerResult, KernelOutput, ConversationTurn, WorkingSet } from './types';
+import type { MoodShiftPayload, NeuroUpdatePayload, StateOverridePayload, UserInputPayload, AgentSpokePayload, ToolResultPayload, AddMessagePayload, SocialDynamicsPayload, SocialDynamics, WorkingSetSetPayload } from './types';
 import { createInitialKernelState, INITIAL_LIMBIC, INITIAL_SOMA, INITIAL_NEURO, INITIAL_RESONANCE, BASELINE_NEURO, INITIAL_SOCIAL_DYNAMICS } from './initialState';
 import * as SomaSystem from '../systems/SomaSystem';
 import * as LimbicSystem from '../systems/LimbicSystem';
@@ -83,6 +83,15 @@ export function kernelReducer(state: KernelState, event: KernelEvent): KernelRed
       
     case 'CLEAR_CONVERSATION':
       return handleClearConversation(state, outputs);
+
+    case 'WORKING_SET_SET':
+      return handleWorkingSetSet(state, event, outputs);
+
+    case 'WORKING_SET_ADVANCE':
+      return handleWorkingSetAdvance(state, event, outputs);
+
+    case 'WORKING_SET_CLEAR':
+      return handleWorkingSetClear(state, outputs);
       
     case 'SOCIAL_DYNAMICS_UPDATE':
       return handleSocialDynamicsUpdate(state, event, outputs);
@@ -204,6 +213,88 @@ function handleTick(state: KernelState, event: KernelEvent, outputs: KernelOutpu
     payload: { delayMs: nextTick }
   });
   
+  return { nextState, outputs };
+}
+
+function handleWorkingSetSet(state: KernelState, event: KernelEvent, outputs: KernelOutput[]): KernelReducerResult {
+  const payload = event.payload as WorkingSetSetPayload | undefined;
+  if (!payload || !Array.isArray(payload.steps) || payload.steps.length === 0) {
+    return { nextState: state, outputs };
+  }
+
+  const now = event.timestamp;
+  const id = `ws_${now}`;
+  const steps = payload.steps
+    .map((s, i) => String(s || '').trim())
+    .filter(Boolean)
+    .slice(0, 20)
+    .map((text, i) => ({ id: `${id}_s${i}`, text, done: false }));
+
+  if (steps.length === 0) return { nextState: state, outputs };
+
+  const workingSet: WorkingSet = {
+    id,
+    title: payload.title ? String(payload.title).slice(0, 120) : undefined,
+    steps,
+    cursor: 0,
+    createdAt: now,
+    updatedAt: now
+  };
+
+  const nextState = {
+    ...state,
+    soma: SomaSystem.applyEnergyCost(state.soma, 1),
+    workingSet
+  };
+
+  outputs.push({
+    type: 'LOG',
+    payload: { message: `WORKING_SET_SET: ${workingSet.id} steps=${workingSet.steps.length}` }
+  });
+
+  return { nextState, outputs };
+}
+
+function handleWorkingSetAdvance(state: KernelState, event: KernelEvent, outputs: KernelOutput[]): KernelReducerResult {
+  if (!state.workingSet) return { nextState: state, outputs };
+
+  const ws = state.workingSet;
+  const idx = Math.max(0, Math.min(ws.steps.length - 1, ws.cursor));
+  const now = event.timestamp;
+
+  const steps = ws.steps.map((s, i) => (i === idx ? { ...s, done: true } : s));
+  const nextCursor = Math.min(ws.steps.length, idx + 1);
+
+  const nextWs: WorkingSet = {
+    ...ws,
+    steps,
+    cursor: nextCursor,
+    updatedAt: now
+  };
+
+  const nextState = {
+    ...state,
+    soma: SomaSystem.applyEnergyCost(state.soma, 0.5),
+    workingSet: nextWs
+  };
+
+  outputs.push({
+    type: 'LOG',
+    payload: { message: `WORKING_SET_ADVANCE: ${ws.id} cursor=${nextCursor}/${ws.steps.length}` }
+  });
+
+  return { nextState, outputs };
+}
+
+function handleWorkingSetClear(state: KernelState, outputs: KernelOutput[]): KernelReducerResult {
+  if (!state.workingSet) return { nextState: state, outputs };
+
+  const nextState = {
+    ...state,
+    workingSet: null
+  };
+
+  outputs.push({ type: 'LOG', payload: { message: 'WORKING_SET_CLEAR' } });
   return { nextState, outputs };
 }
 
