@@ -1,4 +1,4 @@
-import { GoogleGenAI, Type } from "@google/genai";
+import { Type } from "@google/genai";
 import { eventBus } from "../core/EventBus";
 import { AgentType, PacketType, CognitiveError, DetectedIntent, StylePreference, CommandType, UrgencyLevel } from "../types";
 import { generateUUID } from "../utils/uuid";
@@ -11,44 +11,16 @@ import { guardLegacyWithFactEcho, isFactEchoPipelineEnabled } from "../core/syst
 import { UnifiedContextBuilder, type UnifiedContext, type ContextBuilderInput } from "../core/context";
 import { applyAutonomyV2RawContract } from "../core/systems/RawContract";
 import { parseDetectedIntent } from "../core/systems/IntentContract";
-import { parseJsonFromLLM } from "../utils/AIResponseParser";
-import { TokenUsageLedger } from "../core/telemetry/TokenUsageLedger";
 import { ModelRouter, runWithModelFallback } from "./ModelRouter";
 
-type GeminiTextSource = 'text' | 'parts' | 'alt' | 'none';
-
-function getGeminiTextWithMeta(resp: any): { text: string; source: GeminiTextSource } {
-    const direct = typeof resp?.text === 'string' ? resp.text : '';
-    if (direct && direct.trim()) return { text: direct, source: 'text' };
-
-    const parts = resp?.candidates?.[0]?.content?.parts;
-    if (Array.isArray(parts)) {
-        const joined = parts
-            .map((p: any) => (typeof p?.text === 'string' ? p.text : ''))
-            .join('');
-        if (joined && joined.trim()) return { text: joined, source: 'parts' };
-    }
-
-    const alt = resp?.candidates?.[0]?.content?.text;
-    if (typeof alt === 'string' && alt.trim()) return { text: alt, source: 'alt' };
-
-    return { text: '', source: 'none' };
-}
-
-export function getGeminiText(resp: any): string {
-    return getGeminiTextWithMeta(resp).text;
-}
+import { createGeminiClient } from "./gemini/aiClient";
+import { getGeminiText, getGeminiTextWithSource } from "./gemini/text";
+import { cleanJSON, parseJSONStrict } from "./gemini/json";
+import { mapError, withRetry } from "./gemini/retry";
+import { logUsage } from "./gemini/usage";
 
 // 1. Safe Environment Access & Initialization (Vite)
-const apiKey = import.meta.env.VITE_GEMINI_API_KEY as string | undefined;
-
-if (!apiKey) {
-    console.error("[Gemini] Brak VITE_GEMINI_API_KEY w .env.local – CortexService nie ma klucza.");
-    // Możesz tu zwrócić null zamiast rzucać, jeśli chcesz dalej ładować UI bez AGI
-    throw new Error("Brak VITE_GEMINI_API_KEY w env (frontend).");
-}
-
-const ai = new GoogleGenAI({ apiKey });
+const ai = createGeminiClient();
 
 async function generateWithFallback(operation: string, params: any): Promise<any> {
     const task = ModelRouter.routeForOperation(operation);
@@ -100,188 +72,8 @@ async function generateWithFallback(operation: string, params: any): Promise<any
     }
 }
 
-// 2. Robust JSON Parsing Helper
-// Generic Type Guard
-function isValidResponse<T>(data: any, validator?: (data: any) => boolean): data is T {
-    if (!data || typeof data !== 'object') return false;
-    if (validator) return validator(data);
-    return true; // Default: just checks if it's an object
-}
-
-/**
- * Parse result with explicit success/failure signal.
- * FAIL-CLOSED: caller decides what to do on failure, not silent default.
- */
-export interface JSONParseResult<T> {
-    success: boolean;
-    data: T | null;
-    error?: string;
-    rawText?: string;
-}
-
-/**
- * Parse JSON with explicit success/failure.
- * Returns {success: false} instead of silent default.
- */
-const parseJSONStrict = <T>(text: string | undefined, validator?: (data: any) => boolean): JSONParseResult<T> => {
-    if (!text) {
-        return { success: false, data: null, error: 'EMPTY_RESPONSE' };
-    }
-    
-    try {
-        const sanitizedText = text
-            .slice(0, 20000)
-            .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, '');
-
-        const parsedResult = parseJsonFromLLM<T>(sanitizedText, {
-            allowRepair: true,
-            validator: validator as any,
-            requireJsonBlock: false
-        });
-
-        if (parsedResult.ok && parsedResult.value && isValidResponse<T>(parsedResult.value, validator)) {
-            return { success: true, data: parsedResult.value };
-        }
-
-        return { success: false, data: null, error: parsedResult.error || 'PARSE_ERROR', rawText: text.substring(0, 200) };
-    } catch (e) {
-        return {
-            success: false,
-            data: null,
-            error: (e as Error).message,
-            rawText: text.substring(0, 200)
-        };
-    }
-};
-
-const cleanJSON = <T>(
-    text: string | undefined,
-    defaultVal: T,
-    validator?: (data: any) => boolean,
-    callsite?: string
-): T => {
-    if (!text) return defaultVal;
-    try {
-        const parsedResult = parseJsonFromLLM<T>(text, {
-            allowRepair: true,
-            validator: validator as any,
-            requireJsonBlock: false
-        });
-
-        if (parsedResult.ok && parsedResult.value && isValidResponse<T>(parsedResult.value, validator)) {
-            return parsedResult.value;
-        }
-
-        if (!parsedResult.ok) {
-            throw new Error(parsedResult.error || 'PARSE_ERROR');
-        }
-
-        console.warn("JSON Parsed but failed validation. Using default.");
-        return defaultVal;
-
-    } catch (e2) {
-        const hasBrace = text?.includes('{') ?? false;
-        const hasBracket = text?.includes('[') ?? false;
-        const first60 = text?.substring(0, 60) || 'EMPTY';
-        
-        console.warn(`[JSON_PARSE_FAILURE] callsite=${callsite || 'unknown'} hasBrace=${hasBrace} hasBracket=${hasBracket} first60="${first60}"`);
-
-        // Telemetry: structured failure log for debugging
-        eventBus.publish({
-            id: generateUUID(),
-            timestamp: Date.now(),
-            source: AgentType.CORTEX_FLOW,
-            type: PacketType.PREDICTION_ERROR,
-            payload: {
-                metric: "JSON_PARSE_FAILURE",
-                callsite: callsite || 'unknown',
-                has_brace: hasBrace,
-                has_bracket: hasBracket,
-                first_60_chars: first60,
-                error: (e2 as any).message
-            },
-            priority: 0.9
-        });
-
-        return defaultVal;
-    }
-};
-
-// 3. Usage Logging
-const logUsage = (operation: string, response: any) => {
-    if (response && response.usageMetadata) {
-        const { promptTokenCount, candidatesTokenCount, totalTokenCount } = response.usageMetadata;
-
-        TokenUsageLedger.record({
-            agentId: getCurrentAgentId(),
-            op: operation,
-            inTokens: promptTokenCount || 0,
-            outTokens: candidatesTokenCount || 0,
-            totalTokens: totalTokenCount || 0,
-            at: Date.now()
-        });
-
-        eventBus.publish({
-            id: generateUUID(),
-            timestamp: Date.now(),
-            source: AgentType.SOMA,
-            type: PacketType.PREDICTION_ERROR,
-            payload: {
-                metric: "TOKEN_USAGE",
-                op: operation,
-                in: promptTokenCount || 0,
-                out: candidatesTokenCount || 0,
-                total: totalTokenCount || 0
-            },
-            priority: 0.1
-        });
-    } else {
-        // Optional: Log if usage data is missing but expected?
-        // console.debug(`[${operation}] No usage metadata returned.`);
-    }
-};
-
-// 4. Retry Logic & Error Mapping
-const mapError = (e: any): CognitiveError => {
-    // Check for offline state first
-    if (typeof navigator !== 'undefined' && !navigator.onLine) {
-        return { code: 'SYNAPTIC_DISCONNECT', message: "Neural Link Severed", details: "No internet connection detected.", retryable: true };
-    }
-
-    const msg = (e.message || "").toLowerCase();
-    const status = (e.status || "").toString();
-
-    // Handle Google RPC / XHR Errors
-    if (msg.includes("429") || msg.includes("quota") || msg.includes("exhausted")) {
-        return { code: 'NEURAL_OVERLOAD', message: "Cognitive Quota Exceeded", details: "Rate limit hit. Cooling down.", retryable: true };
-    }
-    if (msg.includes("503") || msg.includes("network") || msg.includes("fetch") || msg.includes("failed") || status === "UNKNOWN") {
-        return { code: 'SYNAPTIC_DISCONNECT', message: "Neural Link Unstable", details: "Transient network error (RPC/XHR).", retryable: true };
-    }
-    if (msg.includes("safety") || msg.includes("blocked")) {
-        return { code: 'SAFETY_BLOCK', message: "Invasive Thought Inhibited", details: "Content filtered by safety protocols.", retryable: false };
-    }
-    return { code: 'UNKNOWN', message: "Cognitive Dissonance", details: msg || "Unknown Error", retryable: true };
-};
-
-const withRetry = async <T>(operation: () => Promise<T>, retries = 2, delay = 1000): Promise<T> => {
-    try {
-        if (typeof navigator !== 'undefined' && !navigator.onLine) {
-            throw new Error("Offline");
-        }
-        return await operation();
-    } catch (e: any) {
-        if (retries > 0) {
-            const mapped = mapError(e);
-            if (mapped.retryable) {
-                console.warn(`Retrying operation... (${retries} left). Cause: ${mapped.details}`);
-                await new Promise(res => setTimeout(res, delay));
-                return withRetry(operation, retries - 1, delay * 2);
-            }
-        }
-        throw mapError(e);
-    }
-};
+// Types preserved for public API compatibility
+export type { JSONParseResult } from './gemini/json';
 
 export const CortexService = {
     // NEW: Visual Cortex (Imagination) - Fixed to use gemini-2.5-flash-image
@@ -957,7 +749,7 @@ OUTPUT FORMAT:
             };
 
             const first = await makeCall(basePrompt);
-            const firstMeta = getGeminiTextWithMeta(first);
+            const firstMeta = getGeminiTextWithSource(first);
             const parsed1 = parseDetectedIntent(firstMeta.text, safeDefault);
             if (parsed1.ok) return parsed1.value;
 
@@ -974,7 +766,7 @@ OUTPUT FORMAT:
             });
 
             const second = await makeCall(strictRetryPrompt);
-            const secondMeta = getGeminiTextWithMeta(second);
+            const secondMeta = getGeminiTextWithSource(second);
             const parsed2 = parseDetectedIntent(secondMeta.text, safeDefault);
             if (parsed2.ok) return parsed2.value;
 
