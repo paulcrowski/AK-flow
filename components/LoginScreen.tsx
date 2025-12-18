@@ -65,6 +65,7 @@ export function LoginScreen() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="news@paulcrow.pl"
+              autoComplete="username"
               className="w-full px-4 py-3 bg-[#0a0c10] border border-gray-700 rounded-lg text-white placeholder-gray-600 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 transition-colors"
               autoFocus
             />
@@ -80,6 +81,7 @@ export function LoginScreen() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="••••••••"
+              autoComplete="current-password"
               className="w-full px-4 py-3 bg-[#0a0c10] border border-gray-700 rounded-lg text-white placeholder-gray-600 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 transition-colors"
             />
             {error && (

@@ -43,7 +43,8 @@ export class RLSDiagnostics {
         // Log RLS suspicions
         if (isRLSIssue) {
             console.warn(`[RLS DIAGNOSTIC] ${rlsMessage}`);
-            console.info(`[RLS DIAGNOSTIC] Current user role: ${this.getCurrentUserRole()}`);
+            const role = await this.getCurrentUserRole();
+            console.info(`[RLS DIAGNOSTIC] Current user role: ${role}`);
         }
         
         return {

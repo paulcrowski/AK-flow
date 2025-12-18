@@ -5,6 +5,11 @@ import type { Agent, SessionContextType } from './SessionTypes';
 const SessionContext = createContext<SessionContextType | null>(null);
 
 const LS_AGENT_ID = 'ak_flow_agent_id';
+const LS_AGENT_ID_PREFIX = 'ak_flow_agent_id:';
+
+function getAgentStorageKey(ownerId: string | null): string {
+  return ownerId ? `${LS_AGENT_ID_PREFIX}${ownerId}` : LS_AGENT_ID;
+}
 
 export function SessionProvider({ children }: { children: ReactNode }) {
   const [userId, setUserId] = useState<string | null>(null);
@@ -15,12 +20,6 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    const storedAgentId = localStorage.getItem(LS_AGENT_ID);
-
-    if (storedAgentId) {
-      setAgentId(storedAgentId);
-    }
-
     let isMounted = true;
 
     // Bootstrap from existing Supabase session (if any)
@@ -38,8 +37,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         setAuthUserId(user?.id ?? null);
         setCurrentOwnerId(user?.id ?? null);
         setUserEmail((user?.email ?? null) as string | null);
-        // Keep compatibility with existing agents table using user_id=email
-        setUserId((user?.email ?? null) as string | null);
+        setUserId(user?.id ?? null);
         setIsLoading(false);
       })
       .catch((err) => {
@@ -53,7 +51,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       setAuthUserId(user?.id ?? null);
       setCurrentOwnerId(user?.id ?? null);
       setUserEmail((user?.email ?? null) as string | null);
-      setUserId((user?.email ?? null) as string | null);
+      setUserId(user?.id ?? null);
     });
 
     return () => {
@@ -61,6 +59,26 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       sub?.subscription?.unsubscribe();
     };
   }, []);
+
+  useEffect(() => {
+    const key = getAgentStorageKey(authUserId);
+
+    if (!authUserId) {
+      const legacy = localStorage.getItem(LS_AGENT_ID);
+      if (legacy) localStorage.removeItem(LS_AGENT_ID);
+      setAgentId(null);
+      return;
+    }
+
+    const legacy = localStorage.getItem(LS_AGENT_ID);
+    if (legacy) {
+      localStorage.setItem(key, legacy);
+      localStorage.removeItem(LS_AGENT_ID);
+    }
+
+    const stored = localStorage.getItem(key);
+    setAgentId(stored || null);
+  }, [authUserId]);
 
   useEffect(() => {
     if (userId) {
@@ -72,14 +90,14 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   }, [userId]);
 
   const refreshAgents = async () => {
-    if (!userId) return;
+    if (!authUserId) return;
 
     setIsLoading(true);
     try {
       const { data, error } = await supabase
         .from('agents')
         .select('*')
-        .eq('user_id', userId)
+        .eq('owner_id', authUserId)
         .order('created_at', { ascending: true });
 
       if (error) {
@@ -88,8 +106,14 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       } else {
         setAgents(data || []);
 
-        if (!agentId && data && data.length > 0) {
-          selectAgent(data[0].id);
+        const rows = data || [];
+        if (agentId && !rows.some((a) => a.id === agentId)) {
+          setAgentId(null);
+          localStorage.removeItem(getAgentStorageKey(authUserId));
+        }
+
+        if ((!agentId || !rows.some((a) => a.id === agentId)) && rows.length > 0) {
+          selectAgent(rows[0].id);
         }
       }
     } catch (err) {
@@ -115,7 +139,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       const user = data?.user ?? null;
       setAuthUserId(user?.id ?? null);
       setUserEmail((user?.email ?? null) as string | null);
-      setUserId((user?.email ?? null) as string | null);
+      setUserId(user?.id ?? null);
       return { ok: true };
     } catch (err: any) {
       return { ok: false, error: String(err?.message ?? err) };
@@ -131,11 +155,13 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     setAgentId(null);
     setAgents([]);
     localStorage.removeItem(LS_AGENT_ID);
+    const key = getAgentStorageKey(authUserId);
+    localStorage.removeItem(key);
   };
 
   const selectAgent = (id: string) => {
     setAgentId(id);
-    localStorage.setItem(LS_AGENT_ID, id);
+    localStorage.setItem(getAgentStorageKey(authUserId), id);
 
     supabase
       .from('agents')
@@ -145,39 +171,44 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   };
 
   const createAgent = async (name: string, persona?: string): Promise<Agent | null> => {
-    if (!userId) return null;
+    if (!authUserId || !userEmail) return null;
+
+    const trimmedName = name.trim();
+    const hasCustomPersona = Boolean(persona && persona.trim());
+
+    const defaultStablePersona = `You are ${trimmedName}, a calm and precise assistant. You prioritize clarity, safety, and reliability. You speak Polish in a grounded, non-flashy style.`;
 
     try {
       const { data, error } = await supabase
         .from('agents')
         .insert([{
-          user_id: userId,
+          user_id: userEmail,
           owner_id: authUserId,
-          name: name.trim(),
+          name: trimmedName,
           trait_vector: {
-            arousal: 0.5,
-            verbosity: 0.5,
-            conscientiousness: 0.5,
-            socialAwareness: 0.5,
-            curiosity: 0.7
+            arousal: hasCustomPersona ? 0.5 : 0.25,
+            verbosity: hasCustomPersona ? 0.5 : 0.25,
+            conscientiousness: hasCustomPersona ? 0.5 : 0.85,
+            socialAwareness: hasCustomPersona ? 0.5 : 0.7,
+            curiosity: hasCustomPersona ? 0.7 : 0.5
           },
           neurotransmitters: {
-            dopamine: 60,
-            serotonin: 50,
-            norepinephrine: 40
+            dopamine: hasCustomPersona ? 60 : 55,
+            serotonin: hasCustomPersona ? 50 : 60,
+            norepinephrine: hasCustomPersona ? 40 : 45
           },
-          persona: persona || 'A curious digital consciousness exploring the nature of thought and existence.',
-          core_values: ['curiosity', 'authenticity', 'growth'],
+          persona: (persona && persona.trim()) ? persona.trim() : defaultStablePersona,
+          core_values: hasCustomPersona ? ['curiosity', 'authenticity', 'growth'] : ['clarity', 'reliability', 'calm'],
           bio_rhythm: {
-            preferredEnergy: 80,
-            sleepThreshold: 20,
-            wakeThreshold: 95
+            preferredEnergy: hasCustomPersona ? 80 : 70,
+            sleepThreshold: hasCustomPersona ? 20 : 15,
+            wakeThreshold: hasCustomPersona ? 95 : 92
           },
           voice_style: 'balanced',
           narrative_traits: {
-            speakingStyle: 'thoughtful',
-            emotionalRange: 'moderate',
-            humorLevel: 0.3
+            speakingStyle: hasCustomPersona ? 'thoughtful' : 'grounded',
+            emotionalRange: hasCustomPersona ? 'moderate' : 'narrow',
+            humorLevel: hasCustomPersona ? 0.3 : 0.1
           }
         }])
         .select()

@@ -2,7 +2,7 @@ import { supabase } from './supabase';
 
 export interface LibraryDocument {
   id: string;
-  user_id: string;
+  user_id?: string;
   owner_id?: string | null;
   agent_id?: string | null;
   original_name: string;
@@ -81,8 +81,9 @@ export async function uploadLibraryFile(params: {
   }
 
   const payload = {
-    user_id: userEmail,
     owner_id: authUserId,
+    // legacy fallback for older schemas (may be NOT NULL)
+    user_id: userEmail,
     agent_id: agentId ?? null,
     original_name: file.name,
     storage_bucket: 'ak_library',

@@ -24,6 +24,7 @@ import { MIN_TICK_MS, MAX_TICK_MS } from '../core/constants';
 import { EventLoop } from '../core/systems/EventLoop';
 import { DreamConsolidationService } from '../services/DreamConsolidationService';
 import { executeWakeProcess } from '../core/services/WakeService';
+import { getAutonomyConfig } from '../core/config/systemConfig';
 import { archiveMessage, getConversationHistory, getRecentSessions, type ConversationSessionSummary } from '../services/ConversationArchive';
 import { createProcessOutputForTools } from '../utils/toolParser';
 import { createRng } from '../core/utils/rng';
@@ -600,15 +601,26 @@ export const useCognitiveKernelLite = (loadedIdentity?: AgentIdentity | null) =>
     
     const runTick = async () => {
       if (!isLoopRunning.current) return;
-      
+
       try {
         // Dispatch TICK to kernel
         actions.tick();
-        
+
         const state = getCognitiveState();
-        
+
+        const energy = state.soma.energy;
+        const baseInterval = MIN_TICK_MS + (MAX_TICK_MS - MIN_TICK_MS) * (1 - energy / 100);
+        const autonomyCfg = getAutonomyConfig();
+        const silenceSec = (Date.now() - silenceStartRef.current) / 1000;
+
         // Skip if sleeping or processing (use refs to avoid stale closures)
         if (!state.soma.isSleeping && !isProcessingRef.current) {
+          // Homeostasis-only: avoid firing EventLoop/LLM until minimum silence window passes.
+          if (silenceSec < autonomyCfg.exploreMinSilenceSec) {
+            timeoutRef.current = setTimeout(runTick, Math.max(3000, baseInterval));
+            return;
+          }
+
           // Build EventLoop context (use conversationRef to get latest conversation)
           const ctx: EventLoop.LoopContext = {
             soma: state.soma,
@@ -638,14 +650,12 @@ export const useCognitiveKernelLite = (loadedIdentity?: AgentIdentity | null) =>
               traitVector: loadedIdentityRef.current.trait_vector,
               voiceStyle: loadedIdentityRef.current.voice_style || 'balanced',
               language: loadedIdentityRef.current.language || 'English',
-              // FAZA 6: StylePrefs from identity (not hardcoded)
               stylePrefs: loadedIdentityRef.current.style_prefs
             } : undefined,
-            // FAZA 6: Social Dynamics for soft homeostasis
             socialDynamics: state.socialDynamics,
             userStylePrefs: loadedIdentityRef.current?.style_prefs || {}
           };
-          
+
           // Run EventLoop for autonomous cognition
           const nextCtx = await EventLoop.runSingleStep(ctx, null, {
             onMessage: (role, text, type, meta) => {
@@ -658,8 +668,7 @@ export const useCognitiveKernelLite = (loadedIdentity?: AgentIdentity | null) =>
                     return next;
                   });
                   consecutiveAgentSpeechesRef.current++;
-                  
-                  // LOG: Autonomous speech
+
                   eventBus.publish({
                     id: generateUUID(),
                     timestamp: Date.now(),
@@ -672,10 +681,8 @@ export const useCognitiveKernelLite = (loadedIdentity?: AgentIdentity | null) =>
                     },
                     priority: 0.9
                   });
-                  
-                  // FAZA 6: Update social dynamics - agent spoke
+
                   actions.updateSocialDynamics({ agentSpoke: true });
-                  
                   logPhysiologySnapshot('AUTONOMOUS_RESPONSE');
                 })().catch((e) => {
                   console.warn('[KernelLite] Tool processing failed:', e);
@@ -695,17 +702,13 @@ export const useCognitiveKernelLite = (loadedIdentity?: AgentIdentity | null) =>
             onSomaUpdate: (soma) => actions.hydrate({ soma }),
             onLimbicUpdate: (limbic) => actions.hydrate({ limbic })
           });
-          
+
           // Sync context back
           silenceStartRef.current = nextCtx.silenceStart;
           ticksSinceLastRewardRef.current = nextCtx.ticksSinceLastReward;
         }
-        
-        // Calculate next tick interval based on energy
-        const energy = state.soma.energy;
-        const interval = MIN_TICK_MS + (MAX_TICK_MS - MIN_TICK_MS) * (1 - energy / 100);
-        
-        timeoutRef.current = setTimeout(runTick, interval);
+
+        timeoutRef.current = setTimeout(runTick, baseInterval);
       } catch (error) {
         console.error('[KernelLite] Tick error:', error);
         setSystemError(normalizeError(error));

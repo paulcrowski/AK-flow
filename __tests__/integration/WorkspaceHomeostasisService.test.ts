@@ -1,13 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-const fromMock = vi.fn();
-
 vi.mock('../../services/supabase', () => {
+  const fromMock = vi.fn();
   return {
     supabase: {
       from: fromMock
     },
-    getCurrentAgentId: () => 'agent_1'
+    getCurrentAgentId: () => 'agent_1',
+    __mocks: { fromMock }
   };
 });
 
@@ -19,9 +19,14 @@ describe('WorkspaceHomeostasisService', () => {
   });
 
   it('should delete workspace memories beyond maxWorkspaceMemories (newest kept)', async () => {
-    const kept = 3;
+    const kept = 50;
 
-    const rows = Array.from({ length: 6 }).map((_, i) => ({
+    const mocked = await import('../../services/supabase');
+    const fromMock = (mocked as any).__mocks.fromMock as ReturnType<typeof vi.fn>;
+
+    let page = 0;
+
+    const rows = Array.from({ length: 53 }).map((_, i) => ({
       id: `m${i + 1}`,
       raw_text: i === 0 ? 'WORKSPACE_DOC_SUMMARY\n...' : 'WORKSPACE_CHUNK_SUMMARY\n...',
       created_at: new Date(Date.now() - i * 1000).toISOString()
@@ -32,7 +37,10 @@ describe('WorkspaceHomeostasisService', () => {
       eq: vi.fn(() => selectChain),
       ilike: vi.fn(() => selectChain),
       order: vi.fn(() => selectChain),
-      range: vi.fn(async () => ({ data: rows, error: null }))
+      range: vi.fn(async () => {
+        page += 1;
+        return page === 1 ? { data: rows, error: null } : { data: [], error: null };
+      })
     };
 
     const deleteChain: any = {
@@ -53,13 +61,14 @@ describe('WorkspaceHomeostasisService', () => {
     expect(res.ok).toBe(true);
 
     if (res.ok) {
-      expect(res.totalBefore).toBe(6);
+      expect(res.maxWorkspaceMemories).toBe(50);
+      expect(res.totalBefore).toBe(53);
       expect(res.deletedCount).toBe(3);
     }
 
     expect(deleteChain.in).toHaveBeenCalledTimes(1);
     const batchArg = (deleteChain.in as any).mock.calls[0][1] as string[];
-    expect(batchArg).toEqual(['m4', 'm5', 'm6']);
+    expect(batchArg).toEqual(['m51', 'm52', 'm53']);
   });
 
   it('should not delete when below limit', async () => {
@@ -69,12 +78,20 @@ describe('WorkspaceHomeostasisService', () => {
       created_at: new Date(Date.now() - i * 1000).toISOString()
     }));
 
+    const mocked = await import('../../services/supabase');
+    const fromMock = (mocked as any).__mocks.fromMock as ReturnType<typeof vi.fn>;
+
+    let page = 0;
+
     const selectChain: any = {
       select: vi.fn(() => selectChain),
       eq: vi.fn(() => selectChain),
       ilike: vi.fn(() => selectChain),
       order: vi.fn(() => selectChain),
-      range: vi.fn(async () => ({ data: rows, error: null }))
+      range: vi.fn(async () => {
+        page += 1;
+        return page === 1 ? { data: rows, error: null } : { data: [], error: null };
+      })
     };
 
     const deleteChain: any = {

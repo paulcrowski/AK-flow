@@ -3,7 +3,7 @@ import { Bot, Plus, Check, Loader2, LogOut, ChevronDown } from 'lucide-react';
 import { useSession, Agent } from '../contexts/SessionContext';
 
 export function AgentSelector() {
-  const { userId, agents, currentAgent, selectAgent, createAgent, logout, isLoading } = useSession();
+  const { userId, userEmail, agents, currentAgent, selectAgent, createAgent, logout, isLoading } = useSession();
   const [isOpen, setIsOpen] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   const [newAgentName, setNewAgentName] = useState('');
@@ -58,7 +58,7 @@ export function AgentSelector() {
             {/* User Info */}
             <div className="px-4 py-3 border-b border-gray-800 bg-[#0a0c10]">
               <p className="text-xs text-gray-500">Zalogowany jako</p>
-              <p className="text-sm text-gray-300 font-mono truncate">{userId}</p>
+              <p className="text-sm text-gray-300 font-mono truncate">{userEmail || userId}</p>
             </div>
 
             {/* Agent List */}

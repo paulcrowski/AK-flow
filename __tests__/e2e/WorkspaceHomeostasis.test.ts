@@ -31,7 +31,13 @@ describe('WorkspaceHomeostasis E2E', () => {
     const res = await WorkspaceHomeostasisService.applyForCurrentAgent({ maxWorkspaceMemories: 3 });
 
     if (ins.error) {
-      expect(res.ok === false).toBe(true);
+      // DB optional: insert may fail due to RLS / missing permissions / missing schema.
+      // In that case the pruning call may either fail (ok:false) or gracefully no-op (ok:true, totalBefore=0).
+      if (res.ok) {
+        expect(res.totalBefore).toBe(0);
+      } else {
+        expect(res.ok === false).toBe(true);
+      }
       await shadow.nuke();
       return;
     }

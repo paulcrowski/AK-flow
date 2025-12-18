@@ -29,6 +29,7 @@ import { createMemorySpace } from './MemorySpace';
 import { TickCommitter } from './TickCommitter';
 import { publishTickStart, publishTickSkipped, publishThinkModeSelected, publishTickEnd } from './TickLifecycleTelemetry';
 import { isMainFeatureEnabled } from '../config/featureFlags';
+import { getAutonomyConfig } from '../config/systemConfig';
 
 let lastAutonomyActionSignature: string | null = null;
 let lastAutonomyActionLogAt = 0;
@@ -421,7 +422,8 @@ export namespace EventLoop {
 
             // 3C. Autonomous Volition (only if autonomousMode is ON)
             // Check if we should think
-            if (VolitionSystem.shouldInitiateThought(silenceDuration)) {
+            const autonomyCfg = getAutonomyConfig();
+            if (VolitionSystem.shouldInitiateThought(silenceDuration, autonomyCfg.exploreMinSilenceSec)) {
                 // Notify UI of thought process
                 callbacks.onThought("Autonomous processing...");
 
