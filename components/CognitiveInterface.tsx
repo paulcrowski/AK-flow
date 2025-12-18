@@ -343,7 +343,7 @@ export function CognitiveInterface() {
     // All hooks are above this point, so React rules are satisfied
     if (identityLoading) {
         return (
-            <div className="flex h-screen items-center justify-center bg-brain-dark text-gray-100">
+            <div className="flex h-[100dvh] items-center justify-center bg-brain-dark text-gray-100">
                 <div className="flex flex-col items-center gap-4">
                     <Loader2 className="w-8 h-8 animate-spin text-brain-accent" />
                     <span className="text-sm text-gray-400">Loading agent identity...</span>
@@ -516,7 +516,7 @@ export function CognitiveInterface() {
     };
 
     return (
-        <div className={`flex h-screen text-gray-100 font-sans transition-all duration-[2000ms] overflow-hidden 
+        <div className={`flex h-[100dvh] text-gray-100 font-sans transition-all duration-[2000ms] overflow-hidden 
         ${isSleeping ? 'brightness-50 grayscale-[0.5]' : ''} 
         ${isFatigued && !isSleeping ? 'brightness-75' : ''}
     `}>
