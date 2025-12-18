@@ -1,10 +1,12 @@
+import { PromptComposer } from '../PromptComposer';
+
 export function buildAssessInputPrompt(input: { userInput: string; currentPrediction: string }): string {
   const { userInput, currentPrediction } = input;
 
-  return `
-                TASK: Analyze this user input.
-                INPUT: "${userInput}"
-                PREDICTED INPUT WAS: "${currentPrediction}"
-                OUTPUT JSON: complexity, surprise, sentiment_valence, keywords
-            `;
+  return PromptComposer.join([
+    PromptComposer.section('TASK', ['Analyze this user input.']),
+    PromptComposer.section('INPUT', [`"${userInput}"`]),
+    PromptComposer.section('PREDICTED INPUT WAS', [`"${currentPrediction}"`]),
+    PromptComposer.section('OUTPUT JSON', ['complexity, surprise, sentiment_valence, keywords'])
+  ]);
 }
