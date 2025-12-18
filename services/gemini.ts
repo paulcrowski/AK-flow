@@ -25,6 +25,8 @@ import { buildGenerateResponsePrompt } from "./gemini/prompts/generateResponsePr
 import { buildAutonomousVolitionPrompt } from "./gemini/prompts/autonomousVolitionPrompt";
 import { buildDetectIntentPrompts } from "./gemini/prompts/detectIntentPrompt";
 
+import { UnifiedContextPromptBuilder } from "./gemini/UnifiedContextPromptBuilder";
+
 // 1. Safe Environment Access & Initialization (Vite)
 const ai = createGeminiClient();
 
@@ -487,7 +489,9 @@ OUTPUT FORMAT:
         voice_pressure: number;
         speech_content: string;
     }> {
-        const prompt = UnifiedContextBuilder.formatAsPrompt(ctx, 'autonomous');
+        const prompt = isCortexSubEnabled('unifiedContextPrompt')
+            ? UnifiedContextPromptBuilder.build(ctx, 'autonomous')
+            : UnifiedContextBuilder.formatAsPrompt(ctx, 'autonomous');
         
         return withRetry(async () => {
             const response = await ai.models.generateContent({

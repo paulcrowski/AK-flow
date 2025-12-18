@@ -89,6 +89,7 @@ export const SYSTEM_CONFIG = {
     metaStateHomeostasis: false,  // Był: USE_META_STATE_HOMEOSTASIS (future)
     identityCoherence: false,     // Był: USE_IDENTITY_COHERENCE_CHECK (future)
     styleExamples: false,         // Był: USE_STYLE_EXAMPLES (future)
+    unifiedContextPrompt: false,  // New: build UnifiedContext prompt via PromptComposer (flagged)
   },
 
   // ─────────────────────────────────────────────────────────────────────────
