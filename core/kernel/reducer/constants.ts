@@ -1,0 +1,2 @@
+export const MAX_THOUGHT_HISTORY = 20;
+export const MAX_CONVERSATION_TURNS = 50;
