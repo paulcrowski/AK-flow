@@ -15,7 +15,10 @@ import { successSignalService } from '../services/SuccessSignalService';
 import { setCachedIdentity } from '../core/builders';
 // IDENTITY-LITE: Import fetchNarrativeSelf for fallback chain
 import { fetchNarrativeSelf } from '../core/services/IdentityDataService';
-import { Brain, Send, Moon, Sun, Loader2, Zap, Power, AlertTriangle, RefreshCw, EyeOff, Image as ImageIcon, Sparkles, Globe, FileText, LogOut, Pin } from 'lucide-react';
+import { Loader2, Zap, Power, Moon, EyeOff } from 'lucide-react';
+import { LeftSidebar } from './layout/LeftSidebar';
+import { ChatContainer } from './chat/ChatContainer';
+import { ChatInput } from './chat/ChatInput';
 
 // Convert Agent from SessionContext to AgentIdentity for Kernel
 const agentToIdentity = (agent: Agent | null): AgentIdentity | null => {
@@ -472,45 +475,6 @@ export function CognitiveInterface() {
         }
     };
 
-    const renderEvidenceSourceBadge = (evidenceSource?: string, evidenceDetail?: string) => {
-        if (!evidenceSource) return null;
-
-        const es = String(evidenceSource);
-        const detail = typeof evidenceDetail === 'string' && evidenceDetail.trim() ? evidenceDetail.trim() : '';
-        const label = detail ? `EVID:${es.toUpperCase()}(${detail.toUpperCase()})` : `EVID:${es.toUpperCase()}`;
-
-        const cls = es === 'tool'
-            ? 'border-emerald-500/40 bg-emerald-900/10 text-emerald-300'
-            : es === 'memory'
-                ? 'border-violet-500/40 bg-violet-900/10 text-violet-300'
-                : es === 'system'
-                    ? 'border-red-500/40 bg-red-900/10 text-red-300'
-                    : 'border-gray-500/40 bg-gray-900/10 text-gray-300';
-
-        return (
-            <span className={`ml-2 inline-flex items-center px-2 py-0.5 rounded border text-[9px] font-mono tracking-widest ${cls}`}>
-                {label}
-            </span>
-        );
-    };
-
-    const renderGeneratorBadge = (generator?: string) => {
-        if (!generator) return null;
-
-        const gen = String(generator);
-        const label = `GEN:${gen.toUpperCase()}`;
-
-        const cls = gen === 'system'
-            ? 'border-red-500/40 bg-red-900/10 text-red-300'
-            : 'border-gray-500/40 bg-gray-900/10 text-gray-300';
-
-        return (
-            <span className={`ml-2 inline-flex items-center px-2 py-0.5 rounded border text-[9px] font-mono tracking-widest ${cls}`}>
-                {label}
-            </span>
-        );
-    };
-
     const copyCurrentTraceWithWindow = async (windowMs: number) => {
         try {
             const traceId = traceHud?.traceId ?? null;
@@ -547,188 +511,25 @@ export function CognitiveInterface() {
                 <div className="absolute inset-0 z-40 backdrop-blur-sm pointer-events-none animate-pulse bg-[#0a0c10]/40"></div>
             )}
 
-            {/* LEFT SIDEBAR: Session/Settings/Conversation (desktop only) */}
-            <div className="hidden xl:flex w-[280px] shrink-0 h-full border-r border-gray-800 bg-[#07090d] flex-col relative z-10 overflow-hidden">
-                {/* Session Info */}
-                <div className="p-4 border-b border-gray-800 bg-[#0a0c10] shrink-0">
-                    <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                            <div className="w-2.5 h-2.5 rounded-full bg-cyan-400 shadow-[0_0_10px_#38bdf8]" />
-                            <div className="text-[10px] font-mono tracking-widest text-gray-300">SESSION</div>
-                        </div>
-                        <button
-                            onClick={() => logout()}
-                            className="text-gray-500 hover:text-red-400 transition-colors"
-                            title="Logout"
-                        >
-                            <LogOut size={14} />
-                        </button>
-                    </div>
-                    <div className="mt-3 space-y-1">
-                        <div className="text-[10px] text-gray-500 font-mono truncate">{userId || '—'}</div>
-                        <div className="text-sm text-gray-200 font-semibold truncate">{currentAgent?.name || 'No agent selected'}</div>
-                    </div>
-                    <div className="mt-3">
-                        <AgentSelector />
-                    </div>
-                </div>
-
-                {/* Quick Settings */}
-                <div className="p-4 border-b border-gray-800 shrink-0">
-                    <div className="text-[10px] font-mono tracking-widest text-gray-500 mb-3">QUICK SETTINGS</div>
-                    <div className="grid grid-cols-1 gap-2">
-                        <button
-                            onClick={toggleAutonomy}
-                            className={`flex items-center justify-between px-3 py-2 rounded-lg border text-[11px] font-mono transition-colors ${autonomousMode ? 'border-green-500/50 bg-green-900/20 text-green-300' : 'border-gray-700 bg-gray-900/30 text-gray-400 hover:bg-gray-900/60'}`}
-                        >
-                            <span className="flex items-center gap-2"><Power size={12} /> AUTONOMY</span>
-                            <span>{autonomousMode ? 'ON' : 'OFF'}</span>
-                        </button>
-
-                        <button
-                            onClick={toggleSleep}
-                            className={`flex items-center justify-between px-3 py-2 rounded-lg border text-[11px] font-mono transition-colors ${isSleeping ? 'border-indigo-500/50 bg-indigo-900/20 text-indigo-300' : 'border-gray-700 bg-gray-900/30 text-gray-400 hover:bg-gray-900/60'}`}
-                        >
-                            <span className="flex items-center gap-2">{isSleeping ? <Sun size={12} /> : <Moon size={12} />} SLEEP</span>
-                            <span>{isSleeping ? 'ON' : 'OFF'}</span>
-                        </button>
-
-                        {typeof chemistryEnabled === 'boolean' && (
-                            <button
-                                onClick={toggleChemistry}
-                                className={`flex items-center justify-between px-3 py-2 rounded-lg border text-[11px] font-mono transition-colors ${chemistryEnabled ? 'border-purple-500/50 bg-purple-900/20 text-purple-300' : 'border-gray-700 bg-gray-900/30 text-gray-400 hover:bg-gray-900/60'}`}
-                            >
-                                <span className="flex items-center gap-2"><Zap size={12} /> CHEM</span>
-                                <span>{chemistryEnabled ? 'ON' : 'OFF'}</span>
-                            </button>
-                        )}
-
-                        <button
-                            onClick={resetKernel}
-                            className="flex items-center justify-between px-3 py-2 rounded-lg border border-gray-700 bg-gray-900/30 text-[11px] font-mono text-gray-400 hover:bg-gray-900/60 transition-colors"
-                        >
-                            <span className="flex items-center gap-2"><RefreshCw size={12} /> RESET</span>
-                            <span>NOW</span>
-                        </button>
-                    </div>
-                </div>
-
-                <div className="shrink-0">
-                    <LibraryPanel />
-                </div>
-
-                <div className="flex-1 overflow-hidden flex flex-col min-h-0">
-                    {/* Tematy Section */}
-                    <div className="p-4 border-b border-gray-800 bg-[#0a0c10]/40 shrink-0">
-                        <div className="flex items-center justify-between mb-2">
-                            <div className="text-[10px] font-black tracking-[0.2em] text-cyan-500/80 uppercase">Tematy</div>
-                            <div className="text-[10px] font-mono text-gray-600 bg-gray-900/50 px-1.5 py-0.5 rounded">{conversationSessions?.length ?? 0}</div>
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-2">
-                            <button
-                                onClick={() => selectConversationSession(activeConversationSessionId)}
-                                className="px-3 py-2 rounded-lg border border-gray-700 bg-gray-900/30 text-[11px] font-mono text-gray-300 hover:bg-gray-900/60 transition-colors"
-                                title="Continue active session"
-                                disabled={!activeConversationSessionId}
-                            >
-                                CONTINUE
-                            </button>
-                            <button
-                                onClick={() => selectConversationSession(null)}
-                                className="px-3 py-2 rounded-lg border border-gray-700 bg-gray-900/30 text-[11px] font-mono text-gray-300 hover:bg-gray-900/60 transition-colors"
-                                title="Start new session thread"
-                            >
-                                NEW
-                            </button>
-                        </div>
-                    </div>
-
-                    <div className="flex-1 overflow-y-auto px-4 py-2 space-y-1.5 custom-scrollbar min-h-0 bg-[#050608]/20">
-                        {(() => {
-                            const sessions = (conversationSessions || []);
-                            const pinned = sessions.filter(s => pinnedSessions.includes(s.sessionId));
-                            const unpinned = sessions.filter(s => !pinnedSessions.includes(s.sessionId));
-                            const sorted = [...pinned, ...unpinned];
-
-                            return sorted.slice(0, 50).map((s) => {
-                                const isActive = activeConversationSessionId === s.sessionId;
-                                const isPinned = pinnedSessions.includes(s.sessionId);
-                                const label = s.preview || s.sessionId;
-                                const ts = Number.isFinite(s.lastTimestamp) ? new Date(s.lastTimestamp).toLocaleDateString() : '';
-                                return (
-                                    <div key={s.sessionId} className="group relative">
-                                        <button
-                                            onClick={() => selectConversationSession(s.sessionId)}
-                                            className={`w-full text-left rounded-lg border px-3 py-2.5 text-[11px] transition-all duration-300 ${isActive
-                                                ? 'border-cyan-500/40 bg-cyan-950/20 text-cyan-100 shadow-[0_4px_12px_rgba(34,211,238,0.05)] scale-[1.02] z-10'
-                                                : 'border-gray-800/60 bg-gray-900/10 text-gray-400 hover:border-gray-700 hover:bg-gray-800/30'
-                                                }`}
-                                            title={s.sessionId}
-                                        >
-                                            <div className="flex items-center justify-between gap-2 mb-1.5 pointer-events-none">
-                                                <span className="text-[9px] font-mono uppercase tracking-widest opacity-40">{ts || '—'}</span>
-                                                <div className="flex items-center gap-1.5">
-                                                    {isPinned && <Pin size={8} className="text-cyan-400 fill-cyan-400" />}
-                                                    <span className="text-[9px] font-mono text-gray-600 border border-gray-800/50 px-1 rounded">{s.messageCount}</span>
-                                                </div>
-                                            </div>
-                                            <div className="line-clamp-2 leading-snug font-medium opacity-90 group-hover:opacity-100 transition-opacity whitespace-pre-wrap break-all overflow-hidden truncate">
-                                                {String(label)}
-                                            </div>
-                                        </button>
-                                        <button
-                                            onClick={(e) => togglePin(e, s.sessionId)}
-                                            className={`absolute top-2 right-2 p-1 rounded transition-opacity duration-300 ${isPinned ? 'opacity-100 text-cyan-400' : 'opacity-0 group-hover:opacity-100 text-gray-500 hover:text-cyan-400'}`}
-                                            title={isPinned ? "Odepnij" : " przypnij"}
-                                        >
-                                            <Pin size={10} className={isPinned ? "fill-cyan-400/20" : ""} />
-                                        </button>
-                                    </div>
-                                );
-                            });
-                        })()}
-
-                        {(conversationSessions || []).length === 0 && (
-                            <div className="text-[10px] text-gray-600 italic text-center py-4 uppercase tracking-[0.2em] opacity-50">BRAK ARCHIWUM</div>
-                        )}
-                    </div>
-
-                    {/* Last Conversation Preview */}
-                    <div className="h-[30%] shrink-0 border-t border-gray-800 flex flex-col min-h-0 bg-[#050608]/40">
-                        <div className="p-3 border-b border-gray-800/40 shrink-0">
-                            <div className="flex items-center justify-between">
-                                <div className="text-[10px] font-black tracking-[0.2em] text-gray-500 uppercase">Ostatnie wpisy</div>
-                                <div className="text-[9px] font-mono text-gray-600">{conversation.length}</div>
-                            </div>
-                        </div>
-                        <div className="flex-1 overflow-y-auto p-3 space-y-2 custom-scrollbar">
-                            {conversation.slice(-20).reverse().map((msg, idx) => (
-                                <div
-                                    key={`sidebar-${msg.role}-${idx}`}
-                                    className={`rounded-lg border px-3 py-2 text-[11px] leading-snug ${msg.role === 'user'
-                                        ? 'border-blue-900/30 bg-blue-900/10 text-blue-100'
-                                        : msg.type === 'thought'
-                                            ? 'border-gray-800 bg-gray-900/30 text-gray-400 italic'
-                                            : 'border-gray-800 bg-gray-900/20 text-gray-200'
-                                        }`}
-                                >
-                                    <div className="flex items-center justify-between mb-1">
-                                        <span className="text-[9px] font-mono uppercase tracking-wider text-gray-500">{msg.role}</span>
-                                        <span className="text-[9px] font-mono text-gray-600">{msg.type || 'speech'}</span>
-                                    </div>
-                                    <div className="break-words opacity-90">
-                                        {String(msg.text || '').slice(0, 140)}{String(msg.text || '').length > 140 ? '…' : ''}
-                                    </div>
-                                </div>
-                            ))}
-                            {conversation.length === 0 && (
-                                <div className="text-[11px] text-gray-600 italic text-center">No messages yet.</div>
-                            )}
-                        </div>
-                    </div>
-                </div>
-            </div>
+            {/* LEFT SIDEBAR */}
+            <LeftSidebar
+                userId={userId}
+                currentAgentName={currentAgent?.name || null}
+                autonomousMode={autonomousMode}
+                isSleeping={isSleeping}
+                chemistryEnabled={chemistryEnabled}
+                conversation={conversation}
+                conversationSessions={conversationSessions}
+                activeConversationSessionId={activeConversationSessionId}
+                pinnedSessions={pinnedSessions}
+                onLogout={logout}
+                onToggleAutonomy={toggleAutonomy}
+                onToggleSleep={toggleSleep}
+                onToggleChemistry={toggleChemistry}
+                onResetKernel={resetKernel}
+                onSelectSession={selectConversationSession}
+                onTogglePin={togglePin}
+            />
 
             <div className="flex-1 flex flex-col relative z-10 min-w-0">
                 {/* Header */}
@@ -919,174 +720,23 @@ export function CognitiveInterface() {
                 </div>
 
                 {/* Chat Area */}
-                <div ref={chatScrollRef} className="flex-1 min-h-0 overflow-y-auto p-6 space-y-6 bg-gradient-to-b from-brain-dark to-gray-900 scrollbar-thin relative">
-                    {conversation.length === 0 && (
-                        <div className="h-full flex flex-col items-center justify-center text-gray-600 opacity-50">
-                            <Brain size={64} className="mb-4" />
-                            <p>Cognitive Kernel Active.</p>
-                        </div>
-                    )}
-                    {conversation.map((msg, idx) => (
-                        <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'} relative z-10 animate-in slide-in-from-bottom-2 fade-in duration-500`}>
-
-                            {/* 1. VISUAL DREAM CARD */}
-                            {msg.type === 'visual' ? (
-                                <div className="max-w-[75%] bg-black/60 border border-pink-500/50 rounded-xl overflow-hidden shadow-[0_0_30px_rgba(236,72,153,0.15)] group hover:shadow-[0_0_50px_rgba(236,72,153,0.3)] transition-shadow duration-500">
-                                    <div className="h-64 w-full bg-gray-900 relative overflow-hidden">
-                                        {msg.imageData ? (
-                                            <img src={msg.imageData} alt="Dream" className="w-full h-full object-cover animate-in fade-in duration-1000 group-hover:scale-105 transition-transform duration-1000" />
-                                        ) : (
-                                            <div className="w-full h-full flex flex-col items-center justify-center text-pink-700/50 font-mono text-xs gap-2">
-                                                <ImageIcon size={32} />
-                                                <span>[VISUAL MEMORY CORRUPTED]</span>
-                                            </div>
-                                        )}
-                                        <div className="absolute top-0 inset-x-0 p-3 bg-gradient-to-b from-black/80 to-transparent flex justify-between items-start">
-                                            <div className="px-2 py-1 text-[9px] text-pink-300 font-bold tracking-widest border border-pink-500/30 rounded bg-black/40 backdrop-blur-sm flex items-center gap-2 shadow-lg">
-                                                <Sparkles size={10} /> VISUAL CORTEX OUTPUT
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div className="p-4 bg-gray-900/90 backdrop-blur-md border-t border-gray-800">
-                                        <p className="text-sm text-pink-100 font-serif leading-relaxed italic">"{msg.text}"</p>
-                                    </div>
-                                </div>
-
-                                /* 2. INTELLIGENCE BRIEFING CARD (SEARCH) */
-                            ) : msg.type === 'intel' ? (
-                                <div className="max-w-[85%] bg-[#0a1018] border-l-4 border-cyan-500 rounded-r-lg shadow-lg overflow-hidden">
-                                    <div className="bg-cyan-950/20 p-2 px-4 border-b border-cyan-900/30 flex justify-between items-center">
-                                        <span className="text-[10px] font-bold text-cyan-400 flex items-center gap-2 tracking-widest uppercase">
-                                            <Globe size={12} /> Intelligence Briefing
-                                        </span>
-                                        <span className="text-[9px] text-cyan-600 font-mono">{new Date().toLocaleTimeString()}</span>
-                                    </div>
-                                    <div className="p-4 text-sm text-gray-300 font-mono leading-relaxed whitespace-pre-wrap">
-                                        {msg.text}
-                                    </div>
-                                    {msg.sources && msg.sources.length > 0 && (
-                                        <div className="bg-[#05080c] p-2 px-4 border-t border-gray-800 flex flex-wrap gap-2">
-                                            {msg.sources.map((src: any, i: number) => (
-                                                <a key={i} href={src.uri} target="_blank" rel="noopener noreferrer" className="text-[10px] text-cyan-600 hover:text-cyan-400 flex items-center gap-1 bg-cyan-900/10 px-2 py-1 rounded border border-cyan-900/30 transition-colors">
-                                                    <FileText size={8} /> {src.title.substring(0, 20)}...
-                                                </a>
-                                            ))}
-                                        </div>
-                                    )}
-                                </div>
-
-                                /* 3. STANDARD MESSAGE OR THOUGHT */
-                            ) : (
-                                <div className={`max-w-[85%] rounded-lg shadow-2xl overflow-hidden ${msg.role === 'user'
-                                    ? 'bg-gradient-to-br from-blue-900/90 to-blue-800/80 text-white rounded-br-none border border-blue-600/50 backdrop-blur-sm'
-                                    : msg.type === 'thought'
-                                        ? 'bg-gradient-to-br from-gray-900/80 to-gray-800/60 text-gray-400 italic border border-dashed border-gray-700/50 backdrop-blur-sm'
-                                        : 'bg-gradient-to-br from-gray-800/90 to-gray-700/80 text-gray-100 rounded-bl-none border border-gray-600/50 backdrop-blur-sm shadow-[0_0_20px_rgba(56,189,248,0.15)]'
-                                    }`}>
-                                    {msg.type === 'thought' && (
-                                        <div className="bg-black/30 px-3 py-1.5 border-b border-gray-700/50">
-                                            <span className="text-[10px] text-gray-500 uppercase tracking-widest flex items-center gap-1.5 font-bold">
-                                                <Brain size={10} /> INTERNAL MONOLOGUE
-                                            </span>
-                                        </div>
-                                    )}
-                                    {msg.role !== 'user' && msg.type !== 'thought' && (
-                                        <div className="bg-gradient-to-r from-cyan-900/30 to-transparent px-3 py-1.5 border-b border-cyan-800/30">
-                                            <span className="text-[10px] text-cyan-400 uppercase tracking-widest flex items-center gap-1.5 font-bold">
-                                                <Sparkles size={10} /> COGNITIVE OUTPUT
-                                                {renderEvidenceSourceBadge((msg as any)?.evidenceSource ?? (msg as any)?.knowledgeSource, (msg as any)?.evidenceDetail)}
-                                                {renderGeneratorBadge((msg as any)?.generator)}
-                                            </span>
-                                        </div>
-                                    )}
-                                    <div className="p-4 px-5">
-                                        <p className={`leading-relaxed ${msg.type === 'thought' ? 'text-sm font-mono opacity-80' : 'text-base font-medium'}`}>
-                                            {msg.text}
-                                        </p>
-                                    </div>
-                                </div>
-                            )}
-                        </div>
-                    ))}
-
-                    {/* SYSTEM ERROR ALERT */}
-                    {systemError && (
-                        <div className="flex justify-center animate-pulse z-20 relative">
-                            <div className="bg-red-900/20 border border-red-600/50 rounded p-4 max-w-md w-full flex flex-col gap-2">
-                                <div className="flex items-center gap-2 text-red-400 font-bold text-sm uppercase tracking-widest">
-                                    <AlertTriangle size={16} />
-                                    {systemError.code}
-                                </div>
-                                <div className="text-xs text-red-300 font-mono">
-                                    {systemError.message}
-                                </div>
-                                {systemError.retryable && (
-                                    <button
-                                        onClick={retryLastAction}
-                                        className="mt-2 bg-red-900/50 hover:bg-red-800 text-red-200 text-xs py-2 px-4 rounded flex items-center justify-center gap-2 transition-colors border border-red-700"
-                                    >
-                                        <RefreshCw size={12} /> RETRY CONNECTION
-                                    </button>
-                                )}
-                            </div>
-                        </div>
-                    )}
-                    <div ref={chatEndRef} />
-                </div>
+                <ChatContainer
+                    conversation={conversation}
+                    systemError={systemError}
+                    onRetry={retryLastAction}
+                />
 
                 {/* Input Area */}
-                <div className={`p-4 border-t transition-colors duration-1000 ${isFatigued ? 'bg-[#151010] border-red-900/20' : 'bg-brain-dark border-gray-700'}`}>
-                    <div className="relative flex items-center">
-                        <input
-                            type="text"
-                            value={input}
-                            onChange={(e) => setInput(e.target.value)}
-                            onKeyDown={(e) => e.key === 'Enter' && onSend()}
-                            placeholder={
-                                isSleeping ? "System is Dreaming (REM Cycle active)..." :
-                                    isCritical ? "Consciousness fading..." :
-                                        isFatigued ? "Alberto is tired..." :
-                                            "Inject data into the cognitive stream..."
-                            }
-                            disabled={isSleeping || !!systemError}
-                            className={`w-full bg-gray-900/80 text-white rounded-2xl px-8 py-5 pr-16 focus:outline-none focus:ring-2 border placeholder-gray-600 shadow-2xl transition-all text-lg ${isSleeping
-                                ? 'border-indigo-500/30 opacity-50 cursor-not-allowed italic'
-                                : isFatigued
-                                    ? 'border-orange-900/50 focus:ring-orange-800'
-                                    : 'border-gray-700 focus:ring-brain-accent hover:border-gray-500'
-                                }`}
-                        />
-                        <button
-                            onClick={onSend}
-                            disabled={isSleeping || !input.trim() || !!systemError}
-                            className={`absolute right-2 p-2 rounded-full text-brain-dark transition-all disabled:opacity-50 disabled:cursor-not-allowed
-                         ${isFatigued ? 'bg-orange-600 hover:bg-orange-500' : 'bg-brain-accent hover:bg-white'}
-                    `}
-                        >
-                            <Send size={20} />
-                        </button>
-                    </div>
-                    <div className="flex justify-end mt-2 px-2">
-                        <button
-                            onClick={toggleSleep}
-                            className={`text-xs flex items-center gap-1 hover:text-white transition-all duration-300 border px-3 py-1 rounded-full ${isSleeping
-                                ? "border-indigo-500/50 text-indigo-300 bg-indigo-900/20 animate-pulse"
-                                : isFatigued
-                                    ? "border-orange-500/50 text-orange-400 bg-orange-900/20 animate-pulse"
-                                    : "border-gray-700 text-gray-500 hover:bg-gray-800"
-                                }`}
-                        >
-                            {isSleeping ? <Sun size={12} /> : <Moon size={12} />}
-                            {isSleeping
-                                ? "WAKE UP"
-                                : isCritical
-                                    ? "DRIFTING..."
-                                    : isFatigued
-                                        ? "ALLOW REST"
-                                        : "FORCE SLEEP"}
-                        </button>
-                    </div>
-                </div>
+                <ChatInput
+                    value={input}
+                    onChange={setInput}
+                    onSend={onSend}
+                    onToggleSleep={toggleSleep}
+                    disabled={isSleeping || !!systemError}
+                    isSleeping={isSleeping}
+                    isFatigued={isFatigued}
+                    isCritical={isCritical}
+                />
             </div>
 
             {/* RIGHT: NEURO-MONITOR */}

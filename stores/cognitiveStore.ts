@@ -22,13 +22,27 @@ import {
   createInitialKernelState
 } from '../core/kernel';
 import type { LimbicState, SomaState, NeurotransmitterState, GoalState, TraitVector } from '../types';
-
-// ... (existing imports)
+import type { ConversationSessionSummary } from '../services/ConversationArchive';
+import { StorageService } from '../services/StorageService';
 
 
 // ═══════════════════════════════════════════════════════════════════════════
 // STORE STATE INTERFACE
 // ═══════════════════════════════════════════════════════════════════════════
+
+// UI Message type (conversation display)
+export interface UiMessage {
+  id?: string;
+  role: string;
+  text: string;
+  type?: 'thought' | 'speech' | 'visual' | 'intel' | 'action' | 'tool_result';
+  knowledgeSource?: 'memory' | 'tool' | 'llm' | 'mixed' | 'system';
+  evidenceSource?: 'memory' | 'tool' | 'system';
+  evidenceDetail?: string;
+  generator?: 'llm' | 'system';
+  imageData?: string;
+  sources?: any[];
+}
 
 interface CognitiveStoreState extends KernelState {
   // Engine instance (internal)
@@ -36,6 +50,15 @@ interface CognitiveStoreState extends KernelState {
 
   // Pending outputs from last dispatch (side effects)
   pendingOutputs: KernelOutput[];
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // CONVERSATION UI STATE (not in KernelState - UI-specific)
+  // ─────────────────────────────────────────────────────────────────────────
+  uiConversation: UiMessage[];           // Display conversation (richer than kernel)
+  conversationSessions: ConversationSessionSummary[];
+  activeSessionId: string | null;
+  isProcessing: boolean;
+  currentThought: string;
 
   // Actions
   dispatch: (event: KernelEvent) => void;
@@ -60,6 +83,14 @@ interface CognitiveStoreState extends KernelState {
   updateSocialDynamics: (payload: { agentSpoke?: boolean; userResponded?: boolean }) => void;
   reset: () => void;
   hydrate: (state: Partial<KernelState>) => void;
+
+  // Conversation UI actions
+  setUiConversation: (messages: UiMessage[]) => void;
+  addUiMessage: (message: UiMessage) => void;
+  setConversationSessions: (sessions: ConversationSessionSummary[]) => void;
+  setActiveSessionId: (sessionId: string | null) => void;
+  setIsProcessing: (processing: boolean) => void;
+  setCurrentThought: (thought: string) => void;
 
   // Selectors (for atomic re-renders)
   getLimbic: () => LimbicState;
@@ -100,6 +131,13 @@ export const useCognitiveStore = create<CognitiveStoreState>()(
         // Internal
         _engine: engine,
         pendingOutputs: [],
+
+        // Conversation UI state
+        uiConversation: [],
+        conversationSessions: [],
+        activeSessionId: null,
+        isProcessing: false,
+        currentThought: 'Initializing...',
 
         // ─────────────────────────────────────────────────────────────────────
         // MAIN DISPATCH - all state changes go through here
@@ -234,6 +272,35 @@ export const useCognitiveStore = create<CognitiveStoreState>()(
         },
 
         // ─────────────────────────────────────────────────────────────────────
+        // CONVERSATION UI ACTIONS (direct set, not through kernel)
+        // ─────────────────────────────────────────────────────────────────────
+        setUiConversation: (messages: UiMessage[]) => {
+          set({ uiConversation: messages });
+        },
+
+        addUiMessage: (message: UiMessage) => {
+          set((state) => ({
+            uiConversation: [...state.uiConversation, message]
+          }));
+        },
+
+        setConversationSessions: (sessions: ConversationSessionSummary[]) => {
+          set({ conversationSessions: sessions });
+        },
+
+        setActiveSessionId: (sessionId: string | null) => {
+          set({ activeSessionId: sessionId });
+        },
+
+        setIsProcessing: (processing: boolean) => {
+          set({ isProcessing: processing });
+        },
+
+        setCurrentThought: (thought: string) => {
+          set({ currentThought: thought });
+        },
+
+        // ─────────────────────────────────────────────────────────────────────
         // SELECTORS (for atomic re-renders with subscribeWithSelector)
         // ─────────────────────────────────────────────────────────────────────
         getLimbic: () => get().limbic,
@@ -305,6 +372,13 @@ export const useThoughtHistory = () => useCognitiveStore((s) => s.thoughtHistory
 export const useConversation = () => useCognitiveStore((s) => s.conversation);
 export const usePendingOutputs = () => useCognitiveStore((s) => s.pendingOutputs);
 
+// Conversation UI selectors
+export const useUiConversation = () => useCognitiveStore((s) => s.uiConversation);
+export const useConversationSessions = () => useCognitiveStore((s) => s.conversationSessions);
+export const useActiveSessionId = () => useCognitiveStore((s) => s.activeSessionId);
+export const useIsProcessing = () => useCognitiveStore((s) => s.isProcessing);
+export const useCurrentThought = () => useCognitiveStore((s) => s.currentThought);
+
 // Actions (stable references)
 export const useCognitiveActions = () => useCognitiveStore(useShallow((s) => ({
   dispatch: s.dispatch,
@@ -327,6 +401,13 @@ export const useCognitiveActions = () => useCognitiveStore(useShallow((s) => ({
   updateSocialDynamics: s.updateSocialDynamics,
   reset: s.reset,
   hydrate: s.hydrate,
+  // Conversation UI actions
+  setUiConversation: s.setUiConversation,
+  addUiMessage: s.addUiMessage,
+  setConversationSessions: s.setConversationSessions,
+  setActiveSessionId: s.setActiveSessionId,
+  setIsProcessing: s.setIsProcessing,
+  setCurrentThought: s.setCurrentThought,
 })));
 
 // ═══════════════════════════════════════════════════════════════════════════

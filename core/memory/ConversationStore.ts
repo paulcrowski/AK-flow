@@ -91,6 +91,37 @@ function turnToSnapshot(turn: ConversationTurn): ConversationSnapshotTurn {
   };
 }
 
+/**
+ * Mapuje ConversationTurn z DB/Store na format UI.
+ * Pojedyncze źródło prawdy dla konwersji - DRY.
+ */
+export function mapTurnToUiMessage(t: ConversationTurn): {
+  role: string;
+  text: string;
+  type: 'thought' | 'speech' | 'visual' | 'intel' | 'action' | 'tool_result';
+  knowledgeSource?: 'memory' | 'tool' | 'llm' | 'mixed' | 'system';
+  evidenceSource?: 'memory' | 'tool' | 'system';
+  evidenceDetail?: string;
+  generator?: 'llm' | 'system';
+} {
+  return {
+    role: t.role,
+    text: t.text,
+    type: (t.type ?? 'speech') as any,
+    ...(t.knowledgeSource ? { knowledgeSource: t.knowledgeSource } : {}),
+    ...(t.evidenceSource ? { evidenceSource: t.evidenceSource } : {}),
+    ...(t.evidenceDetail ? { evidenceDetail: t.evidenceDetail } : {}),
+    ...(t.generator ? { generator: t.generator } : {})
+  };
+}
+
+/**
+ * Mapuje tablicę turnów na format UI.
+ */
+export function mapTurnsToUiMessages(turns: ConversationTurn[]) {
+  return turns.map(mapTurnToUiMessage);
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // MAIN API
 // ═══════════════════════════════════════════════════════════════════════════
