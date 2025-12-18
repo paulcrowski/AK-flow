@@ -281,7 +281,7 @@ export function CognitiveInterface() {
         // Guard: Skip if already reset for this session (StrictMode protection)
         if (lastResetSessionRef.current === sessionKey) return;
         lastResetSessionRef.current = sessionKey;
-        
+
         // When user or agent changes, fully reset cognitive kernel state
         resetKernel();
         // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -312,9 +312,9 @@ export function CognitiveInterface() {
             }
         );
         console.log('[CognitiveInterface] ✅ Confession v2 listeners initialized');
-        
+
         return cleanup;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []); // Empty deps - singleton, only init once
 
 
@@ -516,7 +516,7 @@ export function CognitiveInterface() {
     };
 
     return (
-        <div className={`flex h-[100dvh] text-gray-100 font-sans transition-all duration-[2000ms] overflow-hidden 
+        <div className={`flex h-[100dvh] text-gray-100 font-sans transition-all duration-500 overflow-hidden 
         ${isSleeping ? 'brightness-50 grayscale-[0.5]' : ''} 
         ${isFatigued && !isSleeping ? 'brightness-75' : ''}
     `}>
@@ -533,7 +533,7 @@ export function CognitiveInterface() {
             )}
 
             {/* LEFT SIDEBAR: Session/Settings/Conversation (desktop only) */}
-            <div className="hidden xl:flex w-[320px] h-full border-r border-gray-800 bg-[#0f1219] flex-col relative z-10">
+            <div className="hidden xl:flex w-[350px] shrink-0 h-full border-r border-gray-800 bg-[#0f1219] flex-col relative z-10">
                 {/* Session Info */}
                 <div className="p-4 border-b border-gray-800 bg-[#0a0c10]">
                     <div className="flex items-center justify-between">
@@ -687,7 +687,7 @@ export function CognitiveInterface() {
                 </div>
             </div>
 
-            <div className="flex-1 flex flex-col relative z-10 min-h-0">
+            <div className="flex-1 flex flex-col relative z-10 min-w-0">
                 {/* Header */}
                 <header className={`h-16 border-b flex items-center justify-between px-6 transition-colors duration-1000 ${isFatigued ? 'bg-[#151010] border-red-900/20' : 'bg-brain-dark border-gray-700'}`}>
                     <div className="flex items-center gap-3">
@@ -696,9 +696,9 @@ export function CognitiveInterface() {
                     ${isSleeping ? 'bg-indigo-500 animate-[pulse_4s_infinite]' : ''}
                     ${!isProcessing && !isSleeping && isFatigued ? 'bg-yellow-600 animate-[pulse_2s_infinite]' : 'bg-green-500'}
                 `}></div>
-                        <h1 className="font-bold text-lg tracking-wider flex items-center gap-2">
+                        <h1 className="font-extrabold text-2xl tracking-tighter flex items-center gap-2 bg-gradient-to-r from-brain-accent to-cyan-200 bg-clip-text text-transparent">
                             AK-FLOW
-                            <span className="text-gray-500 text-xs">v4.0</span>
+                            <span className="text-gray-600 text-[10px] font-mono tracking-widest border border-gray-800 px-1.5 py-0.5 rounded ml-1">V4.0</span>
                         </h1>
                         <AgentSelector />
                     </div>
@@ -856,8 +856,7 @@ export function CognitiveInterface() {
                     </div>
                 </header>
 
-                {/* Thought Stream */}
-                <div className={`min-h-12 py-2 border-b border-gray-700 flex items-start px-6 text-xs font-mono transition-colors duration-1000 ${systemError ? 'bg-red-900/20 text-red-400' :
+                <div className={`min-h-14 py-3 border-b border-gray-700 flex items-start px-6 text-sm font-mono transition-colors duration-1000 ${systemError ? 'bg-red-900/20 text-red-400' :
                     isSleeping ? 'bg-indigo-950/20 text-indigo-300' :
                         isFatigued ? 'bg-[#1a1010] text-orange-300' :
                             'bg-brain-panel text-brain-accent'
@@ -957,8 +956,8 @@ export function CognitiveInterface() {
                                             </span>
                                         </div>
                                     )}
-                                    <div className="p-4">
-                                        <p className={`leading-relaxed ${msg.type === 'thought' ? 'text-sm font-mono' : 'text-base'}`}>
+                                    <div className="p-5">
+                                        <p className={`leading-relaxed ${msg.type === 'thought' ? 'text-base font-mono' : 'text-lg font-medium'}`}>
                                             {msg.text}
                                         </p>
                                     </div>
@@ -1007,11 +1006,11 @@ export function CognitiveInterface() {
                                             "Inject data into the cognitive stream..."
                             }
                             disabled={isSleeping || !!systemError}
-                            className={`w-full bg-gray-800 text-white rounded-full px-6 py-4 pr-12 focus:outline-none focus:ring-2 border placeholder-gray-500 shadow-inner transition-all ${isSleeping
+                            className={`w-full bg-gray-900/80 text-white rounded-2xl px-8 py-5 pr-16 focus:outline-none focus:ring-2 border placeholder-gray-600 shadow-2xl transition-all text-lg ${isSleeping
                                 ? 'border-indigo-500/30 opacity-50 cursor-not-allowed italic'
                                 : isFatigued
                                     ? 'border-orange-900/50 focus:ring-orange-800'
-                                    : 'border-gray-600 focus:ring-brain-accent'
+                                    : 'border-gray-700 focus:ring-brain-accent hover:border-gray-500'
                                 }`}
                         />
                         <button
@@ -1048,7 +1047,7 @@ export function CognitiveInterface() {
             </div>
 
             {/* RIGHT: NEURO-MONITOR */}
-            <div className="w-[500px] h-full border-l border-gray-800 hidden lg:block">
+            <div className="w-[650px] shrink-0 h-full border-l border-gray-800 hidden lg:block overflow-hidden bg-[#0a0c12]">
                 <NeuroMonitor
                     limbicState={limbicState}
                     somaState={somaState}

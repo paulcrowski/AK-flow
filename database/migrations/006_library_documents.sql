@@ -17,6 +17,10 @@ CREATE TABLE IF NOT EXISTS public.library_documents (
   CONSTRAINT library_documents_agent_id_fkey FOREIGN KEY (agent_id) REFERENCES public.agents(id) ON DELETE SET NULL
 );
 
+ALTER TABLE public.library_documents
+  ADD COLUMN IF NOT EXISTS owner_id uuid,
+  ADD COLUMN IF NOT EXISTS user_id text;
+
 CREATE INDEX IF NOT EXISTS idx_library_documents_owner_id ON public.library_documents(owner_id);
 CREATE INDEX IF NOT EXISTS idx_library_documents_agent_id ON public.library_documents(agent_id);
 CREATE INDEX IF NOT EXISTS idx_library_documents_uploaded_at ON public.library_documents(uploaded_at DESC);
@@ -35,6 +39,9 @@ CREATE TABLE IF NOT EXISTS public.library_chunks (
   CONSTRAINT library_chunks_unique_doc_chunk UNIQUE (document_id, chunk_index)
 );
 
+ALTER TABLE public.library_chunks
+  ADD COLUMN IF NOT EXISTS owner_id uuid;
+
 CREATE INDEX IF NOT EXISTS idx_library_chunks_owner_id ON public.library_chunks(owner_id);
 CREATE INDEX IF NOT EXISTS idx_library_chunks_document_id ON public.library_chunks(document_id);
 
@@ -45,48 +52,123 @@ DROP POLICY IF EXISTS library_documents_select_own ON public.library_documents;
 CREATE POLICY library_documents_select_own ON public.library_documents
   FOR SELECT
   TO authenticated
-  USING (owner_id = auth.uid());
+  USING (
+    (owner_id IS NOT NULL AND owner_id = auth.uid())
+    OR
+    (user_id IS NOT NULL AND user_id = (auth.jwt() ->> 'email'))
+  );
 
 DROP POLICY IF EXISTS library_documents_insert_own ON public.library_documents;
 CREATE POLICY library_documents_insert_own ON public.library_documents
   FOR INSERT
   TO authenticated
-  WITH CHECK (owner_id = auth.uid());
+  WITH CHECK (
+    (owner_id IS NOT NULL AND owner_id = auth.uid())
+    OR
+    (user_id IS NOT NULL AND user_id = (auth.jwt() ->> 'email'))
+  );
 
 DROP POLICY IF EXISTS library_documents_update_own ON public.library_documents;
 CREATE POLICY library_documents_update_own ON public.library_documents
   FOR UPDATE
   TO authenticated
-  USING (owner_id = auth.uid())
-  WITH CHECK (owner_id = auth.uid());
+  USING (
+    (owner_id IS NOT NULL AND owner_id = auth.uid())
+    OR
+    (user_id IS NOT NULL AND user_id = (auth.jwt() ->> 'email'))
+  )
+  WITH CHECK (
+    (owner_id IS NOT NULL AND owner_id = auth.uid())
+    OR
+    (user_id IS NOT NULL AND user_id = (auth.jwt() ->> 'email'))
+  );
 
 DROP POLICY IF EXISTS library_documents_delete_own ON public.library_documents;
 CREATE POLICY library_documents_delete_own ON public.library_documents
   FOR DELETE
   TO authenticated
-  USING (owner_id = auth.uid());
+  USING (
+    (owner_id IS NOT NULL AND owner_id = auth.uid())
+    OR
+    (user_id IS NOT NULL AND user_id = (auth.jwt() ->> 'email'))
+  );
 
 DROP POLICY IF EXISTS library_chunks_select_own ON public.library_chunks;
 CREATE POLICY library_chunks_select_own ON public.library_chunks
   FOR SELECT
   TO authenticated
-  USING (owner_id = auth.uid());
+  USING (
+    EXISTS (
+      SELECT 1
+      FROM public.library_documents d
+      WHERE d.id = public.library_chunks.document_id
+        AND (
+          (d.owner_id IS NOT NULL AND d.owner_id = auth.uid())
+          OR
+          (d.user_id IS NOT NULL AND d.user_id = (auth.jwt() ->> 'email'))
+        )
+    )
+  );
 
 DROP POLICY IF EXISTS library_chunks_insert_own ON public.library_chunks;
 CREATE POLICY library_chunks_insert_own ON public.library_chunks
   FOR INSERT
   TO authenticated
-  WITH CHECK (owner_id = auth.uid());
+  WITH CHECK (
+    EXISTS (
+      SELECT 1
+      FROM public.library_documents d
+      WHERE d.id = public.library_chunks.document_id
+        AND (
+          (d.owner_id IS NOT NULL AND d.owner_id = auth.uid())
+          OR
+          (d.user_id IS NOT NULL AND d.user_id = (auth.jwt() ->> 'email'))
+        )
+    )
+  );
 
 DROP POLICY IF EXISTS library_chunks_update_own ON public.library_chunks;
 CREATE POLICY library_chunks_update_own ON public.library_chunks
   FOR UPDATE
   TO authenticated
-  USING (owner_id = auth.uid())
-  WITH CHECK (owner_id = auth.uid());
+  USING (
+    EXISTS (
+      SELECT 1
+      FROM public.library_documents d
+      WHERE d.id = public.library_chunks.document_id
+        AND (
+          (d.owner_id IS NOT NULL AND d.owner_id = auth.uid())
+          OR
+          (d.user_id IS NOT NULL AND d.user_id = (auth.jwt() ->> 'email'))
+        )
+    )
+  )
+  WITH CHECK (
+    EXISTS (
+      SELECT 1
+      FROM public.library_documents d
+      WHERE d.id = public.library_chunks.document_id
+        AND (
+          (d.owner_id IS NOT NULL AND d.owner_id = auth.uid())
+          OR
+          (d.user_id IS NOT NULL AND d.user_id = (auth.jwt() ->> 'email'))
+        )
+    )
+  );
 
 DROP POLICY IF EXISTS library_chunks_delete_own ON public.library_chunks;
 CREATE POLICY library_chunks_delete_own ON public.library_chunks
   FOR DELETE
   TO authenticated
-  USING (owner_id = auth.uid());
+  USING (
+    EXISTS (
+      SELECT 1
+      FROM public.library_documents d
+      WHERE d.id = public.library_chunks.document_id
+        AND (
+          (d.owner_id IS NOT NULL AND d.owner_id = auth.uid())
+          OR
+          (d.user_id IS NOT NULL AND d.user_id = (auth.jwt() ->> 'email'))
+        )
+    )
+  );

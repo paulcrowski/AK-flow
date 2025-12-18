@@ -18,15 +18,18 @@ interface NeuroMonitorProps {
 
 const AGENT_LAYOUT: Record<string, { x: number, y: number, label: string, color: string }> = {
     [AgentType.CORTEX_FLOW]: { x: 50, y: 50, label: 'CORTEX', color: '#38bdf8' },
-    [AgentType.CORTEX_CONFLICT]: { x: 70, y: 35, label: 'CONFLICT', color: '#eab308' },
-    [AgentType.MEMORY_EPISODIC]: { x: 50, y: 20, label: 'MEMORY', color: '#c084fc' },
-    [AgentType.SENSORY_TEXT]: { x: 20, y: 50, label: 'INPUT', color: '#22c55e' },
-    [AgentType.LIMBIC]: { x: 80, y: 50, label: 'LIMBIC', color: '#ef4444' },
-    [AgentType.SOMA]: { x: 80, y: 75, label: 'SOMA', color: '#f97316' },
-    [AgentType.MOTOR]: { x: 50, y: 80, label: 'OUTPUT', color: '#94a3b8' },
-    [AgentType.MORAL]: { x: 30, y: 35, label: 'MORAL', color: '#14b8a6' },
-    [AgentType.VISUAL_CORTEX]: { x: 30, y: 65, label: 'VISION', color: '#f472b6' },
-    [AgentType.NEUROCHEM]: { x: 20, y: 75, label: 'CHEM', color: '#a855f7' },
+    [AgentType.CORTEX_CONFLICT]: { x: 75, y: 35, label: 'CONFLICT', color: '#fbbf24' },
+    [AgentType.MEMORY_EPISODIC]: { x: 50, y: 15, label: 'EPISODIC', color: '#c084fc' },
+    [AgentType.SENSORY_TEXT]: { x: 10, y: 40, label: 'TXT_IN', color: '#22c55e' },
+    [AgentType.SENSORY_VISUAL]: { x: 10, y: 55, label: 'VIS_IN', color: '#10b981' },
+    [AgentType.SENSORY_AUDIO]: { x: 10, y: 70, label: 'AUD_IN', color: '#34d399' },
+    [AgentType.LIMBIC]: { x: 90, y: 50, label: 'EMOTION', color: '#ef4444' },
+    [AgentType.SOMA]: { x: 90, y: 80, label: 'BIOMETRY', color: '#f97316' },
+    [AgentType.MOTOR]: { x: 50, y: 90, label: 'MOTOR', color: '#94a3b8' },
+    [AgentType.MORAL]: { x: 25, y: 25, label: 'MORAL', color: '#14b8a6' },
+    [AgentType.VISUAL_CORTEX]: { x: 25, y: 75, label: 'VISION', color: '#f472b6' },
+    [AgentType.NEUROCHEM]: { x: 75, y: 65, label: 'CHEMICAL', color: '#a855f7' },
+    [AgentType.GLOBAL_FIELD]: { x: 50, y: 70, label: 'CEMI', color: '#22d3ee' },
 };
 
 const CircularGauge = ({ value, color, label, icon: Icon }: { value: number, color: string, label: string, icon: any }) => {
@@ -64,13 +67,13 @@ const CyberHeart = ({ bpm, intensity }: { bpm: number; intensity: number }) => {
     const duration = 60 / bpm;
     const color = intensity < 0.3 ? '#38bdf8' : intensity < 0.7 ? '#eab308' : '#ef4444';
     return (
-        <div className="relative flex items-center justify-center w-24 h-24 group cursor-help">
+        <div className="relative flex items-center justify-center w-32 h-32 group cursor-help">
             <div className="absolute inset-0 border-2 border-dashed border-gray-700 rounded-full opacity-30 animate-[spin_10s_linear_infinite]" />
-            <svg viewBox="0 0 24 24" className="w-10 h-10 drop-shadow-[0_0_10px_rgba(255,255,255,0.3)] transition-colors duration-500" style={{ fill: color, animation: `pulseHeart ${duration}s ease-in-out infinite` }}>
+            <svg viewBox="0 0 24 24" className="w-14 h-14 drop-shadow-[0_0_15px_rgba(255,255,255,0.4)] transition-colors duration-500" style={{ fill: color, animation: `pulseHeart ${duration}s ease-in-out infinite` }}>
                 <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" />
             </svg>
-            <div className="absolute -bottom-4 text-[10px] font-mono text-gray-500 bg-gray-900 px-2 py-0.5 rounded border border-gray-800">{Math.round(bpm)} BPM</div>
-            <style>{`@keyframes pulseHeart { 0% { transform: scale(1); opacity: 0.8; } 15% { transform: scale(1.3); opacity: 1; } 100% { transform: scale(1); opacity: 0.8; } }`}</style>
+            <div className="absolute -bottom-2 text-[11px] font-mono font-bold text-gray-400 bg-gray-950 px-3 py-1 rounded-full border border-gray-800 shadow-xl">{Math.round(bpm)} BPM</div>
+            <style>{`@keyframes pulseHeart { 0% { transform: scale(1); opacity: 0.8; } 15% { transform: scale(1.35); opacity: 1; } 100% { transform: scale(1); opacity: 0.8; } }`}</style>
         </div>
     );
 };
@@ -532,11 +535,11 @@ export const NeuroMonitor: React.FC<NeuroMonitorProps> = ({ limbicState, somaSta
                 <div className="flex items-center gap-2">
                     <Activity className="text-brain-accent" size={16} />
                     <div>
-                        <h2 className="text-gray-100 font-bold tracking-widest text-[11px]">NEURO-MONITOR</h2>
-                        <div className="flex items-center gap-1 text-[9px] text-gray-500">
-                            <span className="text-green-400">ONLINE</span>
+                        <h2 className="text-gray-100 font-extrabold tracking-[0.2em] text-[13px]">NEURO-MONITOR</h2>
+                        <div className="flex items-center gap-1 text-[10px] text-gray-500 font-bold">
+                            <span className="text-cyan-400">ACTIVE RESONANCE</span>
                             <span>::</span>
-                            <span>v3.9 (Debug)</span>
+                            <span>PROTOTYPE 13/10</span>
                         </div>
                     </div>
                 </div>
@@ -632,8 +635,8 @@ export const NeuroMonitor: React.FC<NeuroMonitorProps> = ({ limbicState, somaSta
                                     key={mode}
                                     onClick={() => setLogFilter(mode as any)}
                                     className={`px-2 py-1 rounded-full border text-[8px] font-mono tracking-wider transition-all ${logFilter === mode
-                                            ? 'border-brain-accent text-brain-accent bg-gray-900'
-                                            : 'border-gray-800 text-gray-500 hover:text-gray-300 hover:bg-gray-900/60'
+                                        ? 'border-brain-accent text-brain-accent bg-gray-900'
+                                        : 'border-gray-800 text-gray-500 hover:text-gray-300 hover:bg-gray-900/60'
                                         }`}
                                 >
                                     {mode}
@@ -676,8 +679,8 @@ export const NeuroMonitor: React.FC<NeuroMonitorProps> = ({ limbicState, somaSta
                     { id: 'SQL', icon: Database, label: 'DB' },
                     { id: 'DEBUG', icon: Zap, label: 'DEBUG' },
                 ].map(tab => (
-                    <button key={tab.id} onClick={() => setActiveTab(tab.id as Tab)} className={`flex-1 py-3 text-center text-[10px] font-bold tracking-wider flex items-center justify-center gap-1.5 transition-all ${activeTab === tab.id ? 'text-white bg-gray-800 border-b-2 border-brain-accent' : 'text-gray-600 hover:text-gray-300 hover:bg-gray-900/50'}`}>
-                        <tab.icon size={12} /> {tab.label}
+                    <button key={tab.id} onClick={() => setActiveTab(tab.id as Tab)} className={`flex-1 py-4 text-center text-[11px] font-black tracking-widest flex items-center justify-center gap-2 transition-all border-r border-gray-800 last:border-r-0 ${activeTab === tab.id ? 'text-white bg-gray-800/50 border-b-2 border-brain-accent shadow-[inset_0_-10px_20px_rgba(56,189,248,0.05)]' : 'text-gray-500 hover:text-gray-300 hover:bg-gray-800/30'}`}>
+                        <tab.icon size={14} /> {tab.label}
                     </button>
                 ))}
             </div>
@@ -858,11 +861,11 @@ export const NeuroMonitor: React.FC<NeuroMonitorProps> = ({ limbicState, somaSta
 
                 {activeTab === 'NETWORK' && (
                     <div className="h-full flex flex-col items-center justify-center relative bg-[#050608]">
-                        <div className="w-full h-full p-6 flex items-center justify-center">
-                            <svg viewBox="0 0 100 100" className="w-full h-full max-w-[320px] max-h-[320px]">
+                        <div className="w-full h-full p-8 flex items-center justify-center">
+                            <svg viewBox="-5 -5 110 110" className="w-full h-full max-w-[500px] max-h-[500px]">
                                 <defs>
-                                    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
-                                        <feGaussianBlur stdDeviation="1.5" result="coloredBlur" />
+                                    <filter id="glow" x="-100%" y="-100%" width="300%" height="300%">
+                                        <feGaussianBlur stdDeviation="2.5" result="coloredBlur" />
                                         <feMerge><feMergeNode in="coloredBlur" /><feMergeNode in="SourceGraphic" /></feMerge>
                                     </filter>
                                 </defs>
@@ -870,9 +873,9 @@ export const NeuroMonitor: React.FC<NeuroMonitorProps> = ({ limbicState, somaSta
                                 {/* CEMI FIELD VISUALIZATION */}
                                 {resonanceField && (
                                     <g>
-                                        <circle cx="50" cy="50" r={35 + (resonanceField.intensity * 10)} fill="none" stroke="#22d3ee" strokeWidth="0.2" opacity="0.3">
-                                            <animate attributeName="r" from={35} to={45} dur={`${4 * resonanceField.timeDilation} s`} repeatCount="indefinite" />
-                                            <animate attributeName="opacity" values="0.1;0.3;0.1" dur={`${4 * resonanceField.timeDilation} s`} repeatCount="indefinite" />
+                                        <circle cx="50" cy="50" r={40 + (resonanceField.intensity * 15)} fill="none" stroke="#22d3ee" strokeWidth="0.3" opacity="0.2">
+                                            <animate attributeName="r" from={40} to={55} dur={`${4 * resonanceField.timeDilation}s`} repeatCount="indefinite" />
+                                            <animate attributeName="opacity" values="0.05;0.2;0.05" dur={`${4 * resonanceField.timeDilation}s`} repeatCount="indefinite" />
                                         </circle>
                                     </g>
                                 )}
@@ -883,10 +886,10 @@ export const NeuroMonitor: React.FC<NeuroMonitorProps> = ({ limbicState, somaSta
                                     const center = AGENT_LAYOUT[AgentType.CORTEX_FLOW];
                                     const activityLevel = agentActivity[key] || 0;
                                     // Dynamic width based on activity
-                                    const strokeW = activityLevel > 0.1 ? 0.2 + (activityLevel * 0.8) : 0.2;
+                                    const strokeW = activityLevel > 0.1 ? 0.3 + (activityLevel * 1.5) : 0.3;
 
                                     return (
-                                        <line key={`conn - ${key} `} x1={center.x} y1={center.y} x2={pos.x} y2={pos.y} stroke={activityLevel > 0.1 ? pos.color : '#1e293b'} strokeWidth={strokeW} strokeDasharray={activityLevel > 0.1 ? "none" : "2 2"} opacity={Math.max(0.2, activityLevel)} />
+                                        <line key={`conn-${key}`} x1={center.x} y1={center.y} x2={pos.x} y2={pos.y} stroke={activityLevel > 0.1 ? pos.color : '#1e293b'} strokeWidth={strokeW} strokeDasharray={activityLevel > 0.1 ? "none" : "3 3"} opacity={Math.max(0.15, activityLevel)} className="transition-all duration-700" />
                                     );
                                 })}
                                 {/* NODES */}
@@ -896,18 +899,18 @@ export const NeuroMonitor: React.FC<NeuroMonitorProps> = ({ limbicState, somaSta
                                     const intensity = Math.min(2, rawActivity); // Allow over-driving radius
 
                                     return (
-                                        <g key={key}>
-                                            <circle cx={pos.x} cy={pos.y} r={key === AgentType.CORTEX_FLOW ? 8 : 5} fill="#0f1219" stroke={pos.color} strokeWidth={0.5 + (activityLevel * 0.5)} />
+                                        <g key={key} className="transition-all duration-500">
+                                            <circle cx={pos.x} cy={pos.y} r={key === AgentType.CORTEX_FLOW ? 10 : 6} fill="#050608" stroke={pos.color} strokeWidth={0.8 + (activityLevel * 1.2)} />
                                             {rawActivity > 0.1 && (
                                                 <circle
                                                     cx={pos.x} cy={pos.y}
-                                                    r={(key === AgentType.CORTEX_FLOW ? 8 : 5) + (intensity * 3)}
+                                                    r={(key === AgentType.CORTEX_FLOW ? 10 : 6) + (intensity * 5)}
                                                     fill={pos.color}
-                                                    opacity={activityLevel * 0.6} // Brighter glow
+                                                    opacity={activityLevel * 0.4} // Brighter glow
                                                     filter="url(#glow)"
                                                 />
                                             )}
-                                            <text x={pos.x} y={pos.y + 1.5} textAnchor="middle" fill={rawActivity > 0.1 ? '#fff' : '#475569'} fontSize="2.5" fontWeight="bold">{pos.label}</text>
+                                            <text x={pos.x} y={pos.y + 1.8} textAnchor="middle" fill={rawActivity > 0.1 ? '#fff' : '#475569'} fontSize="3.5" fontWeight="900" style={{ pointerEvents: 'none', textShadow: '0 0 5px rgba(0,0,0,0.8)' }}>{pos.label}</text>
                                         </g>
                                     );
                                 })}
@@ -969,12 +972,12 @@ export const NeuroMonitor: React.FC<NeuroMonitorProps> = ({ limbicState, somaSta
                             else if (packet.type === PacketType.SYSTEM_ALERT) style = { border: 'border-orange-500/50', bg: 'bg-orange-900/10', text: 'text-orange-400', icon: ShieldAlert };
 
                             return (
-                                <div key={packet.id} className={`border - l - 2 p - 2 rounded - r ${style.border} ${style.bg} transition - all hover: bg - gray - 800 / 50`}>
-                                    <div className="flex justify-between items-center mb-1">
-                                        <span className={`text - [9px] font - bold flex items - center gap - 1.5 ${style.text} `}><style.icon size={10} />{packet.type.replace(/_/g, ' ')}</span>
-                                        <span className="text-[8px] text-gray-600 font-mono">{new Date(packet.timestamp).toLocaleTimeString()}</span>
+                                <div key={packet.id} className={`border-l-4 p-4 rounded-r-xl ${style.border} ${style.bg} transition-all hover:bg-gray-800/80 shadow-lg group`}>
+                                    <div className="flex justify-between items-center mb-2">
+                                        <span className={`text-[11px] font-black flex items-center gap-2 tracking-widest ${style.text} uppercase`}><style.icon size={12} className="group-hover:animate-pulse" />{packet.type.replace(/_/g, ' ')}</span>
+                                        <span className="text-[9px] text-gray-500 font-mono font-bold">{new Date(packet.timestamp).toLocaleTimeString()}</span>
                                     </div>
-                                    <div className="pl-4 border-l border-gray-800 ml-1">{renderPayload(packet)}</div>
+                                    <div className="pl-4 border-l border-gray-800/50 ml-1.5 py-1">{renderPayload(packet)}</div>
                                 </div>
                             );
                         })}
