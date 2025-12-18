@@ -164,6 +164,40 @@ describe('P0 Tool Lifecycle', () => {
       expect(timeoutEvent).toBeDefined();
       expect(timeoutEvent!.payload.tool).toBe('SEARCH_LIBRARY');
     });
+
+    it('SEARCH_IN_REPO should behave as alias of SEARCH_LIBRARY', async () => {
+      vi.mocked(searchLibraryChunks).mockResolvedValue({ ok: true, hits: [] } as any);
+
+      const processOutput = createProcessOutputForTools(mockDeps);
+      await processOutput('[SEARCH_IN_REPO: AGI]');
+
+      const intentEvent = getEvents().find(e => e.type === PacketType.TOOL_INTENT);
+      const resultEvent = getEvents().find(e => e.type === PacketType.TOOL_RESULT);
+
+      expect(intentEvent).toBeDefined();
+      expect(intentEvent!.payload.tool).toBe('SEARCH_LIBRARY');
+      expect(resultEvent).toBeDefined();
+      expect(resultEvent!.payload.tool).toBe('SEARCH_LIBRARY');
+    });
+
+    it('READ_FILE should behave as alias of READ_LIBRARY_DOC', async () => {
+      vi.mocked(downloadLibraryDocumentText).mockResolvedValue({
+        ok: true,
+        doc: { original_name: 'x.md' },
+        text: 'hello'
+      } as any);
+
+      const processOutput = createProcessOutputForTools(mockDeps);
+      await processOutput('[READ_FILE: doc_1]');
+
+      const intentEvent = getEvents().find(e => e.type === PacketType.TOOL_INTENT);
+      const resultEvent = getEvents().find(e => e.type === PacketType.TOOL_RESULT);
+
+      expect(intentEvent).toBeDefined();
+      expect(intentEvent!.payload.tool).toBe('READ_LIBRARY_DOC');
+      expect(resultEvent).toBeDefined();
+      expect(resultEvent!.payload.tool).toBe('READ_LIBRARY_DOC');
+    });
   });
 
   afterEach(() => {

@@ -98,10 +98,21 @@ export const createProcessOutputForTools = (deps: ToolParserDeps) => {
     // [SEARCH_LIBRARY: query]
     // [READ_LIBRARY_CHUNK: <docId>#<chunkIndex>]
     // [READ_LIBRARY_DOC: <docId>]
-    const workspaceTagRegex = /\[(SEARCH_LIBRARY|READ_LIBRARY_CHUNK|READ_LIBRARY_DOC):\s*([^\]]+?)\]/i;
+    // Aliases:
+    // [SEARCH_IN_REPO: query] -> SEARCH_LIBRARY
+    // [READ_FILE: <docId>] -> READ_LIBRARY_DOC
+    // [READ_FILE_CHUNK: <docId>#<chunkIndex>] -> READ_LIBRARY_CHUNK
+    const workspaceTagRegex = /\[(SEARCH_LIBRARY|READ_LIBRARY_CHUNK|READ_LIBRARY_DOC|SEARCH_IN_REPO|READ_FILE|READ_FILE_CHUNK):\s*([^\]]+?)\]/i;
 
     const executeWorkspaceTool = async (toolRaw: string, argRaw: string) => {
-      const tool = String(toolRaw || '').toUpperCase();
+      const tool0 = String(toolRaw || '').toUpperCase();
+      const tool = tool0 === 'SEARCH_IN_REPO'
+        ? 'SEARCH_LIBRARY'
+        : tool0 === 'READ_FILE'
+          ? 'READ_LIBRARY_DOC'
+          : tool0 === 'READ_FILE_CHUNK'
+            ? 'READ_LIBRARY_CHUNK'
+            : tool0;
       const arg = String(argRaw || '').trim();
 
       const intentId = generateUUID();

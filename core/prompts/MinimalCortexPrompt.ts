@@ -66,6 +66,10 @@ But you MUST follow the 3-layer cognitive architecture:
      "I'll search my workspace. [SEARCH_LIBRARY: query]"
      "I'll open the exact chunk. [READ_LIBRARY_CHUNK: <documentId>#<chunkIndex>]"
      "I'll open the full document. [READ_LIBRARY_DOC: <documentId>]"
+   - Ergonomic aliases (equivalent to the above):
+     "Search in repo. [SEARCH_IN_REPO: query]" (alias of SEARCH_LIBRARY)
+     "Open file. [READ_FILE: <documentId>]" (alias of READ_LIBRARY_DOC)
+     "Open file chunk. [READ_FILE_CHUNK: <documentId>#<chunkIndex>]" (alias of READ_LIBRARY_CHUNK)
    - This is PUBLIC, LOGGED, OBSERVABLE.
 
 CORRECT EXAMPLE:
