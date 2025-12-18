@@ -204,16 +204,23 @@ export const createProcessOutputForTools = (deps: ToolParserDeps) => {
 
         throw new Error(`Unsupported workspace tool: ${tool}`);
       } catch (error: any) {
+        const msg = error?.message || String(error);
+        const isTimeout = typeof msg === 'string' && msg.startsWith('TOOL_TIMEOUT:');
+
         eventBus.publish({
           id: generateUUID(),
           timestamp: Date.now(),
           source: AgentType.CORTEX_FLOW,
-          type: PacketType.TOOL_ERROR,
-          payload: { tool, arg, intentId, error: error?.message || String(error) },
+          type: isTimeout ? PacketType.TOOL_TIMEOUT : PacketType.TOOL_ERROR,
+          payload: { tool, arg, intentId, error: msg },
           priority: 0.9
         });
 
-        addMessage('assistant', `WORKSPACE_TOOL_ERROR: ${tool} ${String(arg).slice(0, 200)} :: ${error?.message || String(error)}`, 'thought');
+        addMessage(
+          'assistant',
+          `${isTimeout ? 'WORKSPACE_TOOL_TIMEOUT' : 'WORKSPACE_TOOL_ERROR'}: ${tool} ${String(arg).slice(0, 200)} :: ${msg}`,
+          'thought'
+        );
       }
     };
 

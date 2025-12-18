@@ -146,6 +146,24 @@ describe('P0 Tool Lifecycle', () => {
       const intents = getEvents().filter(e => e.type === PacketType.TOOL_INTENT);
       expect(intents.length).toBeGreaterThanOrEqual(2);
     });
+
+    it('SEARCH_LIBRARY should emit TOOL_TIMEOUT when execution exceeds limit', async () => {
+      vi.mocked(searchLibraryChunks).mockImplementation(
+        () => new Promise(resolve => setTimeout(() => resolve({ ok: true, hits: [] }), 15000)) as any
+      );
+
+      const processOutput = createProcessOutputForTools(mockDeps);
+
+      vi.useFakeTimers();
+      const promise = processOutput('[SEARCH_LIBRARY: slow query]');
+      await vi.advanceTimersByTimeAsync(11000);
+      await promise;
+      vi.useRealTimers();
+
+      const timeoutEvent = getEvents().find(e => e.type === PacketType.TOOL_TIMEOUT);
+      expect(timeoutEvent).toBeDefined();
+      expect(timeoutEvent!.payload.tool).toBe('SEARCH_LIBRARY');
+    });
   });
 
   afterEach(() => {
