@@ -19,6 +19,17 @@ export interface LibraryDocument {
   ingested_at?: string | null;
 }
 
+export interface LibraryChunk {
+  id: string;
+  document_id: string;
+  chunk_index: number;
+  start_offset: number;
+  end_offset: number;
+  content?: string | null;
+  summary?: string | null;
+  created_at: string;
+}
+
 function sanitizeFilename(name: string): string {
   const trimmed = name.trim();
   const safe = trimmed
@@ -32,7 +43,14 @@ function inferMimeType(file: File): string {
   const lower = file.name.toLowerCase();
   if (lower.endsWith('.md')) return 'text/markdown';
   if (lower.endsWith('.txt')) return 'text/plain';
+  if (lower.endsWith('.json')) return 'application/json';
   return 'application/octet-stream';
+}
+
+function inferDocType(file: File): string {
+  const lower = file.name.toLowerCase();
+  if (lower.endsWith('.json')) return 'json';
+  return 'text';
 }
 
 export async function uploadLibraryFile(params: {
@@ -61,7 +79,7 @@ export async function uploadLibraryFile(params: {
     storage_path,
     mime_type: inferMimeType(file),
     byte_size: file.size,
-    doc_type: 'text',
+    doc_type: inferDocType(file),
     status: 'uploaded'
   };
 
@@ -98,4 +116,21 @@ export async function listLibraryDocuments(params?: {
   const res = await q;
   if (res.error) return { ok: false, error: res.error.message };
   return { ok: true, documents: (res.data as LibraryDocument[]) || [] };
+}
+
+export async function listLibraryChunks(params: {
+  documentId: string;
+  limit?: number;
+}): Promise<{ ok: true; chunks: LibraryChunk[] } | { ok: false; error: string }> {
+  const limit = params.limit ?? 50;
+
+  const res = await supabase
+    .from('library_chunks')
+    .select('id,document_id,chunk_index,start_offset,end_offset,content,summary,created_at')
+    .eq('document_id', params.documentId)
+    .order('chunk_index', { ascending: true })
+    .limit(limit);
+
+  if (res.error) return { ok: false, error: res.error.message };
+  return { ok: true, chunks: (res.data as LibraryChunk[]) || [] };
 }

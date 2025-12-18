@@ -1,7 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { FileUp, RefreshCw, Loader2, Sparkles } from 'lucide-react';
+import { createPortal } from 'react-dom';
+import { FileUp, RefreshCw, Loader2, Sparkles, X, ChevronDown, ChevronUp, Layers } from 'lucide-react';
 import { useSession } from '../contexts/SessionContext';
-import { listLibraryDocuments, uploadLibraryFile, type LibraryDocument } from '../services/LibraryService';
+import { listLibraryChunks, listLibraryDocuments, uploadLibraryFile, type LibraryChunk, type LibraryDocument } from '../services/LibraryService';
 import { ingestLibraryDocument } from '../services/LibraryIngestService';
 
 export function LibraryPanel() {
@@ -12,6 +13,11 @@ export function LibraryPanel() {
   const [isUploading, setIsUploading] = useState(false);
   const [ingestingById, setIngestingById] = useState<Record<string, boolean>>({});
   const [ingestErrorById, setIngestErrorById] = useState<Record<string, string>>({});
+  const [expandedSummaryById, setExpandedSummaryById] = useState<Record<string, boolean>>({});
+  const [chunksDoc, setChunksDoc] = useState<LibraryDocument | null>(null);
+  const [chunks, setChunks] = useState<LibraryChunk[]>([]);
+  const [isChunksLoading, setIsChunksLoading] = useState(false);
+  const [chunksError, setChunksError] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const canUse = Boolean(authUserId && userEmail);
@@ -56,6 +62,32 @@ export function LibraryPanel() {
     setIngestingById((prev) => ({ ...prev, [doc.id]: false }));
   };
 
+  const toggleSummary = (docId: string) => {
+    setExpandedSummaryById((prev) => ({ ...prev, [docId]: !prev[docId] }));
+  };
+
+  const openChunks = async (doc: LibraryDocument) => {
+    setChunksDoc(doc);
+    setChunks([]);
+    setChunksError('');
+    setIsChunksLoading(true);
+    const res = await listLibraryChunks({ documentId: doc.id, limit: 80 });
+    if (res.ok === false) {
+      setChunksError(res.error);
+      setIsChunksLoading(false);
+      return;
+    }
+    setChunks(res.chunks);
+    setIsChunksLoading(false);
+  };
+
+  const closeChunks = () => {
+    setChunksDoc(null);
+    setChunks([]);
+    setChunksError('');
+    setIsChunksLoading(false);
+  };
+
   const onFileSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
     try {
       const file = e.target.files?.[0] || null;
@@ -68,8 +100,8 @@ export function LibraryPanel() {
       }
 
       const lower = file.name.toLowerCase();
-      if (!(lower.endsWith('.txt') || lower.endsWith('.md'))) {
-        setError('Dozwolone pliki: .txt, .md');
+      if (!(lower.endsWith('.txt') || lower.endsWith('.md') || lower.endsWith('.json'))) {
+        setError('Dozwolone pliki: .txt, .md, .json');
         return;
       }
 
@@ -114,7 +146,7 @@ export function LibraryPanel() {
       <input
         ref={fileInputRef}
         type="file"
-        accept=".txt,.md,text/plain,text/markdown"
+        accept=".txt,.md,.json,text/plain,text/markdown,application/json"
         onChange={onFileSelected}
         className="hidden"
       />
@@ -124,9 +156,9 @@ export function LibraryPanel() {
           onClick={onChooseFile}
           disabled={!canUse || isUploading}
           className="flex items-center justify-between px-3 py-2 rounded-lg border border-gray-700 bg-gray-900/30 text-[11px] font-mono text-gray-300 hover:bg-gray-900/60 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          title={!canUse ? 'Zaloguj się przez Supabase Auth' : 'Upload .txt/.md'}
+          title={!canUse ? 'Zaloguj się przez Supabase Auth' : 'Upload .txt/.md/.json'}
         >
-          <span className="flex items-center gap-2"><FileUp size={12} /> UPLOAD .TXT/.MD</span>
+          <span className="flex items-center gap-2"><FileUp size={12} /> UPLOAD .TXT/.MD/.JSON</span>
           <span>{isUploading ? '...' : ''}</span>
         </button>
 
@@ -177,9 +209,42 @@ export function LibraryPanel() {
                 </div>
               )}
 
-              {d.global_summary && String(d.global_summary).trim() && (
-                <div className="mt-2 text-[10px] text-gray-400 leading-snug break-words">
-                  {String(d.global_summary).slice(0, 220)}{String(d.global_summary).length > 220 ? '…' : ''}
+              {(d.global_summary && String(d.global_summary).trim()) && (
+                <div className="mt-2">
+                  <div
+                    className={`text-[10px] text-gray-400 leading-snug break-words whitespace-pre-wrap ${expandedSummaryById[d.id] ? 'max-h-40 overflow-y-auto pr-1' : ''}`}
+                  >
+                    {expandedSummaryById[d.id]
+                      ? String(d.global_summary)
+                      : `${String(d.global_summary).slice(0, 220)}${String(d.global_summary).length > 220 ? '…' : ''}`}
+                  </div>
+                </div>
+              )}
+
+              {(d.status === 'ingested' || Boolean(d.ingested_at) || (d.global_summary && String(d.global_summary).trim())) && (
+                <div className="mt-2 flex items-center justify-between">
+                  <div>
+                    {d.global_summary && String(d.global_summary).length > 220 && (
+                      <button
+                        onClick={() => toggleSummary(d.id)}
+                        className="text-[9px] font-mono text-gray-500 hover:text-gray-300 transition-colors"
+                        title={expandedSummaryById[d.id] ? 'Collapse' : 'Expand'}
+                      >
+                        <span className="flex items-center gap-1">
+                          {expandedSummaryById[d.id] ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+                          {expandedSummaryById[d.id] ? 'LESS' : 'MORE'}
+                        </span>
+                      </button>
+                    )}
+                  </div>
+
+                  <button
+                    onClick={() => openChunks(d)}
+                    className="text-[9px] font-mono text-gray-500 hover:text-gray-300 transition-colors"
+                    title="View chunks"
+                  >
+                    <span className="flex items-center gap-1"><Layers size={12} /> CHUNKS</span>
+                  </button>
                 </div>
               )}
 
@@ -196,6 +261,74 @@ export function LibraryPanel() {
           )}
         </div>
       </div>
+
+      {chunksDoc && typeof document !== 'undefined' && createPortal(
+        <div
+          className="fixed inset-0 z-[9999] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4"
+          onClick={closeChunks}
+        >
+          <div
+            className="w-full max-w-3xl max-h-[85vh] rounded-xl border border-gray-800 bg-[#0b0e14] shadow-2xl overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="px-4 py-3 border-b border-gray-800 flex items-center justify-between">
+              <div className="min-w-0">
+                <div className="text-[11px] font-mono text-gray-300 truncate">{chunksDoc.original_name}</div>
+                <div className="text-[9px] font-mono text-gray-600 truncate">{chunksDoc.id}</div>
+              </div>
+              <button
+                onClick={closeChunks}
+                className="text-gray-500 hover:text-gray-300 transition-colors"
+                title="Close"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="px-4 py-3 border-b border-gray-800 flex items-center justify-between">
+              <div className="text-[10px] font-mono text-gray-500">CHUNKS</div>
+              <div className="text-[10px] font-mono text-gray-600">{chunks.length}</div>
+            </div>
+
+            <div className="p-4 overflow-y-auto max-h-[calc(85vh-96px)] space-y-2">
+              {chunksError && (
+                <div className="text-[11px] text-red-400 break-words">{chunksError}</div>
+              )}
+              {isChunksLoading && (
+                <div className="text-[11px] text-gray-400 font-mono flex items-center gap-2">
+                  <Loader2 size={14} className="animate-spin" /> loading…
+                </div>
+              )}
+
+              {!isChunksLoading && !chunksError && chunks.map((c) => (
+                <div key={c.id} className="rounded-lg border border-gray-800 bg-gray-900/20 px-3 py-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="text-[10px] font-mono text-gray-500">#{c.chunk_index}</div>
+                    <div className="text-[9px] font-mono text-gray-600">{c.start_offset}–{c.end_offset}</div>
+                  </div>
+
+                  {c.summary && String(c.summary).trim() && (
+                    <div className="mt-2 text-[11px] text-gray-200 whitespace-pre-wrap break-words">
+                      {String(c.summary)}
+                    </div>
+                  )}
+
+                  {c.content && String(c.content).trim() && (
+                    <div className="mt-2 text-[10px] text-gray-500 whitespace-pre-wrap break-words">
+                      {String(c.content).slice(0, 420)}{String(c.content).length > 420 ? '…' : ''}
+                    </div>
+                  )}
+                </div>
+              ))}
+
+              {!isChunksLoading && !chunksError && chunks.length === 0 && (
+                <div className="text-[11px] text-gray-600 italic">No chunks for this document.</div>
+              )}
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
     </div>
   );
 }

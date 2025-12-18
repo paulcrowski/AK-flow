@@ -9,6 +9,14 @@ type Chunk = {
   content: string;
 };
 
+type ChunkingConfig = {
+  targetChars: number;
+  maxChars: number;
+  overlapChars: number;
+  maxChunks: number;
+  singleChunkBelowChars: number;
+};
+
 function normalizeNewlines(text: string): string {
   return String(text || '').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
 }
@@ -17,6 +25,12 @@ function isMarkdownDoc(doc: LibraryDocument): boolean {
   const name = (doc.original_name || '').toLowerCase();
   const mime = (doc.mime_type || '').toLowerCase();
   return name.endsWith('.md') || mime.includes('markdown');
+}
+
+function isJsonDoc(doc: LibraryDocument): boolean {
+  const name = (doc.original_name || '').toLowerCase();
+  const mime = (doc.mime_type || '').toLowerCase();
+  return name.endsWith('.json') || mime.includes('application/json') || mime.endsWith('+json');
 }
 
 function splitMarkdownIntoBlocks(text: string): { start: number; end: number; text: string }[] {
@@ -155,10 +169,70 @@ function chunkHybrid(input: {
   return chunks;
 }
 
+function chooseChunkingConfig(fullTextLen: number): ChunkingConfig {
+  if (fullTextLen <= 4000) {
+    return {
+      targetChars: 8000,
+      maxChars: 12000,
+      overlapChars: 0,
+      maxChunks: 20,
+      singleChunkBelowChars: 4000
+    };
+  }
+
+  if (fullTextLen <= 40_000) {
+    return {
+      targetChars: 2600,
+      maxChars: 4200,
+      overlapChars: 240,
+      maxChunks: 60,
+      singleChunkBelowChars: 0
+    };
+  }
+
+  if (fullTextLen <= 200_000) {
+    return {
+      targetChars: 5200,
+      maxChars: 8200,
+      overlapChars: 420,
+      maxChunks: 80,
+      singleChunkBelowChars: 0
+    };
+  }
+
+  return {
+    targetChars: 8200,
+    maxChars: 12000,
+    overlapChars: 600,
+    maxChunks: 100,
+    singleChunkBelowChars: 0
+  };
+}
+
+function oneChunk(fullText: string): Chunk[] {
+  const trimmed = String(fullText || '').trim();
+  if (!trimmed) return [];
+  const start = Math.max(0, fullText.indexOf(trimmed));
+  const end = start + trimmed.length;
+  return [{ chunk_index: 0, start_offset: start, end_offset: end, content: trimmed }];
+}
+
 async function downloadDocumentText(doc: LibraryDocument): Promise<string> {
   const dl = await supabase.storage.from(doc.storage_bucket).download(doc.storage_path);
   if (dl.error) throw new Error(dl.error.message);
-  return normalizeNewlines(await dl.data.text());
+
+  const raw = normalizeNewlines(await dl.data.text());
+  if (isJsonDoc(doc)) {
+    try {
+      if (raw.length <= 2_000_000) {
+        const parsed = JSON.parse(raw);
+        return normalizeNewlines(JSON.stringify(parsed, null, 2));
+      }
+    } catch {
+      return raw;
+    }
+  }
+  return raw;
 }
 
 export async function ingestLibraryDocument(params: {
@@ -175,17 +249,37 @@ export async function ingestLibraryDocument(params: {
       return { ok: false, error: 'EMPTY_DOCUMENT' };
     }
 
-    const targetChars = params.targetChars ?? 1400;
-    const maxChars = params.maxChars ?? 2400;
-    const overlapChars = params.overlapChars ?? 200;
+    const defaults = chooseChunkingConfig(fullText.length);
+    const targetChars = params.targetChars ?? defaults.targetChars;
+    const maxChars = params.maxChars ?? defaults.maxChars;
+    const overlapChars = params.overlapChars ?? defaults.overlapChars;
+    const maxChunks = defaults.maxChunks;
 
-    const chunks = chunkHybrid({
-      fullText,
-      isMarkdown: isMarkdownDoc(doc),
-      targetChars,
-      maxChars,
-      overlapChars
-    });
+    let chunks = defaults.singleChunkBelowChars > 0 && fullText.length <= defaults.singleChunkBelowChars
+      ? oneChunk(fullText)
+      : chunkHybrid({
+          fullText,
+          isMarkdown: isMarkdownDoc(doc),
+          targetChars,
+          maxChars,
+          overlapChars
+        });
+
+    if (chunks.length > maxChunks && params.targetChars == null && params.maxChars == null) {
+      for (let attempt = 0; attempt < 3 && chunks.length > maxChunks; attempt++) {
+        const scale = Math.min(6, Math.max(2, Math.ceil(chunks.length / maxChunks)));
+        const bumpedTarget = Math.min(20_000, Math.round(targetChars * scale));
+        const bumpedMax = Math.min(28_000, Math.round(maxChars * scale));
+        const bumpedOverlap = Math.min(2000, Math.round(overlapChars * Math.min(2, scale / 2)));
+        chunks = chunkHybrid({
+          fullText,
+          isMarkdown: isMarkdownDoc(doc),
+          targetChars: bumpedTarget,
+          maxChars: bumpedMax,
+          overlapChars: bumpedOverlap
+        });
+      }
+    }
 
     if (chunks.length === 0) {
       return { ok: false, error: 'NO_CHUNKS' };
