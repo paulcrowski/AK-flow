@@ -322,6 +322,25 @@ OUTPUT FORMAT:
         }
     },
 
+    async generateText(
+        operation: string,
+        prompt: string,
+        opts?: { temperature?: number; maxOutputTokens?: number }
+    ): Promise<string> {
+        return withRetry(async () => {
+            const response = await ai.models.generateContent({
+                model: 'gemini-2.5-flash',
+                contents: prompt,
+                config: {
+                    temperature: opts?.temperature ?? 0.3,
+                    maxOutputTokens: opts?.maxOutputTokens ?? 1024
+                }
+            });
+            logUsage(operation, response);
+            return getGeminiText(response) || '';
+        }, 2, 2000);
+    },
+
     async performDeepResearch(query: string, context: string): Promise<{ synthesis: string, sources: any[] }> {
         return withRetry(async () => {
             try {

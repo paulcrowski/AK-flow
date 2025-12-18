@@ -1,7 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { FileUp, RefreshCw } from 'lucide-react';
+import { FileUp, RefreshCw, Loader2, Sparkles } from 'lucide-react';
 import { useSession } from '../contexts/SessionContext';
 import { listLibraryDocuments, uploadLibraryFile, type LibraryDocument } from '../services/LibraryService';
+import { ingestLibraryDocument } from '../services/LibraryIngestService';
 
 export function LibraryPanel() {
   const { authUserId, userEmail, agentId } = useSession();
@@ -9,6 +10,8 @@ export function LibraryPanel() {
   const [error, setError] = useState<string>('');
   const [isLoading, setIsLoading] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+  const [ingestingById, setIngestingById] = useState<Record<string, boolean>>({});
+  const [ingestErrorById, setIngestErrorById] = useState<Record<string, string>>({});
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const canUse = Boolean(authUserId && userEmail);
@@ -38,6 +41,20 @@ export function LibraryPanel() {
   }, [refresh]);
 
   const onChooseFile = () => fileInputRef.current?.click();
+
+  const onIngest = async (doc: LibraryDocument) => {
+    if (!canUse) return;
+    setIngestErrorById((prev) => ({ ...prev, [doc.id]: '' }));
+    setIngestingById((prev) => ({ ...prev, [doc.id]: true }));
+    const res = await ingestLibraryDocument({ document: doc });
+    if (res.ok === false) {
+      setIngestErrorById((prev) => ({ ...prev, [doc.id]: res.error }));
+      setIngestingById((prev) => ({ ...prev, [doc.id]: false }));
+      return;
+    }
+    await refresh();
+    setIngestingById((prev) => ({ ...prev, [doc.id]: false }));
+  };
 
   const onFileSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
     try {
@@ -130,12 +147,35 @@ export function LibraryPanel() {
             >
               <div className="flex items-center justify-between gap-2">
                 <div className="text-[11px] text-gray-200 truncate">{d.original_name}</div>
-                <div className="text-[9px] text-gray-600 font-mono">{d.status}</div>
+                <div className="flex items-center gap-2">
+                  <div className="text-[9px] text-gray-600 font-mono">{d.status}</div>
+                  <button
+                    onClick={() => onIngest(d)}
+                    disabled={!canUse || Boolean(ingestingById[d.id])}
+                    className="px-2 py-1 rounded-md border border-gray-700 bg-gray-900/30 text-[9px] font-mono text-gray-300 hover:bg-gray-900/60 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    title="Ingest: chunking + summaries"
+                  >
+                    <span className="flex items-center gap-1">
+                      {ingestingById[d.id] ? (
+                        <Loader2 size={10} className="animate-spin" />
+                      ) : (
+                        <Sparkles size={10} />
+                      )}
+                      INGEST
+                    </span>
+                  </button>
+                </div>
               </div>
               <div className="mt-1 flex items-center justify-between gap-2">
                 <div className="text-[9px] text-gray-600 font-mono truncate">{d.storage_path}</div>
                 <div className="text-[9px] text-gray-600 font-mono">{Math.round((d.byte_size || 0) / 1024)}kb</div>
               </div>
+
+              {ingestErrorById[d.id] && (
+                <div className="mt-2 text-[10px] text-red-400 break-words">
+                  {ingestErrorById[d.id]}
+                </div>
+              )}
             </div>
           ))}
 

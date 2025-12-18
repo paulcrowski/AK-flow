@@ -15,7 +15,7 @@ import { successSignalService } from '../services/SuccessSignalService';
 import { setCachedIdentity } from '../core/builders';
 // IDENTITY-LITE: Import fetchNarrativeSelf for fallback chain
 import { fetchNarrativeSelf } from '../core/services/IdentityDataService';
-import { Brain, Send, Moon, Sun, Loader2, Zap, Power, AlertTriangle, RefreshCw, EyeOff, Image as ImageIcon, Sparkles, Globe, FileText, LogOut } from 'lucide-react';
+import { Brain, Send, Moon, Sun, Loader2, Zap, Power, AlertTriangle, RefreshCw, EyeOff, Image as ImageIcon, Sparkles, Globe, FileText, LogOut, Pin } from 'lucide-react';
 
 // Convert Agent from SessionContext to AgentIdentity for Kernel
 const agentToIdentity = (agent: Agent | null): AgentIdentity | null => {
@@ -75,6 +75,20 @@ export function CognitiveInterface() {
 
     // FAZA 5: Load full agent identity from DB
     const [loadedIdentity, setLoadedIdentity] = useState<AgentIdentity | null>(null);
+    const [pinnedSessions, setPinnedSessions] = useState<string[]>(() => {
+        try {
+            return JSON.parse(localStorage.getItem('ak_pinned_sessions') || '[]');
+        } catch { return []; }
+    });
+
+    const togglePin = (e: React.MouseEvent, sid: string) => {
+        e.stopPropagation();
+        const next = pinnedSessions.includes(sid)
+            ? pinnedSessions.filter(id => id !== sid)
+            : [...pinnedSessions, sid];
+        setPinnedSessions(next);
+        localStorage.setItem('ak_pinned_sessions', JSON.stringify(next));
+    };
     const [identityLoading, setIdentityLoading] = useState(true);
     const lastLoadedAgentIdRef = useRef<string | null>(null); // Guard against StrictMode double-fire
 
@@ -534,9 +548,9 @@ export function CognitiveInterface() {
             )}
 
             {/* LEFT SIDEBAR: Session/Settings/Conversation (desktop only) */}
-            <div className="hidden xl:flex w-[280px] shrink-0 h-full border-r border-gray-800 bg-[#0f1219] flex-col relative z-10">
+            <div className="hidden xl:flex w-[280px] shrink-0 h-full border-r border-gray-800 bg-[#07090d] flex-col relative z-10 overflow-hidden">
                 {/* Session Info */}
-                <div className="p-4 border-b border-gray-800 bg-[#0a0c10]">
+                <div className="p-4 border-b border-gray-800 bg-[#0a0c10] shrink-0">
                     <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
                             <div className="w-2.5 h-2.5 rounded-full bg-cyan-400 shadow-[0_0_10px_#38bdf8]" />
@@ -560,7 +574,7 @@ export function CognitiveInterface() {
                 </div>
 
                 {/* Quick Settings */}
-                <div className="p-4 border-b border-gray-800">
+                <div className="p-4 border-b border-gray-800 shrink-0">
                     <div className="text-[10px] font-mono tracking-widest text-gray-500 mb-3">QUICK SETTINGS</div>
                     <div className="grid grid-cols-1 gap-2">
                         <button
@@ -599,93 +613,119 @@ export function CognitiveInterface() {
                     </div>
                 </div>
 
-                <LibraryPanel />
-
-                <div className="p-4 border-b border-gray-800">
-                    <div className="flex items-center justify-between mb-2">
-                        <div className="text-[10px] font-mono tracking-widest text-gray-500">CONVERSATIONS</div>
-                        <div className="text-[10px] font-mono text-gray-600">{conversationSessions?.length ?? 0}</div>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-2 mb-3">
-                        <button
-                            onClick={() => selectConversationSession(activeConversationSessionId)}
-                            className="px-3 py-2 rounded-lg border border-gray-700 bg-gray-900/30 text-[11px] font-mono text-gray-300 hover:bg-gray-900/60 transition-colors"
-                            title="Continue active session"
-                            disabled={!activeConversationSessionId}
-                        >
-                            CONTINUE
-                        </button>
-                        <button
-                            onClick={() => selectConversationSession(null)}
-                            className="px-3 py-2 rounded-lg border border-gray-700 bg-gray-900/30 text-[11px] font-mono text-gray-300 hover:bg-gray-900/60 transition-colors"
-                            title="Start new session thread"
-                        >
-                            NEW
-                        </button>
-                    </div>
-
-                    <div className="space-y-2">
-                        {(conversationSessions || []).slice(0, 25).map((s) => {
-                            const isActive = activeConversationSessionId === s.sessionId;
-                            const label = s.preview || s.sessionId;
-                            const ts = Number.isFinite(s.lastTimestamp) ? new Date(s.lastTimestamp).toLocaleString() : '';
-                            return (
-                                <button
-                                    key={s.sessionId}
-                                    onClick={() => selectConversationSession(s.sessionId)}
-                                    className={`w-full text-left rounded-lg border px-3 py-2 text-[11px] transition-colors ${isActive
-                                        ? 'border-cyan-500/40 bg-cyan-900/10 text-cyan-100'
-                                        : 'border-gray-800 bg-gray-900/20 text-gray-200 hover:bg-gray-900/40'
-                                        }`}
-                                    title={s.sessionId}
-                                >
-                                    <div className="flex items-center justify-between gap-2 mb-1">
-                                        <span className="text-[9px] font-mono uppercase tracking-wider text-gray-500">{ts || '—'}</span>
-                                        <span className="text-[9px] font-mono text-gray-600">{s.messageCount}</span>
-                                    </div>
-                                    <div className="break-words opacity-90">
-                                        {String(label).slice(0, 120)}{String(label).length > 120 ? '…' : ''}
-                                    </div>
-                                </button>
-                            );
-                        })}
-
-                        {(conversationSessions || []).length === 0 && (
-                            <div className="text-[11px] text-gray-600 italic">No archived sessions yet.</div>
-                        )}
-                    </div>
+                <div className="shrink-0">
+                    <LibraryPanel />
                 </div>
 
-                {/* Last Conversation Preview */}
-                <div className="flex-1 overflow-y-auto p-4">
-                    <div className="flex items-center justify-between mb-2">
-                        <div className="text-[10px] font-mono tracking-widest text-gray-500">LAST CONVERSATION</div>
-                        <div className="text-[10px] font-mono text-gray-600">{conversation.length}</div>
-                    </div>
-                    <div className="space-y-2">
-                        {conversation.slice(-25).reverse().map((msg, idx) => (
-                            <div
-                                key={`sidebar-${msg.role}-${idx}`}
-                                className={`rounded-lg border px-3 py-2 text-[11px] leading-snug ${msg.role === 'user'
-                                    ? 'border-blue-900/30 bg-blue-900/10 text-blue-100'
-                                    : msg.type === 'thought'
-                                        ? 'border-gray-800 bg-gray-900/30 text-gray-400 italic'
-                                        : 'border-gray-800 bg-gray-900/20 text-gray-200'
-                                    }`}
+                <div className="flex-1 overflow-hidden flex flex-col min-h-0">
+                    {/* Tematy Section */}
+                    <div className="p-4 border-b border-gray-800 bg-[#0a0c10]/40 shrink-0">
+                        <div className="flex items-center justify-between mb-2">
+                            <div className="text-[10px] font-black tracking-[0.2em] text-cyan-500/80 uppercase">Tematy</div>
+                            <div className="text-[10px] font-mono text-gray-600 bg-gray-900/50 px-1.5 py-0.5 rounded">{conversationSessions?.length ?? 0}</div>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-2">
+                            <button
+                                onClick={() => selectConversationSession(activeConversationSessionId)}
+                                className="px-3 py-2 rounded-lg border border-gray-700 bg-gray-900/30 text-[11px] font-mono text-gray-300 hover:bg-gray-900/60 transition-colors"
+                                title="Continue active session"
+                                disabled={!activeConversationSessionId}
                             >
-                                <div className="flex items-center justify-between mb-1">
-                                    <span className="text-[9px] font-mono uppercase tracking-wider text-gray-500">{msg.role}</span>
-                                    <span className="text-[9px] font-mono text-gray-600">{msg.type || 'speech'}</span>
-                                </div>
-                                <div className="break-words opacity-90">
-                                    {String(msg.text || '').slice(0, 140)}{String(msg.text || '').length > 140 ? '…' : ''}
-                                </div>
-                            </div>
-                        ))}
-                        {conversation.length === 0 && (
-                            <div className="text-[11px] text-gray-600 italic">No messages yet.</div>
+                                CONTINUE
+                            </button>
+                            <button
+                                onClick={() => selectConversationSession(null)}
+                                className="px-3 py-2 rounded-lg border border-gray-700 bg-gray-900/30 text-[11px] font-mono text-gray-300 hover:bg-gray-900/60 transition-colors"
+                                title="Start new session thread"
+                            >
+                                NEW
+                            </button>
+                        </div>
+                    </div>
+
+                    <div className="flex-1 overflow-y-auto px-4 py-2 space-y-1.5 custom-scrollbar min-h-0 bg-[#050608]/20">
+                        {(() => {
+                            const sessions = (conversationSessions || []);
+                            const pinned = sessions.filter(s => pinnedSessions.includes(s.sessionId));
+                            const unpinned = sessions.filter(s => !pinnedSessions.includes(s.sessionId));
+                            const sorted = [...pinned, ...unpinned];
+
+                            return sorted.slice(0, 50).map((s) => {
+                                const isActive = activeConversationSessionId === s.sessionId;
+                                const isPinned = pinnedSessions.includes(s.sessionId);
+                                const label = s.preview || s.sessionId;
+                                const ts = Number.isFinite(s.lastTimestamp) ? new Date(s.lastTimestamp).toLocaleDateString() : '';
+                                return (
+                                    <div key={s.sessionId} className="group relative">
+                                        <button
+                                            onClick={() => selectConversationSession(s.sessionId)}
+                                            className={`w-full text-left rounded-lg border px-3 py-2.5 text-[11px] transition-all duration-300 ${isActive
+                                                ? 'border-cyan-500/40 bg-cyan-950/20 text-cyan-100 shadow-[0_4px_12px_rgba(34,211,238,0.05)] scale-[1.02] z-10'
+                                                : 'border-gray-800/60 bg-gray-900/10 text-gray-400 hover:border-gray-700 hover:bg-gray-800/30'
+                                                }`}
+                                            title={s.sessionId}
+                                        >
+                                            <div className="flex items-center justify-between gap-2 mb-1.5 pointer-events-none">
+                                                <span className="text-[9px] font-mono uppercase tracking-widest opacity-40">{ts || '—'}</span>
+                                                <div className="flex items-center gap-1.5">
+                                                    {isPinned && <Pin size={8} className="text-cyan-400 fill-cyan-400" />}
+                                                    <span className="text-[9px] font-mono text-gray-600 border border-gray-800/50 px-1 rounded">{s.messageCount}</span>
+                                                </div>
+                                            </div>
+                                            <div className="line-clamp-2 leading-snug font-medium opacity-90 group-hover:opacity-100 transition-opacity whitespace-pre-wrap break-all overflow-hidden truncate">
+                                                {String(label)}
+                                            </div>
+                                        </button>
+                                        <button
+                                            onClick={(e) => togglePin(e, s.sessionId)}
+                                            className={`absolute top-2 right-2 p-1 rounded transition-opacity duration-300 ${isPinned ? 'opacity-100 text-cyan-400' : 'opacity-0 group-hover:opacity-100 text-gray-500 hover:text-cyan-400'}`}
+                                            title={isPinned ? "Odepnij" : " przypnij"}
+                                        >
+                                            <Pin size={10} className={isPinned ? "fill-cyan-400/20" : ""} />
+                                        </button>
+                                    </div>
+                                );
+                            });
+                        })()}
+
+                        {(conversationSessions || []).length === 0 && (
+                            <div className="text-[10px] text-gray-600 italic text-center py-4 uppercase tracking-[0.2em] opacity-50">BRAK ARCHIWUM</div>
                         )}
+                    </div>
+
+                    {/* Last Conversation Preview */}
+                    <div className="h-[30%] shrink-0 border-t border-gray-800 flex flex-col min-h-0 bg-[#050608]/40">
+                        <div className="p-3 border-b border-gray-800/40 shrink-0">
+                            <div className="flex items-center justify-between">
+                                <div className="text-[10px] font-black tracking-[0.2em] text-gray-500 uppercase">Ostatnie wpisy</div>
+                                <div className="text-[9px] font-mono text-gray-600">{conversation.length}</div>
+                            </div>
+                        </div>
+                        <div className="flex-1 overflow-y-auto p-3 space-y-2 custom-scrollbar">
+                            {conversation.slice(-20).reverse().map((msg, idx) => (
+                                <div
+                                    key={`sidebar-${msg.role}-${idx}`}
+                                    className={`rounded-lg border px-3 py-2 text-[11px] leading-snug ${msg.role === 'user'
+                                        ? 'border-blue-900/30 bg-blue-900/10 text-blue-100'
+                                        : msg.type === 'thought'
+                                            ? 'border-gray-800 bg-gray-900/30 text-gray-400 italic'
+                                            : 'border-gray-800 bg-gray-900/20 text-gray-200'
+                                        }`}
+                                >
+                                    <div className="flex items-center justify-between mb-1">
+                                        <span className="text-[9px] font-mono uppercase tracking-wider text-gray-500">{msg.role}</span>
+                                        <span className="text-[9px] font-mono text-gray-600">{msg.type || 'speech'}</span>
+                                    </div>
+                                    <div className="break-words opacity-90">
+                                        {String(msg.text || '').slice(0, 140)}{String(msg.text || '').length > 140 ? '…' : ''}
+                                    </div>
+                                </div>
+                            ))}
+                            {conversation.length === 0 && (
+                                <div className="text-[11px] text-gray-600 italic text-center">No messages yet.</div>
+                            )}
+                        </div>
                     </div>
                 </div>
             </div>
@@ -1065,3 +1105,5 @@ export function CognitiveInterface() {
         </div>
     );
 }
+
+export default CognitiveInterface;
