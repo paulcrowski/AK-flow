@@ -32,6 +32,7 @@ import { SYSTEM_CONFIG } from '../core/config/systemConfig';
 import { isMemorySubEnabled } from '../core/config/featureFlags';
 import { getCurrentTraceId, getStartupTraceId } from '../core/trace/TraceContext';
 import { loadConversation, loadConversationForSession, syncToLocalStorage, mapTurnsToUiMessages } from '../core/memory/ConversationStore';
+import { KernelEngineRunner } from '../core/runner/KernelEngineRunner';
 
 // Deterministic RNG for reproducible behavior
 const rng = createRng(SYSTEM_CONFIG.rng.seed);
@@ -130,6 +131,11 @@ export const useCognitiveKernelLite = (loadedIdentity?: AgentIdentity | null) =>
   const pendingOutputs = usePendingOutputs();
   
   const actions = useCognitiveActions();
+
+  const actionsRef = useRef(actions);
+  useEffect(() => {
+    actionsRef.current = actions;
+  }, [actions]);
   
   // ─────────────────────────────────────────────────────────────────────────────
   // F1: ZUSTAND UI STATE (moved from useState)
@@ -150,25 +156,14 @@ export const useCognitiveKernelLite = (loadedIdentity?: AgentIdentity | null) =>
   // ─────────────────────────────────────────────────────────────────────────
   // REFS (mutable, no re-render)
   // ─────────────────────────────────────────────────────────────────────────
-  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const isLoopRunning = useRef(false);
   const hasBootedRef = useRef(false);
   const loadedIdentityRef = useRef(loadedIdentity);
   const sessionIdRef = useRef<string | null>(null);
-  const silenceStartRef = useRef(Date.now());
-  const lastSpeakRef = useRef(0);
-  const thoughtHistoryRef = useRef<string[]>([]);
-  const consecutiveAgentSpeechesRef = useRef(0);
-  const ticksSinceLastRewardRef = useRef(0);
   const lastVisualTimestampRef = useRef(0);
   const visualBingeCountRef = useRef(0);
   const toolStateRef = useRef<{ limbicState: any }>({ limbicState });
-  // STALE CLOSURE FIX: Refs for values used in tick loop
-  const conversationRef = useRef(conversation);
-  const isProcessingRef = useRef(isProcessing);
-  const inputQueueRef = useRef<{ clientMessageId: string; userInput: string; imageData?: string }[]>([]);
-  const drainingQueueRef = useRef(false);
-  const lastEnqueueRef = useRef<{ text: string; at: number } | null>(null);
+
+  const runnerRef = useRef<KernelEngineRunner<AgentIdentity> | null>(null);
 
   const upsertLocalSessionSummary = useCallback((sessionId: string, preview: string, timestamp: number) => {
     const prev = getCognitiveState().conversationSessions;
@@ -193,23 +188,12 @@ export const useCognitiveKernelLite = (loadedIdentity?: AgentIdentity | null) =>
     actions.setConversationSessions(next);
   }, [actions]);
   
-  // ─────────────────────────────────────────────────────────────────────────
-  // SYNC REFS (prevent stale closures in tick loop)
-  // ─────────────────────────────────────────────────────────────────────────
-  useEffect(() => {
-    conversationRef.current = conversation;
-  }, [conversation]);
-
   useEffect(() => {
     const agentId = loadedIdentityRef.current?.id;
     if (!agentId) return;
 
     syncToLocalStorage(agentId, conversation as any);
   }, [conversation]);
-  
-  useEffect(() => {
-    isProcessingRef.current = isProcessing;
-  }, [isProcessing]);
   
   useEffect(() => {
     toolStateRef.current = { limbicState };
@@ -237,7 +221,6 @@ export const useCognitiveKernelLite = (loadedIdentity?: AgentIdentity | null) =>
       addMessage: (role, text, type, imageData, sources) => {
         const msg = { role, text, type, ...(imageData ? { imageData } : {}), ...(sources ? { sources } : {}) };
         actions.addUiMessage(msg as any);
-        conversationRef.current = [...conversationRef.current, msg as any];
       },
       setSomaState,
       setLimbicState,
@@ -296,7 +279,6 @@ export const useCognitiveKernelLite = (loadedIdentity?: AgentIdentity | null) =>
 
         const mapped = mapTurnsToUiMessages(res.turns);
         actions.setUiConversation(mapped);
-        conversationRef.current = mapped;
       })();
     }
   }, [actions, agentPersona, loadedIdentity]);
@@ -318,7 +300,6 @@ export const useCognitiveKernelLite = (loadedIdentity?: AgentIdentity | null) =>
     // NEW session: start fresh UI thread immediately
     if (!sessionId) {
       actions.setUiConversation([]);
-      conversationRef.current = [];
       syncToLocalStorage(agentId, []);
     }
 
@@ -354,7 +335,6 @@ export const useCognitiveKernelLite = (loadedIdentity?: AgentIdentity | null) =>
       if (loadedIdentityRef.current?.id !== agentId) return;
 
       actions.setUiConversation(mapped);
-      conversationRef.current = mapped;
 
       eventBus.publish({
         id: generateUUID(),
@@ -433,6 +413,39 @@ export const useCognitiveKernelLite = (loadedIdentity?: AgentIdentity | null) =>
       priority: 0.2
     });
   }, [chemistryEnabled]);
+
+  if (!runnerRef.current) {
+    runnerRef.current = new KernelEngineRunner<AgentIdentity>({
+      actions: {
+        dispatch: (event) => actionsRef.current.dispatch(event as any),
+        tick: () => actionsRef.current.tick(),
+        setIsProcessing: (processing) => actionsRef.current.setIsProcessing(processing),
+        setCurrentThought: (thought) => actionsRef.current.setCurrentThought(thought),
+        addUiMessage: (message) => actionsRef.current.addUiMessage(message as any),
+        setUiConversation: (messages) => actionsRef.current.setUiConversation(messages as any),
+        processUserInput: (input) => actionsRef.current.processUserInput(input),
+        hydrate: (state) => actionsRef.current.hydrate(state as any),
+        updateSocialDynamics: (payload) => actionsRef.current.updateSocialDynamics(payload)
+      },
+      getState: () => getCognitiveState(),
+      generateUUID,
+      getCurrentTraceId: () => getCurrentTraceId(),
+      processOutputForTools,
+      archiveMessage: (msg, agentId, sessionId) => {
+        void archiveMessage(msg, agentId, sessionId);
+      },
+      upsertLocalSessionSummary,
+      publishEvent: (packet) => eventBus.publish(packet),
+      runEventLoopStep: (ctx, input, callbacks) => EventLoop.runSingleStep(ctx, input, callbacks),
+      getAutonomyConfig: () => getAutonomyConfig(),
+      computeTickIntervalMs: (energy) => MIN_TICK_MS + (MAX_TICK_MS - MIN_TICK_MS) * (1 - energy / 100),
+      getIdentity: () => loadedIdentityRef.current,
+      getAgentId: () => loadedIdentityRef.current?.id ?? null,
+      getSessionId: () => sessionIdRef.current,
+      logPhysiologySnapshot,
+      setSystemError: (e) => setSystemError(normalizeError(e))
+    });
+  }
   
   // ─────────────────────────────────────────────────────────────────────────
   // EVENTBUS SUBSCRIPTIONS
@@ -479,7 +492,6 @@ export const useCognitiveKernelLite = (loadedIdentity?: AgentIdentity | null) =>
     const agentId = loadedIdentityRef.current?.id;
     if (agentId) {
       actions.setUiConversation([]);
-      conversationRef.current = [];
       syncToLocalStorage(agentId, []);
     }
   }, [actions]);
@@ -563,371 +575,24 @@ export const useCognitiveKernelLite = (loadedIdentity?: AgentIdentity | null) =>
   }, [pendingOutputs]);
   
   // ─────────────────────────────────────────────────────────────────────────
-  // AUTONOMY LOOP
+  // ENGINE RUNTIME (autonomy loop lives outside React)
   // ─────────────────────────────────────────────────────────────────────────
   useEffect(() => {
-    if (!autonomousMode) {
-      if (timeoutRef.current) {
-        clearTimeout(timeoutRef.current);
-        timeoutRef.current = null;
-      }
-      isLoopRunning.current = false;
-      return;
-    }
-    
-    if (isLoopRunning.current) return;
-    isLoopRunning.current = true;
-    
-    const runTick = async () => {
-      if (!isLoopRunning.current) return;
+    const runner = runnerRef.current;
+    if (!runner) return;
 
-      try {
-        // Dispatch TICK to kernel
-        actions.tick();
+    if (autonomousMode) runner.startAutonomyLoop();
+    else runner.stopAutonomyLoop();
 
-        const state = getCognitiveState();
-
-        const energy = state.soma.energy;
-        const baseInterval = MIN_TICK_MS + (MAX_TICK_MS - MIN_TICK_MS) * (1 - energy / 100);
-        const autonomyCfg = getAutonomyConfig();
-        const silenceSec = (Date.now() - silenceStartRef.current) / 1000;
-
-        // Skip if sleeping or processing (use refs to avoid stale closures)
-        if (!state.soma.isSleeping && !isProcessingRef.current) {
-          // Homeostasis-only: avoid firing EventLoop/LLM until minimum silence window passes.
-          if (silenceSec < autonomyCfg.exploreMinSilenceSec) {
-            timeoutRef.current = setTimeout(runTick, Math.max(3000, baseInterval));
-            return;
-          }
-
-          // Build EventLoop context (use conversationRef to get latest conversation)
-          const ctx: EventLoop.LoopContext = {
-            soma: state.soma,
-            limbic: state.limbic,
-            neuro: state.neuro,
-            conversation: conversationRef.current.map(c => ({
-              role: c.role as 'user' | 'assistant',
-              text: c.text,
-              type: c.type
-            })),
-            autonomousMode: true,
-            lastSpeakTimestamp: lastSpeakRef.current,
-            silenceStart: silenceStartRef.current,
-            thoughtHistory: thoughtHistoryRef.current,
-            poeticMode: false,
-            autonomousLimitPerMinute: 3,
-            chemistryEnabled,
-            goalState,
-            traitVector,
-            consecutiveAgentSpeeches: consecutiveAgentSpeechesRef.current,
-            ticksSinceLastReward: ticksSinceLastRewardRef.current,
-            hadExternalRewardThisTick: false,
-            agentIdentity: loadedIdentityRef.current ? {
-              name: loadedIdentityRef.current.name,
-              persona: loadedIdentityRef.current.persona || '',
-              coreValues: loadedIdentityRef.current.core_values || [],
-              traitVector: loadedIdentityRef.current.trait_vector,
-              voiceStyle: loadedIdentityRef.current.voice_style || 'balanced',
-              language: loadedIdentityRef.current.language || 'English',
-              stylePrefs: loadedIdentityRef.current.style_prefs
-            } : undefined,
-            socialDynamics: state.socialDynamics,
-            userStylePrefs: loadedIdentityRef.current?.style_prefs || {}
-          };
-
-          // Run EventLoop for autonomous cognition
-          const nextCtx = await EventLoop.runSingleStep(ctx, null, {
-            onMessage: (role, text, type, meta) => {
-              if (role === 'assistant' && type === 'speech') {
-                void (async () => {
-                  const cleaned = await processOutputForTools(text);
-                  const msg = { role, text: cleaned, type, ...(meta?.knowledgeSource ? { knowledgeSource: meta.knowledgeSource } : {}) };
-                  actions.addUiMessage(msg as any);
-                  conversationRef.current = [...conversationRef.current, msg as any];
-                  consecutiveAgentSpeechesRef.current++;
-
-                  eventBus.publish({
-                    id: generateUUID(),
-                    timestamp: Date.now(),
-                    source: AgentType.CORTEX_FLOW,
-                    type: PacketType.THOUGHT_CANDIDATE,
-                    payload: {
-                      event: 'AUTONOMOUS_SPOKE',
-                      speech_content: cleaned,
-                      agentName: loadedIdentityRef.current?.name || 'Unknown'
-                    },
-                    priority: 0.9
-                  });
-
-                  actions.updateSocialDynamics({ agentSpoke: true });
-                  logPhysiologySnapshot('AUTONOMOUS_RESPONSE');
-                })().catch((e) => {
-                  console.warn('[KernelLite] Tool processing failed:', e);
-                  const fallbackMsg = { role, text, type };
-                  actions.addUiMessage(fallbackMsg as any);
-                  conversationRef.current = [...conversationRef.current, fallbackMsg as any];
-                });
-              } else if (role === 'assistant' && type === 'thought') {
-                actions.setCurrentThought(text);
-              }
-            },
-            onThought: (thought) => {
-              actions.setCurrentThought(thought);
-            },
-            onSomaUpdate: (soma) => actions.hydrate({ soma }),
-            onLimbicUpdate: (limbic) => actions.hydrate({ limbic })
-          });
-
-          // Sync context back
-          silenceStartRef.current = nextCtx.silenceStart;
-          ticksSinceLastRewardRef.current = nextCtx.ticksSinceLastReward;
-        }
-
-        timeoutRef.current = setTimeout(runTick, baseInterval);
-      } catch (error) {
-        console.error('[KernelLite] Tick error:', error);
-        setSystemError(normalizeError(error));
-      }
-    };
-    
-    runTick();
-    
     return () => {
-      if (timeoutRef.current) {
-        clearTimeout(timeoutRef.current);
-        timeoutRef.current = null;
-      }
-      isLoopRunning.current = false;
+      runner.stopAutonomyLoop();
     };
-  }, [autonomousMode, actions]);
-
-  const processSingleInput = useCallback(async (clientMessageId: string, userInput: string, imageData?: string) => {
-    silenceStartRef.current = Date.now();
-
-    const processedUserInput = await processOutputForTools(userInput);
-
-    // Update conversation with processed input
-    const prev = getCognitiveState().uiConversation;
-    const idx = prev.findIndex((m) => m?.id === clientMessageId);
-    let nextConv;
-    if (idx !== -1) {
-      const updated = {
-        ...prev[idx],
-        role: 'user',
-        text: processedUserInput,
-        ...(imageData ? { imageData } : {})
-      };
-      nextConv = [...prev.slice(0, idx), updated, ...prev.slice(idx + 1)];
-    } else {
-      nextConv = [...prev, {
-        id: clientMessageId,
-        role: 'user',
-        text: processedUserInput,
-        ...(imageData ? { imageData } : {})
-      }];
-    }
-    actions.setUiConversation(nextConv as any);
-    conversationRef.current = nextConv as any;
-
-    const agentId = loadedIdentityRef.current?.id;
-    const sessId = sessionIdRef.current;
-    if (agentId && sessId) {
-      const nowTs = Date.now();
-      void archiveMessage(
-        {
-          id: clientMessageId,
-          role: 'user',
-          content: processedUserInput,
-          timestamp: nowTs,
-          metadata: { hasImage: !!imageData }
-        },
-        agentId,
-        sessId
-      );
-
-      upsertLocalSessionSummary(sessId, processedUserInput, nowTs);
-    }
-
-    eventBus.publish({
-      id: generateUUID(),
-      timestamp: Date.now(),
-      source: AgentType.CORTEX_FLOW,
-      type: PacketType.THOUGHT_CANDIDATE,
-      payload: {
-        event: 'USER_INPUT',
-        text: processedUserInput,
-        hasImage: !!imageData
-      },
-      priority: 0.8
-    });
-
-    actions.processUserInput(processedUserInput);
-
-    const state = getCognitiveState();
-    const beforeConversation = conversationRef.current;
-    const ctx: EventLoop.LoopContext = {
-      soma: state.soma,
-      limbic: state.limbic,
-      neuro: state.neuro,
-      conversation: [
-        ...beforeConversation.map(c => ({
-          role: c.role as 'user' | 'assistant',
-          text: c.text,
-          type: c.type
-        })),
-        { role: 'user', text: processedUserInput }
-      ],
-      autonomousMode: false,
-      lastSpeakTimestamp: state.lastSpeakTimestamp,
-      silenceStart: state.silenceStart,
-      thoughtHistory: thoughtHistoryRef.current,
-      poeticMode: state.poeticMode,
-      autonomousLimitPerMinute: 3,
-      chemistryEnabled: state.chemistryEnabled,
-      goalState: state.goalState,
-      traitVector: state.traitVector,
-      consecutiveAgentSpeeches: state.consecutiveAgentSpeeches,
-      ticksSinceLastReward: state.ticksSinceLastReward,
-      hadExternalRewardThisTick: false,
-      agentIdentity: loadedIdentityRef.current ? {
-        name: loadedIdentityRef.current.name,
-        persona: loadedIdentityRef.current.persona || '',
-        coreValues: loadedIdentityRef.current.core_values || [],
-        traitVector: loadedIdentityRef.current.trait_vector,
-        voiceStyle: loadedIdentityRef.current.voice_style || 'balanced',
-        language: loadedIdentityRef.current.language || 'English',
-        stylePrefs: loadedIdentityRef.current.style_prefs
-      } : undefined,
-      socialDynamics: state.socialDynamics,
-      userStylePrefs: loadedIdentityRef.current?.style_prefs || {}
-    };
-
-    const nextCtx = await EventLoop.runSingleStep(ctx, processedUserInput, {
-      onMessage: (role, text, type, meta) => {
-        if (role === 'assistant' && type === 'speech') {
-          const tickTraceId = getCurrentTraceId() ?? undefined;
-          void (async () => {
-            const cleaned = await processOutputForTools(text);
-            const speechMsg = {
-              role,
-              text: cleaned,
-              type,
-              ...(meta?.knowledgeSource ? { knowledgeSource: meta.knowledgeSource } : {}),
-              ...(meta?.evidenceSource ? { evidenceSource: meta.evidenceSource } : {}),
-              ...(meta?.evidenceDetail ? { evidenceDetail: meta.evidenceDetail } : {}),
-              ...(meta?.generator ? { generator: meta.generator } : {})
-            };
-            actions.addUiMessage(speechMsg as any);
-            conversationRef.current = [...conversationRef.current, speechMsg as any];
-
-            const agentId = loadedIdentityRef.current?.id;
-            const sessId = sessionIdRef.current;
-            if (agentId && sessId) {
-              const nowTs = Date.now();
-              void archiveMessage(
-                {
-                  id: generateUUID(),
-                  role: 'assistant',
-                  content: cleaned,
-                  timestamp: nowTs,
-                  metadata: {
-                    traceId: tickTraceId,
-                    ...(meta?.knowledgeSource ? { knowledgeSource: meta.knowledgeSource } : {}),
-                    ...(meta?.evidenceSource ? { evidenceSource: meta.evidenceSource } : {}),
-                    ...(meta?.evidenceDetail ? { evidenceDetail: meta.evidenceDetail } : {}),
-                    ...(meta?.generator ? { generator: meta.generator } : {})
-                  }
-                },
-                agentId,
-                sessId
-              );
-
-              upsertLocalSessionSummary(sessId, cleaned, nowTs);
-            }
-
-            eventBus.publish({
-              id: generateUUID(),
-              traceId: tickTraceId,
-              timestamp: Date.now(),
-              source: AgentType.CORTEX_FLOW,
-              type: PacketType.THOUGHT_CANDIDATE,
-              payload: {
-                event: 'AGENT_SPOKE',
-                speech_content: cleaned,
-                agentName: loadedIdentityRef.current?.name || 'Unknown'
-              },
-              priority: 0.9
-            });
-
-            logPhysiologySnapshot('POST_RESPONSE');
-            actions.setCurrentThought(text.slice(0, 100) + '...');
-          })().catch((e) => {
-            console.warn('[KernelLite] Tool processing failed:', e);
-            const errMsg = { role, text, type };
-            actions.addUiMessage(errMsg as any);
-            conversationRef.current = [...conversationRef.current, errMsg as any];
-          });
-        } else if (role === 'assistant' && type === 'thought') {
-          actions.setCurrentThought(text);
-        }
-      },
-      onThought: (thought) => {
-        actions.setCurrentThought(thought);
-      },
-      onSomaUpdate: (soma) => actions.hydrate({ soma }),
-      onLimbicUpdate: (limbic) => actions.hydrate({ limbic })
-    });
-
-    silenceStartRef.current = nextCtx.silenceStart;
-  }, [actions, processOutputForTools, upsertLocalSessionSummary, logPhysiologySnapshot]);
-
-  const drainInputQueue = useCallback(async () => {
-    if (drainingQueueRef.current) return;
-    drainingQueueRef.current = true;
-    actions.setIsProcessing(true);
-    setSystemError(null);
-
-    try {
-      while (inputQueueRef.current.length > 0) {
-        const next = inputQueueRef.current.shift();
-        if (!next) break;
-        await processSingleInput(next.clientMessageId, next.userInput, next.imageData);
-      }
-    } catch (error) {
-      inputQueueRef.current = [];
-      console.error('[KernelLite] Input error:', error);
-      setSystemError(normalizeError(error));
-    } finally {
-      actions.setIsProcessing(false);
-      drainingQueueRef.current = false;
-    }
-  }, [actions, processSingleInput]);
+  }, [autonomousMode]);
 
   const handleInput = useCallback(async (userInput: string, imageData?: string) => {
-    const trimmed = (userInput || '').trim();
-    if (!trimmed) return;
-
-    const now = Date.now();
-    const last = lastEnqueueRef.current;
-    if (last && last.text === trimmed && (now - last.at) < 600) {
-      return;
-    }
-    lastEnqueueRef.current = { text: trimmed, at: now };
-
-    const clientMessageId = generateUUID();
-
-    const inputMsg = {
-      id: clientMessageId,
-      role: 'user',
-      text: trimmed,
-      ...(imageData ? { imageData } : {})
-    };
-    actions.addUiMessage(inputMsg as any);
-    conversationRef.current = [...conversationRef.current, inputMsg as any];
-
-    inputQueueRef.current.push({ clientMessageId, userInput: trimmed, imageData });
-    void drainInputQueue();
-  }, [drainInputQueue]);
+    setSystemError(null);
+    runnerRef.current?.enqueueUserInput(userInput, imageData);
+  }, []);
   
   const retryLastAction = useCallback(() => {
     setSystemError(null);
