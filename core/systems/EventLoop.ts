@@ -22,7 +22,7 @@ import { createMemorySpace } from './MemorySpace';
 import { TickCommitter } from './TickCommitter';
 import { publishTickStart, publishTickSkipped, publishThinkModeSelected, publishTickEnd } from './TickLifecycleTelemetry';
 import { isMainFeatureEnabled } from '../config/featureFlags';
-import { ThinkModeSelector, createAutonomyBudgetTracker, createTickTraceScope, runAutonomousVolitionStep } from './eventloop/index';
+import { ThinkModeSelector, createAutonomyBudgetTracker, createTickTraceScope, runAutonomousVolitionStep, runReactiveStep, runGoalDrivenStep } from './eventloop/index';
 
 export namespace EventLoop {
     export type ThinkMode = 'reactive' | 'goal_driven' | 'autonomous' | 'idle';
@@ -128,107 +128,13 @@ export namespace EventLoop {
 
         // 2. Process User Input (if any)
         if (input) {
-            // RACE CONDITION GUARD: Mark that user input arrived to block stale autonomous commits
-            TickCommitter.markUserInput();
-            
-            const prefetchedMemories = isMainFeatureEnabled('ONE_MIND_ENABLED')
-                ? await memorySpace.hot.semanticSearch(input)
-                : undefined;
-
-            const result = await CortexSystem.processUserMessage({
-                text: input,
-                currentLimbic: ctx.limbic,
-                currentSoma: ctx.soma,
-                conversationHistory: ctx.conversation,
-                // FAZA 5: Pass identity context
-                identity: ctx.agentIdentity,
-                sessionOverlay: ctx.sessionOverlay,
-                memorySpace,
-                prefetchedMemories
+            await runReactiveStep({
+                ctx: ctx as any,
+                userInput: input,
+                callbacks,
+                memorySpace: memorySpace as any,
+                trace: trace as any
             });
-
-            // SEMANTIC INTENT DETECTION (Bonus 11/10)
-            // Replaces old keyword matching with cognitive understanding
-            const intent = await CortexService.detectIntent(input);
-
-            // Apply Style Preference
-            if (intent.style === 'POETIC') {
-                ctx.poeticMode = true;
-                console.log("Intent Detected: POETIC MODE ENABLED");
-            } else if (intent.style === 'SIMPLE') {
-                ctx.poeticMode = false;
-                console.log("Intent Detected: POETIC MODE DISABLED (Simple Style Requested)");
-            } else if (intent.style === 'ACADEMIC') {
-                ctx.poeticMode = false; // Academic is not poetic, it's precise
-                // TODO: Add academicMode flag in future
-            }
-
-            // Log Cognitive Metric
-            // We don't have access to eventBus here directly without import, 
-            // but we can log to console or rely on the CortexService logs if enabled.
-            // For now, we trust the context update.
-
-            // Update Context
-            if (result.moodShift) {
-                ctx.limbic = LimbicSystem.applyMoodShift(ctx.limbic, result.moodShift);
-                callbacks.onLimbicUpdate(ctx.limbic);
-            }
-
-            // Callback to UI
-            if (result.internalThought) {
-                callbacks.onMessage('assistant', result.internalThought, 'thought');
-            }
-
-            if (isMainFeatureEnabled('ONE_MIND_ENABLED') && trace.agentId) {
-                try {
-                    const commit = TickCommitter.commitSpeech({
-                        agentId: trace.agentId,
-                        traceId: trace.traceId,
-                        tickNumber: trace.tickNumber,
-                        origin: 'reactive',
-                        speechText: result.responseText
-                    });
-
-                    if (commit.committed) {
-                        callbacks.onMessage('assistant', result.responseText, 'speech', {
-                            knowledgeSource: result.knowledgeSource,
-                            evidenceSource: result.evidenceSource,
-                            evidenceDetail: result.evidenceDetail,
-                            generator: result.generator
-                        });
-                    } else {
-                        callbacks.onThought(`[REACTIVE_SUPPRESSED] ${commit.blockReason || 'UNKNOWN'}`);
-                    }
-                } catch (e) {
-                    // FAIL-OPEN: reactive user response should never be silenced due to committer errors
-                    callbacks.onThought(`[REACTIVE_COMMIT_ERROR] ${(e as Error)?.message || 'unknown'}`);
-                    callbacks.onMessage('assistant', result.responseText, 'speech', {
-                        knowledgeSource: result.knowledgeSource,
-                        evidenceSource: result.evidenceSource,
-                        evidenceDetail: result.evidenceDetail,
-                        generator: result.generator
-                    });
-                }
-            } else {
-                callbacks.onMessage('assistant', result.responseText, 'speech', {
-                    knowledgeSource: result.knowledgeSource,
-                    evidenceSource: result.evidenceSource,
-                    evidenceDetail: result.evidenceDetail,
-                    generator: result.generator
-                });
-            }
-
-            // Reset silence & mark user interaction for GoalSystem
-            ctx.silenceStart = Date.now();
-            ctx.lastSpeakTimestamp = Date.now();
-            ctx.goalState.lastUserInteractionAt = Date.now();
-            
-            // FAZA 4.5: Reset consecutive agent speeches counter (user spoke!)
-            ctx.consecutiveAgentSpeeches = 0;
-            
-            // FAZA 5.1: User input = EXTERNAL REWARD (world responded!)
-            ctx.hadExternalRewardThisTick = true;
-            ctx.ticksSinceLastReward = 0;
         }
 
         // 3. Autonomous Volition (only if autonomousMode is ON)
@@ -295,95 +201,13 @@ export namespace EventLoop {
 
             // 3B. GOAL EXECUTION (single-shot) - via ExecutiveGate
             if (ctx.goalState.activeGoal) {
-                const goal: Goal = ctx.goalState.activeGoal;
-                const result = await CortexSystem.pursueGoal(goal, {
-                    limbic: ctx.limbic,
-                    soma: ctx.soma,
-                    conversation: ctx.conversation,
-                    traitVector: ctx.traitVector,
-                    neuroState: ctx.neuro,
-                    // FAZA 5: Pass identity context
-                    identity: ctx.agentIdentity,
-                    sessionOverlay: ctx.sessionOverlay
+                await runGoalDrivenStep({
+                    ctx: ctx as any,
+                    goal: ctx.goalState.activeGoal as any,
+                    callbacks,
+                    gateContext,
+                    trace: trace as any
                 });
-
-                // Create goal-driven candidate
-                const goalCandidate = ExecutiveGate.createGoalCandidate(
-                    result.responseText,
-                    result.internalThought || '',
-                    goal.id,
-                    { source: goal.source, salience: goal.priority }
-                );
-                
-                // ExecutiveGate decides for goal-driven speech
-                const goalGateDecision = ExecutiveGate.decide([goalCandidate], gateContext);
-                
-                // HEMISPHERE LOG: Goal-driven thought origin tracking
-                eventBus.publish({
-                    id: `thought-goal-${Date.now()}`,
-                    timestamp: Date.now(),
-                    source: AgentType.CORTEX_FLOW,
-                    type: PacketType.THOUGHT_CANDIDATE,
-                    payload: {
-                        hemisphere: 'goal_driven',
-                        goal_id: goal.id,
-                        internal_monologue: result.internalThought || '',
-                        status: 'THINKING'
-                    },
-                    priority: 0.5
-                });
-                
-                if (result.internalThought) {
-                    callbacks.onMessage('assistant', result.internalThought, 'thought');
-                }
-
-                if (goalGateDecision.should_speak && goalGateDecision.winner) {
-                    const speechText = goalGateDecision.winner.speech_content;
-
-                    const commit = isMainFeatureEnabled('ONE_MIND_ENABLED')
-                        ? TickCommitter.commitSpeech({
-                            agentId: trace.agentId!,
-                            traceId: trace.traceId,
-                            tickNumber: trace.tickNumber,
-                            origin: 'goal_driven',
-                            speechText
-                        })
-                        : { committed: true, blocked: false, deduped: false };
-
-                    if (commit.committed) {
-                        callbacks.onMessage('assistant', speechText, 'speech', {
-                            knowledgeSource: result.knowledgeSource,
-                            evidenceSource: result.evidenceSource,
-                            generator: result.generator
-                        });
-                    }
-                } else {
-                    // Goal speech suppressed - log it
-                    callbacks.onThought(`[GOAL SUPPRESSED] ${result.responseText?.slice(0, 50)}...`);
-                }
-
-                const executedAt = Date.now();
-
-                eventBus.publish({
-                    id: `goal-executed-${executedAt}`,
-                    timestamp: executedAt,
-                    source: AgentType.CORTEX_FLOW,
-                    type: PacketType.SYSTEM_ALERT,
-                    payload: {
-                        event: 'GOAL_EXECUTED',
-                        goal: {
-                            id: goal.id,
-                            source: goal.source,
-                            description: goal.description,
-                            priority: goal.priority
-                        }
-                    },
-                    priority: 0.7
-                });
-
-                ctx.goalState.activeGoal = null;
-                ctx.lastSpeakTimestamp = executedAt;
-                ctx.silenceStart = executedAt;
 
                 // After executing a goal, skip regular autonomous volition in this tick
                 return ctx;
