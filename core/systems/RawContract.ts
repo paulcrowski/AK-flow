@@ -1,3 +1,5 @@
+import { parseJsonFromLLM } from '../../utils/AIResponseParser';
+
 export type RawContractFailureReason =
     | 'EMPTY_RESPONSE'
     | 'NO_JSON_OBJECT'
@@ -22,117 +24,6 @@ function sanitizeText(input: string, maxLen: number): string {
     return input
         .slice(0, maxLen)
         .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, '');
-}
-
-function extractJSONObject(input: string): string | null {
-    const start = input.indexOf('{');
-    if (start === -1) return null;
-
-    let inString = false;
-    let escape = false;
-    let depth = 0;
-
-    for (let i = start; i < input.length; i++) {
-        const ch = input[i];
-
-        if (inString) {
-            if (escape) {
-                escape = false;
-                continue;
-            }
-            if (ch === '\\') {
-                escape = true;
-                continue;
-            }
-            if (ch === '"') {
-                inString = false;
-            }
-            continue;
-        }
-
-        if (ch === '"') {
-            inString = true;
-            continue;
-        }
-
-        if (ch === '{') depth++;
-        if (ch === '}') {
-            depth--;
-            if (depth === 0) return input.slice(start, i + 1);
-        }
-    }
-
-    return null;
-}
-
-/**
- * Attempt to repair common JSON errors from LLM output:
- * - Unquoted property names
- * - Single quotes instead of double quotes
- * - Trailing commas
- */
-function repairJSON(input: string): string {
-    let result = input;
-
-    // Normalize smart quotes from some model outputs
-    result = result.replace(/[“”]/g, '"').replace(/[‘’]/g, "'");
-
-    // Escape newlines inside strings (common LLM JSON failure)
-    {
-        let out = '';
-        let inString = false;
-        let escape = false;
-        for (let i = 0; i < result.length; i++) {
-            const ch = result[i];
-            if (inString) {
-                if (escape) {
-                    out += ch;
-                    escape = false;
-                    continue;
-                }
-                if (ch === '\\') {
-                    out += ch;
-                    escape = true;
-                    continue;
-                }
-                if (ch === '"') {
-                    out += ch;
-                    inString = false;
-                    continue;
-                }
-                if (ch === '\n') {
-                    out += '\\n';
-                    continue;
-                }
-                if (ch === '\r') {
-                    out += '\\r';
-                    continue;
-                }
-                out += ch;
-                continue;
-            }
-
-            if (ch === '"') {
-                out += ch;
-                inString = true;
-                continue;
-            }
-
-            out += ch;
-        }
-        result = out;
-    }
-
-    // Replace single quotes with double quotes (but not inside strings)
-    result = result.replace(/'/g, '"');
-
-    // Fix unquoted property names: { foo: "bar" } → { "foo": "bar" }
-    result = result.replace(/([{,]\s*)([a-zA-Z_][a-zA-Z0-9_]*)\s*:/g, '$1"$2":');
-
-    // Remove trailing commas before } or ]
-    result = result.replace(/,(\s*[}\]])/g, '$1');
-
-    return result;
 }
 
 function clampString(input: unknown, maxLen: number): string {
@@ -202,29 +93,23 @@ export function applyAutonomyV2RawContract(
     }
 
     const sanitized = sanitizeText(rawText, maxRawLen);
-    const jsonObj = extractJSONObject(sanitized);
-    if (!jsonObj) {
-        return { ok: false, value: silent, reason: 'NO_JSON_OBJECT' };
+    const parsedResult = parseJsonFromLLM<any>(sanitized, { allowRepair: true, requireJsonBlock: true });
+    if (!parsedResult.ok) {
+        if (parsedResult.reason === 'NO_JSON') {
+            return { ok: false, value: silent, reason: 'NO_JSON_OBJECT' };
+        }
+        if (parsedResult.reason === 'EMPTY') {
+            return { ok: false, value: silent, reason: 'EMPTY_RESPONSE' };
+        }
+        return {
+            ok: false,
+            value: silent,
+            reason: 'JSON_PARSE_ERROR',
+            details: parsedResult.error || parsedResult.reason
+        };
     }
 
-    let parsed: any;
-    try {
-        parsed = JSON.parse(jsonObj);
-    } catch (e) {
-        // Try to repair common JSON errors and parse again
-        try {
-            const repaired = repairJSON(jsonObj);
-            parsed = JSON.parse(repaired);
-            console.log('[RawContract] JSON repaired successfully');
-        } catch (e2) {
-            return {
-                ok: false,
-                value: silent,
-                reason: 'JSON_PARSE_ERROR',
-                details: e instanceof Error ? e.message : String(e)
-            };
-        }
-    }
+    const parsed: any = parsedResult.value;
 
     if (!parsed || typeof parsed !== 'object') {
         return { ok: false, value: silent, reason: 'VALIDATION_FAILED' };

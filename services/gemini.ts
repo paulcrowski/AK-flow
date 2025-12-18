@@ -11,6 +11,7 @@ import { guardLegacyWithFactEcho, isFactEchoPipelineEnabled } from "../core/syst
 import { UnifiedContextBuilder, type UnifiedContext, type ContextBuilderInput } from "../core/context";
 import { applyAutonomyV2RawContract } from "../core/systems/RawContract";
 import { parseDetectedIntent } from "../core/systems/IntentContract";
+import { parseJsonFromLLM } from "../utils/AIResponseParser";
 
 // 1. Safe Environment Access & Initialization (Vite)
 const apiKey = import.meta.env.VITE_GEMINI_API_KEY as string | undefined;
@@ -52,44 +53,27 @@ const parseJSONStrict = <T>(text: string | undefined, validator?: (data: any) =>
     }
     
     try {
-        let parsed: any;
-
         const sanitizedText = text
             .slice(0, 20000)
             .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, '');
-        
-        // Pre-clean: Remove common LLM prefixes
-        let cleaned = sanitizedText.replace(/^[\s\S]*?(?=\{)/m, '').trim();
-        if (!cleaned.startsWith('{')) {
-            cleaned = sanitizedText;
+
+        const parsedResult = parseJsonFromLLM<T>(sanitizedText, {
+            allowRepair: true,
+            validator: validator as any,
+            requireJsonBlock: false
+        });
+
+        if (parsedResult.ok && parsedResult.value && isValidResponse<T>(parsedResult.value, validator)) {
+            return { success: true, data: parsedResult.value };
         }
-        
-        // Strategy 1: Direct parse
-        try {
-            parsed = JSON.parse(cleaned);
-        } catch {
-            // Strategy 2: Extract JSON block
-            const match = sanitizedText.match(/\{[\s\S]*\}/);
-            if (match) {
-                parsed = JSON.parse(match[0]);
-            } else {
-                // Strategy 3: Aggressive cleanup
-                const clean = sanitizedText.replace(/```json\n?/g, '').replace(/```/g, '').trim();
-                parsed = JSON.parse(clean);
-            }
-        }
-        
-        if (isValidResponse<T>(parsed, validator)) {
-            return { success: true, data: parsed };
-        } else {
-            return { success: false, data: null, error: 'VALIDATION_FAILED', rawText: text.substring(0, 200) };
-        }
+
+        return { success: false, data: null, error: parsedResult.error || 'PARSE_ERROR', rawText: text.substring(0, 200) };
     } catch (e) {
-        return { 
-            success: false, 
-            data: null, 
-            error: (e as Error).message, 
-            rawText: text.substring(0, 200) 
+        return {
+            success: false,
+            data: null,
+            error: (e as Error).message,
+            rawText: text.substring(0, 200)
         };
     }
 };
@@ -102,52 +86,22 @@ const cleanJSON = <T>(
 ): T => {
     if (!text) return defaultVal;
     try {
-        let parsed: any;
-        
-        // 0. Fast-path: If model emitted a prefixed explanation ("Here is...")
-        // cut everything before the first '{' or '['.
-        const trimmed = text.trim();
-        let cleaned = trimmed;
+        const parsedResult = parseJsonFromLLM<T>(text, {
+            allowRepair: true,
+            validator: validator as any,
+            requireJsonBlock: false
+        });
 
-        const firstObj = trimmed.indexOf('{');
-        const firstArr = trimmed.indexOf('[');
-        const firstJsonIdx =
-            firstObj === -1 ? firstArr :
-            firstArr === -1 ? firstObj :
-            Math.min(firstObj, firstArr);
-
-        if (firstJsonIdx > 0) {
-            cleaned = trimmed.slice(firstJsonIdx).trim();
+        if (parsedResult.ok && parsedResult.value && isValidResponse<T>(parsedResult.value, validator)) {
+            return parsedResult.value;
         }
 
-        // Fail-fast: if we still don't start with JSON, do not try to be clever.
-        // This prevents repeatedly parsing "Here is" and similar non-JSON junk.
-        if (!cleaned.startsWith('{') && !cleaned.startsWith('[')) {
-            throw new Error('Non-JSON output (missing {/[ prefix)');
-        }
-        
-        // 1. Try direct parse first
-        try {
-            parsed = JSON.parse(cleaned);
-        } catch (e) {
-            // 2. Extract JSON block using regex
-            const match = text.match(/\{[\s\S]*\}|\[[\s\S]*\]/);
-            if (match) {
-                parsed = JSON.parse(match[0]);
-            } else {
-                // 3. Last resort: aggressive cleanup
-                let clean = text.replace(/```json\n?/g, '').replace(/```/g, '').trim();
-                parsed = JSON.parse(clean);
-            }
+        if (!parsedResult.ok) {
+            throw new Error(parsedResult.error || 'PARSE_ERROR');
         }
 
-        // 4. Validate Type
-        if (isValidResponse<T>(parsed, validator)) {
-            return parsed;
-        } else {
-            console.warn("JSON Parsed but failed validation. Using default.");
-            return defaultVal;
-        }
+        console.warn("JSON Parsed but failed validation. Using default.");
+        return defaultVal;
 
     } catch (e2) {
         const hasBrace = text?.includes('{') ?? false;

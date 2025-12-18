@@ -183,10 +183,209 @@ export function extractSummary(text: string, maxLength: number = 500): string {
     return firstParagraph.slice(0, maxLength);
 }
 
+export type LLMJsonParseFailureReason = 'EMPTY' | 'NO_JSON' | 'PARSE_ERROR';
+
+export interface LLMJsonParseOptions<T> {
+    validator?: (data: unknown) => data is T;
+    allowRepair?: boolean;
+    requireJsonBlock?: boolean;
+}
+
+export interface LLMJsonParseResult<T> {
+    ok: boolean;
+    value?: T;
+    reason?: LLMJsonParseFailureReason;
+    repaired?: boolean;
+    extracted?: string;
+    error?: string;
+}
+
+function extractCodeFenceBlocks(text: string): string[] {
+    const blocks: string[] = [];
+    const re = /```(?:json)?\s*([\s\S]*?)```/gi;
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(text))) {
+        const inner = (m[1] || '').trim();
+        if (inner) blocks.push(inner);
+        if (blocks.length >= 3) break;
+    }
+    return blocks;
+}
+
+function extractBalancedFrom(text: string, start: number): string | null {
+    const open = text[start];
+    const close = open === '{' ? '}' : open === '[' ? ']' : null;
+    if (!close) return null;
+
+    let inString = false;
+    let stringChar: '"' | '\'' | '' = '';
+    let escape = false;
+    let depth = 0;
+
+    for (let i = start; i < text.length; i++) {
+        const ch = text[i];
+        if (inString) {
+            if (escape) {
+                escape = false;
+                continue;
+            }
+            if (ch === '\\') {
+                escape = true;
+                continue;
+            }
+            if (ch === stringChar) {
+                inString = false;
+                stringChar = '';
+            }
+            continue;
+        }
+
+        if (ch === '"' || ch === "'") {
+            inString = true;
+            stringChar = ch as '"' | '\'';
+            continue;
+        }
+
+        if (ch === open) depth++;
+        if (ch === close) {
+            depth--;
+            if (depth === 0) return text.slice(start, i + 1);
+        }
+    }
+
+    return null;
+}
+
+export function extractJsonBlock(text: string): string | null {
+    const raw = String(text || '').trim();
+    if (!raw) return null;
+
+    const fenced = extractCodeFenceBlocks(raw);
+    if (fenced.length > 0) return fenced[0];
+
+    const objStart = raw.indexOf('{');
+    const arrStart = raw.indexOf('[');
+    const start = objStart === -1 ? arrStart : arrStart === -1 ? objStart : Math.min(objStart, arrStart);
+    if (start === -1) return null;
+
+    const balanced = extractBalancedFrom(raw, start);
+    return balanced;
+}
+
+export function repairJsonMinimal(input: string): string {
+    let normalized = String(input || '');
+    normalized = normalized.replace(/[“”]/g, '"').replace(/[‘’]/g, "'");
+
+    let out = '';
+    let inString = false;
+    let stringChar: '"' | '\'' | '' = '';
+    let escape = false;
+
+    for (let i = 0; i < normalized.length; i++) {
+        const ch = normalized[i];
+
+        if (inString) {
+            if (escape) {
+                out += ch;
+                escape = false;
+                continue;
+            }
+            if (ch === '\\') {
+                out += ch;
+                escape = true;
+                continue;
+            }
+            if (ch === stringChar) {
+                out += '"';
+                inString = false;
+                stringChar = '';
+                continue;
+            }
+            if (ch === '\n') {
+                out += '\\n';
+                continue;
+            }
+            if (ch === '\r') {
+                out += '\\r';
+                continue;
+            }
+            out += ch;
+            continue;
+        }
+
+        if (ch === '"' || ch === "'") {
+            inString = true;
+            stringChar = ch as '"' | '\'';
+            out += '"';
+            continue;
+        }
+
+        out += ch;
+    }
+
+    out = out.replace(/([{,]\s*)([a-zA-Z_][a-zA-Z0-9_]*)\s*:/g, '$1"$2":');
+    out = out.replace(/,(\s*[}\]])/g, '$1');
+    return out;
+}
+
+export function parseJsonFromLLM<T>(
+    text: string | undefined,
+    options: LLMJsonParseOptions<T> = {}
+): LLMJsonParseResult<T> {
+    const raw = String(text || '').trim();
+    if (!raw) return { ok: false, reason: 'EMPTY' };
+
+    const candidates: string[] = [];
+
+    if (!options.requireJsonBlock && (raw.startsWith('{') || raw.startsWith('['))) {
+        candidates.push(raw);
+    }
+
+    const fenced = extractCodeFenceBlocks(raw);
+    for (const b of fenced) candidates.push(b);
+
+    const block = extractJsonBlock(raw);
+    if (block) candidates.push(block);
+
+    const uniq = Array.from(new Set(candidates.map((c) => c.trim()).filter(Boolean)));
+    if (uniq.length === 0) return { ok: false, reason: 'NO_JSON' };
+
+    let lastErr: unknown = null;
+
+    for (const c of uniq) {
+        try {
+            const parsed = JSON.parse(c);
+            if (options.validator && !options.validator(parsed)) continue;
+            return { ok: true, value: parsed as T, repaired: false, extracted: c };
+        } catch (e) {
+            lastErr = e;
+        }
+    }
+
+    if (options.allowRepair) {
+        for (const c of uniq) {
+            const repaired = repairJsonMinimal(c);
+            try {
+                const parsed = JSON.parse(repaired);
+                if (options.validator && !options.validator(parsed)) continue;
+                return { ok: true, value: parsed as T, repaired: true, extracted: c };
+            } catch (e) {
+                lastErr = e;
+            }
+        }
+    }
+
+    const error = lastErr instanceof Error ? lastErr.message : lastErr ? String(lastErr) : undefined;
+    return { ok: false, reason: 'PARSE_ERROR', error };
+}
+
 export default {
     extractJSON,
     safeParseJSON,
     extractFields,
     parseAIResponse,
-    extractSummary
+    extractSummary,
+    extractJsonBlock,
+    repairJsonMinimal,
+    parseJsonFromLLM
 };
