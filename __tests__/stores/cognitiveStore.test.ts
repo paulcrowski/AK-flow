@@ -57,6 +57,22 @@ describe('CognitiveStore', () => {
       expect(state.consecutiveAgentSpeeches).toBe(0);
     });
 
+    it('processUserInput() should auto-create working set for multi-step tasks', () => {
+      const { processUserInput } = useCognitiveStore.getState();
+      processUserInput('Zrób X. Dodaj Y.');
+      const ws = (getCognitiveState() as any).workingSet;
+      expect(ws).not.toBeNull();
+      expect(ws.steps.length).toBeGreaterThanOrEqual(2);
+    });
+
+    it('processUserInput() should auto-clear working set on explicit command', () => {
+      const { processUserInput, setWorkingSet } = useCognitiveStore.getState() as any;
+      setWorkingSet(['S1']);
+      expect((getCognitiveState() as any).workingSet).not.toBeNull();
+      processUserInput('Wyczyść plan');
+      expect((getCognitiveState() as any).workingSet).toBeNull();
+    });
+
     it('toggleAutonomousMode() should toggle autonomy', () => {
       const { toggleAutonomousMode } = useCognitiveStore.getState();
       
@@ -148,6 +164,19 @@ describe('CognitiveStore', () => {
       const { setWorkingSet, advanceWorkingSet } = useCognitiveStore.getState() as any;
       setWorkingSet(['S1', 'S2']);
       advanceWorkingSet();
+      const ws = (getCognitiveState() as any).workingSet;
+      expect(ws.steps[0].done).toBe(true);
+      expect(ws.cursor).toBe(1);
+    });
+
+    it('TOOL_RESULT success should auto-advance working set', () => {
+      const { setWorkingSet } = useCognitiveStore.getState() as any;
+      setWorkingSet(['S1', 'S2']);
+      dispatchCognitiveEvent({
+        type: 'TOOL_RESULT',
+        timestamp: Date.now(),
+        payload: { toolType: 'SEARCH', success: true }
+      });
       const ws = (getCognitiveState() as any).workingSet;
       expect(ws.steps[0].done).toBe(true);
       expect(ws.cursor).toBe(1);

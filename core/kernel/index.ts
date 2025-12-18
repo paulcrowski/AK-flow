@@ -13,6 +13,8 @@ export type {
   KernelOutput,
   KernelOutputType,
   KernelReducerResult,
+  WorkingSet,
+  WorkingSetStep,
   TickPayload,
   UserInputPayload,
   AgentSpokePayload,

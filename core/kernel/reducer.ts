@@ -15,6 +15,7 @@ import * as LimbicSystem from '../systems/LimbicSystem';
 import * as BiologicalClock from '../systems/BiologicalClock';
 import { AgentType, PacketType } from '../../types';
 import { SYSTEM_CONFIG } from '../config/systemConfig';
+import { deriveWorkingSetFromUserInput, shouldAutoCreateWorkingSetFromUserInput, shouldClearWorkingSetFromUserInput } from './workingSetPolicy';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // CONSTANTS
@@ -336,6 +337,29 @@ function handleUserInput(state: KernelState, event: KernelEvent, outputs: Kernel
   } else if (payload?.detectedStyle === 'SIMPLE') {
     nextState = { ...nextState, poeticMode: false };
   }
+
+  const userText = String((payload as any)?.text ?? (payload as any)?.input ?? '').trim();
+  if (userText) {
+    if (shouldClearWorkingSetFromUserInput(userText)) {
+      nextState = { ...nextState, workingSet: null };
+      outputs.push({ type: 'LOG', payload: { message: 'WORKING_SET_AUTO_CLEAR' } });
+    } else if (!nextState.workingSet && shouldAutoCreateWorkingSetFromUserInput(userText)) {
+      const derived = deriveWorkingSetFromUserInput(userText);
+      if (derived.steps.length > 0) {
+        const r = handleWorkingSetSet(
+          nextState,
+          {
+            type: 'WORKING_SET_SET',
+            timestamp: now,
+            payload: { steps: derived.steps, ...(derived.title ? { title: derived.title } : {}) }
+          } as KernelEvent,
+          []
+        );
+        nextState = { ...r.nextState };
+        outputs.push({ type: 'LOG', payload: { message: 'WORKING_SET_AUTO_CREATE' } });
+      }
+    }
+  }
   
   return { nextState, outputs };
 }
@@ -386,10 +410,21 @@ function handleAgentSpoke(state: KernelState, event: KernelEvent, outputs: Kerne
 
 function handleToolResult(state: KernelState, event: KernelEvent, outputs: KernelOutput[]): KernelReducerResult {
   // Tool result = external reward (reset RPE counter)
-  const nextState = {
+  let nextState = {
     ...state,
     ticksSinceLastReward: 0
   };
+
+  const payload = event.payload as ToolResultPayload | undefined;
+  if (payload?.success && nextState.workingSet) {
+    const r = handleWorkingSetAdvance(
+      nextState,
+      { type: 'WORKING_SET_ADVANCE', timestamp: event.timestamp } as KernelEvent,
+      []
+    );
+    nextState = { ...r.nextState };
+    outputs.push({ type: 'LOG', payload: { message: 'WORKING_SET_AUTO_ADVANCE' } });
+  }
   
   outputs.push({
     type: 'LOG',

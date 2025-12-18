@@ -148,6 +148,7 @@ export interface TickPayload {
 
 export interface UserInputPayload {
   text: string;
+  input?: string;
   detectedStyle?: 'POETIC' | 'SIMPLE' | 'NEUTRAL';
 }
 

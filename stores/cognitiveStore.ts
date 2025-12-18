@@ -121,7 +121,7 @@ export const useCognitiveStore = create<CognitiveStoreState>()(
           get().dispatch({
             type: 'USER_INPUT',
             timestamp: Date.now(),
-            payload: { input }
+            payload: { text: input }
           });
         },
 
