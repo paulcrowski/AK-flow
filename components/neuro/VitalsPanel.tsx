@@ -7,7 +7,7 @@
  */
 
 import React from 'react';
-import { Activity, Zap, Scale, Waves } from 'lucide-react';
+import { Activity, Zap, ShieldAlert, Moon } from 'lucide-react';
 import type { LimbicState, SomaState, NeurotransmitterState } from '../../types';
 
 interface VitalsPanelProps {
@@ -80,73 +80,50 @@ export const CyberHeart = ({ bpm, intensity }: { bpm: number; intensity: number 
   );
 };
 
-export const VitalsPanel: React.FC<VitalsPanelProps> = ({
-  limbicState,
-  somaState,
-  neuroState
-}) => {
-  const computedBpm = 60 + (limbicState.fear * 60) + (somaState.energy * 20);
-  const emotionalIntensity = (limbicState.fear + limbicState.curiosity + limbicState.frustration) / 3;
-
+export const VitalsPanel: React.FC<VitalsPanelProps> = (props) => {
+  const { limbicState, somaState } = props;
   return (
-    <div className="p-4 space-y-4">
-      {/* Heart */}
-      <div className="flex justify-center">
-        <CyberHeart bpm={computedBpm} intensity={emotionalIntensity} />
+    <>
+      <div className="grid grid-cols-5 gap-4 mb-4 items-center">
+        <CircularGauge value={limbicState.fear} color="#ef4444" label="FEAR" icon={ShieldAlert} />
+        <CircularGauge value={limbicState.curiosity} color="#38bdf8" label="CURIOSITY" icon={Activity} />
+        <div className="flex justify-center">
+          <CyberHeart bpm={60 + (limbicState.fear * 80) + (somaState?.cognitiveLoad || 0 * 0.5)} intensity={limbicState.fear} />
+        </div>
+        <CircularGauge value={somaState.energy / 100} color="#f97316" label="ENERGY" icon={Zap} />
+        <CircularGauge value={limbicState.satisfaction} color="#22c55e" label="SATISFACTION" icon={Activity} />
       </div>
-
-      {/* Limbic Gauges */}
-      <div className="grid grid-cols-4 gap-2">
-        <CircularGauge value={limbicState.fear} color="#ef4444" label="Fear" icon={Activity} />
-        <CircularGauge value={limbicState.curiosity} color="#38bdf8" label="Curious" icon={Zap} />
-        <CircularGauge value={limbicState.satisfaction} color="#22c55e" label="Satisfy" icon={Scale} />
-        <CircularGauge value={limbicState.frustration} color="#f97316" label="Frust" icon={Waves} />
-      </div>
-
-      {/* Energy/Load/Satisfaction Bars */}
-      <div className="space-y-2">
-        <div>
-          <div className="flex justify-between text-[10px] text-gray-500 mb-1">
-            <span>ENERGY</span>
-            <span>{Math.round(somaState.energy)}%</span>
-          </div>
-          <div className="h-2 bg-gray-800 rounded-full overflow-hidden">
-            <div 
-              className="h-full bg-gradient-to-r from-green-500 to-cyan-400 transition-all duration-500"
-              style={{ width: `${somaState.energy}%` }}
-            />
+      <div className="space-y-3">
+        <div className="flex items-center gap-2">
+          {somaState.isSleeping && <Moon size={12} className="text-purple-400 animate-pulse" />}
+          <div className="flex justify-between items-end mb-0.5 w-full">
+            <span className="text-[9px] text-gray-500 uppercase tracking-wider">ENERGY</span>
+            <span className="text-[10px] font-bold text-orange-400">{somaState.energy.toFixed(0)}%</span>
           </div>
         </div>
-
-        <div>
-          <div className="flex justify-between text-[10px] text-gray-500 mb-1">
-            <span>COGNITIVE LOAD</span>
-            <span>{Math.round(somaState.cognitiveLoad * 100)}%</span>
+        <div className="h-2 w-full bg-gray-800 rounded-full overflow-hidden">
+          <div className="h-full bg-gradient-to-r from-orange-600 to-orange-400 transition-all duration-500" style={{ width: `${somaState.energy}%` }} />
+        </div>
+        <div className="w-full">
+          <div className="flex justify-between items-end mb-0.5">
+            <span className="text-[9px] text-gray-500 uppercase tracking-wider">COG LOAD</span>
+            <span className="text-[10px] font-bold text-cyan-400">{(somaState?.cognitiveLoad || 0).toFixed(0)}%</span>
           </div>
-          <div className="h-2 bg-gray-800 rounded-full overflow-hidden">
-            <div 
-              className="h-full bg-gradient-to-r from-yellow-500 to-orange-500 transition-all duration-500"
-              style={{ width: `${somaState.cognitiveLoad * 100}%` }}
-            />
+          <div className="h-2 w-full bg-gray-800 rounded-full overflow-hidden">
+            <div className="h-full bg-gradient-to-r from-cyan-600 to-cyan-400 transition-all duration-500" style={{ width: `${somaState?.cognitiveLoad || 0}%` }} />
           </div>
         </div>
-
-        {neuroState && (
-          <div>
-            <div className="flex justify-between text-[10px] text-gray-500 mb-1">
-              <span>DOPAMINE</span>
-              <span>{Math.round(neuroState.dopamine)}%</span>
-            </div>
-            <div className="h-2 bg-gray-800 rounded-full overflow-hidden">
-              <div 
-                className="h-full bg-gradient-to-r from-purple-500 to-pink-500 transition-all duration-500"
-                style={{ width: `${neuroState.dopamine}%` }}
-              />
-            </div>
+        <div className="w-full">
+          <div className="flex justify-between items-end mb-0.5">
+            <span className="text-[9px] text-gray-500 uppercase tracking-wider">SATISFACTION</span>
+            <span className="text-[10px] font-bold text-green-400">{(limbicState.satisfaction * 100).toFixed(0)}%</span>
           </div>
-        )}
+          <div className="h-2 w-full bg-gray-800 rounded-full overflow-hidden">
+            <div className="h-full bg-gradient-to-r from-green-600 to-green-400 transition-all duration-500" style={{ width: `${limbicState.satisfaction * 100}%` }} />
+          </div>
+        </div>
       </div>
-    </div>
+    </>
   );
 };
 
