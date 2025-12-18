@@ -15,6 +15,7 @@ import { successSignalService } from '../services/SuccessSignalService';
 import { setCachedIdentity } from '../core/builders';
 // IDENTITY-LITE: Import fetchNarrativeSelf for fallback chain
 import { fetchNarrativeSelf } from '../core/services/IdentityDataService';
+import { useTraceAnalytics } from '../hooks/useTraceAnalytics';
 import { Loader2, Zap, Power, Moon, EyeOff } from 'lucide-react';
 import { LeftSidebar } from './layout/LeftSidebar';
 import { ChatContainer } from './chat/ChatContainer';
@@ -56,25 +57,16 @@ export function CognitiveInterface() {
     // --- SESSION (Multi-Agent) ---
     const { userId, agentId, currentAgent, getAgentIdentity, logout } = useSession();
 
-    const [traceHudOpen, setTraceHudOpen] = useState(false);
-    const [traceHudCopyState, setTraceHudCopyState] = useState<'idle' | 'ok' | 'fail'>('idle');
-    const [traceHudFrozen, setTraceHudFrozen] = useState(false);
-    const traceHudFrozenRef = useRef(false);
-    const [traceHud, setTraceHud] = useState<{
-        traceId?: string;
-        tickNumber?: number;
-        skipped?: boolean;
-        skipReason?: string | null;
-        durationMs?: number;
-        lastCommit?: {
-            committed?: boolean;
-            blocked?: boolean;
-            deduped?: boolean;
-            blockReason?: string;
-            origin?: string;
-            counters?: { totalCommits?: number; blockedCommits?: number; dedupedCommits?: number };
-        };
-    } | null>(null);
+    const {
+        traceHud,
+        traceHudOpen,
+        setTraceHudOpen,
+        traceHudCopyState,
+        traceHudFrozen,
+        toggleFrozen,
+        copyCurrentTrace,
+        copyCurrentTraceWithWindow
+    } = useTraceAnalytics();
 
     // FAZA 5: Load full agent identity from DB
     const [loadedIdentity, setLoadedIdentity] = useState<AgentIdentity | null>(null);
@@ -95,69 +87,7 @@ export function CognitiveInterface() {
     const [identityLoading, setIdentityLoading] = useState(true);
     const lastLoadedAgentIdRef = useRef<string | null>(null); // Guard against StrictMode double-fire
 
-    useEffect(() => {
-        const unsubscribe = eventBus.subscribe(PacketType.SYSTEM_ALERT, (packet: any) => {
-            const ev = packet?.payload?.event;
-            if (!ev) return;
-
-            if (traceHudFrozenRef.current && (ev === 'TICK_START' || ev === 'TICK_SKIPPED' || ev === 'TICK_COMMIT' || ev === 'TICK_END')) {
-                return;
-            }
-
-            if (ev === 'TICK_START') {
-                setTraceHud((prev) => ({
-                    ...(prev || {}),
-                    traceId: packet.traceId,
-                    tickNumber: packet.payload?.tickNumber,
-                    skipped: false,
-                    skipReason: null,
-                    durationMs: undefined,
-                }));
-                return;
-            }
-
-            if (ev === 'TICK_SKIPPED') {
-                setTraceHud((prev) => ({
-                    ...(prev || {}),
-                    traceId: packet.traceId ?? prev?.traceId,
-                    tickNumber: packet.payload?.tickNumber ?? prev?.tickNumber,
-                    skipped: true,
-                    skipReason: packet.payload?.reason ?? packet.payload?.skipReason ?? prev?.skipReason ?? null,
-                }));
-                return;
-            }
-
-            if (ev === 'TICK_COMMIT') {
-                setTraceHud((prev) => ({
-                    ...(prev || {}),
-                    traceId: packet.traceId ?? prev?.traceId,
-                    tickNumber: packet.payload?.tickNumber ?? prev?.tickNumber,
-                    lastCommit: {
-                        committed: packet.payload?.committed,
-                        blocked: packet.payload?.blocked,
-                        deduped: packet.payload?.deduped,
-                        blockReason: packet.payload?.blockReason,
-                        origin: packet.payload?.origin,
-                        counters: packet.payload?.counters
-                    }
-                }));
-                return;
-            }
-
-            if (ev === 'TICK_END') {
-                setTraceHud((prev) => ({
-                    ...(prev || {}),
-                    traceId: packet.traceId ?? prev?.traceId,
-                    tickNumber: packet.payload?.tickNumber ?? prev?.tickNumber,
-                    skipped: packet.payload?.skipped ?? prev?.skipped,
-                    skipReason: packet.payload?.skipReason ?? prev?.skipReason,
-                    durationMs: packet.payload?.durationMs
-                }));
-            }
-        });
-
-        return () => unsubscribe();
-    }, []);
+    
 
     // FAZA 5: Boot Protocol v2 - Load identity from DB
     useEffect(() => {
@@ -377,118 +307,6 @@ export function CognitiveInterface() {
     const isCritical = somaState.energy < 5;
     const isSleeping = somaState.isSleeping;
 
-    const copyTraceToClipboard = async (exportPayload: string) => {
-        if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
-            await navigator.clipboard.writeText(exportPayload);
-            return;
-        }
-        if (typeof document !== 'undefined') {
-            const el = document.createElement('textarea');
-            el.value = exportPayload;
-            el.setAttribute('readonly', '');
-            el.style.position = 'fixed';
-            el.style.left = '-9999px';
-            document.body.appendChild(el);
-            el.select();
-            document.execCommand('copy');
-            document.body.removeChild(el);
-            return;
-        }
-        throw new Error('clipboard_unavailable');
-    };
-
-    const sanitizeTracePacketForExport = (packet: any) => {
-        const p = JSON.parse(JSON.stringify(packet));
-        if (p?.payload) {
-            if (p.payload.imageData && p.payload.imageData.length > 1000) p.payload.imageData = "[VISUAL DATA REMOVED]";
-            if (p.payload.image_data && p.payload.image_data.length > 1000) p.payload.image_data = "[VISUAL DATA REMOVED]";
-        }
-        return p;
-    };
-
-    const buildTraceExportPayload = (packets: any[], meta: { windowMs: number; traceId?: string | null }) => {
-        const traceId = meta.traceId ?? null;
-        const traceEvents = traceId ? packets.filter((p: any) => p?.traceId === traceId) : [];
-        const timestamps = traceEvents.map((p: any) => p?.timestamp).filter((t: any) => typeof t === 'number');
-        const minTs = timestamps.length ? Math.min(...timestamps) : null;
-        const maxTs = timestamps.length ? Math.max(...timestamps) : null;
-
-        return JSON.stringify(
-            {
-                traceId,
-                tickNumber: traceHud?.tickNumber ?? null,
-                durationMs: typeof traceHud?.durationMs === 'number' ? traceHud?.durationMs : null,
-                exportedAt: Date.now(),
-                windowMs: meta.windowMs,
-                tickEnvelope: traceId
-                    ? {
-                        traceId,
-                        minTs,
-                        maxTs,
-                        eventCount: traceEvents.length
-                    }
-                    : null,
-                events: packets.map(sanitizeTracePacketForExport)
-            },
-            null,
-            2
-        );
-    };
-
-    const dedupeAndSortPackets = (packets: any[]) => {
-        const seen = new Set<string>();
-        const out: any[] = [];
-        for (const p of packets) {
-            const id = p?.id;
-            if (typeof id !== 'string') continue;
-            if (seen.has(id)) continue;
-            seen.add(id);
-            out.push(p);
-        }
-        out.sort((a: any, b: any) => {
-            const at = typeof a?.timestamp === 'number' ? a.timestamp : 0;
-            const bt = typeof b?.timestamp === 'number' ? b.timestamp : 0;
-            return at - bt;
-        });
-        return out;
-    };
-
-    const copyCurrentTrace = async () => {
-        try {
-            const traceId = traceHud?.traceId ?? null;
-            const snapA = eventBus.getHistory().slice();
-            const merged = dedupeAndSortPackets(snapA);
-            const exportPayload = buildTraceExportPayload(merged, { windowMs: 0, traceId });
-
-            await copyTraceToClipboard(exportPayload);
-
-            setTraceHudCopyState('ok');
-            setTimeout(() => setTraceHudCopyState('idle'), 1500);
-        } catch {
-            setTraceHudCopyState('fail');
-            setTimeout(() => setTraceHudCopyState('idle'), 2000);
-        }
-    };
-
-    const copyCurrentTraceWithWindow = async (windowMs: number) => {
-        try {
-            const traceId = traceHud?.traceId ?? null;
-            const snapA = eventBus.getHistory().slice();
-            await new Promise((r) => setTimeout(r, Math.max(0, windowMs)));
-            const snapB = eventBus.getHistory().slice();
-            const merged = dedupeAndSortPackets([...snapA, ...snapB]);
-            const exportPayload = buildTraceExportPayload(merged, { windowMs, traceId });
-
-            await copyTraceToClipboard(exportPayload);
-
-            setTraceHudCopyState('ok');
-            setTimeout(() => setTraceHudCopyState('idle'), 1500);
-        } catch {
-            setTraceHudCopyState('fail');
-            setTimeout(() => setTraceHudCopyState('idle'), 2000);
-        }
-    };
-
     return (
         <div className={`flex h-[100dvh] text-gray-100 font-sans transition-all duration-100 overflow-hidden 
         ${isSleeping ? 'brightness-50 grayscale-[0.5]' : ''} 
@@ -575,14 +393,7 @@ export function CognitiveInterface() {
                                     <div className="text-[10px] font-mono tracking-widest text-gray-400">TRACE HUD</div>
                                     <div className="flex items-center gap-2">
                                         <button
-                                            onClick={() => {
-                                                if (!traceHud?.traceId) return;
-                                                setTraceHudFrozen((prev) => {
-                                                    const next = !prev;
-                                                    traceHudFrozenRef.current = next;
-                                                    return next;
-                                                });
-                                            }}
+                                            onClick={toggleFrozen}
                                             className={`px-2 py-1 rounded border text-[10px] font-mono tracking-widest transition-colors ${traceHud?.traceId
                                                 ? traceHudFrozen
                                                     ? 'border-yellow-500/40 text-yellow-300 bg-yellow-900/10'
