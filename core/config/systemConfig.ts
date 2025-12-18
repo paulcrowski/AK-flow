@@ -77,6 +77,7 @@ export const SYSTEM_CONFIG = {
     globalRecallDefault: true,    // Był: USE_GLOBAL_RECALL_DEFAULT
     searchKnowledgeChunks: true,  // Był: USE_SEARCH_KNOWLEDGE_CHUNKS
     chunkHomeostasis: true,       // Był: USE_SEARCH_KNOWLEDGE_CHUNK_HOMEOSTASIS
+    workspaceHomeostasis: true,
   },
 
   // ═══════════════════════════════════════════════════════════════════════════

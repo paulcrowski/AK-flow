@@ -1,6 +1,8 @@
 import { supabase, MemoryService } from './supabase';
 import { CortexService } from './gemini';
 import type { LibraryDocument } from './LibraryService';
+import { WorkspaceHomeostasisService } from './WorkspaceHomeostasisService';
+import { isMemorySubEnabled } from '../core/config/featureFlags';
 
 type Chunk = {
   chunk_index: number;
@@ -485,6 +487,14 @@ export async function ingestLibraryDocument(params: {
             end_offset: c.end_offset
           }
         });
+      }
+
+      if (isMemorySubEnabled('workspaceHomeostasis')) {
+        try {
+          await WorkspaceHomeostasisService.applyForCurrentAgent({ maxWorkspaceMemories: 400 });
+        } catch {
+          // swallow workspace homeostasis errors
+        }
       }
     } catch {
       // swallow workspace->memory errors
