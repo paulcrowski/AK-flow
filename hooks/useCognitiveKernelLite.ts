@@ -61,7 +61,7 @@ import {
   useIsProcessing,
   useCurrentThought
 } from '../stores/cognitiveStore';
-import { StorageService } from '../services/StorageService';
+import { SessionManagerService } from '../services/SessionManagerService';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // TYPES
@@ -242,18 +242,9 @@ export const useCognitiveKernelLite = (loadedIdentity?: AgentIdentity | null) =>
       setAgentPersona(loadedIdentity.persona || agentPersona);
 
       // Session Id: persist per-agent for ChatGPT-like conversation threads
-      try {
-        const key = `ak-flow:activeSession:${loadedIdentity.id}`;
-        const stored = typeof localStorage !== 'undefined' ? localStorage.getItem(key) : null;
-        const nextSessionId = stored && stored.trim() ? stored : `sess_${Date.now()}`;
-        sessionIdRef.current = nextSessionId;
-        actions.setActiveSessionId(nextSessionId);
-        if (typeof localStorage !== 'undefined') localStorage.setItem(key, nextSessionId);
-      } catch {
-        const fallback = `sess_${Date.now()}`;
-        sessionIdRef.current = fallback;
-        actions.setActiveSessionId(fallback);
-      }
+      const nextSessionId = SessionManagerService.getOrCreateActiveSessionId(loadedIdentity.id);
+      sessionIdRef.current = nextSessionId;
+      actions.setActiveSessionId(nextSessionId);
 
       // Load list of sessions (sidebar)
       void (async () => {
@@ -291,11 +282,7 @@ export const useCognitiveKernelLite = (loadedIdentity?: AgentIdentity | null) =>
     sessionIdRef.current = resolved;
     actions.setActiveSessionId(resolved);
 
-    try {
-      if (typeof localStorage !== 'undefined') localStorage.setItem(`ak-flow:activeSession:${agentId}`, resolved);
-    } catch {
-      // ignore
-    }
+    SessionManagerService.setActiveSessionId(agentId, resolved);
 
     // NEW session: start fresh UI thread immediately
     if (!sessionId) {

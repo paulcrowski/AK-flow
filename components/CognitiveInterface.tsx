@@ -95,11 +95,6 @@ export function CognitiveInterface() {
     const [identityLoading, setIdentityLoading] = useState(true);
     const lastLoadedAgentIdRef = useRef<string | null>(null); // Guard against StrictMode double-fire
 
-    // Set agent ID for memory service when it changes
-    useEffect(() => {
-        setCurrentAgentId(agentId);
-    }, [agentId]);
-
     useEffect(() => {
         const unsubscribe = eventBus.subscribe(PacketType.SYSTEM_ALERT, (packet: any) => {
             const ev = packet?.payload?.event;
