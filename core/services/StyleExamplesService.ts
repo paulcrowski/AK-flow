@@ -10,12 +10,13 @@
 import { supabase } from '@/services/supabase';
 import type { StyleExample, StyleContext } from '../types/StyleExample';
 import { MAX_STYLE_EXAMPLES } from '../types/StyleExample';
+import { clamp01 } from '../../utils/math';
 
 /**
  * Normalizuje wartość do zakresu 0-1
  */
 function normalizeToRatio(value: number, min: number, max: number): number {
-  return Math.max(0, Math.min(1, (value - min) / (max - min)));
+  return clamp01((value - min) / (max - min));
 }
 
 /**

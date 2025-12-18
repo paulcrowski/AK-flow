@@ -1,5 +1,6 @@
 import type { KernelEvent, KernelOutput, KernelReducerResult, KernelState, MoodShiftPayload, NeuroUpdatePayload } from '../../types';
 import * as LimbicSystem from '../../../systems/LimbicSystem';
+import { clamp100 } from '../../../../utils/math';
 
 export function handleMoodShift(state: KernelState, event: KernelEvent, outputs: KernelOutput[]): KernelReducerResult {
   const payload = event.payload as MoodShiftPayload | undefined;
@@ -21,14 +22,12 @@ export function handleNeuroUpdate(state: KernelState, event: KernelEvent, output
     return { nextState: state, outputs };
   }
 
-  const clamp = (v: number) => Math.max(0, Math.min(100, v));
-
   const nextState: KernelState = {
     ...state,
     neuro: {
-      dopamine: clamp(state.neuro.dopamine + (payload.delta.dopamine ?? 0)),
-      serotonin: clamp(state.neuro.serotonin + (payload.delta.serotonin ?? 0)),
-      norepinephrine: clamp(state.neuro.norepinephrine + (payload.delta.norepinephrine ?? 0))
+      dopamine: clamp100(state.neuro.dopamine + (payload.delta.dopamine ?? 0)),
+      serotonin: clamp100(state.neuro.serotonin + (payload.delta.serotonin ?? 0)),
+      norepinephrine: clamp100(state.neuro.norepinephrine + (payload.delta.norepinephrine ?? 0))
     }
   };
 

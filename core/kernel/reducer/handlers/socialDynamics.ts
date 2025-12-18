@@ -2,6 +2,7 @@ import type { KernelEvent, KernelOutput, KernelReducerResult, KernelState, Socia
 import { INITIAL_SOCIAL_DYNAMICS } from '../../initialState';
 import { SYSTEM_CONFIG } from '../../../config/systemConfig';
 import { AgentType, PacketType } from '../../../../types';
+import { clamp01 } from '../../../../utils/math';
 
 export function handleSocialDynamicsUpdate(state: KernelState, event: KernelEvent, outputs: KernelOutput[]): KernelReducerResult {
   const payload = event.payload as SocialDynamicsPayload;
@@ -29,8 +30,8 @@ export function handleSocialDynamicsUpdate(state: KernelState, event: KernelEven
   }
 
   socialCost = Math.max(SOCIAL_COST_BASELINE, Math.min(1, socialCost));
-  autonomyBudget = Math.max(0, Math.min(1, autonomyBudget));
-  userPresenceScore = Math.max(0, Math.min(1, userPresenceScore));
+  autonomyBudget = clamp01(autonomyBudget);
+  userPresenceScore = clamp01(userPresenceScore);
   consecutiveWithoutResponse = Math.max(0, Math.floor(consecutiveWithoutResponse));
 
   const newSocialDynamics: SocialDynamics = {

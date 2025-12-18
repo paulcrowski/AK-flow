@@ -11,6 +11,7 @@
 
 import { evaluationBus, EVALUATION_CONFIG } from './EvaluationBus';
 import { EvaluationStage } from '../../types';
+import { clamp01 } from '../../utils/math';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Configuration
@@ -157,7 +158,7 @@ export function calculateTrustIndex(): TrustIndexResult {
     retryRate * METRICS_CONFIG.TRUST_WEIGHTS.retry +
     identityLeakRate * METRICS_CONFIG.TRUST_WEIGHTS.identity_leak;
   
-  const index = Math.max(0, Math.min(1, 1 - penalty));
+  const index = clamp01(1 - penalty);
   
   return {
     index,

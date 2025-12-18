@@ -1,5 +1,6 @@
 import type { KernelEvent, KernelOutput, KernelReducerResult, KernelState, StateOverridePayload } from '../../types';
 import { createInitialKernelState } from '../../initialState';
+import { clamp01, clamp100 } from '../../../../utils/math';
 
 export function handleStateOverride(state: KernelState, event: KernelEvent, outputs: KernelOutput[]): KernelReducerResult {
   const payload = event.payload as StateOverridePayload | undefined;
@@ -14,7 +15,7 @@ export function handleStateOverride(state: KernelState, event: KernelEvent, outp
       ...nextState,
       limbic: {
         ...nextState.limbic,
-        [payload.key]: Math.max(0, Math.min(1, payload.value))
+        [payload.key]: clamp01(payload.value)
       }
     };
   } else if (payload.target === 'soma') {
@@ -22,7 +23,7 @@ export function handleStateOverride(state: KernelState, event: KernelEvent, outp
       ...nextState,
       soma: {
         ...nextState.soma,
-        [payload.key]: Math.max(0, Math.min(100, payload.value))
+        [payload.key]: clamp100(payload.value)
       }
     };
   } else if (payload.target === 'neuro') {
@@ -30,7 +31,7 @@ export function handleStateOverride(state: KernelState, event: KernelEvent, outp
       ...nextState,
       neuro: {
         ...nextState.neuro,
-        [payload.key]: Math.max(0, Math.min(100, payload.value))
+        [payload.key]: clamp100(payload.value)
       }
     };
   }

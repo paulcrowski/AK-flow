@@ -11,7 +11,14 @@
  * We collect metrics first, then enable reactions in Phase 2.
  */
 
-import { EvaluationEvent, EvaluationSource, EvaluationStage, EvaluationTag, FailureSource } from '../../types';
+import type {
+  EvaluationEvent,
+  EvaluationSource,
+  EvaluationStage,
+  EvaluationTag,
+  FailureSource
+} from '../../types';
+import { clamp01 } from '../../utils/math';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Configuration
@@ -317,10 +324,10 @@ export function createEvaluationEvent(
     timestamp: Date.now(),
     source,
     stage,
-    severity: Math.max(0, Math.min(1, severity)),
+    severity: clamp01(severity),
     valence,
     tags,
-    confidence: Math.max(0, Math.min(1, confidence)),
+    confidence: clamp01(confidence),
     attribution: options?.attribution,
     context: options?.context
   };

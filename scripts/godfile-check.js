@@ -11,7 +11,6 @@ const hardLimit = Number.parseInt(process.env.GODFILE_HARD_LIMIT || '', 10) || D
 
 const DEFAULT_ALLOWLIST = new Set([
   'core/systems/EventLoop.ts',
-  'services/gemini.ts',
   'ak-nexus/src/stores/nexusStore.ts'
 ]);
 

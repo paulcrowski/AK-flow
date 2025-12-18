@@ -4,6 +4,7 @@ import { SYSTEM_CONFIG } from '../../../config/systemConfig';
 import * as SomaSystem from '../../../systems/SomaSystem';
 import * as BiologicalClock from '../../../systems/BiologicalClock';
 import { AgentType, PacketType } from '../../../../types';
+import { clamp01 } from '../../../../utils/math';
 
 export function handleTick(state: KernelState, event: KernelEvent, outputs: KernelOutput[]): KernelReducerResult {
   if (!state.autonomousMode) {
@@ -14,7 +15,7 @@ export function handleTick(state: KernelState, event: KernelEvent, outputs: Kern
   const SOCIAL_COST_BASELINE = INITIAL_SOCIAL_DYNAMICS.socialCost;
   const now = event.timestamp;
   const silenceMs = Math.max(0, now - state.lastUserInteractionAt);
-  const userPresenceScore = Math.max(0, Math.min(1, 1 - silenceMs / sdCfg.presenceDecayTimeMs));
+  const userPresenceScore = clamp01(1 - silenceMs / sdCfg.presenceDecayTimeMs);
   const decayRate = userPresenceScore > 0.5 ? sdCfg.decayRateUserPresent : sdCfg.decayRateUserAbsent;
   const socialCost = Math.max(
     SOCIAL_COST_BASELINE,
@@ -24,7 +25,7 @@ export function handleTick(state: KernelState, event: KernelEvent, outputs: Kern
   const nextSocialDynamics: SocialDynamics = {
     ...state.socialDynamics,
     socialCost: Math.min(1, socialCost),
-    autonomyBudget: Math.max(0, autonomyBudget),
+    autonomyBudget: clamp01(autonomyBudget),
     userPresenceScore,
     consecutiveWithoutResponse: Math.max(0, Math.floor(state.socialDynamics.consecutiveWithoutResponse))
   };

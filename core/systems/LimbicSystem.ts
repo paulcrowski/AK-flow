@@ -12,7 +12,8 @@
  * - Habituation (repeated stimuli have diminishing effect)
  */
 
-import { LimbicState } from '../../types';
+import type { LimbicState } from '../../types';
+import { clamp01 } from '../../utils/math';
 import { getLimbicConfig } from '../config/systemConfig';
 
 export interface EmotionalStimulus {
@@ -351,7 +352,7 @@ export const LimbicSystem = {
     ): LimbicState {
         return {
             ...currentLimbic,
-            [key]: Math.max(0, Math.min(1, value))
+            [key]: clamp01(value)
         };
     }
 };

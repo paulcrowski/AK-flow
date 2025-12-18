@@ -1,6 +1,7 @@
 import { TraitVector, NeurotransmitterState, SomaState, InteractionContextType } from '../../types';
 import { getExpressionConfig, SYSTEM_CONFIG } from '../config/systemConfig';
 import { createRng } from '../utils/rng';
+import { clamp01 as clamp01Impl } from '../../utils/math';
 
 // Deterministic RNG for reproducible behavior
 const rng = createRng(SYSTEM_CONFIG.rng.seed);
@@ -27,8 +28,7 @@ export interface ExpressionDecision {
 
 // Lightweight novelty heuristic: overlap of tokens with last messages handled outside.
 export function clamp01(x: number): number {
-  if (Number.isNaN(x)) return 0;
-  return Math.max(0, Math.min(1, x));
+  return clamp01Impl(x);
 }
 
 // ============================================================================

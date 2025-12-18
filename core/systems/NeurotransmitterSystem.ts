@@ -1,4 +1,5 @@
 import { SomaState, TraitVector } from '../../types';
+import { clamp01, clamp100, clampRange } from '../../utils/math';
 
 export interface NeurotransmitterState {
   dopamine: number;      // 0-100
@@ -21,7 +22,7 @@ export interface NeuroContext {
   ticksSinceLastReward?: number;    // how many ticks since last external reward
 }
 
-export const clampNeuro = (v: number) => Math.max(0, Math.min(100, v));
+export const clampNeuro = (v: number) => clamp100(v);
 
 /**
  * Asymmetric homeostasis - faster decay when ABOVE baseline.
@@ -113,13 +114,13 @@ export const NeurotransmitterSystem = {
 
     // Activity-based boosts (all non-negative, AGI-optimistic)
     const energy = ctx.soma.energy; // 0-100
-    const energyFactor = Math.max(0.5, Math.min(1.5, energy / 50)); // 0.5 .. 1.5
+    const energyFactor = clampRange(energy / 50, 0.5, 1.5); // 0.5 .. 1.5
 
     // Temperament modulation: all effects remain non-negative and bounded
-    const curiosity = Math.max(0, Math.min(1, traits.curiosity));
-    const conscientiousness = Math.max(0, Math.min(1, traits.conscientiousness));
-    const socialAwareness = Math.max(0, Math.min(1, traits.socialAwareness));
-    const arousal = Math.max(0, Math.min(1, traits.arousal));
+    const curiosity = clamp01(traits.curiosity);
+    const conscientiousness = clamp01(traits.conscientiousness);
+    const socialAwareness = clamp01(traits.socialAwareness);
+    const arousal = clamp01(traits.arousal);
 
     if (ctx.activity === 'SOCIAL') {
       // Curious + socially aware agents get more reward from social connection

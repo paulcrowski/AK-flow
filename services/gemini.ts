@@ -1,7 +1,5 @@
 import { Type } from "@google/genai";
-import { eventBus } from "../core/EventBus";
 import { AgentType, PacketType, CognitiveError, DetectedIntent, StylePreference, CommandType, UrgencyLevel } from "../types";
-import { generateUUID } from "../utils/uuid";
 import { getCurrentAgentId } from "./supabase";
 import { isCortexSubEnabled, isMainFeatureEnabled } from "../core/config/featureFlags";
 import { buildMinimalCortexState } from "../core/builders";
@@ -11,8 +9,8 @@ import { guardLegacyWithFactEcho, isFactEchoPipelineEnabled } from "../core/syst
 import { UnifiedContextBuilder, type UnifiedContext, type ContextBuilderInput } from "../core/context";
 import { applyAutonomyV2RawContract } from "../core/systems/RawContract";
 import { parseDetectedIntent } from "../core/systems/IntentContract";
-import { ModelRouter, runWithModelFallback } from "./ModelRouter";
-
+import { generateWithFallback } from "./gemini/generateWithFallback";
+import { clamp01 } from "../utils/math";
 import { createGeminiClient } from "./gemini/aiClient";
 import { getGeminiText, getGeminiTextWithSource } from "./gemini/text";
 import { cleanJSON, parseJSONStrict } from "./gemini/json";
@@ -26,59 +24,17 @@ import { buildAutonomousVolitionPrompt } from "./gemini/prompts/autonomousVoliti
 import { buildDetectIntentPrompts } from "./gemini/prompts/detectIntentPrompt";
 
 import { UnifiedContextPromptBuilder } from "./gemini/UnifiedContextPromptBuilder";
+import { DETECT_INTENT_RESPONSE_SCHEMA } from "./gemini/detectIntentSchema";
+import {
+    ASSESS_INPUT_RESPONSE_SCHEMA,
+    AUTONOMOUS_VOLITION_RESPONSE_SCHEMA,
+    AUTONOMOUS_VOLITION_V2_RESPONSE_SCHEMA,
+    GENERATE_RESPONSE_RESPONSE_SCHEMA,
+    STRUCTURED_DIALOGUE_RESPONSE_SCHEMA
+} from "./gemini/responseSchemas";
 
 // 1. Safe Environment Access & Initialization (Vite)
 const ai = createGeminiClient();
-
-async function generateWithFallback(operation: string, params: any): Promise<any> {
-    const task = ModelRouter.routeForOperation(operation);
-    const chain = ModelRouter.getModelChain(task);
-    try {
-        const r = await runWithModelFallback(chain, async (model) => {
-            return ai.models.generateContent({
-                ...params,
-                model
-            });
-        });
-
-        if (r.attempts > 1) {
-            eventBus.publish({
-                id: generateUUID(),
-                timestamp: Date.now(),
-                source: AgentType.CORTEX_FLOW,
-                type: PacketType.PREDICTION_ERROR,
-                payload: {
-                    metric: 'MODEL_FALLBACK',
-                    op: operation,
-                    task,
-                    chosenModel: r.model,
-                    attempts: r.attempts,
-                    errors: r.errors.slice(0, 6)
-                },
-                priority: 0.1
-            });
-        }
-
-        return r.value;
-    } catch (e: any) {
-        const msg = e?.message ? String(e.message) : String(e);
-        eventBus.publish({
-            id: generateUUID(),
-            timestamp: Date.now(),
-            source: AgentType.CORTEX_FLOW,
-            type: PacketType.PREDICTION_ERROR,
-            payload: {
-                metric: 'MODEL_FALLBACK_FAILED',
-                op: operation,
-                task,
-                attemptedModels: chain,
-                error: msg
-            },
-            priority: 0.2
-        });
-        throw new Error(`MODEL_FALLBACK_FAILED: ${operation} :: ${msg}`);
-    }
-}
 
 // Types preserved for public API compatibility
 export type { JSONParseResult } from './gemini/json';
@@ -190,13 +146,13 @@ OUTPUT FORMAT:
         opts?: { temperature?: number; maxOutputTokens?: number }
     ): Promise<string> {
         return withRetry(async () => {
-            const response = await generateWithFallback(operation, {
+            const response = await generateWithFallback({ ai, operation, params: {
                 contents: prompt,
                 config: {
                     temperature: opts?.temperature ?? 0.3,
                     maxOutputTokens: opts?.maxOutputTokens ?? 1024
                 }
-            });
+            } });
             logUsage(operation, response);
             return getGeminiText(response) || '';
         }, 2, 2000);
@@ -206,12 +162,12 @@ OUTPUT FORMAT:
         return withRetry(async () => {
             try {
                 const prompt = buildDeepResearchPrompt({ query, context });
-                const response = await generateWithFallback('deepResearch', {
+                const response = await generateWithFallback({ ai, operation: 'deepResearch', params: {
                     contents: prompt,
                     config: {
                         tools: [{ googleSearch: {} }]
                     }
-                });
+                } });
                 logUsage('deepResearch', response);
                 const groundingChunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
                 const sources = groundingChunks
@@ -240,16 +196,7 @@ OUTPUT FORMAT:
                 contents: prompt,
                 config: {
                     responseMimeType: 'application/json',
-                    responseSchema: {
-                        type: Type.OBJECT,
-                        properties: {
-                            complexity: { type: Type.NUMBER },
-                            surprise: { type: Type.NUMBER },
-                            sentiment_valence: { type: Type.NUMBER },
-                            keywords: { type: Type.ARRAY, items: { type: Type.STRING } }
-                        },
-                        required: ["complexity", "surprise", "sentiment_valence", "keywords"]
-                    }
+                    responseSchema: ASSESS_INPUT_RESPONSE_SCHEMA
                 }
             });
             logUsage('assessInput', response);
@@ -348,23 +295,7 @@ OUTPUT FORMAT:
                     maxOutputTokens: 8192,
                     temperature: 0.7, // Reduced from 1.1 for stability
                     responseMimeType: 'application/json',
-                    responseSchema: {
-                        type: Type.OBJECT,
-                        properties: {
-                            response_text: { type: Type.STRING },
-                            internal_monologue: { type: Type.STRING },
-                            predicted_user_reaction: { type: Type.STRING },
-                            mood_shift: {
-                                type: Type.OBJECT,
-                                properties: {
-                                    fear_delta: { type: Type.NUMBER },
-                                    curiosity_delta: { type: Type.NUMBER }
-                                },
-                                required: ["fear_delta", "curiosity_delta"]
-                            }
-                        },
-                        required: ["response_text", "internal_monologue", "predicted_user_reaction", "mood_shift"]
-                    }
+                    responseSchema: GENERATE_RESPONSE_RESPONSE_SCHEMA
                 }
             });
 
@@ -415,16 +346,7 @@ OUTPUT FORMAT:
                     temperature: 0.8, // Increased for creativity in dreaming
                     maxOutputTokens: 8192,
                     responseMimeType: 'application/json',
-                    responseSchema: {
-                        type: Type.OBJECT,
-                        properties: {
-                            internal_monologue: { type: Type.STRING },
-                            voice_pressure: { type: Type.NUMBER },
-                            speech_content: { type: Type.STRING },
-                            research_topic: { type: Type.STRING }
-                        },
-                        required: ["internal_monologue", "voice_pressure"]
-                    }
+                    responseSchema: AUTONOMOUS_VOLITION_RESPONSE_SCHEMA
                 }
             });
             logUsage('autonomousVolition', response);
@@ -501,15 +423,7 @@ OUTPUT FORMAT:
                     temperature: 0.7,
                     maxOutputTokens: 1536,
                     responseMimeType: 'application/json',
-                    responseSchema: {
-                        type: Type.OBJECT,
-                        properties: {
-                            internal_monologue: { type: Type.STRING },
-                            voice_pressure: { type: Type.NUMBER },
-                            speech_content: { type: Type.STRING }
-                        },
-                        required: ["internal_monologue", "voice_pressure", "speech_content"]
-                    }
+                    responseSchema: AUTONOMOUS_VOLITION_V2_RESPONSE_SCHEMA
                 }
             });
             logUsage('autonomousVolitionV2', response);
@@ -550,7 +464,7 @@ OUTPUT FORMAT:
                 const v = contracted.value;
                 return {
                     internal_monologue: v.internal_monologue || 'Thinking... ',
-                    voice_pressure: Math.max(0, Math.min(1, v.voice_pressure ?? 0)),
+                    voice_pressure: clamp01(v.voice_pressure ?? 0),
                     speech_content: (v.speech_content || '').slice(0, 1200)
                 };
             }
@@ -614,24 +528,7 @@ OUTPUT FORMAT:
                     temperature: 0.7,
                     maxOutputTokens: 8192,
                     responseMimeType: 'application/json',
-                    responseSchema: {
-                        type: Type.OBJECT,
-                        properties: {
-                            responseText: { type: Type.STRING },
-                            internalThought: { type: Type.STRING },
-                            // PIONEER: Symbolic classification only, no numeric deltas
-                            stimulus_response: {
-                                type: Type.OBJECT,
-                                nullable: true,
-                                properties: {
-                                    valence: { type: Type.STRING },
-                                    salience: { type: Type.STRING },
-                                    novelty: { type: Type.STRING }
-                                }
-                            }
-                        },
-                        required: ["responseText", "internalThought"]
-                    }
+                    responseSchema: STRUCTURED_DIALOGUE_RESPONSE_SCHEMA
                 }
             });
             logUsage('structuredDialogue', response);
@@ -650,15 +547,7 @@ OUTPUT FORMAT:
         // 1. Cache/Optimization: Skip for very short inputs
         if (!input || input.trim().length < 3) return safeDefault;
 
-        const schema = {
-            type: Type.OBJECT,
-            properties: {
-                style: { type: Type.STRING, enum: ["POETIC", "SIMPLE", "ACADEMIC", "NEUTRAL"] },
-                command: { type: Type.STRING, enum: ["NONE", "SEARCH", "VISUALIZE", "SYSTEM_CONTROL"] },
-                urgency: { type: Type.STRING, enum: ["LOW", "MEDIUM", "HIGH"] }
-            },
-            required: ["style", "command", "urgency"]
-        };
+        const schema = DETECT_INTENT_RESPONSE_SCHEMA;
 
         const { basePrompt, strictRetryPrompt } = buildDetectIntentPrompts({ userInput: input });
 
@@ -747,7 +636,7 @@ OUTPUT FORMAT:
         defaultValue: T
     ): Promise<T> {
         return withRetry(async () => {
-            const response = await generateWithFallback('generateJSON', {
+            const response = await generateWithFallback({ ai, operation: 'generateJSON', params: {
                 contents: prompt,
                 config: {
                     temperature: 0.3, // Low temperature for structured output
@@ -755,7 +644,7 @@ OUTPUT FORMAT:
                     responseMimeType: 'application/json',
                     responseSchema: schema
                 }
-            });
+            } });
             logUsage('generateJSON', response);
             return cleanJSON(getGeminiText(response), defaultValue, undefined, 'generateJSON');
         }, 2, 2000);

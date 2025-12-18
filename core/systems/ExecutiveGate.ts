@@ -25,6 +25,7 @@
 
 import type { LimbicState } from '../../types';
 import type { SocialDynamics } from '../kernel/types';
+import { clamp01 } from '../../utils/math';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // TYPES
@@ -350,7 +351,7 @@ export const ExecutiveGate = {
    */
   computeVoicePressure(limbic: LimbicState): number {
     const raw = (limbic.curiosity + limbic.satisfaction - limbic.fear - limbic.frustration) / 2 + 0.5;
-    return Math.max(0, Math.min(1, raw));
+    return clamp01(raw);
   },
   
   /**
