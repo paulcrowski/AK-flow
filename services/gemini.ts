@@ -13,6 +13,7 @@ import { applyAutonomyV2RawContract } from "../core/systems/RawContract";
 import { parseDetectedIntent } from "../core/systems/IntentContract";
 import { parseJsonFromLLM } from "../utils/AIResponseParser";
 import { TokenUsageLedger } from "../core/telemetry/TokenUsageLedger";
+import { ModelRouter } from "./ModelRouter";
 
 type GeminiTextSource = 'text' | 'parts' | 'alt' | 'none';
 
@@ -48,6 +49,63 @@ if (!apiKey) {
 }
 
 const ai = new GoogleGenAI({ apiKey });
+
+async function generateWithFallback(operation: string, params: any): Promise<any> {
+    const task = ModelRouter.routeForOperation(operation);
+    const chain = ModelRouter.getModelChain(task);
+    const errors: string[] = [];
+    let chosen: string | null = null;
+
+    for (let i = 0; i < chain.length; i++) {
+        const model = chain[i];
+        try {
+            const response = await ai.models.generateContent({
+                ...params,
+                model
+            });
+
+            chosen = model;
+            if (i > 0) {
+                eventBus.publish({
+                    id: generateUUID(),
+                    timestamp: Date.now(),
+                    source: AgentType.CORTEX_FLOW,
+                    type: PacketType.PREDICTION_ERROR,
+                    payload: {
+                        metric: 'MODEL_FALLBACK',
+                        op: operation,
+                        task,
+                        chosenModel: chosen,
+                        attempts: i + 1,
+                        errors: errors.slice(0, 6)
+                    },
+                    priority: 0.1
+                });
+            }
+            return response;
+        } catch (e: any) {
+            const msg = e?.message ? String(e.message) : String(e);
+            errors.push(`${model}: ${msg}`);
+        }
+    }
+
+    eventBus.publish({
+        id: generateUUID(),
+        timestamp: Date.now(),
+        source: AgentType.CORTEX_FLOW,
+        type: PacketType.PREDICTION_ERROR,
+        payload: {
+            metric: 'MODEL_FALLBACK_FAILED',
+            op: operation,
+            task,
+            attemptedModels: chain,
+            errors: errors.slice(0, 12)
+        },
+        priority: 0.2
+    });
+
+    throw new Error(`MODEL_FALLBACK_FAILED: ${operation} :: ${errors.join(' | ')}`);
+}
 
 // 2. Robust JSON Parsing Helper
 // Generic Type Guard
@@ -339,8 +397,7 @@ OUTPUT FORMAT:
         opts?: { temperature?: number; maxOutputTokens?: number }
     ): Promise<string> {
         return withRetry(async () => {
-            const response = await ai.models.generateContent({
-                model: 'gemini-2.5-flash',
+            const response = await generateWithFallback(operation, {
                 contents: prompt,
                 config: {
                     temperature: opts?.temperature ?? 0.3,
@@ -355,8 +412,7 @@ OUTPUT FORMAT:
     async performDeepResearch(query: string, context: string): Promise<{ synthesis: string, sources: any[] }> {
         return withRetry(async () => {
             try {
-                const response = await ai.models.generateContent({
-                    model: 'gemini-2.5-flash',
+                const response = await generateWithFallback('deepResearch', {
                     contents: `
                       ROLE: You are AK-FLOW, an advanced intelligence.
                       TASK: Conduct a Deep Research Sweep on: "${query}"
@@ -978,8 +1034,7 @@ OUTPUT FORMAT:
         defaultValue: T
     ): Promise<T> {
         return withRetry(async () => {
-            const response = await ai.models.generateContent({
-                model: 'gemini-2.5-flash',
+            const response = await generateWithFallback('generateJSON', {
                 contents: prompt,
                 config: {
                     temperature: 0.3, // Low temperature for structured output
