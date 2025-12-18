@@ -98,11 +98,11 @@ export const createProcessOutputForTools = (deps: ToolParserDeps) => {
     // [SEARCH_LIBRARY: query]
     // [READ_LIBRARY_CHUNK: <docId>#<chunkIndex>]
     // [READ_LIBRARY_DOC: <docId>]
-    let workspaceMatch = cleanText.match(/\[(SEARCH_LIBRARY|READ_LIBRARY_CHUNK|READ_LIBRARY_DOC):\s*([^\]]+?)\]/i);
-    if (workspaceMatch) {
-      const tool = String(workspaceMatch[1] || '').toUpperCase();
-      const arg = String(workspaceMatch[2] || '').trim();
-      cleanText = cleanText.replace(workspaceMatch[0], '').trim();
+    const workspaceTagRegex = /\[(SEARCH_LIBRARY|READ_LIBRARY_CHUNK|READ_LIBRARY_DOC):\s*([^\]]+?)\]/i;
+
+    const executeWorkspaceTool = async (toolRaw: string, argRaw: string) => {
+      const tool = String(toolRaw || '').toUpperCase();
+      const arg = String(argRaw || '').trim();
 
       const intentId = generateUUID();
       eventBus.publish({
@@ -141,6 +141,7 @@ export const createProcessOutputForTools = (deps: ToolParserDeps) => {
           });
 
           addMessage('assistant', text, 'tool_result');
+          return;
         }
 
         if (tool === 'READ_LIBRARY_CHUNK') {
@@ -171,6 +172,7 @@ export const createProcessOutputForTools = (deps: ToolParserDeps) => {
           });
 
           addMessage('assistant', text, 'tool_result');
+          return;
         }
 
         if (tool === 'READ_LIBRARY_DOC') {
@@ -197,7 +199,10 @@ export const createProcessOutputForTools = (deps: ToolParserDeps) => {
           });
 
           addMessage('assistant', text, 'tool_result');
+          return;
         }
+
+        throw new Error(`Unsupported workspace tool: ${tool}`);
       } catch (error: any) {
         eventBus.publish({
           id: generateUUID(),
@@ -210,6 +215,15 @@ export const createProcessOutputForTools = (deps: ToolParserDeps) => {
 
         addMessage('assistant', `WORKSPACE_TOOL_ERROR: ${tool} ${String(arg).slice(0, 200)} :: ${error?.message || String(error)}`, 'thought');
       }
+    };
+
+    while (true) {
+      const match = cleanText.match(workspaceTagRegex);
+      if (!match) break;
+      const toolRaw = match[1];
+      const argRaw = match[2];
+      cleanText = cleanText.replace(match[0], '').trim();
+      await executeWorkspaceTool(toolRaw, argRaw);
     }
 
     // 1. SEARCH TAG

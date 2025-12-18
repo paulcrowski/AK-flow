@@ -12,6 +12,7 @@ import { eventBus } from '../../core/EventBus';
 import { PacketType, CognitivePacket } from '../../types';
 import { createProcessOutputForTools, ToolParserDeps } from '../../utils/toolParser';
 import { CortexService } from '../../services/gemini';
+import { downloadLibraryDocumentText, getLibraryChunkByIndex, searchLibraryChunks } from '../../services/LibraryService';
 
 // Mock CortexService
 vi.mock('../../services/gemini', () => ({
@@ -27,6 +28,13 @@ vi.mock('../../services/supabase', () => ({
   MemoryService: {
     storeMemory: vi.fn()
   }
+}));
+
+// Mock LibraryService (Workspace tools)
+vi.mock('../../services/LibraryService', () => ({
+  searchLibraryChunks: vi.fn(),
+  getLibraryChunkByIndex: vi.fn(),
+  downloadLibraryDocumentText: vi.fn()
 }));
 
 describe('P0 Tool Lifecycle', () => {
@@ -59,6 +67,85 @@ describe('P0 Tool Lifecycle', () => {
       visualBingeCountRef: { current: 0 },
       stateRef: { current: { limbicState: { fear: 0, curiosity: 0.5, frustration: 0, satisfaction: 0.5 } } }
     };
+  });
+
+  describe('WORKSPACE Tools (Library-backed)', () => {
+    it('SEARCH_LIBRARY should emit TOOL_INTENT and TOOL_RESULT on success', async () => {
+      vi.mocked(searchLibraryChunks).mockResolvedValue({
+        ok: true,
+        hits: [
+          {
+            document_id: 'doc_1',
+            chunk_index: 0,
+            start_offset: 0,
+            end_offset: 10,
+            summary: null,
+            snippet: 'AGI is...'
+          }
+        ]
+      } as any);
+
+      const processOutput = createProcessOutputForTools(mockDeps);
+      await processOutput('Check workspace. [SEARCH_LIBRARY: AGI]');
+
+      const events = getEvents();
+      const intentEvent = events.find(e => e.type === PacketType.TOOL_INTENT);
+      const resultEvent = events.find(e => e.type === PacketType.TOOL_RESULT);
+      expect(intentEvent).toBeDefined();
+      expect(intentEvent!.payload.tool).toBe('SEARCH_LIBRARY');
+      expect(resultEvent).toBeDefined();
+      expect(resultEvent!.payload.tool).toBe('SEARCH_LIBRARY');
+    });
+
+    it('SEARCH_LIBRARY should still emit TOOL_RESULT on empty hits', async () => {
+      vi.mocked(searchLibraryChunks).mockResolvedValue({ ok: true, hits: [] } as any);
+
+      const processOutput = createProcessOutputForTools(mockDeps);
+      await processOutput('[SEARCH_LIBRARY: nothing]');
+
+      const resultEvent = getEvents().find(e => e.type === PacketType.TOOL_RESULT);
+      expect(resultEvent).toBeDefined();
+      expect(resultEvent!.payload.tool).toBe('SEARCH_LIBRARY');
+      expect(resultEvent!.payload.hitsCount).toBe(0);
+    });
+
+    it('READ_LIBRARY_CHUNK should emit TOOL_ERROR when chunk is missing', async () => {
+      vi.mocked(getLibraryChunkByIndex).mockResolvedValue({ ok: true, chunk: null } as any);
+
+      const processOutput = createProcessOutputForTools(mockDeps);
+      await processOutput('[READ_LIBRARY_CHUNK: 1234567890abcdef#2]');
+
+      const errorEvent = getEvents().find(e => e.type === PacketType.TOOL_ERROR);
+      expect(errorEvent).toBeDefined();
+      expect(errorEvent!.payload.tool).toBe('READ_LIBRARY_CHUNK');
+    });
+
+    it('READ_LIBRARY_DOC should emit TOOL_ERROR on service error', async () => {
+      vi.mocked(downloadLibraryDocumentText).mockResolvedValue({ ok: false, error: 'RLS' } as any);
+
+      const processOutput = createProcessOutputForTools(mockDeps);
+      await processOutput('[READ_LIBRARY_DOC: doc_1]');
+
+      const errorEvent = getEvents().find(e => e.type === PacketType.TOOL_ERROR);
+      expect(errorEvent).toBeDefined();
+      expect(errorEvent!.payload.tool).toBe('READ_LIBRARY_DOC');
+      expect(String(errorEvent!.payload.error)).toContain('RLS');
+    });
+
+    it('should support multiple workspace tags in one response', async () => {
+      vi.mocked(searchLibraryChunks).mockResolvedValue({ ok: true, hits: [] } as any);
+      vi.mocked(downloadLibraryDocumentText).mockResolvedValue({
+        ok: true,
+        doc: { original_name: 'x.md' },
+        text: 'hello'
+      } as any);
+
+      const processOutput = createProcessOutputForTools(mockDeps);
+      await processOutput('[SEARCH_LIBRARY: x] then [READ_LIBRARY_DOC: doc_1]');
+
+      const intents = getEvents().filter(e => e.type === PacketType.TOOL_INTENT);
+      expect(intents.length).toBeGreaterThanOrEqual(2);
+    });
   });
 
   afterEach(() => {
