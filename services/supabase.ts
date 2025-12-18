@@ -54,12 +54,22 @@ const compressNeuralImage = async (base64Str: string): Promise<string | null> =>
 // Current agent context - set by SessionContext
 let currentAgentId: string | null = null;
 
+// Current owner context (auth.uid) - set by SessionContext
+let currentOwnerId: string | null = null;
+
 export const setCurrentAgentId = (agentId: string | null) => {
   currentAgentId = agentId;
   console.log('[MemoryService] Agent ID set to:', agentId);
 };
 
 export const getCurrentAgentId = () => currentAgentId;
+
+export const setCurrentOwnerId = (ownerId: string | null) => {
+  currentOwnerId = ownerId;
+  console.log('[MemoryService] Owner ID set to:', ownerId);
+};
+
+export const getCurrentOwnerId = () => currentOwnerId;
 
 export const MemoryService = {
   async storeMemory(memory: MemoryTrace): Promise<boolean> {
@@ -117,6 +127,7 @@ export const MemoryService = {
       // V3.2 Extended Payload (metadata + optional image/dream)
       const extendedPayloadV32 = {
         ...basePayload,
+        ...(currentOwnerId ? { owner_id: currentOwnerId } : {}),
         metadata: metadataSafe,
         image_data: optimizedImage || null,
         is_visual_dream: Boolean(memory.isVisualDream)
@@ -148,6 +159,7 @@ export const MemoryService = {
         // ATTEMPT 2: Fallback to Extended Payload (V3.1: image_data + is_visual_dream)
         const extendedPayloadV31 = {
           ...basePayload,
+          ...(currentOwnerId ? { owner_id: currentOwnerId } : {}),
           image_data: optimizedImage || null,
           is_visual_dream: Boolean(memory.isVisualDream)
         };

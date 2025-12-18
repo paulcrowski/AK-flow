@@ -1,5 +1,5 @@
 import React, { createContext, useState, useEffect, ReactNode } from 'react';
-import { supabase } from '../services/supabase';
+import { supabase, setCurrentOwnerId } from '../services/supabase';
 import type { Agent, SessionContextType } from './SessionTypes';
 
 const SessionContext = createContext<SessionContextType | null>(null);
@@ -36,6 +36,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
         const user = data?.session?.user ?? null;
         setAuthUserId(user?.id ?? null);
+        setCurrentOwnerId(user?.id ?? null);
         setUserEmail((user?.email ?? null) as string | null);
         // Keep compatibility with existing agents table using user_id=email
         setUserId((user?.email ?? null) as string | null);
@@ -50,6 +51,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
       const user = session?.user ?? null;
       setAuthUserId(user?.id ?? null);
+      setCurrentOwnerId(user?.id ?? null);
       setUserEmail((user?.email ?? null) as string | null);
       setUserId((user?.email ?? null) as string | null);
     });
@@ -125,6 +127,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     setUserId(null);
     setUserEmail(null);
     setAuthUserId(null);
+    setCurrentOwnerId(null);
     setAgentId(null);
     setAgents([]);
     localStorage.removeItem(LS_AGENT_ID);
@@ -149,6 +152,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         .from('agents')
         .insert([{
           user_id: userId,
+          owner_id: authUserId,
           name: name.trim(),
           trait_vector: {
             arousal: 0.5,

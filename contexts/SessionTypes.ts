@@ -27,6 +27,7 @@ export interface NarrativeTraits {
 export interface Agent {
   id: string;
   user_id: string;
+  owner_id?: string | null;
   name: string;
   trait_vector: TraitVector;
   neurotransmitters: NeurotransmitterState;
