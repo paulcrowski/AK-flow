@@ -30,19 +30,13 @@ import { TickCommitter } from './TickCommitter';
 import { publishTickStart, publishTickSkipped, publishThinkModeSelected, publishTickEnd } from './TickLifecycleTelemetry';
 import { isMainFeatureEnabled } from '../config/featureFlags';
 import { getAutonomyConfig } from '../config/systemConfig';
+import { ThinkModeSelector, createAutonomyBudgetTracker, createTickTraceScope } from './eventloop/index';
 
 let lastAutonomyActionSignature: string | null = null;
 let lastAutonomyActionLogAt = 0;
 
 export namespace EventLoop {
     export type ThinkMode = 'reactive' | 'goal_driven' | 'autonomous' | 'idle';
-
-    export function selectThinkMode(ctx: LoopContext, input: string | null): ThinkMode {
-        if (input) return 'reactive';
-        if (!ctx.autonomousMode) return 'idle';
-        if (ctx.goalState?.activeGoal) return 'goal_driven';
-        return 'autonomous';
-    }
 
     export interface LoopContext {
         soma: SomaState;
@@ -73,22 +67,12 @@ export namespace EventLoop {
     }
 
     // Module-level Budget Tracking (counters only, limit is in context)
-    let autonomousOpsThisMinute = 0;
-    let lastBudgetReset = Date.now();
-    let tickCount = 0;
-
-    function checkBudget(limit: number): boolean {
-        const now = Date.now();
-        if (now - lastBudgetReset > 60000) {
-            autonomousOpsThisMinute = 0;
-            lastBudgetReset = now;
-        }
-        if (autonomousOpsThisMinute >= limit) {
+    const budgetTracker = createAutonomyBudgetTracker({
+        onExhausted: () => {
             console.warn("Autonomy budget exhausted for this minute, skipping.");
-            return false;
         }
-        return true;
-    }
+    });
+    let tickCount = 0;
 
     // ═══════════════════════════════════════════════════════════════════════════
     // SOCIAL DYNAMICS: Now unified in ExecutiveGate.checkSocialDynamics()
@@ -114,19 +98,22 @@ export namespace EventLoop {
     ): Promise<LoopContext> {
         const startedAt = Date.now();
         const tickNumber = tickCount++;
-        const trace: TraceContext = {
-            traceId: generateTraceId(startedAt, tickNumber),
+        const traceScope = createTickTraceScope({
+            agentId: getCurrentAgentId(),
             tickNumber,
             startedAt,
-            agentId: getCurrentAgentId()
-        };
-
-        pushTraceId(trace.traceId);
+            deps: {
+                generateTraceId,
+                pushTraceId,
+                popTraceId,
+                publishTickStart,
+                publishTickEnd
+            }
+        });
+        const trace: TraceContext = traceScope.trace;
 
         let skipped = false;
         let skipReason: string | null = null;
-
-        publishTickStart(trace.traceId, trace.tickNumber, trace.startedAt);
 
         try {
             // P0 ONE MIND: Hard gate when no agent is selected.
@@ -142,7 +129,7 @@ export namespace EventLoop {
 
             const memorySpace = createMemorySpace(trace.agentId);
 
-            const thinkMode = selectThinkMode(ctx, input);
+            const thinkMode = ThinkModeSelector.select(input, ctx.autonomousMode, Boolean(ctx.goalState?.activeGoal));
             publishThinkModeSelected(trace.traceId, trace.tickNumber, Date.now(), thinkMode);
 
             // 1. Apply emotional homeostasis
@@ -511,10 +498,10 @@ export namespace EventLoop {
 
                 // SAFETY: Check Budget (limit from context)
                 // Budget should only be consumed for non-silence actions (i.e., when we actually do work).
-                if (!checkBudget(ctx.autonomousLimitPerMinute)) {
+                if (!budgetTracker.checkBudget(ctx.autonomousLimitPerMinute)) {
                     return ctx;
                 }
-                autonomousOpsThisMinute++;
+                budgetTracker.consume();
                 
                 // Add action prompt to context
                 unifiedContext.actionPrompt = actionDecision.suggestedPrompt || '';
@@ -809,18 +796,7 @@ export namespace EventLoop {
 
             return ctx;
         } finally {
-            const endedAt = Date.now();
-
-            publishTickEnd(
-                trace.traceId,
-                trace.tickNumber,
-                endedAt,
-                endedAt - trace.startedAt,
-                skipped,
-                skipReason
-            );
-
-            popTraceId(trace.traceId);
+            traceScope.finalize({ skipped, skipReason });
         }
     }
 }
