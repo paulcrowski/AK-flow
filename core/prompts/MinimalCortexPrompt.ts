@@ -70,6 +70,8 @@ But you MUST follow the 3-layer cognitive architecture:
      "Search in repo. [SEARCH_IN_REPO: query]" (alias of SEARCH_LIBRARY)
      "Open file. [READ_FILE: <documentId>]" (alias of READ_LIBRARY_DOC)
      "Open file chunk. [READ_FILE_CHUNK: <documentId>#<chunkIndex>]" (alias of READ_LIBRARY_CHUNK)
+   - Deterministic JSON tool:
+     "Split TODO into 3 buckets. [SPLIT_TODO3: <documentId>]"
    - This is PUBLIC, LOGGED, OBSERVABLE.
 
 CORRECT EXAMPLE:

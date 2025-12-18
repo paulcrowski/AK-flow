@@ -3,6 +3,7 @@ import { CortexService } from '../services/gemini';
 import { MemoryService } from '../services/supabase';
 import { persistSearchKnowledgeChunk } from '../services/SearchKnowledgeChunker';
 import { downloadLibraryDocumentText, getLibraryChunkByIndex, searchLibraryChunks } from '../services/LibraryService';
+import { safeParseJson, splitTodo3 } from './splitTodo3';
 import { AgentType, PacketType } from '../types';
 import { getCurrentTraceId } from '../core/trace/TraceContext';
 import { generateUUID } from './uuid';
@@ -93,6 +94,74 @@ export const createProcessOutputForTools = (deps: ToolParserDeps) => {
 
   return async function processOutputForTools(rawText: string): Promise<string> {
     let cleanText = rawText;
+
+    // 0.5 DETerministic JSON ACTION: SPLIT_TODO3
+    // [SPLIT_TODO3: <documentId>]
+    const splitMatch = cleanText.match(/\[SPLIT_TODO3:\s*([^\]]+?)\]/i);
+    if (splitMatch) {
+      const documentId = String(splitMatch[1] || '').trim();
+      cleanText = cleanText.replace(splitMatch[0], '').trim();
+
+      const tool = 'SPLIT_TODO3';
+      const intentId = generateUUID();
+      eventBus.publish({
+        id: intentId,
+        timestamp: Date.now(),
+        source: AgentType.CORTEX_FLOW,
+        type: PacketType.TOOL_INTENT,
+        payload: { tool, arg: documentId },
+        priority: 0.8
+      });
+
+      try {
+        addMessage('assistant', `Invoking SPLIT_TODO3 for: ${documentId}`, 'action');
+        setCurrentThought('Workspace split TODO → 3...');
+
+        const res: any = await withTimeout<any>(downloadLibraryDocumentText({ documentId }) as any, TOOL_TIMEOUT_MS, tool);
+        if (res.ok === false) throw new Error(res.error);
+
+        const parsed = safeParseJson(String(res.text || ''));
+        if (!parsed) throw new Error('JSON_PARSE_ERROR');
+
+        const result = splitTodo3(parsed);
+        const text = [
+          `SPLIT_TODO3 ${documentId} (${res.doc.original_name}):`,
+          `NOW=${result.now.length} NEXT=${result.next.length} LATER=${result.later.length}`,
+          '',
+          'NOW:',
+          ...result.now.slice(0, 50).map((t: any, i: number) => `- ${String(t?.content || t?.id || i)}`),
+          '',
+          'NEXT:',
+          ...result.next.slice(0, 50).map((t: any, i: number) => `- ${String(t?.content || t?.id || i)}`),
+          '',
+          'LATER:',
+          ...result.later.slice(0, 50).map((t: any, i: number) => `- ${String(t?.content || t?.id || i)}`)
+        ].join('\n');
+
+        eventBus.publish({
+          id: generateUUID(),
+          timestamp: Date.now(),
+          source: AgentType.CORTEX_FLOW,
+          type: PacketType.TOOL_RESULT,
+          payload: { tool, arg: documentId, intentId },
+          priority: 0.8
+        });
+
+        addMessage('assistant', text, 'tool_result');
+      } catch (error: any) {
+        const msg = error?.message || String(error);
+        const isTimeout = typeof msg === 'string' && msg.startsWith('TOOL_TIMEOUT:');
+        eventBus.publish({
+          id: generateUUID(),
+          timestamp: Date.now(),
+          source: AgentType.CORTEX_FLOW,
+          type: isTimeout ? PacketType.TOOL_TIMEOUT : PacketType.TOOL_ERROR,
+          payload: { tool, arg: documentId, intentId, error: msg },
+          priority: 0.9
+        });
+        addMessage('assistant', `SPLIT_TODO3_${isTimeout ? 'TIMEOUT' : 'ERROR'}: ${documentId} :: ${msg}`, 'thought');
+      }
+    }
 
     // 0. WORKSPACE TOOLS (Library-backed)
     // [SEARCH_LIBRARY: query]
