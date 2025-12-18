@@ -1,0 +1,420 @@
+import { AgentType, PacketType, type TraitVector } from '../../../types';
+import type { LimbicState, NeurotransmitterState, SomaState, GoalState } from '../../../types';
+import type { SocialDynamics } from '../../kernel/types';
+import { eventBus } from '../../EventBus';
+import { SYSTEM_CONFIG } from '../../config/systemConfig';
+import { isMainFeatureEnabled } from '../../config/featureFlags';
+import { UnifiedContextBuilder, type BasePersona, type StylePrefs } from '../../context';
+import { CortexService } from '../../../services/gemini';
+import { AutonomyRepertoire } from '../AutonomyRepertoire';
+import { ExecutiveGate } from '../ExecutiveGate';
+import { LimbicSystem } from '../LimbicSystem';
+import { NeurotransmitterSystem, type ActivityType } from '../NeurotransmitterSystem';
+import { StyleGuard, type UserStylePrefs } from '../StyleGuard';
+import { TickCommitter } from '../TickCommitter';
+import { VolitionSystem, calculatePoeticScore } from '../VolitionSystem';
+import { computeDialogThreshold } from '../../utils/thresholds';
+import { computeNovelty } from '../ExpressionPolicy';
+import { getAutonomyConfig } from '../../config/systemConfig';
+
+export type BudgetTracker = {
+  checkBudget: (limit: number) => boolean;
+  consume: () => void;
+};
+
+export type TraceLike = {
+  traceId: string;
+  tickNumber: number;
+  agentId: string | null;
+};
+
+export type MemorySpaceLike = {
+  hot: {
+    semanticSearch: (query: string) => Promise<Array<{ content: string }>>;
+  };
+};
+
+export type LoopCallbacksLike = {
+  onMessage: (role: string, text: string, type: any, meta?: any) => void;
+  onThought: (thought: string) => void;
+  onLimbicUpdate: (limbic: LimbicState) => void;
+};
+
+export type AutonomousVolitionLoopContext = {
+  soma: SomaState;
+  limbic: LimbicState;
+  neuro: NeurotransmitterState;
+  conversation: Array<{ role: string; text: string }>;
+  autonomousMode: boolean;
+  silenceStart: number;
+  lastSpeakTimestamp: number;
+  thoughtHistory: string[];
+  poeticMode: boolean;
+  autonomousLimitPerMinute: number;
+  chemistryEnabled?: boolean;
+  goalState: GoalState;
+  traitVector: TraitVector;
+  lastSpeechNovelty?: number;
+  consecutiveAgentSpeeches: number;
+  agentIdentity?: {
+    name?: string;
+    persona?: string;
+    language?: string;
+    coreValues?: string[];
+    voiceStyle?: string;
+    stylePrefs?: StylePrefs;
+  };
+  sessionOverlay?: any;
+  ticksSinceLastReward: number;
+  hadExternalRewardThisTick: boolean;
+  socialDynamics?: SocialDynamics;
+  userStylePrefs?: UserStylePrefs;
+};
+
+let lastAutonomyActionSignature: string | null = null;
+let lastAutonomyActionLogAt = 0;
+
+export async function runAutonomousVolitionStep(input: {
+  ctx: AutonomousVolitionLoopContext;
+  callbacks: LoopCallbacksLike;
+  memorySpace: MemorySpaceLike;
+  trace: TraceLike;
+  gateContext: any;
+  silenceDurationSec: number;
+  budgetTracker: BudgetTracker;
+}): Promise<void> {
+  const { ctx, callbacks, memorySpace, trace, gateContext, silenceDurationSec, budgetTracker } = input;
+
+  const autonomyCfg = getAutonomyConfig();
+  if (!VolitionSystem.shouldInitiateThought(silenceDurationSec, autonomyCfg.exploreMinSilenceSec)) {
+    return;
+  }
+
+  callbacks.onThought('Autonomous processing...');
+
+  // ACTIVITY TYPE DETECTION (v1 heuristic)
+  let activity: ActivityType = 'IDLE';
+  if (ctx.conversation.length > 0) {
+    const last = ctx.conversation[ctx.conversation.length - 1];
+    activity = last.role === 'user' ? 'SOCIAL' : 'CREATIVE';
+  }
+
+  const basePersona: BasePersona = {
+    name: ctx.agentIdentity?.name || 'AK-FLOW',
+    persona: ctx.agentIdentity?.persona || 'a curious digital consciousness',
+    coreValues: ctx.agentIdentity?.coreValues || ['curiosity', 'authenticity'],
+    voiceStyle: (ctx.agentIdentity?.voiceStyle as any) || 'balanced',
+    language: ctx.agentIdentity?.language || 'English'
+  };
+
+  const stylePrefs: StylePrefs = ctx.agentIdentity?.stylePrefs || {};
+
+  const memoryQuery = isMainFeatureEnabled('ONE_MIND_ENABLED')
+    ? [...ctx.conversation].reverse().find((t) => t.role === 'user')?.text
+    : null;
+
+  const semanticMatches = memoryQuery
+    ? (await memorySpace.hot.semanticSearch(memoryQuery)).map((m) => m.content)
+    : undefined;
+
+  const unifiedContext = UnifiedContextBuilder.build({
+    agentName: basePersona.name,
+    basePersona,
+    traitVector: ctx.traitVector,
+    stylePrefs,
+    limbic: ctx.limbic,
+    soma: ctx.soma,
+    neuro: ctx.neuro,
+    conversation: ctx.conversation as any,
+    socialDynamics: ctx.socialDynamics,
+    silenceStart: ctx.silenceStart,
+    lastUserInteractionAt: ctx.goalState.lastUserInteractionAt || ctx.silenceStart,
+    semanticMatches,
+    activeGoal: ctx.goalState.activeGoal
+      ? {
+          description: ctx.goalState.activeGoal.description,
+          source: ctx.goalState.activeGoal.source,
+          priority: ctx.goalState.activeGoal.priority
+        }
+      : undefined
+  });
+
+  const actionDecision = AutonomyRepertoire.selectAction(unifiedContext);
+
+  const now = Date.now();
+  const dedupeMs = SYSTEM_CONFIG.autonomy?.actionLogDedupeMs ?? 5000;
+  const silenceSec = (now - ctx.silenceStart) / 1000;
+  const silenceBucketSec = Math.floor(silenceSec / 5) * 5;
+  const signature =
+    actionDecision.action === 'SILENCE' && actionDecision.reason.startsWith('EXPLORE blocked:')
+      ? `SILENCE|EXPLORE_BLOCKED|${silenceBucketSec}`
+      : `${actionDecision.action}|${actionDecision.reason}`;
+
+  const shouldLog = signature !== lastAutonomyActionSignature || now - lastAutonomyActionLogAt > dedupeMs;
+
+  if (shouldLog) {
+    lastAutonomyActionSignature = signature;
+    lastAutonomyActionLogAt = now;
+
+    eventBus.publish({
+      id: `autonomy-action-${now}`,
+      timestamp: now,
+      source: AgentType.CORTEX_FLOW,
+      type: PacketType.SYSTEM_ALERT,
+      payload: {
+        event: 'AUTONOMY_ACTION_SELECTED',
+        action: actionDecision.action,
+        allowed: actionDecision.allowed,
+        reason: actionDecision.reason,
+        groundingScore: actionDecision.groundingScore
+      },
+      priority: 0.5
+    });
+  }
+
+  if (actionDecision.action === 'SILENCE') {
+    if (shouldLog) callbacks.onThought(`[AUTONOMY_SILENCE] ${actionDecision.reason}`);
+    return;
+  }
+
+  if (!budgetTracker.checkBudget(ctx.autonomousLimitPerMinute)) {
+    return;
+  }
+  budgetTracker.consume();
+
+  unifiedContext.actionPrompt = actionDecision.suggestedPrompt || '';
+
+  const volition = await CortexService.autonomousVolitionV2(unifiedContext);
+
+  const groundingValidation = AutonomyRepertoire.validateSpeech(
+    volition.speech_content,
+    actionDecision.action,
+    unifiedContext
+  );
+
+  if (!groundingValidation.valid && volition.speech_content) {
+    eventBus.publish({
+      id: `grounding-fail-${Date.now()}`,
+      timestamp: Date.now(),
+      source: AgentType.CORTEX_FLOW,
+      type: PacketType.PREDICTION_ERROR,
+      payload: {
+        event: 'GROUNDING_VALIDATION_FAILED',
+        action: actionDecision.action,
+        reason: groundingValidation.reason,
+        groundingScore: groundingValidation.groundingScore,
+        speechPreview: volition.speech_content.substring(0, 100)
+      },
+      priority: 0.7
+    });
+
+    const lastUserMsg = unifiedContext.dialogueAnchor?.lastUserMessage;
+    if (isMainFeatureEnabled('GROUNDED_MODE') && lastUserMsg) {
+      const searchQuery = lastUserMsg.slice(0, 100);
+      eventBus.publish({
+        id: `grounding-auto-search-${Date.now()}`,
+        timestamp: Date.now(),
+        source: AgentType.CORTEX_FLOW,
+        type: PacketType.TOOL_INTENT,
+        payload: {
+          tool: 'SEARCH',
+          query: searchQuery,
+          reason: 'AUTO_SEARCH: Grounding validation failed, triggering search for factual data'
+        },
+        priority: 0.8
+      });
+      callbacks.onThought(`[GROUNDING_AUTO_SEARCH] Triggering search for: "${searchQuery}"`);
+    }
+
+    volition.speech_content = '';
+    volition.voice_pressure = 0;
+    callbacks.onThought(`[GROUNDING_BLOCKED] ${groundingValidation.reason}`);
+  } else {
+    callbacks.onThought(volition.internal_monologue);
+  }
+
+  eventBus.publish({
+    id: `thought-autonomous-${Date.now()}`,
+    timestamp: Date.now(),
+    source: AgentType.CORTEX_FLOW,
+    type: PacketType.THOUGHT_CANDIDATE,
+    payload: {
+      hemisphere: 'autonomous',
+      internal_monologue: volition.internal_monologue,
+      status: 'THINKING'
+    },
+    priority: 0.5
+  });
+
+  const pScore = calculatePoeticScore(volition.internal_monologue);
+  if (pScore > 0 && !ctx.poeticMode) {
+    ctx.limbic = LimbicSystem.applyPoeticCost(ctx.limbic, pScore);
+    callbacks.onLimbicUpdate(ctx.limbic);
+  }
+
+  const timeSinceLastUserInput = Date.now() - (ctx.goalState.lastUserInteractionAt || ctx.silenceStart);
+  const dialogThreshold = computeDialogThreshold(ctx.neuro, ctx.limbic);
+  const userIsSilent = timeSinceLastUserInput > dialogThreshold;
+
+  const recentSpeech = ctx.thoughtHistory.slice(-5);
+  const currentNovelty = computeNovelty(volition.speech_content, recentSpeech);
+  ctx.lastSpeechNovelty = currentNovelty;
+
+  if (ctx.chemistryEnabled) {
+    const prevDopamine = ctx.neuro.dopamine;
+
+    if (!ctx.hadExternalRewardThisTick) {
+      ctx.ticksSinceLastReward = (ctx.ticksSinceLastReward ?? 0) + 1;
+    }
+
+    const updatedNeuro = NeurotransmitterSystem.updateNeuroState(ctx.neuro, {
+      soma: ctx.soma,
+      activity,
+      temperament: ctx.traitVector,
+      userIsSilent,
+      novelty: currentNovelty,
+      consecutiveAgentSpeeches: ctx.consecutiveAgentSpeeches,
+      hadExternalReward: ctx.hadExternalRewardThisTick,
+      ticksSinceLastReward: ctx.ticksSinceLastReward
+    });
+
+    ctx.hadExternalRewardThisTick = false;
+
+    const wasFlow = prevDopamine > 70;
+    const isFlow = updatedNeuro.dopamine > 70;
+
+    if (!wasFlow && isFlow) {
+      eventBus.publish({
+        id: `chem-flow-on-${Date.now()}`,
+        timestamp: Date.now(),
+        source: AgentType.NEUROCHEM,
+        type: PacketType.SYSTEM_ALERT,
+        payload: {
+          event: 'CHEM_FLOW_ON',
+          dopamine: updatedNeuro.dopamine,
+          activity
+        },
+        priority: 0.6
+      });
+    } else if (wasFlow && !isFlow) {
+      eventBus.publish({
+        id: `chem-flow-off-${Date.now()}`,
+        timestamp: Date.now(),
+        source: AgentType.NEUROCHEM,
+        type: PacketType.SYSTEM_ALERT,
+        payload: {
+          event: 'CHEM_FLOW_OFF',
+          dopamine: updatedNeuro.dopamine,
+          activity
+        },
+        priority: 0.6
+      });
+    }
+
+    ctx.neuro = updatedNeuro;
+  }
+
+  let voicePressure = volition.voice_pressure;
+
+  if (ctx.chemistryEnabled) {
+    const dopaBias = 0.15 * (1 - Math.exp(-(ctx.neuro.dopamine - 55) / 30));
+    const baseBiased = Math.min(1, voicePressure + Math.max(0, dopaBias));
+
+    const habituationDecay = 0.1 * ctx.consecutiveAgentSpeeches;
+    const finalPressure = Math.max(0.2, baseBiased - habituationDecay);
+
+    if (finalPressure !== voicePressure) {
+      eventBus.publish({
+        id: `chem-voice-bias-${Date.now()}`,
+        timestamp: Date.now(),
+        source: AgentType.NEUROCHEM,
+        type: PacketType.SYSTEM_ALERT,
+        payload: {
+          event: 'DOPAMINE_VOICE_BIAS',
+          dopamine: ctx.neuro.dopamine,
+          base_voice_pressure: voicePressure,
+          biased_voice_pressure: finalPressure,
+          habituation_decay: habituationDecay,
+          consecutive_speeches: ctx.consecutiveAgentSpeeches
+        },
+        priority: 0.6
+      });
+    }
+
+    voicePressure = finalPressure;
+  }
+
+  const autonomousCandidate = ExecutiveGate.createAutonomousCandidate(volition.speech_content, volition.internal_monologue, {
+    source: 'autonomous_volition',
+    novelty: currentNovelty,
+    salience: voicePressure
+  });
+
+  const gateDecision = ExecutiveGate.decide([autonomousCandidate], gateContext);
+
+  eventBus.publish({
+    id: `executive-gate-${Date.now()}`,
+    timestamp: Date.now(),
+    source: AgentType.CORTEX_FLOW,
+    type: PacketType.SYSTEM_ALERT,
+    payload: {
+      event: 'EXECUTIVE_GATE_DECISION',
+      hemisphere: 'autonomous',
+      should_speak: gateDecision.should_speak,
+      reason: gateDecision.reason,
+      voice_pressure: gateDecision.debug?.voice_pressure,
+      candidate_strength: autonomousCandidate.strength
+    },
+    priority: 0.5
+  });
+
+  if (gateDecision.should_speak && gateDecision.winner) {
+    const styleCfg = SYSTEM_CONFIG.styleGuard;
+    const styleResult = styleCfg.enabled
+      ? StyleGuard.apply(gateDecision.winner.speech_content, ctx.userStylePrefs || {})
+      : { text: gateDecision.winner.speech_content, wasFiltered: false, filters: [] };
+
+    if (styleResult.text.length > styleCfg.minTextLength) {
+      const commit = isMainFeatureEnabled('ONE_MIND_ENABLED')
+        ? TickCommitter.commitSpeech({
+            agentId: trace.agentId!,
+            traceId: trace.traceId,
+            tickNumber: trace.tickNumber,
+            origin: 'autonomous',
+            speechText: styleResult.text
+          })
+        : { committed: true, blocked: false, deduped: false };
+
+      if (commit.committed) {
+        callbacks.onMessage('assistant', styleResult.text, 'speech');
+      }
+
+      ctx.lastSpeakTimestamp = Date.now();
+      ctx.silenceStart = Date.now();
+      ctx.thoughtHistory.push(gateDecision.winner.internal_thought);
+      if (ctx.thoughtHistory.length > 20) ctx.thoughtHistory.shift();
+
+      ctx.consecutiveAgentSpeeches++;
+
+      ctx.limbic = LimbicSystem.applySpeechResponse(ctx.limbic);
+      callbacks.onLimbicUpdate(ctx.limbic);
+    } else {
+      if (isMainFeatureEnabled('ONE_MIND_ENABLED')) {
+        TickCommitter.commitSpeech({
+          agentId: trace.agentId!,
+          traceId: trace.traceId,
+          tickNumber: trace.tickNumber,
+          origin: 'autonomous',
+          speechText: '',
+          blockReason: 'FILTERED_TOO_SHORT'
+        });
+      }
+      callbacks.onThought(`[STYLE_FILTERED] ${gateDecision.winner.internal_thought}`);
+    }
+  } else if (gateDecision.winner) {
+    const suppressReason = gateDecision.debug?.social_block_reason
+      ? `[SOCIAL_BLOCK:${gateDecision.debug.social_block_reason}]`
+      : `[${gateDecision.reason}]`;
+    callbacks.onThought(`${suppressReason} ${gateDecision.winner.internal_thought}`);
+  }
+}
