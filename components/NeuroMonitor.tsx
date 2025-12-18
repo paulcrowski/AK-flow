@@ -873,9 +873,9 @@ export const NeuroMonitor: React.FC<NeuroMonitorProps> = ({ limbicState, somaSta
                                 {/* CEMI FIELD VISUALIZATION */}
                                 {resonanceField && (
                                     <g>
-                                        <circle cx="50" cy="50" r={40 + (resonanceField.intensity * 15)} fill="none" stroke="#22d3ee" strokeWidth="0.3" opacity="0.2">
+                                        <circle cx="50" cy="50" r={40 + (resonanceField.intensity * 15)} fill="none" stroke="#22d3ee" strokeWidth="0.5" opacity="0.3">
                                             <animate attributeName="r" from={40} to={55} dur={`${4 * resonanceField.timeDilation}s`} repeatCount="indefinite" />
-                                            <animate attributeName="opacity" values="0.05;0.2;0.05" dur={`${4 * resonanceField.timeDilation}s`} repeatCount="indefinite" />
+                                            <animate attributeName="opacity" values="0.1;0.3;0.1" dur={`${4 * resonanceField.timeDilation}s`} repeatCount="indefinite" />
                                         </circle>
                                     </g>
                                 )}
@@ -886,10 +886,11 @@ export const NeuroMonitor: React.FC<NeuroMonitorProps> = ({ limbicState, somaSta
                                     const center = AGENT_LAYOUT[AgentType.CORTEX_FLOW];
                                     const activityLevel = agentActivity[key] || 0;
                                     // Dynamic width based on activity
-                                    const strokeW = activityLevel > 0.1 ? 0.3 + (activityLevel * 1.5) : 0.3;
+                                    const isActive = activityLevel > 0.1;
+                                    const strokeW = isActive ? 0.4 + (activityLevel * 1.6) : 0.4;
 
                                     return (
-                                        <line key={`conn-${key}`} x1={center.x} y1={center.y} x2={pos.x} y2={pos.y} stroke={activityLevel > 0.1 ? pos.color : '#1e293b'} strokeWidth={strokeW} strokeDasharray={activityLevel > 0.1 ? "none" : "3 3"} opacity={Math.max(0.15, activityLevel)} className="transition-all duration-700" />
+                                        <line key={`conn-${key}`} x1={center.x} y1={center.y} x2={pos.x} y2={pos.y} stroke={isActive ? pos.color : '#334155'} strokeWidth={strokeW} strokeDasharray={isActive ? "none" : "3 3"} opacity={isActive ? Math.max(0.4, activityLevel) : 0.25} className="transition-all duration-700" />
                                     );
                                 })}
                                 {/* NODES */}
@@ -897,20 +898,21 @@ export const NeuroMonitor: React.FC<NeuroMonitorProps> = ({ limbicState, somaSta
                                     const rawActivity = agentActivity[key] || 0;
                                     const activityLevel = Math.min(1, rawActivity); // Clamp for opacity
                                     const intensity = Math.min(2, rawActivity); // Allow over-driving radius
+                                    const isActive = rawActivity > 0.1;
 
                                     return (
                                         <g key={key} className="transition-all duration-500">
-                                            <circle cx={pos.x} cy={pos.y} r={key === AgentType.CORTEX_FLOW ? 10 : 6} fill="#050608" stroke={pos.color} strokeWidth={0.8 + (activityLevel * 1.2)} />
-                                            {rawActivity > 0.1 && (
+                                            <circle cx={pos.x} cy={pos.y} r={key === AgentType.CORTEX_FLOW ? 10 : 6} fill="#050608" stroke={isActive ? pos.color : '#475569'} strokeWidth={isActive ? 1.2 + (activityLevel * 0.8) : 0.8} />
+                                            {isActive && (
                                                 <circle
                                                     cx={pos.x} cy={pos.y}
                                                     r={(key === AgentType.CORTEX_FLOW ? 10 : 6) + (intensity * 5)}
                                                     fill={pos.color}
-                                                    opacity={activityLevel * 0.4} // Brighter glow
+                                                    opacity={activityLevel * 0.5} // Brighter glow
                                                     filter="url(#glow)"
                                                 />
                                             )}
-                                            <text x={pos.x} y={pos.y + 1.8} textAnchor="middle" fill={rawActivity > 0.1 ? '#fff' : '#475569'} fontSize="3.5" fontWeight="900" style={{ pointerEvents: 'none', textShadow: '0 0 5px rgba(0,0,0,0.8)' }}>{pos.label}</text>
+                                            <text x={pos.x} y={pos.y + 1.8} textAnchor="middle" fill={isActive ? '#fff' : '#64748b'} fontSize="3.5" fontWeight="900" style={{ pointerEvents: 'none', textShadow: '0 1px 3px rgba(0,0,0,0.9)' }}>{pos.label}</text>
                                         </g>
                                     );
                                 })}

@@ -8,6 +8,7 @@ import { NeuroMonitor } from './NeuroMonitor';
 import { useCognitiveKernelLite, AgentIdentity } from '../hooks/useCognitiveKernelLite';
 import { useSession, Agent } from '../contexts/SessionContext';
 import { AgentSelector } from './AgentSelector';
+import { LibraryPanel } from './LibraryPanel';
 import { confessionService } from '../services/ConfessionService';
 import { initLimbicConfessionListener } from '../core/listeners/LimbicConfessionListener';
 import { successSignalService } from '../services/SuccessSignalService';
@@ -516,7 +517,7 @@ export function CognitiveInterface() {
     };
 
     return (
-        <div className={`flex h-[100dvh] text-gray-100 font-sans transition-all duration-500 overflow-hidden 
+        <div className={`flex h-[100dvh] text-gray-100 font-sans transition-all duration-100 overflow-hidden 
         ${isSleeping ? 'brightness-50 grayscale-[0.5]' : ''} 
         ${isFatigued && !isSleeping ? 'brightness-75' : ''}
     `}>
@@ -533,7 +534,7 @@ export function CognitiveInterface() {
             )}
 
             {/* LEFT SIDEBAR: Session/Settings/Conversation (desktop only) */}
-            <div className="hidden xl:flex w-[350px] shrink-0 h-full border-r border-gray-800 bg-[#0f1219] flex-col relative z-10">
+            <div className="hidden xl:flex w-[280px] shrink-0 h-full border-r border-gray-800 bg-[#0f1219] flex-col relative z-10">
                 {/* Session Info */}
                 <div className="p-4 border-b border-gray-800 bg-[#0a0c10]">
                     <div className="flex items-center justify-between">
@@ -597,6 +598,8 @@ export function CognitiveInterface() {
                         </button>
                     </div>
                 </div>
+
+                <LibraryPanel />
 
                 <div className="p-4 border-b border-gray-800">
                     <div className="flex items-center justify-between mb-2">
@@ -956,8 +959,8 @@ export function CognitiveInterface() {
                                             </span>
                                         </div>
                                     )}
-                                    <div className="p-5">
-                                        <p className={`leading-relaxed ${msg.type === 'thought' ? 'text-base font-mono' : 'text-lg font-medium'}`}>
+                                    <div className="p-4 px-5">
+                                        <p className={`leading-relaxed ${msg.type === 'thought' ? 'text-sm font-mono opacity-80' : 'text-base font-medium'}`}>
                                             {msg.text}
                                         </p>
                                     </div>
@@ -1047,7 +1050,7 @@ export function CognitiveInterface() {
             </div>
 
             {/* RIGHT: NEURO-MONITOR */}
-            <div className="w-[650px] shrink-0 h-full border-l border-gray-800 hidden lg:block overflow-hidden bg-[#0a0c12]">
+            <div className="w-[450px] shrink-0 h-full border-l border-gray-800 hidden lg:block overflow-hidden bg-[#0a0c12]">
                 <NeuroMonitor
                     limbicState={limbicState}
                     somaState={somaState}
