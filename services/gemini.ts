@@ -13,7 +13,7 @@ import { applyAutonomyV2RawContract } from "../core/systems/RawContract";
 import { parseDetectedIntent } from "../core/systems/IntentContract";
 import { parseJsonFromLLM } from "../utils/AIResponseParser";
 import { TokenUsageLedger } from "../core/telemetry/TokenUsageLedger";
-import { ModelRouter } from "./ModelRouter";
+import { ModelRouter, runWithModelFallback } from "./ModelRouter";
 
 type GeminiTextSource = 'text' | 'parts' | 'alt' | 'none';
 
@@ -53,58 +53,51 @@ const ai = new GoogleGenAI({ apiKey });
 async function generateWithFallback(operation: string, params: any): Promise<any> {
     const task = ModelRouter.routeForOperation(operation);
     const chain = ModelRouter.getModelChain(task);
-    const errors: string[] = [];
-    let chosen: string | null = null;
-
-    for (let i = 0; i < chain.length; i++) {
-        const model = chain[i];
-        try {
-            const response = await ai.models.generateContent({
+    try {
+        const r = await runWithModelFallback(chain, async (model) => {
+            return ai.models.generateContent({
                 ...params,
                 model
             });
+        });
 
-            chosen = model;
-            if (i > 0) {
-                eventBus.publish({
-                    id: generateUUID(),
-                    timestamp: Date.now(),
-                    source: AgentType.CORTEX_FLOW,
-                    type: PacketType.PREDICTION_ERROR,
-                    payload: {
-                        metric: 'MODEL_FALLBACK',
-                        op: operation,
-                        task,
-                        chosenModel: chosen,
-                        attempts: i + 1,
-                        errors: errors.slice(0, 6)
-                    },
-                    priority: 0.1
-                });
-            }
-            return response;
-        } catch (e: any) {
-            const msg = e?.message ? String(e.message) : String(e);
-            errors.push(`${model}: ${msg}`);
+        if (r.attempts > 1) {
+            eventBus.publish({
+                id: generateUUID(),
+                timestamp: Date.now(),
+                source: AgentType.CORTEX_FLOW,
+                type: PacketType.PREDICTION_ERROR,
+                payload: {
+                    metric: 'MODEL_FALLBACK',
+                    op: operation,
+                    task,
+                    chosenModel: r.model,
+                    attempts: r.attempts,
+                    errors: r.errors.slice(0, 6)
+                },
+                priority: 0.1
+            });
         }
+
+        return r.value;
+    } catch (e: any) {
+        const msg = e?.message ? String(e.message) : String(e);
+        eventBus.publish({
+            id: generateUUID(),
+            timestamp: Date.now(),
+            source: AgentType.CORTEX_FLOW,
+            type: PacketType.PREDICTION_ERROR,
+            payload: {
+                metric: 'MODEL_FALLBACK_FAILED',
+                op: operation,
+                task,
+                attemptedModels: chain,
+                error: msg
+            },
+            priority: 0.2
+        });
+        throw new Error(`MODEL_FALLBACK_FAILED: ${operation} :: ${msg}`);
     }
-
-    eventBus.publish({
-        id: generateUUID(),
-        timestamp: Date.now(),
-        source: AgentType.CORTEX_FLOW,
-        type: PacketType.PREDICTION_ERROR,
-        payload: {
-            metric: 'MODEL_FALLBACK_FAILED',
-            op: operation,
-            task,
-            attemptedModels: chain,
-            errors: errors.slice(0, 12)
-        },
-        priority: 0.2
-    });
-
-    throw new Error(`MODEL_FALLBACK_FAILED: ${operation} :: ${errors.join(' | ')}`);
 }
 
 // 2. Robust JSON Parsing Helper
