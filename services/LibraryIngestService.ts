@@ -1,4 +1,4 @@
-import { supabase } from './supabase';
+import { supabase, MemoryService } from './supabase';
 import { CortexService } from './gemini';
 import type { LibraryDocument } from './LibraryService';
 
@@ -16,6 +16,42 @@ type ChunkingConfig = {
   maxChunks: number;
   singleChunkBelowChars: number;
 };
+
+function clampInt(n: number, min: number, max: number): number {
+  if (!Number.isFinite(n)) return min;
+  return Math.max(min, Math.min(max, Math.round(n)));
+}
+
+function stableHex32(input: string): string {
+  const s = String(input || '');
+  let h1 = 0x811c9dc5;
+  let h2 = 0x811c9dc5;
+  let h3 = 0x811c9dc5;
+  let h4 = 0x811c9dc5;
+  for (let i = 0; i < s.length; i++) {
+    const c = s.charCodeAt(i);
+    h1 ^= c;
+    h1 = Math.imul(h1, 0x01000193);
+    h2 ^= c;
+    h2 = Math.imul(h2, 0x01000197);
+    h3 ^= c;
+    h3 = Math.imul(h3, 0x0100019b);
+    h4 ^= c;
+    h4 = Math.imul(h4, 0x010001a1);
+  }
+  const to8 = (n: number) => (n >>> 0).toString(16).padStart(8, '0');
+  return `${to8(h1)}${to8(h2)}${to8(h3)}${to8(h4)}`;
+}
+
+function stableUuidLike(input: string): string {
+  const hex = stableHex32(input);
+  const a = hex.slice(0, 8);
+  const b = hex.slice(8, 12);
+  const c = `4${hex.slice(13, 16)}`;
+  const d = `a${hex.slice(17, 20)}`;
+  const e = hex.slice(20, 32);
+  return `${a}-${b}-${c}-${d}-${e}`;
+}
 
 function normalizeNewlines(text: string): string {
   return String(text || '').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
@@ -371,6 +407,88 @@ export async function ingestLibraryDocument(params: {
       .eq('id', doc.id);
 
     if (upd.error) return { ok: false, error: upd.error.message };
+
+    try {
+      const K = 20;
+      const neutralEmotion = { fear: 0, curiosity: 0, frustration: 0, satisfaction: 0 };
+
+      const docSummaryText = String(globalSummary || '').trim();
+      if (docSummaryText) {
+        const content = [
+          'WORKSPACE_DOC_SUMMARY',
+          `doc_id=${doc.id}`,
+          `name=${doc.original_name}`,
+          '',
+          docSummaryText
+        ].join('\n');
+
+        await MemoryService.storeMemory({
+          id: stableUuidLike(`workspace:doc:${doc.id}:${docSummaryText}`),
+          content,
+          emotionalContext: neutralEmotion,
+          timestamp: new Date().toISOString(),
+          neuralStrength: 3,
+          isCoreMemory: false,
+          metadata: {
+            kind: 'WORKSPACE_DOC_SUMMARY',
+            document_id: doc.id,
+            original_name: doc.original_name,
+            storage_bucket: doc.storage_bucket,
+            storage_path: doc.storage_path,
+            doc_type: doc.doc_type,
+            ingested_at: new Date().toISOString()
+          }
+        });
+      }
+
+      const candidates = chunks
+        .map((ch, i) => ({
+          chunk_index: ch.chunk_index,
+          start_offset: ch.start_offset,
+          end_offset: ch.end_offset,
+          summary: String(summariesForDoc[i]?.summary || '').trim()
+        }))
+        .filter((c) => Boolean(c.summary));
+
+      candidates.sort((a, b) => {
+        const dl = b.summary.length - a.summary.length;
+        if (dl !== 0) return dl;
+        return a.chunk_index - b.chunk_index;
+      });
+
+      for (const c of candidates.slice(0, K)) {
+        const content = [
+          'WORKSPACE_CHUNK_SUMMARY',
+          `doc_id=${doc.id}`,
+          `chunk_index=${c.chunk_index}`,
+          '',
+          c.summary
+        ].join('\n');
+
+        await MemoryService.storeMemory({
+          id: stableUuidLike(`workspace:chunk:${doc.id}:${c.chunk_index}:${c.summary}`),
+          content,
+          skipEmbedding: true,
+          emotionalContext: neutralEmotion,
+          timestamp: new Date().toISOString(),
+          neuralStrength: clampInt(1 + Math.min(3, Math.floor(c.summary.length / 200)), 1, 4),
+          isCoreMemory: false,
+          metadata: {
+            kind: 'WORKSPACE_CHUNK_SUMMARY',
+            document_id: doc.id,
+            original_name: doc.original_name,
+            storage_bucket: doc.storage_bucket,
+            storage_path: doc.storage_path,
+            doc_type: doc.doc_type,
+            chunk_index: c.chunk_index,
+            start_offset: c.start_offset,
+            end_offset: c.end_offset
+          }
+        });
+      }
+    } catch {
+      // swallow workspace->memory errors
+    }
 
     return { ok: true, chunkCount: chunks.length };
   } catch (err: any) {

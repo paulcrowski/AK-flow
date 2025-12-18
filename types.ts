@@ -137,6 +137,7 @@ export interface MemoryTrace {
   id?: string;
   content: string;
   embedding?: number[];
+  skipEmbedding?: boolean;
   emotionalContext: LimbicState;
   timestamp: string;
   neuralStrength?: number; // 1-100, Hebbian learning weight

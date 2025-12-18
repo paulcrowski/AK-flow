@@ -2,6 +2,7 @@ import { eventBus } from '../core/EventBus';
 import { CortexService } from '../services/gemini';
 import { MemoryService } from '../services/supabase';
 import { persistSearchKnowledgeChunk } from '../services/SearchKnowledgeChunker';
+import { downloadLibraryDocumentText, getLibraryChunkByIndex, searchLibraryChunks } from '../services/LibraryService';
 import { AgentType, PacketType } from '../types';
 import { getCurrentTraceId } from '../core/trace/TraceContext';
 import { generateUUID } from './uuid';
@@ -92,6 +93,124 @@ export const createProcessOutputForTools = (deps: ToolParserDeps) => {
 
   return async function processOutputForTools(rawText: string): Promise<string> {
     let cleanText = rawText;
+
+    // 0. WORKSPACE TOOLS (Library-backed)
+    // [SEARCH_LIBRARY: query]
+    // [READ_LIBRARY_CHUNK: <docId>#<chunkIndex>]
+    // [READ_LIBRARY_DOC: <docId>]
+    let workspaceMatch = cleanText.match(/\[(SEARCH_LIBRARY|READ_LIBRARY_CHUNK|READ_LIBRARY_DOC):\s*([^\]]+?)\]/i);
+    if (workspaceMatch) {
+      const tool = String(workspaceMatch[1] || '').toUpperCase();
+      const arg = String(workspaceMatch[2] || '').trim();
+      cleanText = cleanText.replace(workspaceMatch[0], '').trim();
+
+      const intentId = generateUUID();
+      eventBus.publish({
+        id: intentId,
+        timestamp: Date.now(),
+        source: AgentType.CORTEX_FLOW,
+        type: PacketType.TOOL_INTENT,
+        payload: { tool, arg },
+        priority: 0.8
+      });
+
+      try {
+        if (tool === 'SEARCH_LIBRARY') {
+          addMessage('assistant', `Invoking SEARCH_LIBRARY for: "${arg}"`, 'action');
+          setCurrentThought(`Workspace search: ${arg}...`);
+
+          const res: any = await withTimeout<any>(searchLibraryChunks({ query: arg, limit: 8 }) as any, TOOL_TIMEOUT_MS, tool);
+          if (res.ok === false) throw new Error(res.error);
+
+          const text = res.hits.length === 0
+            ? `SEARCH_LIBRARY: no hits for "${arg}".`
+            : [
+                `SEARCH_LIBRARY hits for "${arg}":`,
+                ...res.hits.slice(0, 8).map((h: any, i: number) =>
+                  `#${i + 1} doc=${h.document_id} chunk=${h.chunk_index} :: ${String(h.snippet || '').replace(/\s+/g, ' ').slice(0, 280)}`
+                )
+              ].join('\n');
+
+          eventBus.publish({
+            id: generateUUID(),
+            timestamp: Date.now(),
+            source: AgentType.CORTEX_FLOW,
+            type: PacketType.TOOL_RESULT,
+            payload: { tool, arg, intentId, hitsCount: res.hits.length },
+            priority: 0.8
+          });
+
+          addMessage('assistant', text, 'tool_result');
+        }
+
+        if (tool === 'READ_LIBRARY_CHUNK') {
+          const m = arg.match(/^([0-9a-fA-F-]{16,})\s*#\s*(\d+)$/);
+          if (!m) throw new Error('READ_LIBRARY_CHUNK arg must be <docId>#<chunkIndex>');
+          const documentId = m[1];
+          const chunkIndex = Number(m[2]);
+          addMessage('assistant', `Invoking READ_LIBRARY_CHUNK for: ${documentId}#${chunkIndex}`, 'action');
+          setCurrentThought(`Workspace read chunk: ${chunkIndex}...`);
+
+          const res: any = await withTimeout<any>(getLibraryChunkByIndex({ documentId, chunkIndex }) as any, TOOL_TIMEOUT_MS, tool);
+          if (res.ok === false) throw new Error(res.error);
+          if (!res.chunk) throw new Error('CHUNK_NOT_FOUND');
+
+          const chunkText = String(res.chunk.content || '').trim();
+          const text = [
+            `READ_LIBRARY_CHUNK ${documentId}#${chunkIndex}:`,
+            chunkText.slice(0, 8000)
+          ].join('\n');
+
+          eventBus.publish({
+            id: generateUUID(),
+            timestamp: Date.now(),
+            source: AgentType.CORTEX_FLOW,
+            type: PacketType.TOOL_RESULT,
+            payload: { tool, arg, intentId, length: chunkText.length },
+            priority: 0.8
+          });
+
+          addMessage('assistant', text, 'tool_result');
+        }
+
+        if (tool === 'READ_LIBRARY_DOC') {
+          const documentId = arg;
+          addMessage('assistant', `Invoking READ_LIBRARY_DOC for: ${documentId}`, 'action');
+          setCurrentThought('Workspace read document...');
+
+          const res: any = await withTimeout<any>(downloadLibraryDocumentText({ documentId }) as any, TOOL_TIMEOUT_MS, tool);
+          if (res.ok === false) throw new Error(res.error);
+
+          const raw = String(res.text || '');
+          const text = [
+            `READ_LIBRARY_DOC ${documentId} (${res.doc.original_name}):`,
+            raw.slice(0, 12000)
+          ].join('\n');
+
+          eventBus.publish({
+            id: generateUUID(),
+            timestamp: Date.now(),
+            source: AgentType.CORTEX_FLOW,
+            type: PacketType.TOOL_RESULT,
+            payload: { tool, arg, intentId, length: raw.length },
+            priority: 0.8
+          });
+
+          addMessage('assistant', text, 'tool_result');
+        }
+      } catch (error: any) {
+        eventBus.publish({
+          id: generateUUID(),
+          timestamp: Date.now(),
+          source: AgentType.CORTEX_FLOW,
+          type: PacketType.TOOL_ERROR,
+          payload: { tool, arg, intentId, error: error?.message || String(error) },
+          priority: 0.9
+        });
+
+        addMessage('assistant', `WORKSPACE_TOOL_ERROR: ${tool} ${String(arg).slice(0, 200)} :: ${error?.message || String(error)}`, 'thought');
+      }
+    }
 
     // 1. SEARCH TAG
     let searchMatch = cleanText.match(/\[SEARCH:\s*(.*?)\]/i);

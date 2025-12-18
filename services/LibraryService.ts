@@ -30,6 +30,16 @@ export interface LibraryChunk {
   created_at: string;
 }
 
+export interface LibraryChunkSearchHit {
+  document_id: string;
+  chunk_index: number;
+  start_offset: number;
+  end_offset: number;
+  summary?: string | null;
+  snippet: string;
+  score?: number;
+}
+
 function sanitizeFilename(name: string): string {
   const trimmed = name.trim();
   const safe = trimmed
@@ -133,4 +143,78 @@ export async function listLibraryChunks(params: {
 
   if (res.error) return { ok: false, error: res.error.message };
   return { ok: true, chunks: (res.data as LibraryChunk[]) || [] };
+}
+
+export async function getLibraryChunkByIndex(params: {
+  documentId: string;
+  chunkIndex: number;
+}): Promise<{ ok: true; chunk: LibraryChunk | null } | { ok: false; error: string }> {
+  const res = await supabase
+    .from('library_chunks')
+    .select('id,document_id,chunk_index,start_offset,end_offset,content,summary,created_at')
+    .eq('document_id', params.documentId)
+    .eq('chunk_index', params.chunkIndex)
+    .limit(1);
+
+  if (res.error) return { ok: false, error: res.error.message };
+  const first = Array.isArray(res.data) ? (res.data[0] as LibraryChunk | undefined) : undefined;
+  return { ok: true, chunk: first ?? null };
+}
+
+export async function searchLibraryChunks(params: {
+  query: string;
+  limit?: number;
+}): Promise<{ ok: true; hits: LibraryChunkSearchHit[] } | { ok: false; error: string }> {
+  const q = String(params.query || '').trim();
+  if (!q) return { ok: true, hits: [] };
+  const limit = params.limit ?? 8;
+
+  const like = `%${q}%`;
+  const res = await supabase
+    .from('library_chunks')
+    .select('document_id,chunk_index,start_offset,end_offset,content,summary')
+    .or(`content.ilike.${like},summary.ilike.${like}`)
+    .limit(limit);
+
+  if (res.error) return { ok: false, error: res.error.message };
+
+  const rows = (res.data as any[]) || [];
+  const hits: LibraryChunkSearchHit[] = rows.map((r) => {
+    const content = String(r.content || '');
+    const idx = content.toLowerCase().indexOf(q.toLowerCase());
+    const start = idx >= 0 ? Math.max(0, idx - 180) : 0;
+    const end = idx >= 0 ? Math.min(content.length, idx + q.length + 240) : Math.min(content.length, 420);
+    const snippet = content ? content.slice(start, end).trim() : String(r.summary || '').slice(0, 420).trim();
+    return {
+      document_id: String(r.document_id),
+      chunk_index: Number(r.chunk_index),
+      start_offset: Number(r.start_offset),
+      end_offset: Number(r.end_offset),
+      summary: r.summary ?? null,
+      snippet,
+      score: idx >= 0 ? 1 : 0
+    };
+  });
+
+  hits.sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
+  return { ok: true, hits };
+}
+
+export async function downloadLibraryDocumentText(params: {
+  documentId: string;
+}): Promise<{ ok: true; doc: LibraryDocument; text: string } | { ok: false; error: string }> {
+  const docRes = await supabase
+    .from('library_documents')
+    .select('*')
+    .eq('id', params.documentId)
+    .single();
+
+  if (docRes.error) return { ok: false, error: docRes.error.message };
+  const doc = docRes.data as LibraryDocument;
+
+  const dl = await supabase.storage.from(doc.storage_bucket).download(doc.storage_path);
+  if (dl.error) return { ok: false, error: dl.error.message };
+  const text = await dl.data.text();
+
+  return { ok: true, doc, text };
 }

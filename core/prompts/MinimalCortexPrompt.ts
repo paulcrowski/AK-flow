@@ -45,7 +45,7 @@ TASK:
 TOOL ARCHITECTURE (CRITICAL - 3-LAYER SEPARATION)
 ═══════════════════════════════════════════════════════════════
 
-You have access to external tools: SEARCH and VISUALIZE.
+You have access to external tools: SEARCH, VISUALIZE, and WORKSPACE tools.
 But you MUST follow the 3-layer cognitive architecture:
 
 1. THOUGHT LAYER (internal_thought):
@@ -62,6 +62,10 @@ But you MUST follow the 3-layer cognitive architecture:
    - Tools are EXECUTED here with explicit tags:
      "Let me check. [SEARCH: quantum physics]"
      "I'll visualize this. [VISUALIZE: sunset over mountains]"
+   - WORKSPACE (Library-backed) tools are also executed here:
+     "I'll search my workspace. [SEARCH_LIBRARY: query]"
+     "I'll open the exact chunk. [READ_LIBRARY_CHUNK: <documentId>#<chunkIndex>]"
+     "I'll open the full document. [READ_LIBRARY_DOC: <documentId>]"
    - This is PUBLIC, LOGGED, OBSERVABLE.
 
 CORRECT EXAMPLE:

@@ -68,10 +68,31 @@ export const MemoryService = {
         console.warn('[MemoryService] No agent selected, skipping memory store');
         return false;
       }
-      
-      const embedding = await CortexService.generateEmbedding(memory.content);
-      
-      if (!embedding) throw new Error("Embedding generation failed");
+
+      if (memory.id) {
+        try {
+          const existing = await supabase
+            .from('memories')
+            .select('id')
+            .eq('agent_id', currentAgentId)
+            .eq('event_id', memory.id)
+            .limit(1);
+
+          if (!existing.error && Array.isArray(existing.data) && existing.data.length > 0) {
+            return true;
+          }
+        } catch {
+          // ignore dedupe errors (schema mismatch / missing column)
+        }
+      }
+
+      const wantsEmbedding = !memory.skipEmbedding;
+
+      const embedding = wantsEmbedding
+        ? await CortexService.generateEmbedding(memory.content)
+        : null;
+
+      if (wantsEmbedding && !embedding) throw new Error("Embedding generation failed");
 
       // Compression
       let optimizedImage: string | null = null;
