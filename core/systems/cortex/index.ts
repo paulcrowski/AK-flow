@@ -13,3 +13,4 @@ export { formatHistoryForCortex, pruneHistory } from './history';
 export { performDeepResearch } from './deepResearch';
 export { processUserMessage } from './processUserMessage';
 export { pursueGoal } from './goalPursuit';
+export { recallMemories } from './memoryRecall';

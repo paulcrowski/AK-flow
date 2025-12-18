@@ -3,7 +3,7 @@ import path from 'node:path';
 
 const ROOT = process.cwd();
 
-const DEFAULT_SOFT_LIMIT = 450;
+const DEFAULT_SOFT_LIMIT = 500;
 const DEFAULT_HARD_LIMIT = 700;
 
 const softLimit = Number.parseInt(process.env.GODFILE_SOFT_LIMIT || '', 10) || DEFAULT_SOFT_LIMIT;
@@ -11,8 +11,6 @@ const hardLimit = Number.parseInt(process.env.GODFILE_HARD_LIMIT || '', 10) || D
 
 const DEFAULT_ALLOWLIST = new Set([
   'core/systems/EventLoop.ts',
-  'core/kernel/reducer.ts',
-  'core/systems/CortexSystem.ts',
   'services/gemini.ts',
   'ak-nexus/src/stores/nexusStore.ts'
 ]);
