@@ -171,6 +171,18 @@ export function LibraryPanel() {
                 <div className="text-[9px] text-gray-600 font-mono">{Math.round((d.byte_size || 0) / 1024)}kb</div>
               </div>
 
+              {d.ingested_at && (
+                <div className="mt-2 text-[9px] text-gray-600 font-mono">
+                  ingested: {new Date(d.ingested_at).toLocaleString()}
+                </div>
+              )}
+
+              {d.global_summary && String(d.global_summary).trim() && (
+                <div className="mt-2 text-[10px] text-gray-400 leading-snug break-words">
+                  {String(d.global_summary).slice(0, 220)}{String(d.global_summary).length > 220 ? '…' : ''}
+                </div>
+              )}
+
               {ingestErrorById[d.id] && (
                 <div className="mt-2 text-[10px] text-red-400 break-words">
                   {ingestErrorById[d.id]}

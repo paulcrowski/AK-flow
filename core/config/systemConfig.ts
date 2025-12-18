@@ -65,7 +65,7 @@ export const SYSTEM_CONFIG = {
     traceAutoInject: true,      // Był: USE_TRACE_AUTO_INJECT
     traceHandlerScope: true,    // Był: USE_TRACE_HANDLER_SCOPE
     traceExternalIds: true,     // Był: USE_TRACE_EXTERNAL_IDS
-    traceMissingAlert: true,    // Był: USE_TRACE_MISSING_ALERT
+    traceMissingAlert: false,    // Był: USE_TRACE_MISSING_ALERT
   },
 
   // ═══════════════════════════════════════════════════════════════════════════

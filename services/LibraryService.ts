@@ -11,6 +11,9 @@ export interface LibraryDocument {
   mime_type: string;
   byte_size: number;
   doc_type: string;
+  tags?: any;
+  reason?: string;
+  global_summary?: string;
   status: string;
   created_at: string;
   ingested_at?: string | null;
