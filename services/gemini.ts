@@ -13,6 +13,30 @@ import { applyAutonomyV2RawContract } from "../core/systems/RawContract";
 import { parseDetectedIntent } from "../core/systems/IntentContract";
 import { parseJsonFromLLM } from "../utils/AIResponseParser";
 
+type GeminiTextSource = 'text' | 'parts' | 'alt' | 'none';
+
+function getGeminiTextWithMeta(resp: any): { text: string; source: GeminiTextSource } {
+    const direct = typeof resp?.text === 'string' ? resp.text : '';
+    if (direct && direct.trim()) return { text: direct, source: 'text' };
+
+    const parts = resp?.candidates?.[0]?.content?.parts;
+    if (Array.isArray(parts)) {
+        const joined = parts
+            .map((p: any) => (typeof p?.text === 'string' ? p.text : ''))
+            .join('');
+        if (joined && joined.trim()) return { text: joined, source: 'parts' };
+    }
+
+    const alt = resp?.candidates?.[0]?.content?.text;
+    if (typeof alt === 'string' && alt.trim()) return { text: alt, source: 'alt' };
+
+    return { text: '', source: 'none' };
+}
+
+export function getGeminiText(resp: any): string {
+    return getGeminiTextWithMeta(resp).text;
+}
+
 // 1. Safe Environment Access & Initialization (Vite)
 const apiKey = import.meta.env.VITE_GEMINI_API_KEY as string | undefined;
 
@@ -244,7 +268,7 @@ export const CortexService = {
                 }
             });
             logUsage('analyzeVisualInput', response);
-            return response.text || "Visual perception unclear.";
+            return getGeminiText(response) || "Visual perception unclear.";
         });
     },
 
@@ -276,7 +300,7 @@ OUTPUT FORMAT:
                     `
                 });
                 logUsage('consolidateMemories', response);
-                return response.text || safeDefault;
+                return getGeminiText(response) || safeDefault;
             } catch (e) {
                 console.warn("Dream consolidation failed (non-critical)", e);
                 return safeDefault;
@@ -322,7 +346,7 @@ OUTPUT FORMAT:
                 const sources = groundingChunks
                     .map((c: any) => c.web?.uri ? { title: c.web.title, uri: c.web.uri } : null)
                     .filter((Boolean) as any);
-                const text = response.text || "Data stream inconclusive.";
+                const text = getGeminiText(response) || "Data stream inconclusive.";
                 return { synthesis: text, sources: sources };
             } catch (e: any) {
                 return { synthesis: "The connection to the digital ocean is turbulent.", sources: [] };
@@ -362,7 +386,7 @@ OUTPUT FORMAT:
                 }
             });
             logUsage('assessInput', response);
-            return cleanJSON(response.text, safeDefault, undefined, 'assessInput');
+            return cleanJSON(getGeminiText(response), safeDefault, undefined, 'assessInput');
         });
     },
 
@@ -501,7 +525,7 @@ OUTPUT FORMAT:
             });
 
             logUsage('generateResponse', response);
-            const json = cleanJSON(response.text, safeDefault, undefined, 'generateResponse');
+            const json = cleanJSON(getGeminiText(response), safeDefault, undefined, 'generateResponse');
 
             return {
                 text: json.response_text || safeDefault.response_text,
@@ -583,8 +607,10 @@ OUTPUT FORMAT:
             });
             logUsage('autonomousVolition', response);
 
+            const rawText = getGeminiText(response);
+
             // DEBUG: Raw Logging
-            console.log("AV RAW:", response.text);
+            console.log("AV RAW:", rawText);
 
             // FAIL-CLOSED: Use strict parsing - if fail, autonomy stays silent
             const parseResult = parseJSONStrict<{
@@ -592,7 +618,7 @@ OUTPUT FORMAT:
                 voice_pressure: number;
                 speech_content?: string;
                 research_topic?: string;
-            }>(response.text);
+            }>(rawText);
             
             if (!parseResult.success || !parseResult.data) {
                 // FAIL-CLOSED: Log failure and return silent response
@@ -605,7 +631,7 @@ OUTPUT FORMAT:
                     payload: {
                         metric: "AV_JSON_PARSE_FAILURE",
                         error: parseResult.error,
-                        rawText: parseResult.rawText || response.text?.substring(0, 200),
+                        rawText: parseResult.rawText || rawText?.substring(0, 200),
                         action: "SILENCED"
                     },
                     priority: 0.8
@@ -664,11 +690,12 @@ OUTPUT FORMAT:
             });
             logUsage('autonomousVolitionV2', response);
             
-            const rawForLog = (response.text || '').slice(0, 2000);
+            const rawText = getGeminiText(response);
+            const rawForLog = (rawText || '').slice(0, 2000);
             console.log("AV_V2 RAW:", rawForLog);
 
             if (isMainFeatureEnabled('ONE_MIND_ENABLED')) {
-                const contracted = applyAutonomyV2RawContract(response.text, {
+                const contracted = applyAutonomyV2RawContract(rawText, {
                     maxRawLen: 20000,
                     maxInternalMonologueLen: 1200,
                     maxSpeechLen: 1200
@@ -708,7 +735,7 @@ OUTPUT FORMAT:
                 internal_monologue: string;
                 voice_pressure: number;
                 speech_content?: string;
-            }>(response.text);
+            }>(rawText);
             
             if (!parseResult.success || !parseResult.data) {
                 console.warn("[AV_V2] JSON parse failed, autonomy silenced:", parseResult.error);
@@ -784,7 +811,7 @@ OUTPUT FORMAT:
                 }
             });
             logUsage('structuredDialogue', response);
-            return cleanJSON(response.text, safeDefault, undefined, 'structuredDialogue');
+            return cleanJSON(getGeminiText(response), safeDefault, undefined, 'structuredDialogue');
         });
     },
 
@@ -851,7 +878,8 @@ OUTPUT FORMAT:
             };
 
             const first = await makeCall(basePrompt);
-            const parsed1 = parseDetectedIntent(first.text, safeDefault);
+            const firstMeta = getGeminiTextWithMeta(first);
+            const parsed1 = parseDetectedIntent(firstMeta.text, safeDefault);
             if (parsed1.ok) return parsed1.value;
 
             eventBus.publish({
@@ -867,8 +895,28 @@ OUTPUT FORMAT:
             });
 
             const second = await makeCall(strictRetryPrompt);
-            const parsed2 = parseDetectedIntent(second.text, safeDefault);
+            const secondMeta = getGeminiTextWithMeta(second);
+            const parsed2 = parseDetectedIntent(secondMeta.text, safeDefault);
             if (parsed2.ok) return parsed2.value;
+
+            if (!firstMeta.text || !secondMeta.text || firstMeta.source !== 'text' || secondMeta.source !== 'text') {
+                eventBus.publish({
+                    id: generateUUID(),
+                    timestamp: Date.now(),
+                    source: AgentType.CORTEX_FLOW,
+                    type: PacketType.PREDICTION_ERROR,
+                    payload: {
+                        metric: 'DETECT_INTENT_RAW_SOURCE',
+                        first_len: firstMeta.text.length,
+                        first_head: firstMeta.text.slice(0, 120),
+                        first_from: firstMeta.source,
+                        second_len: secondMeta.text.length,
+                        second_head: secondMeta.text.slice(0, 120),
+                        second_from: secondMeta.source
+                    },
+                    priority: 0.1
+                });
+            }
 
             eventBus.publish({
                 id: generateUUID(),
@@ -911,7 +959,7 @@ OUTPUT FORMAT:
                 }
             });
             logUsage('generateJSON', response);
-            return cleanJSON(response.text, defaultValue, undefined, 'generateJSON');
+            return cleanJSON(getGeminiText(response), defaultValue, undefined, 'generateJSON');
         }, 2, 2000);
     }
 };
