@@ -256,9 +256,35 @@ function extractBalancedFrom(text: string, start: number): string | null {
     return null;
 }
 
+function unwrapJsonStringLiteral(text: string): string | null {
+    const raw = String(text || '').trim();
+    if (!raw) return null;
+
+    // Common failure mode: model returns JSON object encoded as a JSON string
+    // Example: "{\"style\":\"NEUTRAL\"}"
+    if (!raw.startsWith('"')) return null;
+
+    try {
+        const unwrapped = JSON.parse(raw);
+        if (typeof unwrapped !== 'string') return null;
+        const inner = unwrapped.trim();
+        if (!inner) return null;
+        if (!(inner.includes('{') || inner.includes('['))) return null;
+        return inner;
+    } catch {
+        return null;
+    }
+}
+
 export function extractJsonBlock(text: string): string | null {
     const raw = String(text || '').trim();
     if (!raw) return null;
+
+    const unwrapped = unwrapJsonStringLiteral(raw);
+    if (unwrapped) {
+        const nested = extractJsonBlock(unwrapped);
+        if (nested) return nested;
+    }
 
     const fenced = extractCodeFenceBlocks(raw);
     if (fenced.length > 0) return fenced[0];
@@ -337,6 +363,11 @@ export function parseJsonFromLLM<T>(
 
     const candidates: string[] = [];
 
+    const unwrapped = unwrapJsonStringLiteral(raw);
+    if (unwrapped) {
+        candidates.push(unwrapped);
+    }
+
     if (!options.requireJsonBlock && (raw.startsWith('{') || raw.startsWith('['))) {
         candidates.push(raw);
     }
@@ -346,6 +377,11 @@ export function parseJsonFromLLM<T>(
 
     const block = extractJsonBlock(raw);
     if (block) candidates.push(block);
+
+    if (unwrapped) {
+        const nestedBlock = extractJsonBlock(unwrapped);
+        if (nestedBlock) candidates.push(nestedBlock);
+    }
 
     const uniq = Array.from(new Set(candidates.map((c) => c.trim()).filter(Boolean)));
     if (uniq.length === 0) return { ok: false, reason: 'NO_JSON' };
