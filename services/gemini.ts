@@ -12,6 +12,7 @@ import { UnifiedContextBuilder, type UnifiedContext, type ContextBuilderInput } 
 import { applyAutonomyV2RawContract } from "../core/systems/RawContract";
 import { parseDetectedIntent } from "../core/systems/IntentContract";
 import { parseJsonFromLLM } from "../utils/AIResponseParser";
+import { TokenUsageLedger } from "../core/telemetry/TokenUsageLedger";
 
 type GeminiTextSource = 'text' | 'parts' | 'alt' | 'none';
 
@@ -159,6 +160,16 @@ const cleanJSON = <T>(
 const logUsage = (operation: string, response: any) => {
     if (response && response.usageMetadata) {
         const { promptTokenCount, candidatesTokenCount, totalTokenCount } = response.usageMetadata;
+
+        TokenUsageLedger.record({
+            agentId: getCurrentAgentId(),
+            op: operation,
+            inTokens: promptTokenCount || 0,
+            outTokens: candidatesTokenCount || 0,
+            totalTokens: totalTokenCount || 0,
+            at: Date.now()
+        });
+
         eventBus.publish({
             id: generateUUID(),
             timestamp: Date.now(),
