@@ -1,9 +1,24 @@
 # 🧠 AK-FLOW Architecture Map
 
-> **Wersja:** 6.0 (2025-12-10)
+> **Wersja:** 6.6 (2025-12-18)
 > **Cel:** Prosta mapa jak działa agent i jaki ma flow
 
 ---
+
+## 🆕 FAZA 6.6: Integrity & Reliability (2025-12-18)
+
+**Cel:** uszczelnienie multi-tenancy przez RLS oraz zapewnienie ciągłości pracy przy awariach API.
+
+**Strict Ownership (RLS):**
+- Usunięcie `public` policies w Supabase.
+- Wymuszenie `owner_id` w `useCognitiveKernelLite` i `LibraryService`.
+- Weryfikacja: `RLSDiagnostics.validate()`.
+
+**Model Router:**
+- Przełącznik: `Flash (Standard) → Pro (Emergency)`.
+- Fallback przy błędach: `429`, `503`.
+- Telemetria: `MODEL_FALLBACK_TRIGGERED`.
+
 
 ## 🆕 FAZA 6.5: Grounded Strict + Provenance + Dream Topic Shards (2025-12-17)
 

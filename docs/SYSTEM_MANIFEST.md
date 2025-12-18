@@ -1,10 +1,29 @@
 # AK-FLOW: Cognitive Agent Architecture Manifest
-**System Version:** 6.5 (Grounded Strict + Provenance + Dream Topic Shards)  
-**Last Updated:** 2025-12-17  
+**System Version:** 6.6 (Strict Ownership RLS + Model Router Fallback)  
+**Last Updated:** 2025-12-18  
 **Architecture Type:** Active Inference (Friston) + Global Workspace Theory + Multi-Modal RAG + **Stateless Inference Engine**  
 **Status:** Autonomous / Stateful / Modular / Self-Aware / Goal-Driven / Personality-Driven / **Emergent Identity**
 
 ---
+
+## 🆕 What's New in V6.6 (2025-12-18)
+
+### Integrity: Strict Ownership RLS
+**Cel:** Uniemożliwić jakikolwiek dostęp do danych (pamięć, cele, stan) bez jawnej weryfikacji właściciela na poziomie bazy danych.
+
+**Wkład:**
+- Usunięcie przestarzałych polityk publicznych Supabase.
+- Wdrożenie schematu `owner_id` jako wymaganego pola w mechanizmie RLS.
+- `RLSDiagnostics`: wbudowana weryfikacja uprawnień przy starcie sesji.
+
+### Reliability: Active Model Router (Flash → Pro Fallback)
+**Cel:** Agent musi działać nawet przy awariach API lub przekroczeniu limitów Quota.
+
+**Wkład:**
+- `ModelRouter`: inteligentny wrapper na GeminiService.
+- Automatyczne przełączenie na `gemini-1.5-pro` przy błędach modelu Flash.
+- Telemetria `MODEL_FALLBACK_TRIGGERED` umożliwiająca analizę stabilności dostawców.
+
 
 ## 🆕 What's New in V6.5 (2025-12-17)
 

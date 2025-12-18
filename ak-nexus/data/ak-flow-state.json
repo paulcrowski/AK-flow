@@ -1,10 +1,10 @@
 {
   "version": "1.0.0",
-  "lastUpdated": "2025-12-17T16:33:00.000Z",
-  "lastModified": "2025-12-17T16:33:00.000Z",
+  "lastUpdated": "2025-12-18T19:10:00.000Z",
+  "lastModified": "2025-12-18T19:10:00.000Z",
   "modifiedBy": "AI_WINDSURF",
   "project": "AK-Flow",
-  "dailyGoal": "PROTOCOL: ALBERTO FIRST CONTACT (Vision, Orientation, Memory)",
+  "dailyGoal": "AgentTrajectory Phase 1 (Execution-First Autonomy)",
   "tasks": [
     {
       "id": "task-test-000",
@@ -851,6 +851,17 @@
       ],
       "createdAt": "2025-12-17T16:33:00.000Z",
       "updatedAt": "2025-12-17T16:33:00.000Z"
+    },
+    {
+      "id": "note-011",
+      "title": "Daily Close: 2025-12-18",
+      "content": "DONE: Integrity & Reliability. Wdrożono ścisły RLS owner_id w Supabase (usunięto legacy public policies) + diagnostyka RLSDiagnostics. Dodano ModelRouter z mechanizmem Flash→Pro Fallback i telemetrią błędów 429/503. Poprawiono typowanie shimów testowych i stabilność sesji.\nVERIFY: npm run build PASS. npm test PASS (556/556).\nCOMMITS: 44b5862, cd19b5b.\nNEXT: AgentTrajectory Phase 1 (Execution-First).",
+      "category": "INSIGHT",
+      "tags": [
+        "daily_close"
+      ],
+      "createdAt": "2025-12-18T19:10:00.000Z",
+      "updatedAt": "2025-12-18T19:10:00.000Z"
     }
   ],
   "stats": {
@@ -859,11 +870,11 @@
     "partial": 2,
     "planned": 10,
     "overallProgress": 52,
-    "currentPhase": "FAZA 6.2: Kernel Stabilization",
+    "currentPhase": "FAZA 6.6: Integrity & Reliability",
     "todayCompleted": 2,
-    "streak": 6,
-    "testsTotal": 514,
-    "testsPassing": 514,
+    "streak": 7,
+    "testsTotal": 556,
+    "testsPassing": 556,
     "blocked": 0,
     "notImplemented": 14
   },
