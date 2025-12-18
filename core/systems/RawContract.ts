@@ -96,6 +96,18 @@ export function applyAutonomyV2RawContract(
     const parsedResult = parseJsonFromLLM<any>(sanitized, { allowRepair: true, requireJsonBlock: true });
     if (!parsedResult.ok) {
         if (parsedResult.reason === 'NO_JSON') {
+            // If there's a JSON opener but no extractable balanced block, treat as parse error (truncated/invalid JSON).
+            // "NO_JSON_OBJECT" is reserved for outputs that contain no JSON at all.
+            const hasJsonOpener = sanitized.includes('{') || sanitized.includes('[');
+            if (hasJsonOpener) {
+                return {
+                    ok: false,
+                    value: silent,
+                    reason: 'JSON_PARSE_ERROR',
+                    details: parsedResult.error || 'NO_BALANCED_JSON_BLOCK'
+                };
+            }
+
             return { ok: false, value: silent, reason: 'NO_JSON_OBJECT' };
         }
         if (parsedResult.reason === 'EMPTY') {
