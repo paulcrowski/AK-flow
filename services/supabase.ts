@@ -13,6 +13,14 @@ const SUPABASE_KEY = getEnv('SUPABASE_KEY') || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpX
 
 export const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
+if (
+  typeof window !== 'undefined' &&
+  typeof import.meta !== 'undefined' &&
+  Boolean((import.meta as any).env?.DEV)
+) {
+  (globalThis as any).__ak_supabase = supabase;
+}
+
 const sanitizeJson = (input: unknown): Record<string, any> => {
   if (!input || typeof input !== 'object') return {};
   try {

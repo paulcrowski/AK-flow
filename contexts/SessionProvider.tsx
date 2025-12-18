@@ -4,26 +4,60 @@ import type { Agent, SessionContextType } from './SessionTypes';
 
 const SessionContext = createContext<SessionContextType | null>(null);
 
-const LS_USER_ID = 'ak_flow_user_id';
 const LS_AGENT_ID = 'ak_flow_agent_id';
 
 export function SessionProvider({ children }: { children: ReactNode }) {
   const [userId, setUserId] = useState<string | null>(null);
+  const [authUserId, setAuthUserId] = useState<string | null>(null);
+  const [userEmail, setUserEmail] = useState<string | null>(null);
   const [agentId, setAgentId] = useState<string | null>(null);
   const [agents, setAgents] = useState<Agent[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    const storedUserId = localStorage.getItem(LS_USER_ID);
     const storedAgentId = localStorage.getItem(LS_AGENT_ID);
 
-    if (storedUserId) {
-      setUserId(storedUserId);
-    }
     if (storedAgentId) {
       setAgentId(storedAgentId);
     }
-    setIsLoading(false);
+
+    let isMounted = true;
+
+    // Bootstrap from existing Supabase session (if any)
+    supabase.auth
+      .getSession()
+      .then(({ data, error }) => {
+        if (!isMounted) return;
+        if (error) {
+          console.warn('[SessionProvider] getSession error:', error.message);
+          setIsLoading(false);
+          return;
+        }
+
+        const user = data?.session?.user ?? null;
+        setAuthUserId(user?.id ?? null);
+        setUserEmail((user?.email ?? null) as string | null);
+        // Keep compatibility with existing agents table using user_id=email
+        setUserId((user?.email ?? null) as string | null);
+        setIsLoading(false);
+      })
+      .catch((err) => {
+        if (!isMounted) return;
+        console.warn('[SessionProvider] getSession exception:', err);
+        setIsLoading(false);
+      });
+
+    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
+      const user = session?.user ?? null;
+      setAuthUserId(user?.id ?? null);
+      setUserEmail((user?.email ?? null) as string | null);
+      setUserId((user?.email ?? null) as string | null);
+    });
+
+    return () => {
+      isMounted = false;
+      sub?.subscription?.unsubscribe();
+    };
   }, []);
 
   useEffect(() => {
@@ -64,17 +98,35 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const login = (email: string) => {
+  const login = async (email: string, password: string): Promise<{ ok: boolean; error?: string }> => {
     const normalizedEmail = email.toLowerCase().trim();
-    setUserId(normalizedEmail);
-    localStorage.setItem(LS_USER_ID, normalizedEmail);
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: normalizedEmail,
+        password
+      });
+
+      if (error) {
+        return { ok: false, error: error.message };
+      }
+
+      const user = data?.user ?? null;
+      setAuthUserId(user?.id ?? null);
+      setUserEmail((user?.email ?? null) as string | null);
+      setUserId((user?.email ?? null) as string | null);
+      return { ok: true };
+    } catch (err: any) {
+      return { ok: false, error: String(err?.message ?? err) };
+    }
   };
 
   const logout = () => {
+    supabase.auth.signOut().catch(() => {});
     setUserId(null);
+    setUserEmail(null);
+    setAuthUserId(null);
     setAgentId(null);
     setAgents([]);
-    localStorage.removeItem(LS_USER_ID);
     localStorage.removeItem(LS_AGENT_ID);
   };
 
@@ -173,6 +225,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   return (
     <SessionContext.Provider value={{
       userId,
+      authUserId,
+      userEmail,
       agentId,
       currentAgent,
       agents,

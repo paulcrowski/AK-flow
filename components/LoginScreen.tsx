@@ -5,9 +5,11 @@ import { useSession } from '../contexts/SessionContext';
 export function LoginScreen() {
   const { login } = useSession();
   const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     const trimmed = email.trim().toLowerCase();
@@ -23,8 +25,20 @@ export function LoginScreen() {
       return;
     }
 
+    if (!password) {
+      setError('Podaj hasło');
+      return;
+    }
+
     setError('');
-    login(trimmed);
+
+    setIsSubmitting(true);
+    const res = await login(trimmed, password);
+    setIsSubmitting(false);
+
+    if (!res.ok) {
+      setError(res.error || 'Logowanie nieudane');
+    }
   };
 
   return (
@@ -54,6 +68,20 @@ export function LoginScreen() {
               className="w-full px-4 py-3 bg-[#0a0c10] border border-gray-700 rounded-lg text-white placeholder-gray-600 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 transition-colors"
               autoFocus
             />
+          </div>
+
+          <div className="mb-6">
+            <label htmlFor="password" className="block text-sm font-medium text-gray-400 mb-2">
+              Hasło
+            </label>
+            <input
+              type="password"
+              id="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="••••••••"
+              className="w-full px-4 py-3 bg-[#0a0c10] border border-gray-700 rounded-lg text-white placeholder-gray-600 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 transition-colors"
+            />
             {error && (
               <p className="mt-2 text-sm text-red-400">{error}</p>
             )}
@@ -61,6 +89,7 @@ export function LoginScreen() {
 
           <button
             type="submit"
+            disabled={isSubmitting}
             className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-gradient-to-r from-cyan-600 to-cyan-500 hover:from-cyan-500 hover:to-cyan-400 text-white font-medium rounded-lg transition-all duration-200 shadow-lg shadow-cyan-500/20"
           >
             Wejdź <ArrowRight className="w-4 h-4" />
@@ -101,7 +130,7 @@ export function LoginScreen() {
 
         {/* Footer */}
         <p className="text-center text-gray-700 text-xs mt-8">
-          Zero haseł • Zero weryfikacji • Lokalne środowisko
+          Supabase Auth • Lokalne środowisko
         </p>
       </div>
     </div>

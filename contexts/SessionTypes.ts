@@ -48,11 +48,13 @@ export interface Agent {
 
 export interface SessionContextType {
   userId: string | null;
+  authUserId: string | null;
+  userEmail: string | null;
   agentId: string | null;
   currentAgent: Agent | null;
   agents: Agent[];
   isLoading: boolean;
-  login: (email: string) => void;
+  login: (email: string, password: string) => Promise<{ ok: boolean; error?: string }>;
   logout: () => void;
   selectAgent: (agentId: string) => void;
   createAgent: (name: string, persona?: string) => Promise<Agent | null>;
