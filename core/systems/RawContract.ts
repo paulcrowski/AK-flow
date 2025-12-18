@@ -28,10 +28,41 @@ function extractJSONObject(input: string): string | null {
     const start = input.indexOf('{');
     if (start === -1) return null;
 
-    const end = input.lastIndexOf('}');
-    if (end === -1) return input.slice(start);
-    if (end <= start) return null;
-    return input.slice(start, end + 1);
+    let inString = false;
+    let escape = false;
+    let depth = 0;
+
+    for (let i = start; i < input.length; i++) {
+        const ch = input[i];
+
+        if (inString) {
+            if (escape) {
+                escape = false;
+                continue;
+            }
+            if (ch === '\\') {
+                escape = true;
+                continue;
+            }
+            if (ch === '"') {
+                inString = false;
+            }
+            continue;
+        }
+
+        if (ch === '"') {
+            inString = true;
+            continue;
+        }
+
+        if (ch === '{') depth++;
+        if (ch === '}') {
+            depth--;
+            if (depth === 0) return input.slice(start, i + 1);
+        }
+    }
+
+    return null;
 }
 
 /**
@@ -42,16 +73,65 @@ function extractJSONObject(input: string): string | null {
  */
 function repairJSON(input: string): string {
     let result = input;
-    
+
+    // Normalize smart quotes from some model outputs
+    result = result.replace(/[“”]/g, '"').replace(/[‘’]/g, "'");
+
+    // Escape newlines inside strings (common LLM JSON failure)
+    {
+        let out = '';
+        let inString = false;
+        let escape = false;
+        for (let i = 0; i < result.length; i++) {
+            const ch = result[i];
+            if (inString) {
+                if (escape) {
+                    out += ch;
+                    escape = false;
+                    continue;
+                }
+                if (ch === '\\') {
+                    out += ch;
+                    escape = true;
+                    continue;
+                }
+                if (ch === '"') {
+                    out += ch;
+                    inString = false;
+                    continue;
+                }
+                if (ch === '\n') {
+                    out += '\\n';
+                    continue;
+                }
+                if (ch === '\r') {
+                    out += '\\r';
+                    continue;
+                }
+                out += ch;
+                continue;
+            }
+
+            if (ch === '"') {
+                out += ch;
+                inString = true;
+                continue;
+            }
+
+            out += ch;
+        }
+        result = out;
+    }
+
     // Replace single quotes with double quotes (but not inside strings)
     result = result.replace(/'/g, '"');
-    
+
     // Fix unquoted property names: { foo: "bar" } → { "foo": "bar" }
     result = result.replace(/([{,]\s*)([a-zA-Z_][a-zA-Z0-9_]*)\s*:/g, '$1"$2":');
-    
+
     // Remove trailing commas before } or ]
     result = result.replace(/,(\s*[}\]])/g, '$1');
-    
+
     return result;
 }
 

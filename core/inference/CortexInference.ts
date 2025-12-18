@@ -72,6 +72,104 @@ function logUsage(operation: string, response: any): void {
   }
 }
 
+function extractJSONObjectBalanced(input: string): string | null {
+  const start = input.indexOf('{');
+  if (start === -1) return null;
+
+  let inString = false;
+  let escape = false;
+  let depth = 0;
+
+  for (let i = start; i < input.length; i++) {
+    const ch = input[i];
+
+    if (inString) {
+      if (escape) {
+        escape = false;
+        continue;
+      }
+      if (ch === '\\') {
+        escape = true;
+        continue;
+      }
+      if (ch === '"') {
+        inString = false;
+      }
+      continue;
+    }
+
+    if (ch === '"') {
+      inString = true;
+      continue;
+    }
+
+    if (ch === '{') depth++;
+    if (ch === '}') {
+      depth--;
+      if (depth === 0) return input.slice(start, i + 1);
+    }
+  }
+
+  return null;
+}
+
+function repairLLMJson(input: string): string {
+  let result = input;
+
+  result = result.replace(/[“”]/g, '"').replace(/[‘’]/g, "'");
+
+  {
+    let out = '';
+    let inString = false;
+    let escape = false;
+
+    for (let i = 0; i < result.length; i++) {
+      const ch = result[i];
+      if (inString) {
+        if (escape) {
+          out += ch;
+          escape = false;
+          continue;
+        }
+        if (ch === '\\') {
+          out += ch;
+          escape = true;
+          continue;
+        }
+        if (ch === '"') {
+          out += ch;
+          inString = false;
+          continue;
+        }
+        if (ch === '\n') {
+          out += '\\n';
+          continue;
+        }
+        if (ch === '\r') {
+          out += '\\r';
+          continue;
+        }
+        out += ch;
+        continue;
+      }
+
+      if (ch === '"') {
+        out += ch;
+        inString = true;
+        continue;
+      }
+
+      out += ch;
+    }
+    result = out;
+  }
+
+  result = result.replace(/'/g, '"');
+  result = result.replace(/([{,]\s*)([a-zA-Z_][a-zA-Z0-9_]*)\s*:/g, '$1"$2":');
+  result = result.replace(/,(\s*[}\]])/g, '$1');
+  return result;
+}
+
 /**
  * Parsuje odpowiedź JSON z LLM
  */
@@ -82,17 +180,20 @@ function parseResponse(text: string | undefined): CortexOutput {
   }
 
   try {
-    // Próbuj bezpośredni parse
+    const raw = String(text).trim();
+
     let parsed: unknown;
     try {
-      parsed = JSON.parse(text);
+      parsed = JSON.parse(raw);
     } catch {
-      // Wyciągnij JSON z markdown
-      const match = text.match(/\{[\s\S]*\}/);
-      if (match) {
-        parsed = JSON.parse(match[0]);
-      } else {
-        throw new Error('No JSON found in response');
+      const jsonObj = extractJSONObjectBalanced(raw);
+      if (!jsonObj) throw new Error('No JSON found in response');
+
+      try {
+        parsed = JSON.parse(jsonObj);
+      } catch {
+        const repaired = repairLLMJson(jsonObj);
+        parsed = JSON.parse(repaired);
       }
     }
 

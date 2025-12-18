@@ -687,7 +687,7 @@ export function CognitiveInterface() {
                 </div>
             </div>
 
-            <div className="flex-1 flex flex-col relative z-10">
+            <div className="flex-1 flex flex-col relative z-10 min-h-0">
                 {/* Header */}
                 <header className={`h-16 border-b flex items-center justify-between px-6 transition-colors duration-1000 ${isFatigued ? 'bg-[#151010] border-red-900/20' : 'bg-brain-dark border-gray-700'}`}>
                     <div className="flex items-center gap-3">
@@ -877,7 +877,7 @@ export function CognitiveInterface() {
                 </div>
 
                 {/* Chat Area */}
-                <div ref={chatScrollRef} className="flex-1 overflow-y-auto p-6 space-y-6 bg-gradient-to-b from-brain-dark to-gray-900 scrollbar-thin relative">
+                <div ref={chatScrollRef} className="flex-1 min-h-0 overflow-y-auto p-6 space-y-6 bg-gradient-to-b from-brain-dark to-gray-900 scrollbar-thin relative">
                     {conversation.length === 0 && (
                         <div className="h-full flex flex-col items-center justify-center text-gray-600 opacity-50">
                             <Brain size={64} className="mb-4" />
