@@ -59,6 +59,10 @@ export class KernelEngineRunner<TIdentity> {
     this.deps = deps;
   }
 
+  setDeps(deps: KernelEngineRunnerDeps<TIdentity>) {
+    this.deps = deps;
+  }
+
   stopAutonomyLoop() {
     if (this.timeoutRef) {
       clearTimeout(this.timeoutRef);

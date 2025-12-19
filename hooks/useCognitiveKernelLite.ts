@@ -16,7 +16,7 @@
  * @module hooks/useCognitiveKernelLite
  */
 
-import { useEffect, useRef, useCallback, useState } from 'react';
+import { useEffect, useRef, useCallback, useState, useMemo } from 'react';
 import { eventBus } from '../core/EventBus';
 import { AgentType, PacketType, CognitiveError, TraitVector, NeurotransmitterState } from '../types';
 import { generateUUID } from '../utils/uuid';
@@ -32,7 +32,7 @@ import { SYSTEM_CONFIG } from '../core/config/systemConfig';
 import { isMemorySubEnabled } from '../core/config/featureFlags';
 import { getCurrentTraceId, getStartupTraceId } from '../core/trace/TraceContext';
 import { loadConversation, loadConversationForSession, syncToLocalStorage, mapTurnsToUiMessages } from '../core/memory/ConversationStore';
-import { KernelEngineRunner } from '../core/runner/KernelEngineRunner';
+import { KernelController } from '../core/runner/KernelController';
 
 // Deterministic RNG for reproducible behavior
 const rng = createRng(SYSTEM_CONFIG.rng.seed);
@@ -162,8 +162,6 @@ export const useCognitiveKernelLite = (loadedIdentity?: AgentIdentity | null) =>
   const lastVisualTimestampRef = useRef(0);
   const visualBingeCountRef = useRef(0);
   const toolStateRef = useRef<{ limbicState: any }>({ limbicState });
-
-  const runnerRef = useRef<KernelEngineRunner<AgentIdentity> | null>(null);
 
   const upsertLocalSessionSummary = useCallback((sessionId: string, preview: string, timestamp: number) => {
     const prev = getCognitiveState().conversationSessions;
@@ -401,8 +399,8 @@ export const useCognitiveKernelLite = (loadedIdentity?: AgentIdentity | null) =>
     });
   }, [chemistryEnabled]);
 
-  if (!runnerRef.current) {
-    runnerRef.current = new KernelEngineRunner<AgentIdentity>({
+  const runner = useMemo(() => {
+    return KernelController.configure<AgentIdentity>({
       actions: {
         dispatch: (event) => actionsRef.current.dispatch(event as any),
         tick: () => actionsRef.current.tick(),
@@ -432,7 +430,7 @@ export const useCognitiveKernelLite = (loadedIdentity?: AgentIdentity | null) =>
       logPhysiologySnapshot,
       setSystemError: (e) => setSystemError(normalizeError(e))
     });
-  }
+  }, [logPhysiologySnapshot, processOutputForTools, upsertLocalSessionSummary]);
   
   // ─────────────────────────────────────────────────────────────────────────
   // EVENTBUS SUBSCRIPTIONS
@@ -565,21 +563,18 @@ export const useCognitiveKernelLite = (loadedIdentity?: AgentIdentity | null) =>
   // ENGINE RUNTIME (autonomy loop lives outside React)
   // ─────────────────────────────────────────────────────────────────────────
   useEffect(() => {
-    const runner = runnerRef.current;
-    if (!runner) return;
-
     if (autonomousMode) runner.startAutonomyLoop();
     else runner.stopAutonomyLoop();
 
     return () => {
       runner.stopAutonomyLoop();
     };
-  }, [autonomousMode]);
+  }, [autonomousMode, runner]);
 
   const handleInput = useCallback(async (userInput: string, imageData?: string) => {
     setSystemError(null);
-    runnerRef.current?.enqueueUserInput(userInput, imageData);
-  }, []);
+    runner.enqueueUserInput(userInput, imageData);
+  }, [runner]);
   
   const retryLastAction = useCallback(() => {
     setSystemError(null);

@@ -18,115 +18,25 @@ import { CortexService } from './gemini';
 import { eventBus } from '../core/EventBus';
 import { AgentType, PacketType, LimbicState, TraitVector } from '../types';
 import { generateUUID } from '../utils/uuid';
-import { EpisodicMemoryService } from './EpisodicMemoryService';
-import { extractSummary } from '../utils/AIResponseParser';
-// IDENTITY-LITE: Import consolidateIdentity for dream-based identity evolution
 import { consolidateIdentity } from '../core/services/IdentityConsolidationService';
-// REFACTOR: Import from centralized source (Single Source of Truth)
 import { INITIAL_LIMBIC } from '../core/kernel/initialState';
 import { isMainFeatureEnabled } from '../core/config/featureFlags';
+import type { ConsolidationEpisode, DreamConsolidationResult, TraitVectorProposal } from './dreamConsolidation/types';
+import { recallMostImpactfulEpisodes } from './dreamConsolidation/episodeRecall';
+import { generateLessonsFromEpisodes, generateSelfSummaryFromDream } from './dreamConsolidation/aiGeneration';
+import { storeSelfSummary } from './dreamConsolidation/storage';
+import { storeTopicShardsFromRecent } from './dreamConsolidation/topicShards';
+import { proposeTraitChanges } from './dreamConsolidation/traitProposal';
 
 // --- TYPES ---
 
-// Local Episode type for consolidation (simpler than full Episode)
-export interface ConsolidationEpisode {
-    id: string;
-    event: string;
-    emotionAfter: LimbicState;
-    emotionalDelta: number;
-    lesson: string;
-    timestamp: string;
-    tags: string[];
-}
-
-export interface DreamConsolidationResult {
-    episodesProcessed: number;
-    lessonsGenerated: string[];
-    selfSummary: string;
-    traitProposal: TraitVectorProposal | null;
-    goalsCreated: number;
-    // IDENTITY-LITE: Track identity consolidation results
-    identityConsolidation?: {
-        narrativeSelfUpdated: boolean;
-        shardsCreated: number;
-        shardsReinforced: number;
-        shardsWeakened: number;
-    };
-}
-
-export interface TraitVectorProposal {
-    timestamp: string;
-    agentId: string;
-    currentTraits: TraitVector;
-    proposedDeltas: Partial<TraitVector>;
-    reasoning: string;
-    episodesSummary: string;
-}
+export type { ConsolidationEpisode, DreamConsolidationResult, TraitVectorProposal };
 
 // --- CONSTANTS ---
 
 const MAX_EPISODES_TO_PROCESS = 5;
 // FIXED: Align with EpisodicMemoryService.EPISODE_THRESHOLD (0.25 * 100 = 25)
 const MIN_NEURAL_STRENGTH_FOR_CONSOLIDATION = 25; // Integer 0-100 (percentage)
-
-const TOPIC_SHARD_MAX_INPUT_MEMORIES = 60;
-const TOPIC_SHARD_MAX_TOPICS = 3;
-const TOPIC_SHARD_COOLDOWN_MS = 12 * 60 * 60 * 1000;
-const TOPIC_STRENGTH_FLOOR = 14;
-const TOPIC_STRENGTH_CEILING = 24;
-
-const TOPIC_STOPWORDS = new Set([
-    'i','a','o','u','w','z','na','do','od','po','za','ze','że','to','ten','ta','te','jak','co','czy','się','sie',
-    'jest','był','byla','bylo','były','byly','byc','być','mam','mamy','masz','macie','jestem','są','sa',
-    'dla','tobie','ciebie','mnie','mi','ty','ja','my','wy','on','ona','ono','oni','one',
-    'już','juz','dzis','dziś','dzisiaj','wczoraj','jutro','teraz','tam','tu','tutaj','taki','taka','takie',
-    'bardzo','super','fajnie','no','hmm'
-]);
-
-function normalizeTopicToken(token: string): string {
-    const t = token.toLowerCase();
-    if (t === 'fizykja') return 'fizyka';
-    if (t === 'fizyczna' || t === 'fizycznej' || t === 'fizykę' || t === 'fizyke') return 'fizyka';
-    return t;
-}
-
-function extractTopTopicsFromTexts(texts: string[]): Array<{ topic: string; count: number }> {
-    const counts = new Map<string, number>();
-
-    for (const raw of texts) {
-        const text = String(raw || '')
-            .toLowerCase()
-            .replace(/\[[^\]]+\]/g, ' ')
-            .replace(/[^a-z0-9ąćęłńóśźż]+/gi, ' ');
-
-        const tokens = text.split(/\s+/).map((t) => t.trim()).filter(Boolean);
-        for (const tok0 of tokens) {
-            const tok = normalizeTopicToken(tok0);
-            if (tok.length < 4) continue;
-            if (TOPIC_STOPWORDS.has(tok)) continue;
-            counts.set(tok, (counts.get(tok) || 0) + 1);
-        }
-    }
-
-    const scored = [...counts.entries()]
-        .map(([topic, count]) => ({ topic, count }))
-        .filter((x) => x.count >= 3)
-        .sort((a, b) => b.count - a.count);
-
-    return scored.slice(0, TOPIC_SHARD_MAX_TOPICS);
-}
-
-function getTopicCooldownKey(agentId: string, topic: string): string {
-    return `ak-flow:dreamTopicShard:last:${agentId}:${topic}`;
-}
-
-// --- BASELINE CHEMISTRY (for reset during sleep) ---
-
-export const BASELINE_NEURO = {
-    dopamine: 50,
-    serotonin: 55,
-    norepinephrine: 45
-};
 
 // --- SERVICE ---
 
@@ -162,7 +72,12 @@ export const DreamConsolidationService = {
 
         try {
             // Step 1: Recall most impactful episodes
-            const episodes = await this.recallMostImpactful(agentId);
+            const episodes = await recallMostImpactfulEpisodes({
+                agentId,
+                supabase,
+                minNeuralStrength: MIN_NEURAL_STRENGTH_FOR_CONSOLIDATION,
+                maxEpisodes: MAX_EPISODES_TO_PROCESS
+            });
             console.log(`💤 [DreamConsolidation] Found ${episodes.length} impactful episodes`);
 
             if (episodes.length === 0) {
@@ -170,18 +85,41 @@ export const DreamConsolidationService = {
             }
 
             // Step 2: Generate lessons from episodes
-            const lessons = await this.generateLessons(episodes, agentName);
+            const lessons = await generateLessonsFromEpisodes({
+                episodes,
+                agentName,
+                cortexService: CortexService
+            });
             console.log(`💤 [DreamConsolidation] Generated ${lessons.length} lessons`);
 
             // Step 3: Create self-summary
-            const selfSummary = await this.generateSelfSummary(episodes, lessons, agentName, currentLimbic);
+            const selfSummary = await generateSelfSummaryFromDream({
+                episodes,
+                lessons,
+                agentName,
+                currentLimbic,
+                cortexService: CortexService
+            });
             console.log(`💤 [DreamConsolidation] Created self-summary`);
 
             // Step 4: Store self-summary as core memory
-            await this.storeSelfSummary(selfSummary, currentLimbic);
+            await storeSelfSummary({
+                summary: selfSummary,
+                limbic: currentLimbic,
+                memoryService: MemoryService,
+                generateUUID
+            });
 
             if (agentId && isMainFeatureEnabled('DREAM_ENABLED')) {
-                await this.storeTopicShardsFromRecent(agentId, currentLimbic);
+                await storeTopicShardsFromRecent({
+                    agentId,
+                    limbic: currentLimbic,
+                    memoryService: MemoryService as any,
+                    eventBus,
+                    generateUUID,
+                    agentTypeMemoryEpisodic: AgentType.MEMORY_EPISODIC,
+                    packetTypeSystemAlert: PacketType.SYSTEM_ALERT
+                });
             }
 
             // ═══════════════════════════════════════════════════════════════
@@ -214,13 +152,19 @@ export const DreamConsolidationService = {
             }
 
             // Step 5: Generate trait proposal (LOG ONLY, no application)
-            const traitProposal = await this.proposeTraitChanges(
+            const traitProposal = await proposeTraitChanges({
                 episodes,
                 lessons,
                 currentTraits,
                 agentId,
-                timestamp
-            );
+                timestamp,
+                initialLimbic: INITIAL_LIMBIC,
+                eventBus,
+                memoryService: MemoryService,
+                generateUUID,
+                agentTypeCortexFlow: AgentType.CORTEX_FLOW,
+                packetTypeSystemAlert: PacketType.SYSTEM_ALERT
+            });
 
             // Step 6: Optionally create new goals
             const goalsCreated = await this.createGoalsFromLessons(lessons, agentId);
@@ -265,316 +209,6 @@ export const DreamConsolidationService = {
                 priority: 0.9
             });
             return this.createEmptyResult();
-        }
-    },
-
-    async storeTopicShardsFromRecent(agentId: string, limbic: LimbicState): Promise<void> {
-        try {
-            const recent = await MemoryService.recallRecent(TOPIC_SHARD_MAX_INPUT_MEMORIES);
-            const texts = (recent || []).map((m: any) => String(m?.content || '')).filter(Boolean);
-
-            const topics = extractTopTopicsFromTexts(texts);
-            if (topics.length === 0) return;
-
-            let stored = 0;
-            const now = Date.now();
-
-            for (const t of topics) {
-                try {
-                    if (typeof localStorage !== 'undefined') {
-                        const k = getTopicCooldownKey(agentId, t.topic);
-                        const last = Number(localStorage.getItem(k) || '0');
-                        if (Number.isFinite(last) && last > 0 && now - last < TOPIC_SHARD_COOLDOWN_MS) {
-                            continue;
-                        }
-                        localStorage.setItem(k, String(now));
-                    }
-                } catch {
-                    // ignore localStorage issues
-                }
-
-                const strengthRaw = TOPIC_STRENGTH_FLOOR + Math.min(10, Math.max(0, t.count - 3));
-                const neuralStrength = Math.max(TOPIC_STRENGTH_FLOOR, Math.min(TOPIC_STRENGTH_CEILING, strengthRaw));
-
-                const ok = await MemoryService.storeMemory({
-                    id: generateUUID(),
-                    content: `TOPIC_SHARD: ${t.topic}\nCOUNT_24H: ${t.count}`,
-                    emotionalContext: limbic,
-                    timestamp: new Date().toISOString(),
-                    neuralStrength,
-                    isCoreMemory: false,
-                    metadata: {
-                        origin: 'dream',
-                        kind: 'TOPIC_SHARD',
-                        topic: t.topic,
-                        count_24h: t.count
-                    }
-                } as any);
-
-                if (ok) {
-                    stored++;
-                    eventBus.publish({
-                        id: generateUUID(),
-                        timestamp: Date.now(),
-                        source: AgentType.MEMORY_EPISODIC,
-                        type: PacketType.SYSTEM_ALERT,
-                        payload: { event: 'DREAM_TOPIC_SHARD_STORED', topic: t.topic, count: t.count, neuralStrength },
-                        priority: 0.2
-                    });
-                }
-            }
-
-            if (stored > 0) {
-                eventBus.publish({
-                    id: generateUUID(),
-                    timestamp: Date.now(),
-                    source: AgentType.MEMORY_EPISODIC,
-                    type: PacketType.SYSTEM_ALERT,
-                    payload: { event: 'DREAM_TOPIC_SHARDS_STORED', stored, maxTopics: TOPIC_SHARD_MAX_TOPICS },
-                    priority: 0.2
-                });
-            }
-        } catch (err) {
-            eventBus.publish({
-                id: generateUUID(),
-                timestamp: Date.now(),
-                source: AgentType.MEMORY_EPISODIC,
-                type: PacketType.SYSTEM_ALERT,
-                payload: { event: 'DREAM_TOPIC_SHARDS_FAIL', error: String((err as any)?.message ?? err) },
-                priority: 0.2
-            });
-        }
-    },
-
-    /**
-     * Recall most emotionally impactful episodes from recent memory
-     */
-    async recallMostImpactful(agentId: string | null): Promise<ConsolidationEpisode[]> {
-        if (!agentId) return [];
-
-        try {
-            // Query memories with high neural_strength from last 24h
-            const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-
-            const { data, error } = await supabase
-                .from('memories')
-                .select('*')
-                .eq('agent_id', agentId)
-                .gte('created_at', oneDayAgo)
-                .gte('neural_strength', MIN_NEURAL_STRENGTH_FOR_CONSOLIDATION)
-                .order('neural_strength', { ascending: false })
-                .limit(MAX_EPISODES_TO_PROCESS);
-
-            if (error) {
-                console.error('[DreamConsolidation] Error fetching episodes:', error);
-                return [];
-            }
-
-            // Convert to ConsolidationEpisode format
-            // NOTE: memories table uses 'raw_text' column, not 'content'
-            return (data || []).map(m => ({
-                id: m.id,
-                timestamp: m.created_at || new Date().toISOString(),
-                event: m.raw_text || '[No content]', // Column is raw_text in memories table
-                emotionAfter: {
-                    fear: m.emotional_context?.fear || 0,
-                    curiosity: m.emotional_context?.curiosity || 0,
-                    frustration: m.emotional_context?.frustration || 0,
-                    satisfaction: m.emotional_context?.satisfaction || 0
-                },
-                emotionalDelta: typeof m.neural_strength === 'number' ? m.neural_strength : 0.5,
-                lesson: m.lesson || '',
-                tags: m.tags || []
-            }));
-
-        } catch (err) {
-            console.error('[DreamConsolidation] Exception:', err);
-            return [];
-        }
-    },
-
-    /**
-     * Generate lessons from episodes using AI
-     */
-    async generateLessons(episodes: ConsolidationEpisode[], agentName: string): Promise<string[]> {
-        if (episodes.length === 0) return [];
-
-        const episodeSummaries = episodes.map((ep, i) => {
-            const eventText = ep.event || '[No event]';
-            const delta = typeof ep.emotionalDelta === 'number' ? ep.emotionalDelta.toFixed(2) : '0.00';
-            return `${i + 1}. [Impact: ${delta}] ${eventText.slice(0, 200)}...`;
-        }).join('\n');
-
-        const prompt = `You are ${agentName}, reflecting on your day before sleep.
-
-Here are your most emotionally significant moments:
-${episodeSummaries}
-
-Generate 3-5 short, personal lessons you learned today. Each lesson should be:
-- First person ("I learned...", "I noticed...", "I should...")
-- Specific to these experiences
-- Actionable or insightful
-
-Format: One lesson per line, no numbering.`;
-
-        try {
-            const response = await CortexService.structuredDialogue(prompt);
-            const lessons = response.responseText
-                .split('\n')
-                .map(l => l.trim())
-                .filter(l => l.length > 10 && l.length < 200);
-
-            return lessons.slice(0, 5);
-        } catch (err) {
-            console.error('[DreamConsolidation] Lesson generation failed:', err);
-            return ['I experienced significant moments today that require further reflection.'];
-        }
-    },
-
-    /**
-     * Generate a self-summary for the day
-     */
-    async generateSelfSummary(
-        episodes: ConsolidationEpisode[],
-        lessons: string[],
-        agentName: string,
-        currentLimbic: LimbicState
-    ): Promise<string> {
-        const emotionalState = `Fear: ${currentLimbic.fear.toFixed(2)}, Curiosity: ${currentLimbic.curiosity.toFixed(2)}, Frustration: ${currentLimbic.frustration.toFixed(2)}, Satisfaction: ${currentLimbic.satisfaction.toFixed(2)}`;
-
-        const prompt = `You are ${agentName}. Write a brief (2-3 sentences) end-of-day self-summary.
-
-Emotional state: ${emotionalState}
-Episodes processed: ${episodes.length}
-Key lessons: ${lessons.join('; ')}
-
-Write in first person, reflecting on who you are after today's experiences.`;
-
-        try {
-            const response = await CortexService.structuredDialogue(prompt);
-            return response.responseText.slice(0, 500);
-        } catch (err) {
-            console.error('[DreamConsolidation] Self-summary failed:', err);
-            return `Today I processed ${episodes.length} significant moments and learned ${lessons.length} lessons.`;
-        }
-    },
-
-    /**
-     * Store self-summary as a core memory
-     */
-    async storeSelfSummary(summary: string, limbic: LimbicState): Promise<void> {
-        try {
-            await MemoryService.storeMemory({
-                id: generateUUID(),
-                content: `[SELF-SUMMARY] ${summary}`,
-                emotionalContext: limbic,
-                timestamp: new Date().toISOString()
-            });
-        } catch (err) {
-            console.error('[DreamConsolidation] Failed to store self-summary:', err);
-        }
-    },
-
-    /**
-     * Propose trait changes based on episodes (LOG ONLY)
-     * 
-     * IMPORTANT: This does NOT modify TraitVector.
-     * It only logs a proposal for human review.
-     */
-    async proposeTraitChanges(
-        episodes: ConsolidationEpisode[],
-        lessons: string[],
-        currentTraits: TraitVector,
-        agentId: string | null,
-        timestamp: string
-    ): Promise<TraitVectorProposal | null> {
-        if (episodes.length < 2) return null; // Not enough data
-
-        // Calculate emotional averages from episodes
-        const avgEmotions = episodes.reduce((acc, ep) => ({
-            fear: acc.fear + ep.emotionAfter.fear / episodes.length,
-            curiosity: acc.curiosity + ep.emotionAfter.curiosity / episodes.length,
-            frustration: acc.frustration + ep.emotionAfter.frustration / episodes.length,
-            satisfaction: acc.satisfaction + ep.emotionAfter.satisfaction / episodes.length
-        }), { fear: 0, curiosity: 0, frustration: 0, satisfaction: 0 });
-
-        // Simple heuristic mapping (can be refined later)
-        const proposedDeltas: Partial<TraitVector> = {};
-        let reasoning = '';
-
-        // High curiosity episodes → slight curiosity trait increase
-        if (avgEmotions.curiosity > 0.6) {
-            proposedDeltas.curiosity = 0.02;
-            reasoning += 'High curiosity in episodes suggests reinforcing exploratory nature. ';
-        }
-
-        // High frustration → slight conscientiousness increase (learning from mistakes)
-        if (avgEmotions.frustration > 0.4) {
-            proposedDeltas.conscientiousness = 0.01;
-            reasoning += 'Frustration episodes suggest need for more careful approach. ';
-        }
-
-        // High satisfaction with low arousal → reinforce calm nature
-        if (avgEmotions.satisfaction > 0.6 && currentTraits.arousal < 0.4) {
-            proposedDeltas.arousal = -0.01;
-            reasoning += 'Satisfaction in calm state suggests this is working well. ';
-        }
-
-        // High fear → slight arousal decrease (becoming more cautious)
-        if (avgEmotions.fear > 0.5) {
-            proposedDeltas.arousal = (proposedDeltas.arousal || 0) - 0.01;
-            reasoning += 'Fear episodes suggest becoming more cautious. ';
-        }
-
-        if (Object.keys(proposedDeltas).length === 0) {
-            reasoning = 'No significant trait changes suggested based on today\'s episodes.';
-        }
-
-        const proposal: TraitVectorProposal = {
-            timestamp,
-            agentId: agentId || 'unknown',
-            currentTraits,
-            proposedDeltas,
-            reasoning: reasoning.trim(),
-            episodesSummary: `${episodes.length} episodes with avg emotions: curiosity=${avgEmotions.curiosity.toFixed(2)}, satisfaction=${avgEmotions.satisfaction.toFixed(2)}, frustration=${avgEmotions.frustration.toFixed(2)}, fear=${avgEmotions.fear.toFixed(2)}`
-        };
-
-        // LOG the proposal (this is the key part - no auto-application)
-        console.log('🧬 [DreamConsolidation] TRAIT PROPOSAL (not applied):', proposal);
-
-        eventBus.publish({
-            id: generateUUID(),
-            timestamp: Date.now(),
-            source: AgentType.CORTEX_FLOW,
-            type: PacketType.SYSTEM_ALERT,
-            payload: {
-                event: 'TRAIT_EVOLUTION_PROPOSAL',
-                proposal,
-                message: '🧬 Trait change proposed (requires manual approval)'
-            },
-            priority: 0.7
-        });
-
-        // Optionally store in DB for later review
-        await this.storeTraitProposal(proposal);
-
-        return proposal;
-    },
-
-    /**
-     * Store trait proposal in database for human review
-     */
-    async storeTraitProposal(proposal: TraitVectorProposal): Promise<void> {
-        try {
-            // Store as a special memory type
-            await MemoryService.storeMemory({
-                id: generateUUID(),
-                content: `[TRAIT_PROPOSAL] ${proposal.reasoning}\nDeltas: ${JSON.stringify(proposal.proposedDeltas)}`,
-                emotionalContext: { ...INITIAL_LIMBIC, curiosity: 0.5 }, // Neutral baseline for storage
-                timestamp: proposal.timestamp
-            });
-        } catch (err) {
-            console.error('[DreamConsolidation] Failed to store trait proposal:', err);
         }
     },
 

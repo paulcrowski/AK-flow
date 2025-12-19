@@ -13,6 +13,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 import { useCognitiveKernelLite } from '../../hooks/useCognitiveKernelLite';
 import { useCognitiveStore } from '../../stores/cognitiveStore';
+import { KernelController } from '../../core/runner/KernelController';
 
 // Mock CortexSystem to avoid API calls
 vi.mock('../../core/systems/CortexSystem', () => ({
@@ -41,6 +42,7 @@ describe('useCognitiveKernelLite', () => {
   beforeEach(() => {
     // Reset store before each test
     useCognitiveStore.getState().reset();
+    KernelController.reset();
     vi.clearAllMocks();
   });
 
