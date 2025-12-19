@@ -102,4 +102,4 @@ function main() {
   console.log(`[godfile-check] OK (soft>${softLimit}, hard>${hardLimit}).`);
 }
 
-main();
+void main();
