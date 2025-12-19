@@ -10,6 +10,7 @@ import { setCurrentAgentId } from './services/supabase';
 import { logSystemConfig, validateWiring } from './core/config';
 import { eventBus } from './core/EventBus';
 import { PacketType } from './types';
+import { generateUUID } from './utils/uuid';
 
 // ALARM 3: Log system config and validate wiring at startup
 // This runs ONCE when the module is loaded
@@ -17,6 +18,9 @@ logSystemConfig();
 
 if (import.meta.env.DEV) {
   const g = globalThis as any;
+  if (typeof g.generateUUID !== 'function') {
+    g.generateUUID = generateUUID;
+  }
   if (!g.__AKFLOW_CONSOLE_PACKET_LOGGER__) {
     g.__AKFLOW_CONSOLE_PACKET_LOGGER__ = true;
     eventBus.subscribe(PacketType.SYSTEM_ALERT, (packet: any) => {
