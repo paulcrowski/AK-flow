@@ -16,7 +16,8 @@ import {
   downloadLibraryDocumentText,
   findLibraryDocumentByName,
   getLibraryChunkByIndex,
-  searchLibraryChunks
+  searchLibraryChunks,
+  uploadLibraryFile
 } from '../../services/LibraryService';
 
 // Mock CortexService
@@ -43,7 +44,8 @@ vi.mock('../../services/LibraryService', () => ({
   searchLibraryChunks: vi.fn(),
   getLibraryChunkByIndex: vi.fn(),
   downloadLibraryDocumentText: vi.fn(),
-  findLibraryDocumentByName: vi.fn()
+  findLibraryDocumentByName: vi.fn(),
+  uploadLibraryFile: vi.fn()
 }));
 
 describe('P0 Tool Lifecycle', () => {
@@ -436,6 +438,32 @@ describe('P0 Tool Lifecycle', () => {
 
       // Every intent should have a corresponding outcome
       expect(outcomeEvents.length).toBeGreaterThanOrEqual(intentEvents.length);
+    });
+  });
+
+  describe('ARTIFACT Tools', () => {
+    it('PUBLISH should sanitize artifact id argument (quotes/brackets)', async () => {
+      vi.mocked(uploadLibraryFile).mockResolvedValue({ ok: true, document: { id: 'doc_1' } } as any);
+
+      const processOutput = createProcessOutputForTools(mockDeps);
+      await processOutput('[CREATE: report.md]hello[/CREATE]');
+
+      const createCall = vi
+        .mocked(mockDeps.addMessage)
+        .mock.calls.find((c: any[]) => c?.[0] === 'assistant' && String(c?.[1] || '').includes('CREATE_OK:'));
+      expect(createCall).toBeDefined();
+      const createdIdMatch = String(createCall?.[1] || '').match(/CREATE_OK:\s*(art-[^\s]+)/);
+      expect(createdIdMatch).toBeDefined();
+      const artifactId = String(createdIdMatch?.[1] || '');
+      expect(artifactId.startsWith('art-')).toBe(true);
+
+      await processOutput(`[PUBLISH: "${artifactId}"]`);
+      const intent = getEvents().find((e) => e.type === PacketType.TOOL_INTENT && e.payload?.tool === 'PUBLISH');
+      expect(intent).toBeDefined();
+      expect(intent!.payload.arg).toBe(artifactId);
+
+      const error = getEvents().find((e) => e.type === PacketType.TOOL_ERROR && e.payload?.tool === 'PUBLISH');
+      if (error) expect(String(error.payload?.error || '')).not.toContain('ARTIFACT_ID_INVALID');
     });
   });
 });

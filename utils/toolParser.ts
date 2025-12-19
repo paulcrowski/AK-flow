@@ -48,6 +48,20 @@ export const createProcessOutputForTools = (deps: ToolParserDeps) => {
   return async function processOutputForTools(rawText: string): Promise<string> {
     let cleanText = rawText;
 
+    const normalizeArg = (raw: string) => {
+      let s = String(raw || '').trim();
+      if (
+        (s.startsWith('<') && s.endsWith('>')) ||
+        (s.startsWith('"') && s.endsWith('"')) ||
+        (s.startsWith("'") && s.endsWith("'")) ||
+        (s.startsWith('`') && s.endsWith('`'))
+      ) {
+        s = s.slice(1, -1).trim();
+      }
+      s = s.replace(/\s+/g, ' ');
+      return s;
+    };
+
     const inferMimeTypeFromName = (name: string) => {
       const lower = String(name || '').toLowerCase();
       if (lower.endsWith('.md')) return 'text/markdown';
@@ -90,7 +104,7 @@ export const createProcessOutputForTools = (deps: ToolParserDeps) => {
     const handlePublishArtifact = async (artifactIdRaw: string) => {
       const tool = 'PUBLISH';
       const intentId = generateUUID();
-      const artifactId = String(artifactIdRaw || '').trim();
+      const artifactId = normalizeArg(artifactIdRaw);
       eventBus.publish({
         id: intentId,
         timestamp: Date.now(),
