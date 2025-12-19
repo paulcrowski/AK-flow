@@ -3,6 +3,7 @@ import { CortexService } from './gemini';
 import type { LibraryDocument } from './LibraryService';
 import { WorkspaceHomeostasisService } from './WorkspaceHomeostasisService';
 import { isMemorySubEnabled } from '../core/config/featureFlags';
+import { clampInt } from '../utils/math';
 
 type Chunk = {
   chunk_index: number;
@@ -18,11 +19,6 @@ type ChunkingConfig = {
   maxChunks: number;
   singleChunkBelowChars: number;
 };
-
-function clampInt(n: number, min: number, max: number): number {
-  if (!Number.isFinite(n)) return min;
-  return Math.max(min, Math.min(max, Math.round(n)));
-}
 
 function stableHex32(input: string): string {
   const s = String(input || '');

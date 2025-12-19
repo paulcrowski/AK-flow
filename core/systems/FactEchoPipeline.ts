@@ -15,6 +15,9 @@ import { buildHardFacts } from './HardFactsBuilder';
 import { fullGuardCheck, checkFactEcho, FACT_ECHO_CONFIG } from './FactEchoGuard';
 import { evaluationBus } from './EvaluationBus';
 import { canApplyPenalty, recordPenalty, logArchitectureIssue } from './PrismMetrics';
+import { createLogger } from '../services/LoggerService';
+
+const log = createLogger('FactEchoPipeline');
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Configuration
@@ -227,13 +230,9 @@ function logPipelineResult(
   const hardKeys = Object.keys(hardFacts).filter(k => hardFacts[k] !== undefined);
   
   if (action === 'PASS') {
-    console.log(
-      `[FactEchoPipeline] ✅ PASS - echoed: [${echoKeys.join(', ')}], expected: [${hardKeys.join(', ')}]`
-    );
+    log.debug(`PASS - echoed: [${echoKeys.join(', ')}], expected: [${hardKeys.join(', ')}]`);
   } else {
-    console.log(
-      `[FactEchoPipeline] ⚠️ ${action} - echoed: [${echoKeys.join(', ')}], expected: [${hardKeys.join(', ')}]`
-    );
+    log.warn(`${action} - echoed: [${echoKeys.join(', ')}], expected: [${hardKeys.join(', ')}]`);
   }
 }
 
@@ -269,12 +268,12 @@ function checkForArchitectureIssues(action: string, hardFacts: HardFacts): void 
 
 export function enableFactEchoPipeline(): void {
   FACT_ECHO_PIPELINE_CONFIG.ENABLED = true;
-  console.log('[FactEchoPipeline] ✅ ENABLED');
+  log.info('ENABLED');
 }
 
 export function disableFactEchoPipeline(): void {
   FACT_ECHO_PIPELINE_CONFIG.ENABLED = false;
-  console.log('[FactEchoPipeline] ⏸️ DISABLED');
+  log.info('DISABLED');
 }
 
 export function isFactEchoPipelineEnabled(): boolean {
@@ -283,5 +282,5 @@ export function isFactEchoPipelineEnabled(): boolean {
 
 export function setDefaultStrictMode(strict: boolean): void {
   FACT_ECHO_PIPELINE_CONFIG.DEFAULT_STRICT_MODE = strict;
-  console.log(`[FactEchoPipeline] Strict mode: ${strict ? 'ON' : 'OFF'}`);
+  log.info(`Strict mode: ${strict ? 'ON' : 'OFF'}`);
 }

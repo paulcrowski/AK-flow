@@ -1,4 +1,6 @@
+import type { PostgrestResponse } from '@supabase/supabase-js';
 import { supabase, getCurrentAgentId } from './supabase';
+import { clampInt } from '../utils/math';
 
 type ApplyHomeostasisResult =
   | {
@@ -14,17 +16,12 @@ type ApplyHomeostasisResult =
       error: string;
     };
 
-function clampInt(n: number, min: number, max: number): number {
-  if (!Number.isFinite(n)) return min;
-  return Math.max(min, Math.min(max, Math.trunc(n)));
-}
-
 function isWorkspaceRawText(rawText: string): boolean {
   const t = String(rawText || '').trimStart();
   return t.startsWith('WORKSPACE_DOC_SUMMARY') || t.startsWith('WORKSPACE_CHUNK_SUMMARY');
 }
 
-async function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+async function withTimeout<T>(promise: PromiseLike<T>, ms: number, label: string): Promise<T> {
   let timeoutId: ReturnType<typeof setTimeout> | null = null;
   const timeoutPromise = new Promise<T>((_, reject) => {
     timeoutId = setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms);
@@ -36,6 +33,12 @@ async function withTimeout<T>(promise: Promise<T>, ms: number, label: string): P
     if (timeoutId) clearTimeout(timeoutId);
   }
 }
+
+type WorkspaceMemoryRow = {
+  id: string;
+  raw_text: string | null;
+  created_at: string;
+};
 
 export const WorkspaceHomeostasisService = {
   async applyForCurrentAgent(params?: {
@@ -66,14 +69,16 @@ export const WorkspaceHomeostasisService = {
       const toDeleteIds: string[] = [];
 
       while (true) {
+        const selectQuery = supabase
+          .from('memories')
+          .select('id,raw_text,created_at')
+          .eq('agent_id', agentId)
+          .ilike('raw_text', 'WORKSPACE_%')
+          .order('created_at', { ascending: false })
+          .range(offset, offset + pageSize - 1);
+
         const res = await withTimeout(
-          supabase
-            .from('memories')
-            .select('id,raw_text,created_at')
-            .eq('agent_id', agentId)
-            .ilike('raw_text', 'WORKSPACE_%')
-            .order('created_at', { ascending: false })
-            .range(offset, offset + pageSize - 1),
+          selectQuery as unknown as PromiseLike<PostgrestResponse<WorkspaceMemoryRow>>,
           requestTimeoutMs,
           'WorkspaceHomeostasisService.select'
         );
@@ -82,7 +87,7 @@ export const WorkspaceHomeostasisService = {
           return { ok: false, agentId, error: res.error.message };
         }
 
-        const rows = (res.data as any[]) || [];
+        const rows = res.data || [];
         if (rows.length === 0) break;
 
         for (const row of rows) {
@@ -115,12 +120,15 @@ export const WorkspaceHomeostasisService = {
 
       for (let i = 0; i < toDeleteIds.length; i += batchSize) {
         const batch = toDeleteIds.slice(i, i + batchSize);
+
+        const deleteQuery = supabase
+          .from('memories')
+          .delete()
+          .eq('agent_id', agentId)
+          .in('id', batch);
+
         const del = await withTimeout(
-          supabase
-            .from('memories')
-            .delete()
-            .eq('agent_id', agentId)
-            .in('id', batch),
+          deleteQuery as unknown as PromiseLike<PostgrestResponse<null>>,
           requestTimeoutMs,
           'WorkspaceHomeostasisService.delete'
         );

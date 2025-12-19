@@ -1,5 +1,9 @@
 import { SomaState, TraitVector } from '../../types';
 import { clamp01, clamp100, clampRange } from '../../utils/math';
+import { SYSTEM_CONFIG } from '../config/systemConfig';
+import { createLogger, shouldLogDopamineTick } from '../services/LoggerService';
+
+const log = createLogger('NeurotransmitterSystem');
 
 export interface NeurotransmitterState {
   dopamine: number;      // 0-100
@@ -68,8 +72,8 @@ export const NeurotransmitterSystem = {
         const prevDopa = dopamine;
         dopamine = Math.max(DOPAMINE_FLOOR, dopamine - decay);
         
-        console.log(
-            `[NeurotransmitterSystem] BOREDOM_DECAY: ${prevDopa.toFixed(1)} → ${dopamine.toFixed(1)} ` +
+        log.debug(
+          `BOREDOM_DECAY: ${prevDopa.toFixed(1)} → ${dopamine.toFixed(1)} ` +
             `(decay=${decay.toFixed(1)}, novelty=${novelty.toFixed(2)}, speeches=${consecutiveSpeeches})`
         );
     }
@@ -90,22 +94,23 @@ export const NeurotransmitterSystem = {
         dopamine = Math.max(DOPAMINE_FLOOR, dopamine - rpeDecay);
         
         if (rpeDecay > 0 && prevDopa !== dopamine) {
-            console.log(
-                `[NeurotransmitterSystem] RPE_DECAY: ${prevDopa.toFixed(1)} → ${dopamine.toFixed(1)} ` +
+            log.debug(
+              `RPE_DECAY: ${prevDopa.toFixed(1)} → ${dopamine.toFixed(1)} ` +
                 `(ticks_since_reward=${ticksSinceReward}, decay=${rpeDecay})`
             );
         }
     }
     
-    // TELEMETRY: DOPAMINE_DECAY_TICK (ChatGPT suggestion for debugging)
-    // Always log dopamine changes for observability
+    // TELEMETRY: DOPAMINE_DECAY_TICK
     const dopaAfterDecay = dopamine;
-    console.log(
-        `[NeurotransmitterSystem] DOPAMINE_TICK: prev=${prev.dopamine.toFixed(1)}, ` +
-        `afterDecay=${dopaAfterDecay.toFixed(1)}, ` +
-        `hadReward=${hadReward}, ticksSinceReward=${ticksSinceReward}, ` +
-        `activity=${ctx.activity}, userSilent=${ctx.userIsSilent}`
-    );
+    if (SYSTEM_CONFIG.mainFeatures.DEBUG_MODE && shouldLogDopamineTick()) {
+      log.debug(
+        `DOPAMINE_TICK: prev=${prev.dopamine.toFixed(1)}, ` +
+          `afterDecay=${dopaAfterDecay.toFixed(1)}, ` +
+          `hadReward=${hadReward}, ticksSinceReward=${ticksSinceReward}, ` +
+          `activity=${ctx.activity}, userSilent=${ctx.userIsSilent}`
+      );
+    }
 
     // Base homeostasis toward mid-levels (no punishments, only gentle pull to baseline)
     dopamine = applyHomeostasis(dopamine, DOPAMINE_BASELINE);      // slight optimistic bias
@@ -144,10 +149,12 @@ export const NeurotransmitterSystem = {
       if (!ctx.userIsSilent) {
         const dopMult = 0.5 + curiosity;         // 0.5 - 1.5
         dopamine += 2 * energyFactor * dopMult;  // Reduced from 3 to 2
-        console.log(`[NeurotransmitterSystem] CREATIVE_WITH_AUDIENCE: dopamine boost +${(2 * energyFactor * dopMult).toFixed(1)}`);
+        log.debug(
+          `CREATIVE_WITH_AUDIENCE: dopamine boost +${(2 * energyFactor * dopMult).toFixed(1)}`
+        );
       } else {
         // No dopamine for talking to yourself!
-        console.log(`[NeurotransmitterSystem] CREATIVE_NO_AUDIENCE: NO dopamine boost (user silent)`);
+        log.debug('CREATIVE_NO_AUDIENCE: NO dopamine boost (user silent)');
       }
     } else if (ctx.activity === 'REPETITIVE') {
       // High conscientiousness: less reward for repetition (but still non-negative)

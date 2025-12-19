@@ -1,11 +1,14 @@
 import { CortexService } from '../../../services/gemini';
+import { createLogger } from '../../services/LoggerService';
+
+const log = createLogger('DeepResearch');
 
 const inFlightTopics = new Set<string>();
 const completedTopics = new Set<string>();
 
 export async function performDeepResearch(topic: string, context: string) {
   if (completedTopics.has(topic) || inFlightTopics.has(topic)) {
-    console.log(`[DeepResearch] Skipping duplicate/in-flight topic: ${topic}`);
+    log.debug(`Skipping duplicate/in-flight topic: ${topic}`);
     return null;
   }
 

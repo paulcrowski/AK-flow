@@ -13,12 +13,15 @@
 import { NeurotransmitterState } from '../../types';
 import { evaluationBus, EVALUATION_CONFIG } from './EvaluationBus';
 import { clampNeuro } from './NeurotransmitterSystem';
+import { createLogger } from '../services/LoggerService';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Configuration
 // ═══════════════════════════════════════════════════════════════════════════
 
 import { SYSTEM_CONFIG } from '../config/systemConfig';
+
+const log = createLogger('ChemistryBridge');
 
 // DEPRECATED: Use SYSTEM_CONFIG.chemistryBridge instead
 const CHEMISTRY_BRIDGE_CONFIG = {
@@ -203,11 +206,10 @@ function clampDelta(delta: number, max: number): number {
 }
 
 function logChemistryDelta(delta: ChemistryDelta): void {
-  const emoji = delta.dopamine > 0 ? '📈' : delta.dopamine < 0 ? '📉' : '➖';
-  console.log(
-    `[ChemistryBridge] ${emoji} Δdopamine=${delta.dopamine.toFixed(2)}, ` +
-    `Δserotonin=${delta.serotonin.toFixed(2)}, ` +
-    `conf=${delta.confidence.toFixed(2)}, source=${delta.source}`
+  log.debug(
+    `Δdopamine=${delta.dopamine.toFixed(2)}, ` +
+      `Δserotonin=${delta.serotonin.toFixed(2)}, ` +
+      `conf=${delta.confidence.toFixed(2)}, source=${delta.source}`
   );
 }
 
@@ -220,7 +222,7 @@ function logChemistryDelta(delta: ChemistryDelta): void {
  */
 export function enableChemistryBridge(): void {
   CHEMISTRY_BRIDGE_CONFIG.ENABLED = true;
-  console.log('[ChemistryBridge] ✅ ENABLED - Chemistry now reacts to EvaluationBus');
+  log.info('ENABLED - Chemistry now reacts to EvaluationBus');
 }
 
 /**
@@ -228,7 +230,7 @@ export function enableChemistryBridge(): void {
  */
 export function disableChemistryBridge(): void {
   CHEMISTRY_BRIDGE_CONFIG.ENABLED = false;
-  console.log('[ChemistryBridge] ⏸️ DISABLED - Chemistry ignores EvaluationBus');
+  log.info('DISABLED - Chemistry ignores EvaluationBus');
 }
 
 /**

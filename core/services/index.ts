@@ -48,3 +48,9 @@ export {
   type ConsolidationInput,
   type IdentityConsolidationResult
 } from './IdentityConsolidationService';
+
+// === Logger Service ===
+export {
+  createLogger,
+  shouldLogDopamineTick
+} from './LoggerService';

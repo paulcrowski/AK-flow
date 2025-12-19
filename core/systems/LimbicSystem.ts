@@ -15,6 +15,9 @@
 import type { LimbicState } from '../../types';
 import { clamp01 } from '../../utils/math';
 import { getLimbicConfig } from '../config/systemConfig';
+import { createLogger } from '../services/LoggerService';
+
+const log = createLogger('LimbicSystem');
 
 export interface EmotionalStimulus {
     surprise?: number;
@@ -257,7 +260,9 @@ export const LimbicSystem = {
             // Log significant damping (for debugging)
             const dampingRatio = Math.abs(dampedFear) / (Math.abs(moodShift.fear_delta) + 0.001);
             if (dampingRatio < 0.5 && Math.abs(moodShift.fear_delta) > 0.1) {
-                console.log(`[LimbicSystem] 🧠 BIOLOGICAL_DAMPING fear: ${moodShift.fear_delta.toFixed(3)} → ${dampedFear.toFixed(3)} (${(dampingRatio * 100).toFixed(0)}%)`);
+                log.debug(
+                  `BIOLOGICAL_DAMPING fear: ${moodShift.fear_delta.toFixed(3)} → ${dampedFear.toFixed(3)} (${(dampingRatio * 100).toFixed(0)}%)`
+                );
             }
         }
         
@@ -266,7 +271,9 @@ export const LimbicSystem = {
             
             const dampingRatio = Math.abs(dampedCuriosity) / (Math.abs(moodShift.curiosity_delta) + 0.001);
             if (dampingRatio < 0.5 && Math.abs(moodShift.curiosity_delta) > 0.1) {
-                console.log(`[LimbicSystem] 🧠 BIOLOGICAL_DAMPING curiosity: ${moodShift.curiosity_delta.toFixed(3)} → ${dampedCuriosity.toFixed(3)} (${(dampingRatio * 100).toFixed(0)}%)`);
+                log.debug(
+                  `BIOLOGICAL_DAMPING curiosity: ${moodShift.curiosity_delta.toFixed(3)} → ${dampedCuriosity.toFixed(3)} (${(dampingRatio * 100).toFixed(0)}%)`
+                );
             }
         }
         
@@ -285,7 +292,7 @@ export const LimbicSystem = {
             if (delta === undefined) return undefined;
             const clamped = Math.max(-MAX_DELTA, Math.min(MAX_DELTA, delta));
             if (clamped !== delta) {
-                console.warn(`[LimbicSystem] ⚠️ SAFETY_NET_CLAMP: ${delta.toFixed(3)} → ${clamped.toFixed(3)}`);
+                log.warn(`SAFETY_NET_CLAMP: ${delta.toFixed(3)} → ${clamped.toFixed(3)}`);
             }
             return clamped;
         };

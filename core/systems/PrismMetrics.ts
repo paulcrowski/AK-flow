@@ -12,6 +12,9 @@
 import { evaluationBus, EVALUATION_CONFIG } from './EvaluationBus';
 import { EvaluationStage } from '../../types';
 import { clamp01 } from '../../utils/math';
+import { createLogger } from '../services/LoggerService';
+
+const log = createLogger('PrismMetrics');
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Configuration
@@ -106,7 +109,7 @@ function resetIfNewDay(): void {
       date: today,
       penalties: { TOOL: 0, ROUTER: 0, PRISM: 0, GUARD: 0, USER: 0 }
     };
-    console.log('[PrismMetrics] 🔄 Daily penalty counters reset');
+    log.debug('Daily penalty counters reset');
   }
 }
 
@@ -200,8 +203,8 @@ export function logArchitectureIssue(issue: Omit<ArchitectureIssue, 'timestamp'>
     architectureIssues.shift();
   }
   
-  console.warn(
-    `[PrismMetrics] 🚨 ARCHITECTURE ISSUE: ${issue.type} - ${issue.description} (severity: ${issue.severity})`
+  log.warn(
+    `ARCHITECTURE ISSUE: ${issue.type} - ${issue.description} (severity: ${issue.severity})`
   );
 }
 
