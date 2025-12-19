@@ -50,6 +50,36 @@ Workspace / Library:
 
 Uwaga: `READ_LIBRARY_DOC` potrafi rozwiązać nazwę pliku → UUID (po `original_name`).
 
+### Repo patching (B2: Patch-as-artifact)
+
+**Standard bezpieczny:** agent generuje diff jako artefakt, człowiek aplikuje lokalnie.
+
+1. Agent tworzy patch:
+
+```text
+[CREATE: patch.diff]
+diff --git a/path/file.ts b/path/file.ts
+--- a/path/file.ts
++++ b/path/file.ts
+@@ -1,3 +1,3 @@
+ ...
+[/CREATE]
+```
+
+2. Człowiek aplikuje:
+
+```bash
+git apply --check patch.diff
+git apply patch.diff
+npm test
+```
+
+3. Rollback (gdy trzeba):
+
+```bash
+git apply -R patch.diff
+```
+
 ## Gdzie patrzeć w logi (debug 13/10)
 
 ### EventBus / telemetria

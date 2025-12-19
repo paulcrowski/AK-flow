@@ -7,11 +7,12 @@
  */
 
 import React from 'react';
-import { LogOut, Power, Moon, Sun, Zap, RefreshCw, Pin } from 'lucide-react';
+import { LogOut, Power, Moon, Sun, Zap, RefreshCw, Pin, Copy, Trash2, FileText, ChevronDown, ChevronUp } from 'lucide-react';
 import { AgentSelector } from '../AgentSelector';
 import { LibraryPanel } from '../LibraryPanel';
 import type { ConversationSessionSummary } from '../../services/ConversationArchive';
 import type { UiMessage } from '../../stores/cognitiveStore';
+import { useArtifactStore } from '../../stores/artifactStore';
 
 interface LeftSidebarProps {
   userId: string | null;
@@ -54,6 +55,20 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
   const pinned = sessions.filter(s => pinnedSessions.includes(s.sessionId));
   const unpinned = sessions.filter(s => !pinnedSessions.includes(s.sessionId));
   const sortedSessions = [...pinned, ...unpinned];
+
+  const [artifactsOpen, setArtifactsOpen] = React.useState(false);
+  const artifacts = useArtifactStore((s) => s.list());
+  const evidenceCount = useArtifactStore((s) => s.evidence.length);
+  const clearEvidence = useArtifactStore((s) => s.clearEvidence);
+
+  const copyText = async (text: string) => {
+    try {
+      if (typeof navigator === 'undefined' || !navigator.clipboard) return;
+      await navigator.clipboard.writeText(String(text || ''));
+    } catch {
+      // ignore
+    }
+  };
 
   return (
     <div className="hidden xl:flex w-[280px] shrink-0 h-full border-r border-gray-800 bg-[#07090d] flex-col relative z-10 overflow-hidden">
@@ -123,6 +138,72 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
 
       <div className="shrink-0">
         <LibraryPanel />
+      </div>
+
+      <div className="shrink-0 border-b border-gray-800">
+        <button
+          onClick={() => setArtifactsOpen((v) => !v)}
+          className="w-full p-4 flex items-center justify-between text-left"
+          title="Artifacts"
+        >
+          <div className="flex items-center gap-2">
+            <FileText size={14} className="text-gray-500" />
+            <div className="text-[10px] font-mono tracking-widest text-gray-500">ARTIFACTS</div>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="text-[10px] font-mono text-gray-600 bg-gray-900/50 px-1.5 py-0.5 rounded">{artifacts.length}</div>
+            {artifactsOpen ? <ChevronUp size={14} className="text-gray-500" /> : <ChevronDown size={14} className="text-gray-500" />}
+          </div>
+        </button>
+
+        {artifactsOpen && (
+          <div className="px-4 pb-4">
+            <div className="flex items-center justify-between mb-2">
+              <div className="text-[10px] font-mono text-gray-600">evidence: {evidenceCount}</div>
+              <button
+                onClick={() => clearEvidence()}
+                className="flex items-center gap-1.5 text-[10px] font-mono text-gray-500 hover:text-red-400 transition-colors"
+                title="Clear evidence"
+                disabled={evidenceCount === 0}
+              >
+                <Trash2 size={12} /> CLEAR
+              </button>
+            </div>
+
+            <div className="space-y-1.5">
+              {artifacts.slice(0, 10).map((a) => (
+                <div key={a.id} className="rounded-lg border border-gray-800/60 bg-gray-900/10 px-3 py-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="min-w-0">
+                      <div className="text-[11px] text-gray-200 font-semibold truncate">{a.name}</div>
+                      <div className="text-[9px] font-mono text-gray-600 truncate">{a.id}</div>
+                    </div>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <button
+                        onClick={() => void copyText(a.id)}
+                        className="p-1 rounded border border-gray-800/60 text-gray-500 hover:text-gray-200 hover:bg-gray-800/30 transition-colors"
+                        title="Copy id"
+                      >
+                        <Copy size={12} />
+                      </button>
+                      <button
+                        onClick={() => void copyText(a.content)}
+                        className="p-1 rounded border border-gray-800/60 text-gray-500 hover:text-gray-200 hover:bg-gray-800/30 transition-colors"
+                        title="Copy content"
+                      >
+                        <Copy size={12} />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+
+              {artifacts.length === 0 && (
+                <div className="text-[10px] text-gray-600 italic text-center py-2">No artifacts yet.</div>
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Sessions List */}
