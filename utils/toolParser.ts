@@ -15,9 +15,11 @@ import { scheduleSoftTimeout, searchInFlight, visualInFlight, withTimeout } from
 
 // P0 13/10: Tool execution timeout (ms)
 const TOOL_TIMEOUT_MS = (() => {
+  const isTestEnv = typeof process !== 'undefined' && process.env.NODE_ENV === 'test';
+  const defaultMs = isTestEnv ? 10000 : 20000;
   const raw = (import.meta as any)?.env?.VITE_TOOL_TIMEOUT_MS;
   const n = Number(raw);
-  return Number.isFinite(n) && n > 0 ? n : 20000;
+  return Number.isFinite(n) && n > 0 ? n : defaultMs;
 })();
 
 export interface ToolParserDeps {

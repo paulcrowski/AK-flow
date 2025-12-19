@@ -12,7 +12,12 @@ import { eventBus } from '../../core/EventBus';
 import { PacketType, CognitivePacket } from '../../types';
 import { createProcessOutputForTools, ToolParserDeps } from '../../utils/toolParser';
 import { CortexService } from '../../services/gemini';
-import { downloadLibraryDocumentText, getLibraryChunkByIndex, searchLibraryChunks } from '../../services/LibraryService';
+import {
+  downloadLibraryDocumentText,
+  findLibraryDocumentByName,
+  getLibraryChunkByIndex,
+  searchLibraryChunks
+} from '../../services/LibraryService';
 
 // Mock CortexService
 vi.mock('../../services/gemini', () => ({
@@ -34,7 +39,8 @@ vi.mock('../../services/supabase', () => ({
 vi.mock('../../services/LibraryService', () => ({
   searchLibraryChunks: vi.fn(),
   getLibraryChunkByIndex: vi.fn(),
-  downloadLibraryDocumentText: vi.fn()
+  downloadLibraryDocumentText: vi.fn(),
+  findLibraryDocumentByName: vi.fn()
 }));
 
 describe('P0 Tool Lifecycle', () => {
@@ -56,6 +62,12 @@ describe('P0 Tool Lifecycle', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     eventBus.clear();
+
+    // Default: resolve non-UUID document refs like "doc_1" by name.
+    vi.mocked(findLibraryDocumentByName).mockResolvedValue({
+      ok: true,
+      document: { id: 'doc_1' }
+    } as any);
 
     // Create mock dependencies
     mockDeps = {
@@ -197,6 +209,49 @@ describe('P0 Tool Lifecycle', () => {
       expect(intentEvent!.payload.tool).toBe('READ_LIBRARY_DOC');
       expect(resultEvent).toBeDefined();
       expect(resultEvent!.payload.tool).toBe('READ_LIBRARY_DOC');
+    });
+
+    it('READ_LIBRARY_RANGE should emit TOOL_INTENT and TOOL_RESULT with range payload', async () => {
+      vi.mocked(downloadLibraryDocumentText).mockResolvedValue({
+        ok: true,
+        doc: { original_name: 'x.md' },
+        text: 'abcdefghijklmnopqrstuvwxyz'
+      } as any);
+
+      const processOutput = createProcessOutputForTools(mockDeps);
+      await processOutput('[READ_LIBRARY_RANGE: doc_1#0:5]');
+
+      const intentEvent = getEvents().find(e => e.type === PacketType.TOOL_INTENT);
+      const resultEvent = getEvents().find(e => e.type === PacketType.TOOL_RESULT);
+
+      expect(intentEvent).toBeDefined();
+      expect(intentEvent!.payload.tool).toBe('READ_LIBRARY_RANGE');
+
+      expect(resultEvent).toBeDefined();
+      expect(resultEvent!.payload.tool).toBe('READ_LIBRARY_RANGE');
+      expect(resultEvent!.payload.totalLength).toBe(26);
+      expect(resultEvent!.payload.range).toEqual({ start: 0, end: 5 });
+      expect(typeof resultEvent!.payload.hash).toBe('string');
+    });
+
+    it('READ_FILE_RANGE should behave as alias of READ_LIBRARY_RANGE', async () => {
+      vi.mocked(downloadLibraryDocumentText).mockResolvedValue({
+        ok: true,
+        doc: { original_name: 'x.md' },
+        text: 'abcdefghijklmnopqrstuvwxyz'
+      } as any);
+
+      const processOutput = createProcessOutputForTools(mockDeps);
+      await processOutput('[READ_FILE_RANGE: doc_1#5:10]');
+
+      const intentEvent = getEvents().find(e => e.type === PacketType.TOOL_INTENT);
+      const resultEvent = getEvents().find(e => e.type === PacketType.TOOL_RESULT);
+
+      expect(intentEvent).toBeDefined();
+      expect(intentEvent!.payload.tool).toBe('READ_LIBRARY_RANGE');
+      expect(resultEvent).toBeDefined();
+      expect(resultEvent!.payload.tool).toBe('READ_LIBRARY_RANGE');
+      expect(resultEvent!.payload.range).toEqual({ start: 5, end: 10 });
     });
   });
 

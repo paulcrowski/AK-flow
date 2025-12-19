@@ -6,10 +6,11 @@ import { createProcessOutputForTools, type ToolParserDeps } from '../../utils/to
 vi.mock('../../services/LibraryService', () => ({
   searchLibraryChunks: vi.fn(),
   getLibraryChunkByIndex: vi.fn(),
-  downloadLibraryDocumentText: vi.fn()
+  downloadLibraryDocumentText: vi.fn(),
+  findLibraryDocumentByName: vi.fn()
 }));
 
-import { searchLibraryChunks, downloadLibraryDocumentText } from '../../services/LibraryService';
+import { searchLibraryChunks, downloadLibraryDocumentText, findLibraryDocumentByName } from '../../services/LibraryService';
 
 describe('Workspace Tools E2E (toolParser + EventBus)', () => {
   let deps: ToolParserDeps;
@@ -19,6 +20,12 @@ describe('Workspace Tools E2E (toolParser + EventBus)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     eventBus.clear();
+
+    // Default: resolve non-UUID document refs like "doc_1" by name.
+    vi.mocked(findLibraryDocumentByName).mockResolvedValue({
+      ok: true,
+      document: { id: 'doc_1' }
+    } as any);
 
     deps = {
       setCurrentThought: vi.fn(),
