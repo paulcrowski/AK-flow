@@ -1,5 +1,5 @@
 import React, { createContext, useState, useEffect, ReactNode } from 'react';
-import { supabase, setCurrentOwnerId } from '../services/supabase';
+import { supabase, setCurrentOwnerId, setCurrentUserEmail } from '../services/supabase';
 import type { Agent, SessionContextType } from './SessionTypes';
 
 const SessionContext = createContext<SessionContextType | null>(null);
@@ -36,6 +36,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         const user = data?.session?.user ?? null;
         setAuthUserId(user?.id ?? null);
         setCurrentOwnerId(user?.id ?? null);
+        setCurrentUserEmail((user?.email ?? null) as string | null);
         setUserEmail((user?.email ?? null) as string | null);
         setUserId(user?.id ?? null);
         setIsLoading(false);
@@ -50,6 +51,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       const user = session?.user ?? null;
       setAuthUserId(user?.id ?? null);
       setCurrentOwnerId(user?.id ?? null);
+      setCurrentUserEmail((user?.email ?? null) as string | null);
       setUserEmail((user?.email ?? null) as string | null);
       setUserId(user?.id ?? null);
     });
@@ -152,6 +154,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     setUserEmail(null);
     setAuthUserId(null);
     setCurrentOwnerId(null);
+    setCurrentUserEmail(null);
     setAgentId(null);
     setAgents([]);
     localStorage.removeItem(LS_AGENT_ID);

@@ -7,10 +7,20 @@ vi.mock('../../services/LibraryService', () => ({
   searchLibraryChunks: vi.fn(),
   getLibraryChunkByIndex: vi.fn(),
   downloadLibraryDocumentText: vi.fn(),
-  findLibraryDocumentByName: vi.fn()
+  findLibraryDocumentByName: vi.fn(),
+  uploadLibraryFile: vi.fn()
 }));
 
-import { searchLibraryChunks, downloadLibraryDocumentText, findLibraryDocumentByName } from '../../services/LibraryService';
+vi.mock('../../services/supabase', () => ({
+  MemoryService: {
+    storeMemory: vi.fn()
+  },
+  getCurrentOwnerId: vi.fn(() => 'U1'),
+  getCurrentUserEmail: vi.fn(() => 'u1@test.local'),
+  getCurrentAgentId: vi.fn(() => 'agent_1')
+}));
+
+import { searchLibraryChunks, downloadLibraryDocumentText, findLibraryDocumentByName, uploadLibraryFile } from '../../services/LibraryService';
 
 describe('Workspace Tools E2E (toolParser + EventBus)', () => {
   let deps: ToolParserDeps;
@@ -73,5 +83,22 @@ describe('Workspace Tools E2E (toolParser + EventBus)', () => {
     expect(results.length).toBeGreaterThanOrEqual(2);
 
     expect(deps.addMessage).toHaveBeenCalledWith('assistant', expect.stringContaining('READ_LIBRARY_DOC'), 'tool_result');
+  });
+
+  it('should support CREATE + PUBLISH tool tags in one response', async () => {
+    vi.mocked(uploadLibraryFile).mockResolvedValue({
+      ok: true,
+      document: { id: 'doc_published' }
+    } as any);
+
+    const process = createProcessOutputForTools(deps);
+    await process('[CREATE: report.md]hello[/CREATE] [PUBLISH: art-INVALID]');
+
+    // This test intentionally asserts tool lifecycle stability rather than successful publish.
+    // PUBLISH should emit TOOL_ERROR if artifact is not found.
+    const intents = getEvents().filter((e) => e.type === PacketType.TOOL_INTENT);
+    const outcomes = getEvents().filter((e) => e.type === PacketType.TOOL_RESULT || e.type === PacketType.TOOL_ERROR);
+    expect(intents.length).toBeGreaterThanOrEqual(2);
+    expect(outcomes.length).toBeGreaterThanOrEqual(2);
   });
 });

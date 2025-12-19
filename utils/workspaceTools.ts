@@ -7,6 +7,7 @@ import {
 } from '../services/LibraryService';
 import { AgentType, PacketType } from '../types';
 import { withTimeout } from './toolRuntime';
+import { useArtifactStore } from '../stores/artifactStore';
 
 export const WORKSPACE_TAG_REGEX = /\[(SEARCH_LIBRARY|READ_LIBRARY_CHUNK|READ_LIBRARY_DOC|READ_LIBRARY_RANGE|SEARCH_IN_REPO|READ_FILE|READ_FILE_CHUNK|READ_FILE_RANGE):\s*([^\]]+?)\]/i;
 
@@ -139,6 +140,20 @@ export async function consumeWorkspaceTags(params: {
 
         const textChunk = raw.slice(start, end);
         const hash = hashText(textChunk);
+
+        try {
+          useArtifactStore.getState().addEvidence({
+            kind: 'library_range',
+            ts: Date.now(),
+            docId: documentId,
+            name: originalName || 'unknown',
+            start,
+            end,
+            hash
+          });
+        } catch {
+          // ignore
+        }
 
         const nextStart = end;
         const nextEnd = Math.min(nextStart + MAX_RANGE_CHARS, totalLength);

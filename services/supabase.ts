@@ -57,6 +57,9 @@ let currentAgentId: string | null = null;
 // Current owner context (auth.uid) - set by SessionContext
 let currentOwnerId: string | null = null;
 
+// Current user email context (legacy user_id) - set by SessionContext
+let currentUserEmail: string | null = null;
+
 export const setCurrentAgentId = (agentId: string | null) => {
   currentAgentId = agentId;
   console.log('[MemoryService] Agent ID set to:', agentId);
@@ -70,6 +73,12 @@ export const setCurrentOwnerId = (ownerId: string | null) => {
 };
 
 export const getCurrentOwnerId = () => currentOwnerId;
+
+export const setCurrentUserEmail = (email: string | null) => {
+  currentUserEmail = email;
+};
+
+export const getCurrentUserEmail = () => currentUserEmail;
 
 export const MemoryService = {
   async storeMemory(memory: MemoryTrace): Promise<boolean> {

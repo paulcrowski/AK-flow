@@ -1,8 +1,8 @@
 import { eventBus } from '../core/EventBus';
 import { CortexService } from '../services/gemini';
-import { MemoryService } from '../services/supabase';
+import { MemoryService, getCurrentAgentId, getCurrentOwnerId, getCurrentUserEmail } from '../services/supabase';
 import { persistSearchKnowledgeChunk } from '../services/SearchKnowledgeChunker';
-import { downloadLibraryDocumentText } from '../services/LibraryService';
+import { downloadLibraryDocumentText, uploadLibraryFile } from '../services/LibraryService';
 import { safeParseJson, splitTodo3 } from './splitTodo3';
 import { AgentType, PacketType } from '../types';
 import { getCurrentTraceId } from '../core/trace/TraceContext';
@@ -10,6 +10,7 @@ import { generateUUID } from './uuid';
 import * as SomaSystem from '../core/systems/SomaSystem';
 import * as LimbicSystem from '../core/systems/LimbicSystem';
 import { VISUAL_BASE_COOLDOWN_MS, VISUAL_ENERGY_COST_BASE } from '../core/constants';
+import { useArtifactStore, hashArtifactContent } from '../stores/artifactStore';
 import { consumeWorkspaceTags } from './workspaceTools';
 import { scheduleSoftTimeout, searchInFlight, visualInFlight, withTimeout } from './toolRuntime';
 
@@ -46,6 +47,221 @@ export const createProcessOutputForTools = (deps: ToolParserDeps) => {
 
   return async function processOutputForTools(rawText: string): Promise<string> {
     let cleanText = rawText;
+
+    const inferMimeTypeFromName = (name: string) => {
+      const lower = String(name || '').toLowerCase();
+      if (lower.endsWith('.md')) return 'text/markdown';
+      if (lower.endsWith('.txt')) return 'text/plain';
+      if (lower.endsWith('.json')) return 'application/json';
+      if (lower.endsWith('.ts') || lower.endsWith('.tsx')) return 'text/plain';
+      return 'application/octet-stream';
+    };
+
+    const publishRequiresEvidence = (name: string) => {
+      const lower = String(name || '').toLowerCase().trim();
+      return (
+        lower.endsWith('.ts') ||
+        lower.endsWith('.tsx') ||
+        lower.endsWith('.js') ||
+        lower.endsWith('.jsx') ||
+        lower.endsWith('.py') ||
+        lower.endsWith('.go') ||
+        lower.endsWith('.rs') ||
+        lower.endsWith('.java') ||
+        lower.endsWith('.cs') ||
+        lower.endsWith('.sql') ||
+        lower.endsWith('.diff') ||
+        lower.endsWith('.patch')
+      );
+    };
+
+    const emitToolError = (params: { tool: string; payload: any; error: string; intentId: string }) => {
+      eventBus.publish({
+        id: generateUUID(),
+        timestamp: Date.now(),
+        source: AgentType.CORTEX_FLOW,
+        type: PacketType.TOOL_ERROR,
+        payload: { ...params.payload, tool: params.tool, intentId: params.intentId, error: params.error },
+        priority: 0.9
+      });
+      addMessage('assistant', `TOOL_ERROR: ${params.tool} :: ${params.error}`, 'thought');
+    };
+
+    const handlePublishArtifact = async (artifactIdRaw: string) => {
+      const tool = 'PUBLISH';
+      const intentId = generateUUID();
+      const artifactId = String(artifactIdRaw || '').trim();
+      eventBus.publish({
+        id: intentId,
+        timestamp: Date.now(),
+        source: AgentType.CORTEX_FLOW,
+        type: PacketType.TOOL_INTENT,
+        payload: { tool, arg: artifactId },
+        priority: 0.8
+      });
+
+      try {
+        const store = useArtifactStore.getState();
+        const art = store.get(artifactId);
+        if (!art) throw new Error('ARTIFACT_NOT_FOUND');
+
+        if (publishRequiresEvidence(art.name)) {
+          const evidenceCount = Array.isArray((store as any).evidence) ? (store as any).evidence.length : 0;
+          if (evidenceCount <= 0) {
+            throw new Error('EVIDENCE_REQUIRED: use READ_LIBRARY_RANGE or READ_ARTIFACT first');
+          }
+        }
+
+        const authUserId = getCurrentOwnerId();
+        const userEmail = getCurrentUserEmail();
+        if (!authUserId || !userEmail) throw new Error('AUTH_REQUIRED');
+
+        const agentId = getCurrentAgentId();
+        const mime = inferMimeTypeFromName(art.name);
+        const file = new File([String(art.content || '')], art.name, { type: mime });
+
+        const res: any = await withTimeout<any>(
+          uploadLibraryFile({
+            file,
+            authUserId,
+            userEmail,
+            agentId: agentId ?? null
+          }) as any,
+          TOOL_TIMEOUT_MS,
+          'PUBLISH'
+        );
+        if (res.ok === false) throw new Error(res.error);
+
+        emitToolResult({
+          tool,
+          intentId,
+          payload: {
+            id: art.id,
+            name: art.name,
+            docId: res.document?.id,
+            size: file.size
+          }
+        });
+        addMessage('assistant', `PUBLISH_OK: ${String(res.document?.id || '')} (${art.name})`, 'tool_result');
+      } catch (e: any) {
+        emitToolError({ tool, intentId, payload: { arg: artifactIdRaw }, error: e?.message || String(e) });
+      }
+    };
+
+    const emitToolResult = (params: { tool: string; payload: any; intentId: string }) => {
+      eventBus.publish({
+        id: generateUUID(),
+        timestamp: Date.now(),
+        source: AgentType.CORTEX_FLOW,
+        type: PacketType.TOOL_RESULT,
+        payload: { ...params.payload, tool: params.tool, intentId: params.intentId },
+        priority: 0.8
+      });
+    };
+
+    const handleArtifactBlock = async (params: { kind: 'CREATE' | 'APPEND' | 'REPLACE'; header: string; body: string; raw: string }) => {
+      const tool = params.kind;
+      const intentId = generateUUID();
+      eventBus.publish({
+        id: intentId,
+        timestamp: Date.now(),
+        source: AgentType.CORTEX_FLOW,
+        type: PacketType.TOOL_INTENT,
+        payload: { tool, arg: params.header },
+        priority: 0.8
+      });
+
+      try {
+        const store = useArtifactStore.getState();
+        if (params.kind === 'CREATE') {
+          const id = store.create(params.header, params.body);
+          emitToolResult({ tool, intentId, payload: { id, name: params.header } });
+          addMessage('assistant', `CREATE_OK: ${id} (${params.header})`, 'tool_result');
+          return;
+        }
+
+        const id = String(params.header || '').trim();
+        if (params.kind === 'APPEND') {
+          store.append(id, params.body);
+          emitToolResult({ tool, intentId, payload: { id } });
+          addMessage('assistant', `APPEND_OK: ${id}`, 'tool_result');
+          return;
+        }
+
+        store.replace(id, params.body);
+        emitToolResult({ tool, intentId, payload: { id } });
+        addMessage('assistant', `REPLACE_OK: ${id}`, 'tool_result');
+      } catch (e: any) {
+        emitToolError({ tool, intentId, payload: { arg: params.header }, error: e?.message || String(e) });
+      }
+    };
+
+    const handleReadArtifact = async (artifactIdRaw: string, rawTag: string) => {
+      const tool = 'READ_ARTIFACT';
+      const intentId = generateUUID();
+      const artifactId = String(artifactIdRaw || '').trim();
+      eventBus.publish({
+        id: intentId,
+        timestamp: Date.now(),
+        source: AgentType.CORTEX_FLOW,
+        type: PacketType.TOOL_INTENT,
+        payload: { tool, arg: artifactId },
+        priority: 0.8
+      });
+
+      try {
+        const store = useArtifactStore.getState();
+        const art = store.get(artifactId);
+        if (!art) throw new Error('ARTIFACT_NOT_FOUND');
+        const hash = hashArtifactContent(art.content);
+        store.addEvidence({ kind: 'artifact', ts: Date.now(), artifactId: art.id, name: art.name, hash });
+        emitToolResult({ tool, intentId, payload: { id: art.id, name: art.name, length: art.content.length, hash } });
+        addMessage('assistant', `READ_ARTIFACT ${art.id} (${art.name}) hash=${hash}\n\n${art.content}`, 'tool_result');
+      } catch (e: any) {
+        emitToolError({ tool, intentId, payload: { arg: artifactId }, error: e?.message || String(e) });
+      }
+    };
+
+    while (true) {
+      const publishMatch = cleanText.match(/\[PUBLISH:\s*([^\]]+?)\](?:\s*\[\/PUBLISH\])?/i);
+      if (publishMatch) {
+        cleanText = cleanText.replace(publishMatch[0], '').trim();
+        await handlePublishArtifact(publishMatch[1]);
+        continue;
+      }
+
+      const readMatch = cleanText.match(/\[READ_ARTIFACT:\s*([^\]]+?)\](?:\s*\[\/READ_ARTIFACT\])?/i);
+      if (readMatch) {
+        cleanText = cleanText.replace(readMatch[0], '').trim();
+        await handleReadArtifact(readMatch[1], readMatch[0]);
+        continue;
+      }
+
+      const blockMatch = cleanText.match(/\[(CREATE|APPEND|REPLACE):\s*([^\]]+?)\]([\s\S]*?)\[\/(CREATE|APPEND|REPLACE)\]/i);
+      if (!blockMatch) break;
+
+      const kind = String(blockMatch[1] || '').toUpperCase() as any;
+      const header = String(blockMatch[2] || '').trim();
+      const body = String(blockMatch[3] || '');
+      cleanText = cleanText.replace(blockMatch[0], '').trim();
+
+      if (String(blockMatch[1] || '').toUpperCase() !== String(blockMatch[4] || '').toUpperCase()) {
+        const tool = 'ARTIFACT_BLOCK';
+        const intentId = generateUUID();
+        eventBus.publish({
+          id: intentId,
+          timestamp: Date.now(),
+          source: AgentType.CORTEX_FLOW,
+          type: PacketType.TOOL_INTENT,
+          payload: { tool, arg: kind },
+          priority: 0.8
+        });
+        emitToolError({ tool, intentId, payload: { arg: kind }, error: 'TAG_MISMATCH' });
+        continue;
+      }
+
+      await handleArtifactBlock({ kind, header, body, raw: blockMatch[0] });
+    }
 
     // 0.5 DETerministic JSON ACTION: SPLIT_TODO3
     // [SPLIT_TODO3: <documentId>]

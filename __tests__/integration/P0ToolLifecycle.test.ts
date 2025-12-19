@@ -32,7 +32,10 @@ vi.mock('../../services/gemini', () => ({
 vi.mock('../../services/supabase', () => ({
   MemoryService: {
     storeMemory: vi.fn()
-  }
+  },
+  getCurrentOwnerId: vi.fn(() => 'U1'),
+  getCurrentUserEmail: vi.fn(() => 'u1@test.local'),
+  getCurrentAgentId: vi.fn(() => 'agent_1')
 }));
 
 // Mock LibraryService (Workspace tools)
