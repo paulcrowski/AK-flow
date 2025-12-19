@@ -1,9 +1,31 @@
 # 🧠 AK-FLOW Architecture Map
 
-> **Wersja:** 6.6 (2025-12-18)
+> **Wersja:** 6.7 (2025-12-19)
 > **Cel:** Prosta mapa jak działa agent i jaki ma flow
 
 ---
+
+## 🆕 FAZA 6.7: Workspace Artifacts + Evidence Gate + Patch-as-Artifact (2025-12-19)
+
+**Cel:** agent ma “warsztat” do tworzenia artefaktów (tekst/kod/diff), publikacji do Library oraz minimalnego bezpieczeństwa (Evidence Gate) przed publikacją kodu.
+
+**Mechanika (Expression / tools):**
+- ArtifactBuffer: `stores/artifactStore.ts` (artifacts + evidence ring buffer).
+- Tool tags (parser): `utils/toolParser.ts`
+  - `CREATE`, `APPEND`, `REPLACE`, `READ_ARTIFACT`
+  - `PUBLISH` (upload do Supabase Library)
+
+**Evidence Gate:**
+- Reguła minimalna: publikacja artefaktów “kodowych” (`.ts/.tsx/.diff/.patch/...`) wymaga świeżego evidence.
+- Evidence źródła:
+  - `READ_LIBRARY_RANGE` (`utils/workspaceTools.ts`)
+  - `READ_ARTIFACT` (`utils/toolParser.ts`)
+
+**B2: Patch-as-artifact (standard bez IPC):**
+- Patch jest artefaktem (`patch.diff`), człowiek aplikuje `git apply --check` + `git apply`.
+
+**UI (warsztat człowieka):**
+- `components/layout/LeftSidebar.tsx`: panel `ARTIFACTS` (lista + copy id/content + clear evidence).
 
 ## 🆕 FAZA 6.6: Integrity & Reliability (2025-12-18)
 

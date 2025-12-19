@@ -50,12 +50,7 @@ export const createProcessOutputForTools = (deps: ToolParserDeps) => {
 
     const normalizeArg = (raw: string) => {
       let s = String(raw || '').trim();
-      if (
-        (s.startsWith('<') && s.endsWith('>')) ||
-        (s.startsWith('"') && s.endsWith('"')) ||
-        (s.startsWith("'") && s.endsWith("'")) ||
-        (s.startsWith('`') && s.endsWith('`'))
-      ) {
+      if ((s.startsWith('<') && s.endsWith('>')) || (s.startsWith('"') && s.endsWith('"')) || (s.startsWith("'") && s.endsWith("'")) || (s.startsWith('`') && s.endsWith('`'))) {
         s = s.slice(1, -1).trim();
       }
       s = s.replace(/\s+/g, ' ');
@@ -73,20 +68,7 @@ export const createProcessOutputForTools = (deps: ToolParserDeps) => {
 
     const publishRequiresEvidence = (name: string) => {
       const lower = String(name || '').toLowerCase().trim();
-      return (
-        lower.endsWith('.ts') ||
-        lower.endsWith('.tsx') ||
-        lower.endsWith('.js') ||
-        lower.endsWith('.jsx') ||
-        lower.endsWith('.py') ||
-        lower.endsWith('.go') ||
-        lower.endsWith('.rs') ||
-        lower.endsWith('.java') ||
-        lower.endsWith('.cs') ||
-        lower.endsWith('.sql') ||
-        lower.endsWith('.diff') ||
-        lower.endsWith('.patch')
-      );
+      return lower.endsWith('.ts') || lower.endsWith('.tsx') || lower.endsWith('.js') || lower.endsWith('.jsx') || lower.endsWith('.py') || lower.endsWith('.go') || lower.endsWith('.rs') || lower.endsWith('.java') || lower.endsWith('.cs') || lower.endsWith('.sql') || lower.endsWith('.diff') || lower.endsWith('.patch');
     };
 
     const emitToolError = (params: { tool: string; payload: any; error: string; intentId: string }) => {
@@ -113,27 +95,22 @@ export const createProcessOutputForTools = (deps: ToolParserDeps) => {
         payload: { tool, arg: artifactId },
         priority: 0.8
       });
-
       try {
         const store = useArtifactStore.getState();
         const art = store.get(artifactId);
         if (!art) throw new Error('ARTIFACT_NOT_FOUND');
-
         if (publishRequiresEvidence(art.name)) {
           const evidenceCount = Array.isArray((store as any).evidence) ? (store as any).evidence.length : 0;
           if (evidenceCount <= 0) {
             throw new Error('EVIDENCE_REQUIRED: use READ_LIBRARY_RANGE or READ_ARTIFACT first');
           }
         }
-
         const authUserId = getCurrentOwnerId();
         const userEmail = getCurrentUserEmail();
         if (!authUserId || !userEmail) throw new Error('AUTH_REQUIRED');
-
         const agentId = getCurrentAgentId();
         const mime = inferMimeTypeFromName(art.name);
         const file = new File([String(art.content || '')], art.name, { type: mime });
-
         const res: any = await withTimeout<any>(
           uploadLibraryFile({
             file,
@@ -145,7 +122,6 @@ export const createProcessOutputForTools = (deps: ToolParserDeps) => {
           'PUBLISH'
         );
         if (res.ok === false) throw new Error(res.error);
-
         emitToolResult({
           tool,
           intentId,

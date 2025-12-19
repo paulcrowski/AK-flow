@@ -1,10 +1,35 @@
 # AK-FLOW: Cognitive Agent Architecture Manifest
 **System Version:** 6.6 (Strict Ownership RLS + Model Router Fallback)  
-**Last Updated:** 2025-12-18  
+**Last Updated:** 2025-12-19  
 **Architecture Type:** Active Inference (Friston) + Global Workspace Theory + Multi-Modal RAG + **Stateless Inference Engine**  
 **Status:** Autonomous / Stateful / Modular / Self-Aware / Goal-Driven / Personality-Driven / **Emergent Identity**
 
 ---
+
+## 🆕 What's New in V6.7 (2025-12-19)
+
+### Workspace: ArtifactBuffer + Publish + Evidence Gate
+
+**Cel:** agent może tworzyć artefakty (tekst / kod / diff) i publikować je do Library, ale tylko po uzyskaniu minimalnego evidence.
+
+**Wkład:**
+- `stores/artifactStore.ts`: ArtifactBuffer (create/append/replace/read + evidence ring-buffer).
+- Tool tags: `CREATE`, `APPEND`, `REPLACE`, `READ_ARTIFACT`, `PUBLISH` w `utils/toolParser.ts`.
+- Evidence Gate: publikacja artefaktów „kodowych” wymaga świeżego evidence (`READ_LIBRARY_RANGE` lub `READ_ARTIFACT`).
+
+### Repo patching: B2 (Patch-as-artifact)
+
+**Cel:** bezpieczny workflow zmian w repo bez IPC: agent generuje patch w artefakcie, człowiek aplikuje lokalnie.
+
+**Wkład:**
+- `README.md`: protokół `patch.diff` + `git apply --check` + `git apply` + rollback.
+
+### UI: panel artefaktów
+
+**Cel:** człowiek widzi artefakty i może nimi zarządzać bez grepowania logów.
+
+**Wkład:**
+- `components/layout/LeftSidebar.tsx`: sekcja `ARTIFACTS` (lista + copy id/content + clear evidence).
 
 ## 🆕 What's New in V6.6 (2025-12-18)
 

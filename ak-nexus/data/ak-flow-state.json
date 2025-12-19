@@ -1,7 +1,7 @@
 {
   "version": "1.0.0",
-  "lastUpdated": "2025-12-18T19:10:00.000Z",
-  "lastModified": "2025-12-18T19:10:00.000Z",
+  "lastUpdated": "2025-12-19T16:20:00.000Z",
+  "lastModified": "2025-12-19T16:20:00.000Z",
   "modifiedBy": "AI_WINDSURF",
   "project": "AK-Flow",
   "dailyGoal": "AgentTrajectory Phase 1 (Execution-First Autonomy)",
@@ -862,6 +862,17 @@
       ],
       "createdAt": "2025-12-18T19:10:00.000Z",
       "updatedAt": "2025-12-18T19:10:00.000Z"
+    },
+    {
+      "id": "note-012",
+      "title": "Daily Close: 2025-12-19",
+      "content": "DONE: Workspace toolchain. Wdrożono ArtifactBuffer (stores/artifactStore.ts) + tool tags CREATE/APPEND/REPLACE/READ_ARTIFACT. Dodano PUBLISH do Supabase Library + minimalny Evidence Gate (publikacja kodu wymaga evidence z READ_LIBRARY_RANGE lub READ_ARTIFACT). Standard B2: Patch-as-artifact (README) + panel ARTIFACTS w LeftSidebar (lista + copy id/content + clear evidence).\nVERIFY: npm test PASS (571/571). npm run godfile:check OK (soft warnings only). npm run build: PENDING.\nCOMMITS: 4c89417, cb6612c, 8dc1119.\nNEXT: B2 w praktyce (patch.diff → apply → publish) + stopniowe zejście z soft warningów godfile-check.",
+      "category": "INSIGHT",
+      "tags": [
+        "daily_close"
+      ],
+      "createdAt": "2025-12-19T16:20:00.000Z",
+      "updatedAt": "2025-12-19T16:20:00.000Z"
     }
   ],
   "stats": {
@@ -873,8 +884,8 @@
     "currentPhase": "FAZA 6.6: Integrity & Reliability",
     "todayCompleted": 2,
     "streak": 7,
-    "testsTotal": 556,
-    "testsPassing": 556,
+    "testsTotal": 571,
+    "testsPassing": 571,
     "blocked": 0,
     "notImplemented": 14
   },

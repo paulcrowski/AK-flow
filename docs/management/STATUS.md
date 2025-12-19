@@ -1,6 +1,6 @@
 # 📊 AK-FLOW Status Report
 
-> Ostatnia aktualizacja: **2025-12-12 17:45 CET**
+> Ostatnia aktualizacja: **2025-12-19 17:20 CET**
 > 
 > Odpowiedzialny: Paul & Claude
 
@@ -12,10 +12,10 @@
 ╔═══════════════════════════════════════════════════════════════╗
 ║              AK-FLOW SYSTEM STATUS                            ║
 ╠═══════════════════════════════════════════════════════════════╣
-║ Tests:           318 passed ✅                                ║
+║ Tests:           571 passed ✅                                ║
 ║ Build:           OK ✅                                        ║
 ║ Wiring:          7/7 systems ACTIVE ✅                        ║
-║ Last Deploy:     2025-12-12 (Memory branch)                  ║
+║ Last Deploy:     2025-12-19 (Workspace tools + B2)           ║
 ╚═══════════════════════════════════════════════════════════════╝
 ```
 
@@ -25,8 +25,8 @@
 
 | Metryka | Wartość | Trend |
 |---------|---------|-------|
-| Testy razem | 318 | ↑ +33 dziś |
-| Testy integracyjne | 33 | ↑ NEW |
+| Testy razem | 571 | ↑ +15 dziś |
+| Testy integracyjne | 33 | - |
 | Feature flags | 5 | - |
 | Krytyczne systemy | 7 | - |
 | Pliki w core/ | ~50 | - |
@@ -55,6 +55,12 @@
 - FactEchoPipeline waliduje fakty
 - Telemetria: PROMPT_HARDFACTS, DOPAMINE_TICK
 
+### ✅ Workspace Tools (Artifacts + Library)
+- Tool tags: `CREATE/APPEND/REPLACE/READ_ARTIFACT/PUBLISH`
+- ArtifactBuffer: `stores/artifactStore.ts`
+- Evidence Gate dla publikacji kodu: evidence z `READ_LIBRARY_RANGE` / `READ_ARTIFACT`
+- Standard bezpieczny: B2 Patch-as-artifact (README)
+
 ---
 
 ## ⚠️ ZNANE OGRANICZENIA
@@ -69,12 +75,11 @@
 ## 🎯 CO DALEJ (PRIORYTET)
 
 ### TERAZ (do końca dnia)
-- [ ] Test manualny: imię, data, cisza
+- [ ] Day Close: `npm run build` + aktualizacja Nexus (ak-flow-state.json)
 
 ### TEN TYDZIEŃ
-- [ ] Dashboard DOPAMINE_TICK w NeuroMonitor
-- [ ] Alert dla IDENTITY_CONTRADICTION
-- [ ] Obserwacja przez 1h normalnego użytkowania
+- [ ] B2 w praktyce: patch.diff jako artefakt → apply → publish do Library
+- [ ] Hardening: zejść z soft warningów godfile-check (stopniowo)
 
 ### PRZYSZŁOŚĆ
 - [ ] WorldResponse Architecture
