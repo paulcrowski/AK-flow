@@ -129,6 +129,30 @@ export async function listLibraryDocuments(params?: {
   return { ok: true, documents: (res.data as LibraryDocument[]) || [] };
 }
 
+ export async function findLibraryDocumentByName(params: {
+   name: string;
+   agentId?: string | null;
+ }): Promise<{ ok: true; document: LibraryDocument | null } | { ok: false; error: string }> {
+   const name = String(params.name || '').trim();
+   if (!name) return { ok: true, document: null };
+
+   let q = supabase
+     .from('library_documents')
+     .select('*')
+     .order('created_at', { ascending: false })
+     .limit(5)
+     .ilike('original_name', `%${name}%`);
+
+   if (params.agentId) {
+     q = q.eq('agent_id', params.agentId);
+   }
+
+   const res = await q;
+   if (res.error) return { ok: false, error: res.error.message };
+   const first = Array.isArray(res.data) ? (res.data[0] as LibraryDocument | undefined) : undefined;
+   return { ok: true, document: first ?? null };
+ }
+
 export async function listLibraryChunks(params: {
   documentId: string;
   limit?: number;

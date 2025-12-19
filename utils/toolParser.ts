@@ -14,7 +14,11 @@ import { consumeWorkspaceTags } from './workspaceTools';
 import { scheduleSoftTimeout, searchInFlight, visualInFlight, withTimeout } from './toolRuntime';
 
 // P0 13/10: Tool execution timeout (ms)
-const TOOL_TIMEOUT_MS = 10000;
+const TOOL_TIMEOUT_MS = (() => {
+  const raw = (import.meta as any)?.env?.VITE_TOOL_TIMEOUT_MS;
+  const n = Number(raw);
+  return Number.isFinite(n) && n > 0 ? n : 20000;
+})();
 
 export interface ToolParserDeps {
   setCurrentThought: (t: string) => void;
@@ -207,6 +211,14 @@ export const createProcessOutputForTools = (deps: ToolParserDeps) => {
                 },
                 priority: 0.8
               });
+            }
+
+            if (op!.timeoutEmitted.size > 0) {
+              addMessage(
+                'assistant',
+                `SEARCH wynik dotarł po TIMEOUT (dołączony). query="${query}"`,
+                'thought'
+              );
             }
 
             addMessage('assistant', research.synthesis, 'intel', undefined, research.sources);

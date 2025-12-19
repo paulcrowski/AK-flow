@@ -1,5 +1,10 @@
 import type { ToolParserDeps } from './toolParser';
-import { downloadLibraryDocumentText, getLibraryChunkByIndex, searchLibraryChunks } from '../services/LibraryService';
+import {
+  downloadLibraryDocumentText,
+  findLibraryDocumentByName,
+  getLibraryChunkByIndex,
+  searchLibraryChunks
+} from '../services/LibraryService';
 import { AgentType, PacketType } from '../types';
 import { withTimeout } from './toolRuntime';
 
@@ -15,6 +20,18 @@ export async function consumeWorkspaceTags(params: {
   const { deps, timeoutMs, makeId, publish } = params;
   let cleanText = params.cleanText;
 
+  const normalizeArg = (raw: string) => {
+    let s = String(raw || '').trim();
+    if ((s.startsWith('<') && s.endsWith('>')) || (s.startsWith('"') && s.endsWith('"')) || (s.startsWith("'") && s.endsWith("'"))) {
+      s = s.slice(1, -1).trim();
+    }
+    // common user typo: extra spaces in filename
+    s = s.replace(/\s+/g, ' ');
+    return s;
+  };
+
+  const isUuidLike = (s: string) => /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(s);
+
   const executeWorkspaceTool = async (toolRaw: string, argRaw: string) => {
     const tool0 = String(toolRaw || '').toUpperCase();
     const tool = tool0 === 'SEARCH_IN_REPO'
@@ -25,7 +42,7 @@ export async function consumeWorkspaceTags(params: {
           ? 'READ_LIBRARY_CHUNK'
           : tool0;
 
-    const arg = String(argRaw || '').trim();
+    const arg = normalizeArg(argRaw);
 
     const intentId = makeId();
     publish({
@@ -99,7 +116,14 @@ export async function consumeWorkspaceTags(params: {
       }
 
       if (tool === 'READ_LIBRARY_DOC') {
-        const documentId = arg;
+        let documentId = arg;
+        if (!isUuidLike(documentId)) {
+          const found: any = await withTimeout<any>(findLibraryDocumentByName({ name: documentId }) as any, timeoutMs, 'FIND_LIBRARY_DOC');
+          if (found.ok === false) throw new Error(found.error);
+          if (!found.document) throw new Error(`DOC_NOT_FOUND_BY_NAME: ${documentId}`);
+          documentId = String(found.document.id);
+        }
+
         deps.addMessage('assistant', `Invoking READ_LIBRARY_DOC for: ${documentId}`, 'action');
         deps.setCurrentThought('Workspace read document...');
 
@@ -107,17 +131,61 @@ export async function consumeWorkspaceTags(params: {
         if (res.ok === false) throw new Error(res.error);
 
         const raw = String(res.text || '');
+        const originalName = String(res.doc?.original_name || '').trim();
+
+        const looksLikeJson = originalName.toLowerCase().endsWith('.json') || raw.trim().startsWith('{') || raw.trim().startsWith('[');
+        let summaryBlock = '';
+        if (looksLikeJson) {
+          try {
+            const parsed: any = JSON.parse(raw);
+            if (parsed && typeof parsed === 'object') {
+              const keys = Array.isArray(parsed) ? [] : Object.keys(parsed);
+              const tasks = Array.isArray(parsed?.tasks) ? parsed.tasks : [];
+              const countsByType: Record<string, number> = {};
+              const countsByPriority: Record<string, number> = {};
+              const openCritical: any[] = [];
+              for (const t of tasks) {
+                const type = String(t?.type ?? 'UNKNOWN');
+                const prio = String(t?.priority ?? 'UNKNOWN');
+                countsByType[type] = (countsByType[type] || 0) + 1;
+                countsByPriority[prio] = (countsByPriority[prio] || 0) + 1;
+                if (prio === 'CRITICAL' && t?.isCompleted === false) openCritical.push(t);
+              }
+
+              summaryBlock = [
+                'JSON_SUMMARY:',
+                `- keys: ${keys.slice(0, 40).join(', ')}${keys.length > 40 ? ' ...' : ''}`,
+                `- version: ${String(parsed?.version ?? '')}`,
+                `- project: ${String(parsed?.project ?? '')}`,
+                `- dailyGoal: ${String(parsed?.dailyGoal ?? '')}`,
+                `- tasks.total: ${tasks.length}`,
+                `- tasks.byType: ${Object.entries(countsByType).map(([k, v]) => `${k}=${v}`).join(', ')}`,
+                `- tasks.byPriority: ${Object.entries(countsByPriority).map(([k, v]) => `${k}=${v}`).join(', ')}`,
+                `- openCritical: ${openCritical.slice(0, 5).map((t) => String(t?.id ?? t?.content ?? 'task')).join(', ')}${openCritical.length > 5 ? ' ...' : ''}`
+              ].join('\n');
+            }
+          } catch {
+            // fall back to raw excerpt
+          }
+        }
+
+        const excerptLimit = looksLikeJson ? 2500 : 8000;
+        const excerpt = raw.slice(0, excerptLimit);
         const text = [
-          `READ_LIBRARY_DOC ${documentId} (${res.doc.original_name}):`,
-          raw.slice(0, 12000)
-        ].join('\n');
+          `READ_LIBRARY_DOC ${documentId} (${originalName || 'unknown'}):`,
+          summaryBlock ? summaryBlock : '',
+          'EXCERPT:',
+          excerpt
+        ]
+          .filter(Boolean)
+          .join('\n');
 
         publish({
           id: makeId(),
           timestamp: Date.now(),
           source: AgentType.CORTEX_FLOW,
           type: PacketType.TOOL_RESULT,
-          payload: { tool, arg, intentId, length: raw.length },
+          payload: { tool, arg, intentId, length: raw.length, summarized: !!summaryBlock },
           priority: 0.8
         });
 
