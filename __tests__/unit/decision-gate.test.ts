@@ -8,7 +8,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import {
   processDecisionGate,
-  resetTurnState,
+  resetTurnStateForAgent,
   resetFullState,
   DEFAULT_POLICY
 } from '../../core/systems/DecisionGate';
@@ -22,6 +22,8 @@ const createSomaState = (energy: number = 80): SomaState => ({
   isSleeping: false
 });
 
+const TEST_AGENT_ID = 'test-agent';
+
 // Mock CortexOutput
 const createOutput = (overrides: Partial<CortexOutput> = {}): CortexOutput => ({
   internal_thought: 'I am thinking about the user question.',
@@ -33,6 +35,7 @@ const createOutput = (overrides: Partial<CortexOutput> = {}): CortexOutput => ({
 describe('Decision Gate - 3-Layer Architecture', () => {
   beforeEach(() => {
     resetFullState();  // Pełny reset włącznie z cooldownami
+    resetTurnStateForAgent(TEST_AGENT_ID);
   });
 
   describe('Cognitive Violation Detection', () => {
@@ -41,7 +44,7 @@ describe('Decision Gate - 3-Layer Architecture', () => {
         internal_thought: 'I need data. [SEARCH: quantum physics]'
       });
 
-      const result = processDecisionGate(output, createSomaState());
+      const result = processDecisionGate(output, createSomaState(), undefined, TEST_AGENT_ID);
 
       expect(result.telemetry.violation).toBeDefined();
       expect(result.telemetry.violation).toContain('SEARCH');
@@ -53,7 +56,7 @@ describe('Decision Gate - 3-Layer Architecture', () => {
         internal_thought: 'Let me imagine this. [VISUALIZE: sunset]'
       });
 
-      const result = processDecisionGate(output, createSomaState());
+      const result = processDecisionGate(output, createSomaState(), undefined, TEST_AGENT_ID);
 
       expect(result.telemetry.violation).toBeDefined();
       expect(result.telemetry.violation).toContain('VISUALIZE');
@@ -64,7 +67,7 @@ describe('Decision Gate - 3-Layer Architecture', () => {
         internal_thought: 'I should search for more data about this topic.'
       });
 
-      const result = processDecisionGate(output, createSomaState());
+      const result = processDecisionGate(output, createSomaState(), undefined, TEST_AGENT_ID);
 
       expect(result.telemetry.violation).toBeUndefined();
       expect(result.approved).toBe(true);
@@ -83,7 +86,7 @@ describe('Decision Gate - 3-Layer Architecture', () => {
         speech_content: 'Let me check that for you.'
       });
 
-      const result = processDecisionGate(output, createSomaState());
+      const result = processDecisionGate(output, createSomaState(), undefined, TEST_AGENT_ID);
 
       expect(result.telemetry.intentDetected).toBe(true);
       expect(result.telemetry.intentExecuted).toBe(true);
@@ -101,7 +104,7 @@ describe('Decision Gate - 3-Layer Architecture', () => {
         speech_content: 'I can show you this.'
       });
 
-      const result = processDecisionGate(output, createSomaState());
+      const result = processDecisionGate(output, createSomaState(), undefined, TEST_AGENT_ID);
 
       expect(result.modifiedOutput.speech_content).toContain('[VISUALIZE:');
       expect(result.modifiedOutput.speech_content).toContain('neural network diagram');
@@ -118,7 +121,7 @@ describe('Decision Gate - 3-Layer Architecture', () => {
         speech_content: 'Let me search. [SEARCH: AI history]'
       });
 
-      const result = processDecisionGate(output, createSomaState());
+      const result = processDecisionGate(output, createSomaState(), undefined, TEST_AGENT_ID);
 
       // Count occurrences of [SEARCH:
       const matches = result.modifiedOutput.speech_content.match(/\[SEARCH:/g);
@@ -137,7 +140,7 @@ describe('Decision Gate - 3-Layer Architecture', () => {
       });
 
       const lowEnergySoma = createSomaState(5); // Below minEnergyForSearch
-      const result = processDecisionGate(output, lowEnergySoma);
+      const result = processDecisionGate(output, lowEnergySoma, undefined, TEST_AGENT_ID);
 
       expect(result.telemetry.intentDetected).toBe(true);
       expect(result.telemetry.intentExecuted).toBe(false);
@@ -153,7 +156,7 @@ describe('Decision Gate - 3-Layer Architecture', () => {
       });
 
       const lowEnergySoma = createSomaState(20); // Below minEnergyForVisualize (25)
-      const result = processDecisionGate(output, lowEnergySoma);
+      const result = processDecisionGate(output, lowEnergySoma, undefined, TEST_AGENT_ID);
 
       expect(result.telemetry.intentDetected).toBe(true);
       expect(result.telemetry.intentExecuted).toBe(false);
@@ -171,11 +174,11 @@ describe('Decision Gate - 3-Layer Architecture', () => {
       const soma = createSomaState(80);
 
       // First should succeed
-      const result1 = processDecisionGate(output1, soma);
+      const result1 = processDecisionGate(output1, soma, undefined, TEST_AGENT_ID);
       expect(result1.telemetry.intentExecuted).toBe(true);
 
       // Second should be blocked (max 1 per turn by default)
-      const result2 = processDecisionGate(output2, soma);
+      const result2 = processDecisionGate(output2, soma, undefined, TEST_AGENT_ID);
       expect(result2.telemetry.intentExecuted).toBe(false);
     });
   });
@@ -190,7 +193,7 @@ describe('Decision Gate - 3-Layer Architecture', () => {
         // No tool_intent, no tool tag in speech
       });
 
-      const result = processDecisionGate(output, createSomaState());
+      const result = processDecisionGate(output, createSomaState(), undefined, TEST_AGENT_ID);
 
       // The function should complete without error
       expect(result.approved).toBe(true);
@@ -210,7 +213,7 @@ describe('Decision Gate - 3-Layer Architecture', () => {
         speech_content: 'Let me find that information for you.'
       });
 
-      const result = processDecisionGate(output, createSomaState());
+      const result = processDecisionGate(output, createSomaState(), undefined, TEST_AGENT_ID);
 
       // Thought should remain unchanged (no violation)
       expect(result.modifiedOutput.internal_thought).toBe(output.internal_thought);
@@ -231,7 +234,7 @@ describe('Decision Gate - 3-Layer Architecture', () => {
         }
       });
 
-      const result = processDecisionGate(output, createSomaState());
+      const result = processDecisionGate(output, createSomaState(), undefined, TEST_AGENT_ID);
 
       expect(result.telemetry.intentDetected).toBe(false);
       expect(result.approved).toBe(true);

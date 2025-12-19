@@ -9,7 +9,7 @@ import { generateFromCortexState } from '../../inference';
 import { isCortexSubEnabled, isMainFeatureEnabled } from '../../config/featureFlags';
 import { eventBus } from '../../EventBus';
 import { getCurrentTraceId } from '../../trace/TraceContext';
-import { processDecisionGate, resetTurnState } from '../DecisionGate';
+import { processDecisionGate, resetTurnStateForAgent } from '../DecisionGate';
 import { guardCortexOutput, isPrismEnabled } from '../PrismPipeline';
 import * as LimbicSystem from '../LimbicSystem';
 import type { MemorySpace } from '../MemorySpace';
@@ -130,8 +130,8 @@ export async function processUserMessage(params: ProcessInputParams): Promise<Pr
         }
       }
 
-      resetTurnState();
-      const gateResult = processDecisionGate(guardedOutput, currentSoma);
+      resetTurnStateForAgent(agentId);
+      const gateResult = processDecisionGate(guardedOutput, currentSoma, undefined, agentId);
       const output = gateResult.modifiedOutput;
 
       const isParseFallback = String((output as any)?.internal_thought || '').includes('Parse error - using fallback');

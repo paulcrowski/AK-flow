@@ -1,6 +1,6 @@
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { processDecisionGate, resetTurnState, GateDecision } from '../systems/DecisionGate';
+import { processDecisionGate, resetTurnStateForAgent, GateDecision } from '../systems/DecisionGate';
 import { buildMinimalCortexState } from '../builders/MinimalCortexStateBuilder';
 import { setCachedIdentity, clearIdentityCache } from '../builders/MinimalCortexStateBuilder';
 import type { CortexOutput } from '../types/CortexOutput';
@@ -23,20 +23,21 @@ const mockTraits = {
 
 describe('Tagged Cognition & Persona-Less Cortex', () => {
 
+    const TEST_AGENT_ID = 'test-agent-1';
+
     beforeEach(() => {
-        resetTurnState();
+        resetTurnStateForAgent(TEST_AGENT_ID);
         clearIdentityCache();
     });
 
     describe('Identity Injection (Mirror Test)', () => {
         it('should inject cached identity into cortex state', () => {
             // Setup: Cache identity
-            const agentId = 'test-agent-1';
-            setCachedIdentity(agentId, mockIdentity, mockTraits);
+            setCachedIdentity(TEST_AGENT_ID, mockIdentity, mockTraits);
 
             // Execute: Build state
             const state = buildMinimalCortexState({
-                agentId,
+                agentId: TEST_AGENT_ID,
                 metaStates: { energy: 100, stress: 0, confidence: 100, dopamine: 50 },
                 userInput: 'Who are you?'
             });
@@ -73,7 +74,7 @@ describe('Tagged Cognition & Persona-Less Cortex', () => {
 
         it('should ALLOW tool when energy is sufficient', () => {
             const highEnergySoma: SomaState = { energy: 80, cognitiveLoad: 0, isSleeping: false } as SomaState;
-            const decision = processDecisionGate(baseOutput, highEnergySoma);
+            const decision = processDecisionGate(baseOutput, highEnergySoma, undefined, TEST_AGENT_ID);
 
             expect(decision.approved).toBe(true);
             expect(decision.telemetry.intentExecuted).toBe(true);
@@ -83,7 +84,7 @@ describe('Tagged Cognition & Persona-Less Cortex', () => {
         it('should BLOCK tool when energy is low (Veto Test)', () => {
             // Energy 22 (Window 20-25)
             const lowEnergySoma: SomaState = { energy: 22, cognitiveLoad: 0, isSleeping: false } as SomaState;
-            const decision = processDecisionGate(baseOutput, lowEnergySoma);
+            const decision = processDecisionGate(baseOutput, lowEnergySoma, undefined, TEST_AGENT_ID);
 
             expect(decision.approved).toBe(true); // Still approved as a valid turn
             expect(decision.telemetry.intentExecuted).toBe(false); // But tool NOT executed
@@ -99,7 +100,7 @@ describe('Tagged Cognition & Persona-Less Cortex', () => {
                 stimulus_response: { valence: 'neutral', salience: 'medium', novelty: 'routine' }
             };
 
-            const decision = processDecisionGate(contaminatedOutput, { energy: 100 } as SomaState);
+            const decision = processDecisionGate(contaminatedOutput, { energy: 100 } as SomaState, undefined, TEST_AGENT_ID);
 
             expect(decision.telemetry.violation).toBeTruthy();
             expect(decision.modifiedOutput.internal_thought).not.toContain('[SEARCH:');

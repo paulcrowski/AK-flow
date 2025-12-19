@@ -18,7 +18,9 @@ import type {
   EvaluationTag,
   FailureSource
 } from '../../types';
-import { clamp01 } from '../../utils/math';
+import { createEvaluationEvent } from './evaluation/createEvaluationEvent';
+import { confessionToEvaluation } from './evaluation/strategies/confessionStrategy';
+import { createGuardEvent } from './evaluation/strategies/guardStrategy';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Configuration
@@ -302,110 +304,4 @@ export const evaluationBus = new EvaluationBusClass();
 // Helper Functions
 // ═══════════════════════════════════════════════════════════════════════════
 
-let eventIdCounter = 0;
-
-/**
- * Create a new EvaluationEvent with auto-generated ID and timestamp
- */
-export function createEvaluationEvent(
-  source: EvaluationSource,
-  stage: EvaluationStage,
-  severity: number,
-  valence: 'positive' | 'negative',
-  tags: EvaluationTag[],
-  confidence: number,
-  options?: {
-    attribution?: FailureSource;
-    context?: EvaluationEvent['context'];
-  }
-): EvaluationEvent {
-  return {
-    id: `eval-${Date.now()}-${++eventIdCounter}`,
-    timestamp: Date.now(),
-    source,
-    stage,
-    severity: clamp01(severity),
-    valence,
-    tags,
-    confidence: clamp01(confidence),
-    attribution: options?.attribution,
-    context: options?.context
-  };
-}
-
-/**
- * Convert ConfessionReport to EvaluationEvent
- */
-export function confessionToEvaluation(
-  confession: {
-    severity: number;
-    pain?: number;
-    failure_attribution?: FailureSource;
-    risk_flags: string[];
-  }
-): EvaluationEvent {
-  const tags: EvaluationTag[] = [];
-  
-  // Map risk flags to tags
-  if (confession.risk_flags.includes('possible_hallucination')) tags.push('hallucination');
-  if (confession.risk_flags.includes('ignored_system_instruction')) tags.push('offtopic');
-  
-  // Determine valence from severity
-  const isNegative = confession.severity > 3;
-  
-  return createEvaluationEvent(
-    'CONFESSION',
-    'PRISM',
-    confession.pain || confession.severity / 10,
-    isNegative ? 'negative' : 'positive',
-    tags,
-    0.8, // Confession has high confidence
-    { attribution: confession.failure_attribution }
-  );
-}
-
-/**
- * Create a Guard evaluation event
- */
-export function createGuardEvent(
-  action: 'PASS' | 'RETRY' | 'SOFT_FAIL' | 'HARD_FAIL',
-  issues: Array<{ type: string; field?: string; expected?: unknown; actual?: string }>,
-  context?: { input?: string; output?: string; hardFacts?: Record<string, unknown> }
-): EvaluationEvent {
-  const tags: EvaluationTag[] = [];
-  let severity = 0;
-  
-  for (const issue of issues) {
-    if (issue.type === 'fact_mutation') {
-      tags.push('fact_mutation');
-      severity = Math.max(severity, 0.8);
-    }
-    if (issue.type === 'fact_approximation') {
-      tags.push('fact_approximation');
-      severity = Math.max(severity, 0.5);
-    }
-    if (issue.type === 'persona_drift') {
-      tags.push('persona_drift');
-      severity = Math.max(severity, 0.6);
-    }
-    if (issue.type === 'identity_leak') {
-      tags.push('identity_leak');
-      severity = Math.max(severity, 0.7);
-    }
-  }
-  
-  if (action === 'RETRY') tags.push('retry_triggered');
-  if (action === 'SOFT_FAIL') tags.push('soft_fail');
-  
-  const valence = action === 'PASS' ? 'positive' : 'negative';
-  
-  return createEvaluationEvent(
-    'GUARD',
-    'PRISM',
-    severity,
-    valence,
-    tags,
-    1.0, // Guard has full confidence (deterministic check)
-    { context }
-  );
-}
+export { createEvaluationEvent, confessionToEvaluation, createGuardEvent };

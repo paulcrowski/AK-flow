@@ -45,6 +45,8 @@ export interface EpisodeCandidate {
 const EPISODE_THRESHOLD = 0.25;  // Minimum emotional delta to trigger episode
 const MAX_LESSON_LENGTH = 200;   // Keep lessons concise
 
+const EPISODE_JSON_TAG = '[EPISODE_JSON]';
+
 // ============================================================
 // HELPERS
 // ============================================================
@@ -138,6 +140,34 @@ OUTPUT: Just the lesson text, no quotes or formatting.
     }
 }
 
+function serializeEpisodeJson(episode: Episode): string {
+    return `${EPISODE_JSON_TAG} ${JSON.stringify({
+        id: episode.id,
+        agentId: episode.agentId,
+        event: episode.event,
+        emotionBefore: episode.emotionBefore,
+        emotionAfter: episode.emotionAfter,
+        emotionalDelta: episode.emotionalDelta,
+        lesson: episode.lesson,
+        timestamp: episode.timestamp,
+        tags: episode.tags
+    })}`;
+}
+
+function parseEpisodeJsonLine(rawText: string): any | null {
+    const idx = rawText.indexOf(EPISODE_JSON_TAG);
+    if (idx < 0) return null;
+
+    const afterTag = rawText.slice(idx + EPISODE_JSON_TAG.length).trim();
+    if (!afterTag) return null;
+
+    try {
+        return JSON.parse(afterTag);
+    } catch {
+        return null;
+    }
+}
+
 // ============================================================
 // MAIN SERVICE
 // ============================================================
@@ -204,7 +234,8 @@ export const EpisodicMemoryService = {
             // Format as structured episodic memory
             const episodicContent = `[EPISODE] ${episode.event}
 [EMOTION] ${episode.tags.join(', ')} (delta: ${episode.emotionalDelta.toFixed(2)})
-[LESSON] ${episode.lesson}`;
+[LESSON] ${episode.lesson}
+${serializeEpisodeJson(episode)}`;
 
             const embedding = await CortexService.generateEmbedding(episodicContent);
 
@@ -290,6 +321,21 @@ export const EpisodicMemoryService = {
     parseEpisodeFromMemory(memoryItem: any): Episode | null {
         try {
             const text = memoryItem.raw_text || '';
+
+            const parsedJson = parseEpisodeJsonLine(text);
+            if (parsedJson && typeof parsedJson === 'object') {
+                return {
+                    id: parsedJson.id || memoryItem.event_id || memoryItem.id,
+                    agentId: parsedJson.agentId || memoryItem.agent_id,
+                    event: String(parsedJson.event || 'Unknown event'),
+                    emotionBefore: parsedJson.emotionBefore || { fear: 0, curiosity: 0, frustration: 0, satisfaction: 0 },
+                    emotionAfter: parsedJson.emotionAfter || { fear: 0, curiosity: 0, frustration: 0, satisfaction: 0 },
+                    emotionalDelta: typeof parsedJson.emotionalDelta === 'number' ? parsedJson.emotionalDelta : 0.3,
+                    lesson: String(parsedJson.lesson || ''),
+                    timestamp: String(parsedJson.timestamp || memoryItem.created_at),
+                    tags: Array.isArray(parsedJson.tags) ? parsedJson.tags : []
+                };
+            }
             
             // Check if it's an episode format
             if (!text.includes('[EPISODE]')) {

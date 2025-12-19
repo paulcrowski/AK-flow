@@ -51,24 +51,36 @@ interface GateState {
   toolsUsedThisTurn: number;
 }
 
-const gateState: GateState = {
-  lastToolUse: {},
-  toolsUsedThisTurn: 0
-};
+const gateStateByAgent = new Map<string, GateState>();
+
+function getGateState(agentId: string): GateState {
+  const existing = gateStateByAgent.get(agentId);
+  if (existing) return existing;
+  const created: GateState = { lastToolUse: {}, toolsUsedThisTurn: 0 };
+  gateStateByAgent.set(agentId, created);
+  return created;
+}
 
 /**
  * Reset stanu na początku nowej tury
  */
 export function resetTurnState(): void {
-  gateState.toolsUsedThisTurn = 0;
+  // legacy no-op; kept for backward compatibility in non-agent-aware code paths
+}
+
+export function resetTurnStateForAgent(agentId: string): void {
+  getGateState(agentId).toolsUsedThisTurn = 0;
 }
 
 /**
  * Pełny reset stanu (dla testów)
  */
 export function resetFullState(): void {
-  gateState.toolsUsedThisTurn = 0;
-  gateState.lastToolUse = {};
+  gateStateByAgent.clear();
+}
+
+export function resetFullStateForAgent(agentId: string): void {
+  gateStateByAgent.delete(agentId);
 }
 
 /**
@@ -109,7 +121,8 @@ function detectCognitiveViolation(thought: string): string | null {
 function checkPolicy(
   intent: ToolIntent,
   somaState: SomaState,
-  policy: ToolPolicyConfig
+  policy: ToolPolicyConfig,
+  gateState: GateState
 ): { allowed: boolean; reason?: string } {
   const now = Date.now();
   
@@ -187,9 +200,11 @@ function redirectIntentToSpeech(output: CortexOutput, intent: ToolIntent): Corte
 export function processDecisionGate(
   output: CortexOutput,
   somaState: SomaState,
-  policy: ToolPolicyConfig = DEFAULT_POLICY
+  policy: ToolPolicyConfig = DEFAULT_POLICY,
+  agentId: string
 ): GateDecision {
   let modifiedOutput = { ...output };
+  const gateState = getGateState(agentId);
   const telemetry = {
     intentDetected: false,
     intentExecuted: false,
@@ -227,7 +242,7 @@ export function processDecisionGate(
     telemetry.intentDetected = true;
     
     // 3. Waliduj politykę
-    const policyCheck = checkPolicy(output.tool_intent, somaState, policy);
+    const policyCheck = checkPolicy(output.tool_intent, somaState, policy, gateState);
     
     if (policyCheck.allowed) {
       // 4. Przekieruj intencję do speech (jeśli brak tagu)

@@ -24,6 +24,19 @@ function isWorkspaceRawText(rawText: string): boolean {
   return t.startsWith('WORKSPACE_DOC_SUMMARY') || t.startsWith('WORKSPACE_CHUNK_SUMMARY');
 }
 
+async function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  let timeoutId: ReturnType<typeof setTimeout> | null = null;
+  const timeoutPromise = new Promise<T>((_, reject) => {
+    timeoutId = setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms);
+  });
+
+  try {
+    return await Promise.race([promise, timeoutPromise]);
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId);
+  }
+}
+
 export const WorkspaceHomeostasisService = {
   async applyForCurrentAgent(params?: {
     maxWorkspaceMemories?: number;
@@ -43,6 +56,7 @@ export const WorkspaceHomeostasisService = {
     }
   ): Promise<ApplyHomeostasisResult> {
     const maxWorkspaceMemories = clampInt(params?.maxWorkspaceMemories ?? 400, 50, 5000);
+    const requestTimeoutMs = 3000;
 
     try {
       // v1: robust classification by raw_text prefix (works even if metadata column is missing)
@@ -52,13 +66,17 @@ export const WorkspaceHomeostasisService = {
       const toDeleteIds: string[] = [];
 
       while (true) {
-        const res = await supabase
-          .from('memories')
-          .select('id,raw_text,created_at')
-          .eq('agent_id', agentId)
-          .ilike('raw_text', 'WORKSPACE_%')
-          .order('created_at', { ascending: false })
-          .range(offset, offset + pageSize - 1);
+        const res = await withTimeout(
+          supabase
+            .from('memories')
+            .select('id,raw_text,created_at')
+            .eq('agent_id', agentId)
+            .ilike('raw_text', 'WORKSPACE_%')
+            .order('created_at', { ascending: false })
+            .range(offset, offset + pageSize - 1),
+          requestTimeoutMs,
+          'WorkspaceHomeostasisService.select'
+        );
 
         if (res.error) {
           return { ok: false, agentId, error: res.error.message };
@@ -77,6 +95,7 @@ export const WorkspaceHomeostasisService = {
           }
         }
 
+        if (rows.length < pageSize) break;
         offset += pageSize;
       }
 
@@ -96,11 +115,15 @@ export const WorkspaceHomeostasisService = {
 
       for (let i = 0; i < toDeleteIds.length; i += batchSize) {
         const batch = toDeleteIds.slice(i, i + batchSize);
-        const del = await supabase
-          .from('memories')
-          .delete()
-          .eq('agent_id', agentId)
-          .in('id', batch);
+        const del = await withTimeout(
+          supabase
+            .from('memories')
+            .delete()
+            .eq('agent_id', agentId)
+            .in('id', batch),
+          requestTimeoutMs,
+          'WorkspaceHomeostasisService.delete'
+        );
 
         if (del.error) {
           return { ok: false, agentId, error: del.error.message };
