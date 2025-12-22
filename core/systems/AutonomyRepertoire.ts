@@ -20,12 +20,13 @@
  */
 
 import type { UnifiedContext } from '../context';
-import { getAutonomyConfig } from '../config/systemConfig';
+import { getAutonomyConfig, SYSTEM_CONFIG } from '../config/systemConfig';
 import { useArtifactStore } from '../../stores/artifactStore';
 
 // P0.1 COMMIT 4: Work-First Autonomy
 // Feature flag - can be disabled if causing issues
-const WORK_FIRST_AUTONOMY_ENABLED = true;
+const WORK_FIRST_AUTONOMY_ENABLED =
+  (SYSTEM_CONFIG.features as Record<string, boolean>).P011_WORK_FIRST_AUTONOMY_ENABLED ?? true;
 
 type PendingWork = {
   artifactId: string;

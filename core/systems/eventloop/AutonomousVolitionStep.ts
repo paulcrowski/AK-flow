@@ -76,6 +76,9 @@ export type AutonomousVolitionLoopContext = {
 let lastAutonomyActionSignature: string | null = null;
 let lastAutonomyActionLogAt = 0;
 
+const WORK_FIRST_AUTONOMY_ENABLED =
+  (SYSTEM_CONFIG.features as Record<string, boolean>).P011_WORK_FIRST_AUTONOMY_ENABLED ?? true;
+
 // P0.1 COMMIT 2: Autonomy Backoff State
 const autonomyFailureState = {
   lastAttemptAt: 0,
@@ -213,9 +216,22 @@ export async function runAutonomousVolitionStep(input: {
       : undefined
   });
 
-  const actionDecision = AutonomyRepertoire.selectAction(unifiedContext);
+  let actionDecision = AutonomyRepertoire.selectAction(unifiedContext);
+
+  if (WORK_FIRST_AUTONOMY_ENABLED && (actionDecision.action === 'CONTINUE' || actionDecision.action === 'EXPLORE')) {
+    actionDecision = {
+      action: 'SILENCE',
+      allowed: true,
+      reason: `WORK_FIRST: ${actionDecision.action} suppressed`,
+      groundingScore: 0
+    };
+  }
 
   if (traceId) {
+    p0MetricAdd(traceId, {
+      autonomyActionName: actionDecision.action,
+      autonomyActionReason: actionDecision.reason
+    });
     if (actionDecision.action === 'WORK') {
       p0MetricAdd(traceId, { workFirstPendingFound: true });
     } else if (actionDecision.action === 'SILENCE' && actionDecision.reason.includes('No pending work')) {
@@ -274,6 +290,17 @@ export async function runAutonomousVolitionStep(input: {
     actionDecision.action,
     unifiedContext
   );
+
+  const isParseFail =
+    String(volition.internal_monologue || '').startsWith('[RAW_CONTRACT_FAIL]') ||
+    String(volition.internal_monologue || '').startsWith('[PARSE_FAIL]');
+
+  if (isParseFail) {
+    callbacks.onThought(`[AUTONOMY_PARSE_FAIL] ${volition.internal_monologue}`);
+    onAutonomyResult(false);
+    if (traceId) p0MetricAdd(traceId, { autonomyFail: 1 });
+    return;
+  }
 
   if (!groundingValidation.valid && volition.speech_content) {
     eventBus.publish({
