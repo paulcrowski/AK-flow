@@ -11,7 +11,7 @@ import {
   createGuardEvent,
   confessionToEvaluation,
   EVALUATION_CONFIG 
-} from '../../core/systems/EvaluationBus';
+} from '@core/systems/EvaluationBus';
 
 describe('EvaluationBus', () => {
   beforeEach(() => {

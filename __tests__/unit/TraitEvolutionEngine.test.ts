@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { TraitEvolutionEngine } from '../../core/systems/TraitEvolutionEngine';
-import { eventBus } from '../../core/EventBus';
-import { PacketType, AgentType, TraitVector, TraitVote } from '../../types';
+import { TraitEvolutionEngine } from '@core/systems/TraitEvolutionEngine';
+import { eventBus } from '@core/EventBus';
+import { PacketType, AgentType, TraitVector, TraitVote } from '@/types';
 import { waitForEventBus } from '../utils';
 
 const baseTraits: TraitVector = {

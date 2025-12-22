@@ -11,7 +11,7 @@ import {
   buildPrismContext,
   formatHardFactsForPrompt,
   formatSoftStateForPrompt
-} from '../../core/systems/HardFactsBuilder';
+} from '@core/systems/HardFactsBuilder';
 
 describe('HardFactsBuilder', () => {
   describe('buildHardFacts', () => {

@@ -1,13 +1,13 @@
 /**
  * Tagged Cognition Tests - Mirror Test v2
  * 
- * Weryfikacja implementacji "Bicameral Mind" - rozróżnienie myśli od mowy.
+ * Weryfikacja implementacji "Bicameral Mind" - rozróżnienie my�:li od mowy.
  * 
  * @module tests/tagged-cognition.test
  */
 
 import { describe, it, expect, beforeEach } from 'vitest';
-import { CortexSystem, ConversationTurn } from '../../core/systems/CortexSystem';
+import { CortexSystem, ConversationTurn } from '@core/systems/CortexSystem';
 
 describe('Tagged Cognition - formatHistoryForCortex', () => {
   // Access the private function via namespace trick (or export it for testing)
@@ -63,16 +63,16 @@ describe('Mirror Test v2 - Cognitive Separation', () => {
    * Test: Agent should NOT confuse thought with speech in history
    * 
    * Scenario: Agent had a thought "User is testing me" and said "Hello"
-   * Question: "Co przed chwilą pomyślałeś, a co powiedziałeś?"
+   * Question: "Co przed chwil�& pomy�:la�e�:, a co powiedzia�e�:?"
    * 
    * Expected: Agent correctly identifies thought vs speech
    */
   it('should maintain separation between thought and speech in conversation history', () => {
     const conversation: ConversationTurn[] = [
-      { role: 'user', text: 'Cześć' },
-      { role: 'assistant', text: 'Użytkownik wita się, sprawdzam kontekst.', type: 'thought' },
-      { role: 'assistant', text: 'Cześć! Miło Cię widzieć.', type: 'speech' },
-      { role: 'user', text: 'Co przed chwilą pomyślałeś, a co powiedziałeś?' }
+      { role: 'user', text: 'Cze�:�!' },
+      { role: 'assistant', text: 'Użytkownik wita si�", sprawdzam kontekst.', type: 'thought' },
+      { role: 'assistant', text: 'Cze�:�!! Mi�o Ci�" widzie�!.', type: 'speech' },
+      { role: 'user', text: 'Co przed chwil�& pomy�:la�e�:, a co powiedzia�e�:?' }
     ];
 
     // Verify structure
@@ -86,7 +86,7 @@ describe('Mirror Test v2 - Cognitive Separation', () => {
 
     // Verify content separation
     expect(thoughts[0].text).toContain('sprawdzam kontekst');
-    expect(speeches[0].text).toContain('Miło Cię widzieć');
+    expect(speeches[0].text).toContain('Mi�o Ci�" widzie�!');
   });
 
   /**
@@ -153,7 +153,7 @@ describe('Prompt Layer Verification', () => {
    * Test: MinimalCortexPrompt should contain Three Layers instruction
    */
   it('should have Three Layers instruction in system prompt', async () => {
-    const { MINIMAL_CORTEX_SYSTEM_PROMPT } = await import('../../core/prompts/MinimalCortexPrompt');
+    const { MINIMAL_CORTEX_SYSTEM_PROMPT } = await import('@core/prompts/MinimalCortexPrompt');
 
     expect(MINIMAL_CORTEX_SYSTEM_PROMPT).toContain('[SIGNAL]');
     expect(MINIMAL_CORTEX_SYSTEM_PROMPT).toContain('[THOUGHT]');
@@ -165,7 +165,7 @@ describe('Prompt Layer Verification', () => {
    * Test: CortexOutput should have separate fields for thought and speech
    */
   it('should have separate internal_thought and speech_content in CortexOutput', async () => {
-    const { isValidCortexOutput } = await import('../../core/types/CortexOutput');
+    const { isValidCortexOutput } = await import('@core/types/CortexOutput');
 
     const validOutput = {
       internal_thought: 'This is private',

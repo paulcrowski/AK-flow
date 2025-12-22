@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { TokenUsageLedger } from '../../core/telemetry/TokenUsageLedger';
+import { TokenUsageLedger } from '@core/telemetry/TokenUsageLedger';
 
 describe('TokenUsageLedger', () => {
   beforeEach(() => {

@@ -6,7 +6,7 @@ import {
   parseConversation,
   syncToLocalStorage,
   type ConversationTurn
-} from '../../core/memory/ConversationStore';
+} from '@core/memory/ConversationStore';
 
 // Mock localStorage
 const mockStorage: Record<string, string> = {};
@@ -18,12 +18,12 @@ vi.stubGlobal('localStorage', {
 });
 
 // Mock ConversationArchive
-vi.mock('../../services/ConversationArchive', () => ({
+vi.mock('@services/ConversationArchive', () => ({
   getConversationHistory: vi.fn(async () => [])
 }));
 
 // Mock featureFlags
-vi.mock('../../core/config/featureFlags', () => ({
+vi.mock('@core/config/featureFlags', () => ({
   isMemorySubEnabled: vi.fn(() => true),
   isFeatureEnabled: vi.fn(() => true)
 }));

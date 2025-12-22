@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { runReactiveStep } from '../../core/systems/eventloop/ReactiveStep';
-import { useArtifactStore } from '../../stores/artifactStore';
-import { eventBus } from '../../core/EventBus';
-import { PacketType } from '../../types';
+import { runReactiveStep } from '@core/systems/eventloop/ReactiveStep';
+import { useArtifactStore } from '@/stores/artifactStore';
+import { eventBus } from '@core/EventBus';
+import { PacketType } from '@/types';
 
 describe('Action-First integration', () => {
   beforeEach(() => {

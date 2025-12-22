@@ -11,12 +11,12 @@
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
-import { useCognitiveKernelLite } from '../../hooks/useCognitiveKernelLite';
-import { useCognitiveStore } from '../../stores/cognitiveStore';
-import { KernelController } from '../../core/runner/KernelController';
+import { useCognitiveKernelLite } from '@/hooks/useCognitiveKernelLite';
+import { useCognitiveStore } from '@/stores/cognitiveStore';
+import { KernelController } from '@core/runner/KernelController';
 
 // Mock CortexSystem to avoid API calls
-vi.mock('../../core/systems/CortexSystem', () => ({
+vi.mock('@core/systems/CortexSystem', () => ({
   CortexSystem: {
     processUserMessage: vi.fn().mockResolvedValue({
       responseText: 'Test response',
@@ -27,14 +27,14 @@ vi.mock('../../core/systems/CortexSystem', () => ({
 }));
 
 // Mock DreamConsolidationService
-vi.mock('../../services/DreamConsolidationService', () => ({
+vi.mock('@services/DreamConsolidationService', () => ({
   DreamConsolidationService: {
     consolidate: vi.fn().mockResolvedValue({})
   }
 }));
 
 // Mock WakeService
-vi.mock('../../core/services/WakeService', () => ({
+vi.mock('@core/services/WakeService', () => ({
   executeWakeProcess: vi.fn().mockResolvedValue({})
 }));
 

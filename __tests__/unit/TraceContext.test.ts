@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { generateTraceId } from '../../core/trace/TraceContext';
+import { generateTraceId } from '@core/trace/TraceContext';
 
 describe('TraceContext', () => {
   it('should generate deterministic trace id from startedAt + tickNumber', () => {

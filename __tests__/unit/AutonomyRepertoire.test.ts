@@ -1,7 +1,7 @@
 /**
  * AutonomyRepertoire.test.ts
  * 
- * Tests for TYDZIEŃ 3: Grounded autonomous actions.
+ * Tests for TYDZIEŒ 3: Grounded autonomous actions.
  * 
  * Key behaviors:
  * 1. EXPLORE blocked when active topic exists
@@ -18,10 +18,10 @@ import {
   selectAction,
   validateSpeech,
   type AutonomyAction
-} from '../../core/systems/AutonomyRepertoire';
-import { UnifiedContextBuilder, type ContextBuilderInput, type BasePersona } from '../../core/context';
-import { getAutonomyConfig } from '../../core/config/systemConfig';
-import { useArtifactStore } from '../../stores/artifactStore';
+} from '@core/systems/AutonomyRepertoire';
+import { UnifiedContextBuilder, type ContextBuilderInput, type BasePersona } from '@core/context';
+import { getAutonomyConfig } from '@core/config/systemConfig';
+import { useArtifactStore } from '@/stores/artifactStore';
 
 describe('AutonomyRepertoire', () => {
   

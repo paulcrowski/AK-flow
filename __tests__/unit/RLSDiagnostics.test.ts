@@ -1,5 +1,5 @@
-import { RLSDiagnostics } from '../../services/RLSDiagnostics';
-import { supabase } from '../../services/supabase';
+import { RLSDiagnostics } from '@services/RLSDiagnostics';
+import { supabase } from '@services/supabase';
 import { vi, describe, beforeAll, afterAll, test, expect } from 'vitest';
 
 describe('RLSDiagnostics', () => {

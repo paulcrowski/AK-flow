@@ -12,11 +12,11 @@ import {
   disableFactEchoPipeline,
   isFactEchoPipelineEnabled,
   setDefaultStrictMode
-} from '../../core/systems/FactEchoPipeline';
-import { CortexOutput } from '../../core/types/CortexOutput';
-import { evaluationBus } from '../../core/systems/EvaluationBus';
-import { clearArchitectureIssues } from '../../core/systems/PrismMetrics';
-import { SYSTEM_CONFIG } from '../../core/config/systemConfig';
+} from '@core/systems/FactEchoPipeline';
+import { CortexOutput } from '@core/types/CortexOutput';
+import { evaluationBus } from '@core/systems/EvaluationBus';
+import { clearArchitectureIssues } from '@core/systems/PrismMetrics';
+import { SYSTEM_CONFIG } from '@core/config/systemConfig';
 
 describe('FactEchoPipeline', () => {
   beforeEach(() => {
@@ -37,7 +37,7 @@ describe('FactEchoPipeline', () => {
     it('PASS when fact_echo matches hardFacts', () => {
       const output: CortexOutput = {
         internal_thought: 'Thinking...',
-        speech_content: 'Mam dwadzieścia trzy procent energii.',
+        speech_content: 'Mam dwadzie�:cia trzy procent energii.',
         stimulus_response: { valence: 'neutral', salience: 'medium', novelty: 'routine' },
         fact_echo: { energy: 23 }
       };

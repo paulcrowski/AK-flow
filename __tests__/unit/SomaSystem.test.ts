@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { calculateMetabolicState } from '../../core/systems/SomaSystem';
-import type { SomaState } from '../types';
+import { calculateMetabolicState } from '@core/systems/SomaSystem';
+import type { SomaState } from '@/types';
 
 const awakeFull: SomaState = {
     energy: 100,

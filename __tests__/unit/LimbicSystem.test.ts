@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { LimbicSystem } from '../../core/systems/LimbicSystem';
-import type { LimbicState } from '../types';
+import { LimbicSystem } from '@core/systems/LimbicSystem';
+import type { LimbicState } from '@/types';
 
 describe('LimbicSystem.applyHomeostasis', () => {
     it('should decay values toward baselines', () => {

@@ -1,6 +1,6 @@
 import { describe, test, expect } from 'vitest';
-import { extractJSON, extractSummary } from '../../utils/AIResponseParser';
-import { executeWakeProcess } from '../../core/services/WakeService';
+import { extractJSON, extractSummary } from '@utils/AIResponseParser';
+import { executeWakeProcess } from '@core/services/WakeService';
 
 describe('Identity-Lite Integration', () => {
     describe('AIResponseParser', () => {

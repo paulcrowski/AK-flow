@@ -1,25 +1,25 @@
 /**
  * IntegrationWiring.test.ts - ALARM 3 Integration Tests
  * 
- * ═══════════════════════════════════════════════════════════════════════════
- * Te testy sprawdzają czy wszystkie moduły są POPRAWNIE PODPIĘTE.
- * Nie testują logiki biznesowej - tylko "plumbing".
+ * �"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"�
+ * Te testy sprawdzaj�& czy wszystkie modu�y s�& POPRAWNIE PODPI��TE.
+ * Nie testuj�& logiki biznesowej - tylko "plumbing".
  * 
  * Karpathy: "Unit tests pass but system doesn't work = wiring is broken"
- * ═══════════════════════════════════════════════════════════════════════════
+ * �"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"�
  * 
  * @module __tests__/IntegrationWiring.test.ts
  */
 
 import { describe, it, expect, beforeEach } from 'vitest';
 
-// ═══════════════════════════════════════════════════════════════════════════
+// �"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"�
 // 1. CONFIG CENTRALIZATION TESTS
-// ═══════════════════════════════════════════════════════════════════════════
+// �"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"�
 
 describe('Config Centralization', () => {
   it('SYSTEM_CONFIG is the single source of truth', async () => {
-    const { SYSTEM_CONFIG } = await import('../../core/config/systemConfig');
+    const { SYSTEM_CONFIG } = await import('@core/config/systemConfig');
 
     // All config sections exist
     expect(SYSTEM_CONFIG.features).toBeDefined();
@@ -34,37 +34,37 @@ describe('Config Centralization', () => {
   });
 
   it('PrismIntegration reads from SYSTEM_CONFIG', async () => {
-    const { SYSTEM_CONFIG } = await import('../../core/config/systemConfig');
+    const { SYSTEM_CONFIG } = await import('@core/config/systemConfig');
 
     expect(SYSTEM_CONFIG.prism.guardEnabled).toBeTypeOf('boolean');
   });
 
   it('PrismPipeline reads from SYSTEM_CONFIG', async () => {
-    const { SYSTEM_CONFIG } = await import('../../core/config/systemConfig');
+    const { SYSTEM_CONFIG } = await import('@core/config/systemConfig');
 
     expect(SYSTEM_CONFIG.prismPipeline.enabled).toBeTypeOf('boolean');
   });
 
   it('FactEchoPipeline reads from SYSTEM_CONFIG', async () => {
-    const { SYSTEM_CONFIG } = await import('../../core/config/systemConfig');
+    const { SYSTEM_CONFIG } = await import('@core/config/systemConfig');
 
     expect(SYSTEM_CONFIG.factEcho.enabled).toBeTypeOf('boolean');
   });
 
   it('ChemistryBridge reads from SYSTEM_CONFIG', async () => {
-    const { SYSTEM_CONFIG } = await import('../../core/config/systemConfig');
+    const { SYSTEM_CONFIG } = await import('@core/config/systemConfig');
 
     expect(SYSTEM_CONFIG.chemistryBridge.enabled).toBeTypeOf('boolean');
   });
 });
 
-// ═══════════════════════════════════════════════════════════════════════════
+// �"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"�
 // 2. HARD FACTS WIRING TESTS
-// ═══════════════════════════════════════════════════════════════════════════
+// �"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"�
 
 describe('HardFacts Wiring', () => {
   it('buildHardFacts includes agentName when provided', async () => {
-    const { buildHardFacts } = await import('../../core/systems/HardFactsBuilder');
+    const { buildHardFacts } = await import('@core/systems/HardFactsBuilder');
 
     const facts = buildHardFacts({
       agentName: 'TestAgent'
@@ -74,7 +74,7 @@ describe('HardFacts Wiring', () => {
   });
 
   it('buildHardFacts includes date', async () => {
-    const { buildHardFacts } = await import('../../core/systems/HardFactsBuilder');
+    const { buildHardFacts } = await import('@core/systems/HardFactsBuilder');
 
     const facts = buildHardFacts({});
 
@@ -83,7 +83,7 @@ describe('HardFacts Wiring', () => {
   });
 
   it('CortexState includes hard_facts field', async () => {
-    const { buildMinimalCortexState, setCachedIdentity } = await import('../../core/builders');
+    const { buildMinimalCortexState, setCachedIdentity } = await import('@core/builders');
 
     // Setup cache
     setCachedIdentity('test-agent', {
@@ -111,13 +111,13 @@ describe('HardFacts Wiring', () => {
   });
 });
 
-// ═══════════════════════════════════════════════════════════════════════════
+// �"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"�
 // 3. IDENTITY WIRING TESTS
-// ═══════════════════════════════════════════════════════════════════════════
+// �"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"�
 
 describe('Identity Wiring', () => {
   it('DEFAULT_CORE_IDENTITY uses UNINITIALIZED_AGENT', async () => {
-    const { DEFAULT_CORE_IDENTITY } = await import('../../core/types/CoreIdentity');
+    const { DEFAULT_CORE_IDENTITY } = await import('@core/types/CoreIdentity');
 
     // CRITICAL: Must NOT be 'Assistant'
     expect(DEFAULT_CORE_IDENTITY.name).toBe('UNINITIALIZED_AGENT');
@@ -126,7 +126,7 @@ describe('Identity Wiring', () => {
 
   it('MinimalCortexStateBuilder fallback is UNINITIALIZED_AGENT', async () => {
     // Import directly from MinimalCortexStateBuilder to avoid supabase dependency chain
-    const { buildMinimalCortexState, clearIdentityCache } = await import('../../core/builders/MinimalCortexStateBuilder');
+    const { buildMinimalCortexState, clearIdentityCache } = await import('@core/builders/MinimalCortexStateBuilder');
 
     // Clear cache to trigger fallback
     clearIdentityCache();
@@ -142,13 +142,13 @@ describe('Identity Wiring', () => {
   });
 });
 
-// ═══════════════════════════════════════════════════════════════════════════
+// �"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"�
 // 4. PERSONAGUARD WIRING TESTS
-// ═══════════════════════════════════════════════════════════════════════════
+// �"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"�
 
 describe('PersonaGuard Wiring', () => {
   it('PersonaGuard exports are available', async () => {
-    const { personaGuard, buildRetryPrompt } = await import('../../core/systems/PersonaGuard');
+    const { personaGuard, buildRetryPrompt } = await import('@core/systems/PersonaGuard');
 
     expect(personaGuard).toBeDefined();
     expect(personaGuard.check).toBeDefined();
@@ -156,7 +156,7 @@ describe('PersonaGuard Wiring', () => {
   });
 
   it('PrismPipeline uses PersonaGuard', async () => {
-    const { guardSpeech, isPrismEnabled } = await import('../../core/systems/PrismPipeline');
+    const { guardSpeech, isPrismEnabled } = await import('@core/systems/PrismPipeline');
 
     expect(guardSpeech).toBeDefined();
     expect(isPrismEnabled).toBeDefined();
@@ -166,10 +166,10 @@ describe('PersonaGuard Wiring', () => {
   });
 
   it('PersonaGuard detects identity contradiction', async () => {
-    const { personaGuard } = await import('../../core/systems/PersonaGuard');
+    const { personaGuard } = await import('@core/systems/PersonaGuard');
 
     const result = personaGuard.check(
-      'Jestem Assistant i pomogę ci.',
+      'Jestem Assistant i pomog�" ci.',
       { energy: 50 },
       'Jesse'  // Expected name
     );
@@ -182,13 +182,13 @@ describe('PersonaGuard Wiring', () => {
   });
 });
 
-// ═══════════════════════════════════════════════════════════════════════════
+// �"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"�
 // 5. RPE (DOPAMINE DECAY) WIRING TESTS
-// ═══════════════════════════════════════════════════════════════════════════
+// �"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"�
 
 describe('RPE Wiring', () => {
   it('NeurotransmitterSystem accepts RPE parameters', async () => {
-    const { NeurotransmitterSystem } = await import('../../core/systems/NeurotransmitterSystem');
+    const { NeurotransmitterSystem } = await import('@core/systems/NeurotransmitterSystem');
 
     const prevState = { dopamine: 70, serotonin: 60, norepinephrine: 50 };
 
@@ -215,7 +215,7 @@ describe('RPE Wiring', () => {
   });
 
   it('CREATIVE activity does NOT boost dopamine when user is silent', async () => {
-    const { NeurotransmitterSystem } = await import('../../core/systems/NeurotransmitterSystem');
+    const { NeurotransmitterSystem } = await import('@core/systems/NeurotransmitterSystem');
 
     const prevState = { dopamine: 55, serotonin: 60, norepinephrine: 50 };
 
@@ -242,14 +242,14 @@ describe('RPE Wiring', () => {
   });
 });
 
-// ═══════════════════════════════════════════════════════════════════════════
+// �"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"�
 // 6. EVENT LOOP CONTEXT WIRING
-// ═══════════════════════════════════════════════════════════════════════════
+// �"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"�
 
 describe('EventLoop Context Wiring', () => {
   it('LoopContext has RPE fields', async () => {
     // Verify that EventLoop namespace exports LoopContext interface with RPE fields
-    const eventLoopModule = await import('../../core/systems/EventLoop');
+    const eventLoopModule = await import('@core/systems/EventLoop');
 
     // EventLoop should be exported
     expect(eventLoopModule.EventLoop).toBeDefined();
@@ -260,13 +260,13 @@ describe('EventLoop Context Wiring', () => {
   });
 });
 
-// ═══════════════════════════════════════════════════════════════════════════
+// �"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"�
 // 7. FACT ECHO WIRING TESTS
-// ═══════════════════════════════════════════════════════════════════════════
+// �"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"�
 
 describe('FactEcho Wiring', () => {
   it('FactEchoPipeline passes agentName to buildHardFacts', async () => {
-    const { guardCortexOutputWithFactEcho } = await import('../../core/systems/FactEchoPipeline');
+    const { guardCortexOutputWithFactEcho } = await import('@core/systems/FactEchoPipeline');
 
     expect(guardCortexOutputWithFactEcho).toBeDefined();
 
@@ -286,13 +286,13 @@ describe('FactEcho Wiring', () => {
   });
 });
 
-// ═══════════════════════════════════════════════════════════════════════════
+// �"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"�
 // 8. SYSTEM PROMPT WIRING
-// ═══════════════════════════════════════════════════════════════════════════
+// �"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"�
 
 describe('System Prompt Wiring', () => {
   it('MINIMAL_CORTEX_SYSTEM_PROMPT contains HARD FACTS instructions', async () => {
-    const { MINIMAL_CORTEX_SYSTEM_PROMPT } = await import('../../core/prompts/MinimalCortexPrompt');
+    const { MINIMAL_CORTEX_SYSTEM_PROMPT } = await import('@core/prompts/MinimalCortexPrompt');
 
     // Prompt must mention hard_facts
     expect(MINIMAL_CORTEX_SYSTEM_PROMPT).toContain('hard_facts');
@@ -304,13 +304,13 @@ describe('System Prompt Wiring', () => {
   });
 });
 
-// ═══════════════════════════════════════════════════════════════════════════
+// �"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"�
 // 9. STARTUP LOGGER WIRING
-// ═══════════════════════════════════════════════════════════════════════════
+// �"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"��"�
 
 describe('Startup Logger Wiring', () => {
   it('logSystemConfig is exported and callable', async () => {
-    const { logSystemConfig, getConfigSnapshot } = await import('../../core/config');
+    const { logSystemConfig, getConfigSnapshot } = await import('@core/config');
 
     expect(logSystemConfig).toBeDefined();
     expect(getConfigSnapshot).toBeDefined();

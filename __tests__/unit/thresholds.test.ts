@@ -6,8 +6,8 @@ import {
     computeDialogThreshold,
     isUserSilent,
     DIALOG_THRESHOLDS
-} from '../../core/utils/thresholds';
-import { NeurotransmitterState, LimbicState } from '../../types';
+} from '@core/utils/thresholds';
+import { NeurotransmitterState, LimbicState } from '@/types';
 
 const defaultNeuro: NeurotransmitterState = {
     dopamine: 50,

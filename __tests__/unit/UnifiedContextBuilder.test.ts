@@ -1,7 +1,7 @@
 /**
  * UnifiedContextBuilder.test.ts
  * 
- * Tests for TYDZIEŃ 2: Unified context building for reactive and autonomous paths.
+ * Tests for TYDZIEŒ 2: Unified context building for reactive and autonomous paths.
  * 
  * Key behaviors:
  * 1. Same context structure for both paths
@@ -15,7 +15,7 @@ import {
   type ContextBuilderInput,
   type StylePrefs,
   type BasePersona
-} from '../../core/context';
+} from '@core/context';
 
 describe('UnifiedContextBuilder', () => {
   

@@ -8,8 +8,8 @@ import {
     estimateSocialCost,
     clamp01,
     shortenToFirstSentences
-} from '../../core/systems/ExpressionPolicy';
-import { TraitVector, SomaState, NeurotransmitterState } from '../../types';
+} from '@core/systems/ExpressionPolicy';
+import { TraitVector, SomaState, NeurotransmitterState } from '@/types';
 
 const defaultTraits: TraitVector = {
     arousal: 0.5,

@@ -1,8 +1,8 @@
 import { describe, it, expect, afterEach } from 'vitest';
-import { eventBus } from '../../core/EventBus';
-import { AgentType, PacketType, type CognitivePacket } from '../../types';
-import { setFeatureFlagForTesting } from '../../core/config/featureFlags';
-import { pushTraceId, popTraceId } from '../../core/trace/TraceContext';
+import { eventBus } from '@core/EventBus';
+import { AgentType, PacketType, type CognitivePacket } from '@/types';
+import { setFeatureFlagForTesting } from '@core/config/featureFlags';
+import { pushTraceId, popTraceId } from '@core/trace/TraceContext';
 
 const ORIGINAL_USE_TRACE_AUTO_INJECT = true;
 

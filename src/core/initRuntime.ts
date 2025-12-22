@@ -21,9 +21,7 @@ export function initRuntime(): RuntimeHandle {
   const state = getRuntimeState();
   if (state.handle) return state.handle;
 
-  const confession: any = (ConfessionModule as any).initConfessionService
-    ? (ConfessionModule as any).initConfessionService(eventBus)
-    : (ConfessionModule as any).confessionService;
+  const confession = (ConfessionModule as any).initConfessionService(eventBus);
 
   console.log('[Runtime] initialized');
 

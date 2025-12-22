@@ -1,6 +1,7 @@
 {
   "exclude": ["docs/archive", "__tests__", "**/*.test.ts"],
   "compilerOptions": {
+    "baseUrl": ".",
     "target": "ES2020",
     "experimentalDecorators": true,
     "useDefineForClassFields": false,
@@ -18,7 +19,19 @@
     "jsx": "react-jsx",
     "paths": {
       "@/*": [
-        "./*"
+        "./src/*"
+      ],
+      "@core/*": [
+        "./src/core/*"
+      ],
+      "@services/*": [
+        "./src/services/*"
+      ],
+      "@utils/*": [
+        "./src/utils/*"
+      ],
+      "@tests/*": [
+        "./__tests__/*"
       ]
     },
     "allowImportingTsExtensions": true,

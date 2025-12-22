@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { applyAutonomyV2RawContract } from '../../core/systems/RawContract';
+import { applyAutonomyV2RawContract } from '@core/systems/RawContract';
 
 describe('RawContract', () => {
     it('should fail closed on empty response', () => {

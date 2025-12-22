@@ -5,9 +5,9 @@
  */
 
 import { describe, it, expect, beforeEach } from 'vitest';
-import { kernelReducer } from '../../core/kernel/reducer';
-import { createInitialKernelState, INITIAL_SOCIAL_DYNAMICS } from '../../core/kernel/initialState';
-import { KernelState, KernelEvent, SocialDynamics } from '../../core/kernel/types';
+import { kernelReducer } from '@core/kernel/reducer';
+import { createInitialKernelState, INITIAL_SOCIAL_DYNAMICS } from '@core/kernel/initialState';
+import { KernelState, KernelEvent, SocialDynamics } from '@core/kernel/types';
 
 describe('SocialDynamics', () => {
   let initialState: KernelState;
@@ -237,7 +237,7 @@ describe('SocialDynamics', () => {
       };
       const { nextState } = kernelReducer(state, tick);
 
-      // 5 min silence → ~0.5 presence (10 min to reach 0)
+      // 5 min silence â†’ ~0.5 presence (10 min to reach 0)
       expect(nextState.socialDynamics.userPresenceScore).toBeCloseTo(0.5, 1);
     });
   });

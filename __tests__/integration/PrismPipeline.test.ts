@@ -12,9 +12,9 @@ import {
   isPrismEnabled,
   enablePipeline,
   disablePipeline
-} from '../../core/systems/PrismPipeline';
-import { evaluationBus } from '../../core/systems/EvaluationBus';
-import { SYSTEM_CONFIG } from '../../core/config/systemConfig';
+} from '@core/systems/PrismPipeline';
+import { evaluationBus } from '@core/systems/EvaluationBus';
+import { SYSTEM_CONFIG } from '@core/config/systemConfig';
 
 describe('PrismPipeline', () => {
   beforeEach(() => {

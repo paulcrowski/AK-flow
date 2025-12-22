@@ -1,7 +1,7 @@
 /**
  * FailClosedParsing.test.ts
  * 
- * Tests for TYDZIEŃ 1: Fail-closed JSON parsing and unified gate.
+ * Tests for TYDZIEŒ 1: Fail-closed JSON parsing and unified gate.
  * 
  * Key behaviors:
  * 1. When JSON parsing fails, autonomy returns voice_pressure=0, speech_content=""
@@ -10,7 +10,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { ExecutiveGate, GateContext, SpeechCandidate } from '../../core/systems/ExecutiveGate';
+import { ExecutiveGate, GateContext, SpeechCandidate } from '@core/systems/ExecutiveGate';
 
 describe('FailClosedParsing', () => {
   

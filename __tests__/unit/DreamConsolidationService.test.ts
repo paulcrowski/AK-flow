@@ -1,10 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { DreamConsolidationService } from '../../services/DreamConsolidationService';
-import type { LimbicState, TraitVector } from '../types';
+import { DreamConsolidationService } from '@services/DreamConsolidationService';
+import type { LimbicState, TraitVector } from '@/types';
 
 const mockFrom = vi.fn();
 
-vi.mock('../services/supabase', () => ({
+vi.mock('@services/supabase', () => ({
     supabase: {
         from: (...args: any[]) => mockFrom(...args)
     },
@@ -16,7 +16,7 @@ vi.mock('../services/supabase', () => ({
 
 const mockStructuredDialogue = vi.fn();
 
-vi.mock('../services/gemini', () => ({
+vi.mock('@services/gemini', () => ({
     CortexService: {
         structuredDialogue: (...args: any[]) => mockStructuredDialogue(...args)
     }

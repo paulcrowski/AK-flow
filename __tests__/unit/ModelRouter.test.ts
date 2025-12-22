@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { ModelRouter, runWithModelFallback } from '../../services/ModelRouter';
+import { ModelRouter, runWithModelFallback } from '@services/ModelRouter';
 
 describe('ModelRouter', () => {
   it('should route generateJSON to json task', () => {

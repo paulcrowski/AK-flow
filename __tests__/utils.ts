@@ -3,7 +3,7 @@
  * 
  * Common helpers for all tests in AK-FLOW
  */
-import { eventBus } from '../core/EventBus';
+import { eventBus } from '@core/EventBus';
 import { vi, expect, type Mocked, type MockedFunction, type MockInstance } from 'vitest';
 
 // Wait for async EventBus handlers

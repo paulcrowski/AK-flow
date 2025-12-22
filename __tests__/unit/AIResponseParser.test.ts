@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseJsonFromLLM, extractJsonBlock, repairJsonMinimal } from '../../utils/AIResponseParser';
+import { parseJsonFromLLM, extractJsonBlock, repairJsonMinimal } from '@utils/AIResponseParser';
 
 describe('AIResponseParser - robustness', () => {
   describe('parseJsonFromLLM', () => {

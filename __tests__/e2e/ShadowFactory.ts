@@ -1,4 +1,4 @@
-import { supabase } from '../../services/supabase';
+import { supabase } from '@services/supabase';
 import { randomUUID } from 'crypto';
 
 /**
@@ -20,7 +20,7 @@ export class ShadowFactory {
     }
 
     /**
-     * INJECT: Wstrzykuje "fałszywe" wspomnienie/input użytkownika do bazy
+     * INJECT: Wstrzykuje "fa�szywe" wspomnienie/input użytkownika do bazy
      */
     async injectUserInput(textContent: string) {
         const payload = {
@@ -44,7 +44,7 @@ export class ShadowFactory {
     }
 
     /**
-     * VERIFY: Sprawdza czy po teście w bazie pojawiła się odpowiedź agenta
+     * VERIFY: Sprawdza czy po te�:cie w bazie pojawi�a si�" odpowiedź agenta
      */
     async fetchLatestMemory(seconds = 5): Promise<string | null> {
         // Fetch most recent memory for this agent
@@ -69,7 +69,7 @@ export class ShadowFactory {
     }
 
     /**
-     * CLEANUP: Spuszcza wodę (kasuje ślady)
+     * CLEANUP: Spuszcza wod�" (kasuje �:lady)
      */
     async nuke() {
         const { error } = await supabase

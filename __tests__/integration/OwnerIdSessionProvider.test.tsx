@@ -20,7 +20,7 @@ const eqMock = vi.fn(() => ({ order: orderMock }));
 const selectMock = vi.fn(() => ({ eq: eqMock }));
 const fromMock = vi.fn(() => ({ select: selectMock }));
 
-vi.mock('../../services/supabase', () => {
+vi.mock('@services/supabase', () => {
   return {
     supabase: {
       auth: {
@@ -34,8 +34,8 @@ vi.mock('../../services/supabase', () => {
   };
 });
 
-import { SessionProvider } from '../../contexts/SessionProvider';
-import { useSession } from '../../contexts/useSession';
+import { SessionProvider } from '@/contexts/SessionProvider';
+import { useSession } from '@/contexts/useSession';
 
 function Consumer() {
   const { userId, logout } = useSession();

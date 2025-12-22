@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-vi.mock('../../services/supabase', () => {
+vi.mock('@services/supabase', () => {
   const fromMock = vi.fn();
   return {
     supabase: {
@@ -11,7 +11,7 @@ vi.mock('../../services/supabase', () => {
   };
 });
 
-import { WorkspaceHomeostasisService } from '../../services/WorkspaceHomeostasisService';
+import { WorkspaceHomeostasisService } from '@services/WorkspaceHomeostasisService';
 
 describe('WorkspaceHomeostasisService', () => {
   beforeEach(() => {
@@ -21,7 +21,7 @@ describe('WorkspaceHomeostasisService', () => {
   it('should delete workspace memories beyond maxWorkspaceMemories (newest kept)', async () => {
     const kept = 50;
 
-    const mocked = await import('../../services/supabase');
+    const mocked = await import('@services/supabase');
     const fromMock = (mocked as any).__mocks.fromMock as ReturnType<typeof vi.fn>;
 
     let page = 0;
@@ -78,7 +78,7 @@ describe('WorkspaceHomeostasisService', () => {
       created_at: new Date(Date.now() - i * 1000).toISOString()
     }));
 
-    const mocked = await import('../../services/supabase');
+    const mocked = await import('@services/supabase');
     const fromMock = (mocked as any).__mocks.fromMock as ReturnType<typeof vi.fn>;
 
     let page = 0;

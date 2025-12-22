@@ -1,17 +1,17 @@
 import { describe, it, expect, afterEach, vi } from 'vitest';
-import { eventBus } from '../../core/EventBus';
-import { EventLoop } from '../../core/systems/EventLoop';
-import { setCurrentAgentId } from '../../services/supabase';
-import { setFeatureFlagForTesting } from '../../core/config/featureFlags';
+import { eventBus } from '@core/EventBus';
+import { EventLoop } from '@core/systems/EventLoop';
+import { setCurrentAgentId } from '@services/supabase';
+import { setFeatureFlagForTesting } from '@core/config/featureFlags';
 
 // Mock LLM plumbing for reactive path
-vi.mock('../../services/gemini', () => ({
+vi.mock('@services/gemini', () => ({
   CortexService: {
     detectIntent: vi.fn().mockResolvedValue({ style: 'SIMPLE', intent: 'casual' })
   }
 }));
 
-vi.mock('../../core/systems/CortexSystem', () => ({
+vi.mock('@core/systems/CortexSystem', () => ({
   CortexSystem: {
     processUserMessage: vi.fn().mockResolvedValue({
       responseText: 'OK',

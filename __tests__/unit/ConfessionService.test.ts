@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, beforeAll, afterAll } from 'vitest';
-import { initConfessionService } from '../../services/ConfessionService';
-import { eventBus } from '../../core/EventBus';
-import { PacketType, AgentType, ConfessionReport } from '../../types';
+import { initConfessionService } from '@services/ConfessionService';
+import { eventBus } from '@core/EventBus';
+import { PacketType, AgentType, ConfessionReport } from '@/types';
 import { waitForEventBus } from '../utils';
 
 // Helper: get last confession report

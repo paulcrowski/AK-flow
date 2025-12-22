@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { createRng } from '../../core/utils/rng';
+import { createRng } from '@core/utils/rng';
 
 describe('RNG', () => {
   it('same seed = same sequence', () => {

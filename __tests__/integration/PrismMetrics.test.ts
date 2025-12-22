@@ -17,8 +17,8 @@ import {
   getPrismDashboard,
   resetDailyPenalties,
   METRICS_CONFIG
-} from '../../core/systems/PrismMetrics';
-import { evaluationBus, createEvaluationEvent } from '../../core/systems/EvaluationBus';
+} from '@core/systems/PrismMetrics';
+import { evaluationBus, createEvaluationEvent } from '@core/systems/EvaluationBus';
 
 describe('PrismMetrics', () => {
   beforeEach(() => {

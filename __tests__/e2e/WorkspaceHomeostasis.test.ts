@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import { loadEnv } from 'vite';
-import { supabase, setCurrentAgentId } from '../../services/supabase';
+import { supabase, setCurrentAgentId } from '@services/supabase';
 import { ShadowFactory } from './ShadowFactory';
-import { WorkspaceHomeostasisService } from '../../services/WorkspaceHomeostasisService';
+import { WorkspaceHomeostasisService } from '@services/WorkspaceHomeostasisService';
 
 const env = loadEnv('development', process.cwd(), '');
 process.env.SUPABASE_URL = env.SUPABASE_URL || process.env.SUPABASE_URL;

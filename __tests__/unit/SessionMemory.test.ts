@@ -1,11 +1,11 @@
 /**
  * SessionMemory.test.ts
  * 
- * Tests for TYDZIEŃ 4: Session memory and formatSessionMemory.
+ * Tests for TYDZIEŒ 4: Session memory and formatSessionMemory.
  */
 
 import { describe, it, expect } from 'vitest';
-import { UnifiedContextBuilder, type SessionMemory } from '../../core/context';
+import { UnifiedContextBuilder, type SessionMemory } from '@core/context';
 
 describe('SessionMemory', () => {
   

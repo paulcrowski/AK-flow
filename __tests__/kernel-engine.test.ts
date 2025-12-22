@@ -12,7 +12,7 @@ import {
   INITIAL_LIMBIC,
   INITIAL_SOMA,
   INITIAL_NEURO
-} from '../core/kernel';
+} from '@core/kernel';
 
 describe('KernelEngine', () => {
   let engine: KernelEngine;

@@ -1,9 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { eventBus } from '../../core/EventBus';
-import { PacketType, CognitivePacket } from '../../types';
-import { createProcessOutputForTools, type ToolParserDeps } from '../../utils/toolParser';
+import { eventBus } from '@core/EventBus';
+import { PacketType, CognitivePacket } from '@/types';
+import { createProcessOutputForTools, type ToolParserDeps } from '@utils/toolParser';
 
-vi.mock('../../services/LibraryService', () => ({
+vi.mock('@services/LibraryService', () => ({
   searchLibraryChunks: vi.fn(),
   getLibraryChunkByIndex: vi.fn(),
   downloadLibraryDocumentText: vi.fn(),
@@ -11,7 +11,7 @@ vi.mock('../../services/LibraryService', () => ({
   uploadLibraryFile: vi.fn()
 }));
 
-vi.mock('../../services/supabase', () => ({
+vi.mock('@services/supabase', () => ({
   MemoryService: {
     storeMemory: vi.fn()
   },
@@ -20,7 +20,7 @@ vi.mock('../../services/supabase', () => ({
   getCurrentAgentId: vi.fn(() => 'agent_1')
 }));
 
-import { searchLibraryChunks, downloadLibraryDocumentText, findLibraryDocumentByName, uploadLibraryFile } from '../../services/LibraryService';
+import { searchLibraryChunks, downloadLibraryDocumentText, findLibraryDocumentByName, uploadLibraryFile } from '@services/LibraryService';
 
 describe('Workspace Tools E2E (toolParser + EventBus)', () => {
   let deps: ToolParserDeps;

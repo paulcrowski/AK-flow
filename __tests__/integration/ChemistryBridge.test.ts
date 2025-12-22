@@ -13,10 +13,10 @@ import {
   disableChemistryBridge,
   isChemistryBridgeEnabled,
   getChemistryBridgeStats
-} from '../../core/systems/ChemistryBridge';
-import { evaluationBus, createEvaluationEvent } from '../../core/systems/EvaluationBus';
-import { NeurotransmitterState } from '../../types';
-import { SYSTEM_CONFIG } from '../../core/config/systemConfig';
+} from '@core/systems/ChemistryBridge';
+import { evaluationBus, createEvaluationEvent } from '@core/systems/EvaluationBus';
+import { NeurotransmitterState } from '@/types';
+import { SYSTEM_CONFIG } from '@core/config/systemConfig';
 
 describe('ChemistryBridge', () => {
   beforeEach(() => {

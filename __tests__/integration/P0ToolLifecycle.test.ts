@@ -8,22 +8,22 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { eventBus } from '../../core/EventBus';
-import { PacketType, CognitivePacket } from '../../types';
-import { createProcessOutputForTools, ToolParserDeps } from '../../utils/toolParser';
-import { useArtifactStore } from '../../stores/artifactStore';
-import { p0MetricStartTick, p0MetricAdd, publishP0Metric } from '../../core/systems/TickLifecycleTelemetry';
-import { CortexService } from '../../services/gemini';
+import { eventBus } from '@core/EventBus';
+import { PacketType, CognitivePacket } from '@/types';
+import { createProcessOutputForTools, ToolParserDeps } from '@utils/toolParser';
+import { useArtifactStore } from '@/stores/artifactStore';
+import { p0MetricStartTick, p0MetricAdd, publishP0Metric } from '@core/systems/TickLifecycleTelemetry';
+import { CortexService } from '@services/gemini';
 import {
   downloadLibraryDocumentText,
   findLibraryDocumentByName,
   getLibraryChunkByIndex,
   searchLibraryChunks,
   uploadLibraryFile
-} from '../../services/LibraryService';
+} from '@services/LibraryService';
 
 // Mock SnapshotService
-vi.mock('../../services/SnapshotService', () => ({
+vi.mock('@services/SnapshotService', () => ({
   exportFullSnapshot: vi.fn(async (agentId: string, sessionId: string) => ({
     version: '1.0',
     agentId,
@@ -49,7 +49,7 @@ vi.mock('../../services/SnapshotService', () => ({
 }));
 
 // Mock CortexService
-vi.mock('../../services/gemini', () => ({
+vi.mock('@services/gemini', () => ({
   CortexService: {
     performDeepResearch: vi.fn(),
     generateVisualThought: vi.fn(),
@@ -58,7 +58,7 @@ vi.mock('../../services/gemini', () => ({
 }));
 
 // Mock MemoryService
-vi.mock('../../services/supabase', () => ({
+vi.mock('@services/supabase', () => ({
   MemoryService: {
     storeMemory: vi.fn()
   },
@@ -68,7 +68,7 @@ vi.mock('../../services/supabase', () => ({
 }));
 
 // Mock LibraryService (Workspace tools)
-vi.mock('../../services/LibraryService', () => ({
+vi.mock('@services/LibraryService', () => ({
   searchLibraryChunks: vi.fn(),
   getLibraryChunkByIndex: vi.fn(),
   downloadLibraryDocumentText: vi.fn(),

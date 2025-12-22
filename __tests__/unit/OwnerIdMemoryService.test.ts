@@ -32,7 +32,7 @@ describe('MemoryService owner_id (unit)', () => {
   });
 
   it('should include owner_id when current owner is set (v3.2 payload)', async () => {
-    const mod = await import('../../services/supabase');
+    const mod = await import('@services/supabase');
     mod.setCurrentAgentId('agent-1');
     mod.setCurrentOwnerId('owner-1');
 
@@ -50,7 +50,7 @@ describe('MemoryService owner_id (unit)', () => {
   });
 
   it('should omit owner_id when current owner is not set', async () => {
-    const mod = await import('../../services/supabase');
+    const mod = await import('@services/supabase');
     mod.setCurrentAgentId('agent-2');
     mod.setCurrentOwnerId(null);
 

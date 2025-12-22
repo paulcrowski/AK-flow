@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { TickCommitter } from '../../core/systems/TickCommitter';
+import { TickCommitter } from '@core/systems/TickCommitter';
 
 describe('TickCommitter', () => {
     beforeEach(() => {

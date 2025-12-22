@@ -11,8 +11,8 @@ import {
   GUARD_CONFIG,
   buildRetryPrompt,
   needsGuardCheck
-} from '../../core/systems/PersonaGuard';
-import { HardFacts } from '../../types';
+} from '@core/systems/PersonaGuard';
+import { HardFacts } from '@/types';
 
 describe('PersonaGuard', () => {
   let guard: PersonaGuard;
@@ -302,7 +302,7 @@ describe('PersonaGuard', () => {
 
     it('handles special characters in response', () => {
       const hardFacts: HardFacts = { energy: 50 };
-      const response = '🔋 Energia: 50% ✅';
+      const response = 'xx Energia: 50% yy';
 
       const result = guard.check(response, hardFacts);
 

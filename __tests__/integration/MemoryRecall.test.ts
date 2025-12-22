@@ -7,7 +7,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // Mock supabase before importing MemoryService
-vi.mock('../../services/supabase', () => ({
+vi.mock('@services/supabase', () => ({
     supabase: {
         from: vi.fn(() => ({
             select: vi.fn(() => ({
@@ -17,14 +17,14 @@ vi.mock('../../services/supabase', () => ({
                             data: [
                                 {
                                     id: 'mem-1',
-                                    raw_text: 'Rozmawialiśmy o sensie życia i filozofii.',
+                                    raw_text: 'Rozmawiali�:my o sensie życia i filozofii.',
                                     created_at: '2025-12-17T10:00:00Z',
                                     neural_strength: 5,
                                     is_core_memory: false
                                 },
                                 {
                                     id: 'mem-2',
-                                    raw_text: 'User pytał o znaczenie egzystencji.',
+                                    raw_text: 'User pyta� o znaczenie egzystencji.',
                                     created_at: '2025-12-17T09:00:00Z',
                                     neural_strength: 3,
                                     is_core_memory: false
@@ -41,7 +41,7 @@ vi.mock('../../services/supabase', () => ({
             data: [
                 {
                     id: 'semantic-1',
-                    raw_text: 'Sens życia to głębokie pytanie filozoficzne.',
+                    raw_text: 'Sens życia to g��"bokie pytanie filozoficzne.',
                     neural_strength: 8,
                     similarity: 0.85
                 }
@@ -55,7 +55,7 @@ vi.mock('../../services/supabase', () => ({
         recallRecent: vi.fn(async () => [
             {
                 id: 'mem-1',
-                content: 'Rozmawialiśmy o sensie życia i filozofii.',
+                content: 'Rozmawiali�:my o sensie życia i filozofii.',
                 timestamp: '2025-12-17T10:00:00Z',
                 neuralStrength: 5
             }
@@ -65,7 +65,7 @@ vi.mock('../../services/supabase', () => ({
                 return [
                     {
                         id: 'semantic-1',
-                        content: 'Sens życia to głębokie pytanie filozoficzne.',
+                        content: 'Sens życia to g��"bokie pytanie filozoficzne.',
                         timestamp: '2025-12-17T09:30:00Z',
                         neuralStrength: 8
                     }
@@ -78,7 +78,7 @@ vi.mock('../../services/supabase', () => ({
 }));
 
 // Mock gemini service
-vi.mock('../../services/gemini', () => ({
+vi.mock('@services/gemini', () => ({
     CortexService: {
         generateEmbedding: vi.fn(async () => new Array(768).fill(0.1)),
         structuredDialogue: vi.fn(async () => ({
@@ -88,7 +88,7 @@ vi.mock('../../services/gemini', () => ({
     }
 }));
 
-import { MemoryService } from '../../services/supabase';
+import { MemoryService } from '@services/supabase';
 
 describe('Memory Recall Integration', () => {
     beforeEach(() => {
@@ -120,12 +120,12 @@ describe('Memory Recall Integration', () => {
         const q = query.toLowerCase();
         
         const looksLikeRecallQuestion =
-            q.includes('pamiętasz') ||
+            q.includes('pami�"tasz') ||
             q.includes('pamietasz') ||
             q.includes('wczoraj') ||
             q.includes('dzis') ||
             q.includes('dzisiaj') ||
-            q.includes('dziś') ||
+            q.includes('dzi�:') ||
             q.includes('rozmow') ||
             q.includes('rozmaw');
         

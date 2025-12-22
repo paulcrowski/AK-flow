@@ -1,10 +1,10 @@
 import { describe, it, expect, vi, afterEach, beforeAll } from 'vitest';
 import { loadEnv } from 'vite';
 import { ShadowFactory } from './ShadowFactory';
-import { EventLoop } from '../../core/systems/EventLoop';
-import { CortexService } from '../../services/gemini';
-import { MemoryService, setCurrentAgentId } from '../../services/supabase';
-import { LimbicState, SomaState, NeurotransmitterState, GoalState, TraitVector } from '../../types';
+import { EventLoop } from '@core/systems/EventLoop';
+import { CortexService } from '@services/gemini';
+import { MemoryService, setCurrentAgentId } from '@services/supabase';
+import { LimbicState, SomaState, NeurotransmitterState, GoalState, TraitVector } from '@/types';
 
 // Load Env for Supabase
 const env = loadEnv('development', process.cwd(), '');
@@ -53,7 +53,7 @@ const createShadowContext = (agentId: string): EventLoop.LoopContext => ({
 
 // Mock LLM to avoid token costs & nondeterminism
 // We only want to test the PLUMBING (State -> DB logic)
-vi.mock('../../services/gemini', () => ({
+vi.mock('@services/gemini', () => ({
     CortexService: {
         detectIntent: vi.fn().mockResolvedValue({ style: 'SIMPLE', intent: 'casual' }),
         generateEmbedding: vi.fn().mockResolvedValue(Array(768).fill(0.1)),
@@ -62,7 +62,7 @@ vi.mock('../../services/gemini', () => ({
 }));
 
 // Mock CortexSystem Logic (The Brain) used by EventLoop
-vi.mock('../../core/systems/CortexSystem', () => ({
+vi.mock('@core/systems/CortexSystem', () => ({
     CortexSystem: {
         processUserMessage: vi.fn().mockResolvedValue({
             responseText: "Response from Warsaw",
@@ -136,10 +136,10 @@ describe('Shadow Agent "Holodeck" E2E', () => {
         const memoryFromDb = await shadow.fetchLatestMemory();
         if (memoryFromDb) {
             expect(memoryFromDb).toContain("Response from Warsaw");
-            console.log("✅ Shadow Test Passed: Real DB Roundtrip verified.");
+            console.log("âœ… Shadow Test Passed: Real DB Roundtrip verified.");
         } else {
             // If DB failed (Auth), we still pass the test if the logic (callbacks) worked
-            console.warn("⚠️ Shadow Test: Logic passed, but DB persistence failed (Auth/RLS).");
+            console.warn("âš ï¸ Shadow Test: Logic passed, but DB persistence failed (Auth/RLS).");
         }
     }, 15000); // 15s timeout for DB
 });

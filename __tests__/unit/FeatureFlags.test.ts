@@ -10,8 +10,8 @@ import {
   isFeatureEnabled,
   getAllFeatureFlags,
   setFeatureFlagForTesting
-} from '../../core/config/featureFlags';
-import { SYSTEM_CONFIG } from '../../core/config/systemConfig';
+} from '@core/config/featureFlags';
+import { SYSTEM_CONFIG } from '@core/config/systemConfig';
 
 describe('FeatureFlags', () => {
   // Store original values

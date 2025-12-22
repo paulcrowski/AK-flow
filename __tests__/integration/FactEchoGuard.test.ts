@@ -11,10 +11,10 @@ import {
   checkIdentityLeak,
   fullGuardCheck,
   FACT_ECHO_CONFIG
-} from '../../core/systems/FactEchoGuard';
-import { evaluationBus } from '../../core/systems/EvaluationBus';
-import { HardFacts } from '../../types';
-import { FactEcho } from '../../core/types/CortexOutput';
+} from '@core/systems/FactEchoGuard';
+import { evaluationBus } from '@core/systems/EvaluationBus';
+import { HardFacts } from '@/types';
+import { FactEcho } from '@core/types/CortexOutput';
 
 describe('FactEchoGuard', () => {
   beforeEach(() => {
@@ -126,7 +126,7 @@ describe('FactEchoGuard', () => {
     });
 
     it('returns null for clean speech', () => {
-      const issue = checkIdentityLeak('Mam 23% energii, więc jestem trochę zmęczony.');
+      const issue = checkIdentityLeak('Mam 23% energii, wi�"c jestem troch�" zm�"czony.');
       expect(issue).toBeNull();
     });
   });
@@ -135,7 +135,7 @@ describe('FactEchoGuard', () => {
     it('PASS when both fact_echo and speech are clean', () => {
       const hardFacts: HardFacts = { energy: 23 };
       const factEcho: FactEcho = { energy: 23 };
-      const speech = 'Mam dwadzieścia trzy procent energii.';
+      const speech = 'Mam dwadzie�:cia trzy procent energii.';
 
       const result = fullGuardCheck(speech, factEcho, hardFacts);
 

@@ -8,10 +8,10 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import {
   checkResponse,
   needsGuardCheck
-} from '../../core/systems/PrismIntegration';
-import { HardFacts } from '../../types';
-import { evaluationBus } from '../../core/systems/EvaluationBus';
-import { SYSTEM_CONFIG } from '../../core/config/systemConfig';
+} from '@core/systems/PrismIntegration';
+import { HardFacts } from '@/types';
+import { evaluationBus } from '@core/systems/EvaluationBus';
+import { SYSTEM_CONFIG } from '@core/config/systemConfig';
 
 describe('PrismIntegration', () => {
   beforeEach(() => {
@@ -34,7 +34,7 @@ describe('PrismIntegration', () => {
 
     it('detects fact mutation', () => {
       const hardFacts: HardFacts = { energy: 50 };
-      const response = 'Mam dużo energii, czuję się świetnie!';
+      const response = 'Mam dużo energii, czuj�" si�" �:wietnie!';
 
       const result = checkResponse(response, { hardFacts });
 

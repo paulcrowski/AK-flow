@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { TTLCache, createMemorySpace } from '../../core/systems/MemorySpace';
+import { TTLCache, createMemorySpace } from '@core/systems/MemorySpace';
 
 describe('MemorySpace', () => {
     beforeEach(() => {

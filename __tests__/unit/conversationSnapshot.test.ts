@@ -5,7 +5,7 @@ import {
   parseConversationSnapshot,
   saveConversationSnapshot,
   serializeConversationSnapshot
-} from '../../core/utils/conversationSnapshot';
+} from '@core/utils/conversationSnapshot';
 
 describe('conversationSnapshot', () => {
   it('should parse valid snapshot and clamp turns', () => {

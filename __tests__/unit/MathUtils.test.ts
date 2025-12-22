@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { clampInt, normalize01, sigmoid } from '../../utils/math';
+import { clampInt, normalize01, sigmoid } from '@utils/math';
 
 describe('utils/math', () => {
   describe('clampInt', () => {

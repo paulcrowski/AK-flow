@@ -11,7 +11,7 @@ import {
   useCognitiveStore, 
   getCognitiveState,
   dispatchCognitiveEvent 
-} from '../../stores/cognitiveStore';
+} from '@/stores/cognitiveStore';
 
 describe('CognitiveStore', () => {
   beforeEach(() => {

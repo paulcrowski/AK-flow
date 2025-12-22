@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { VolitionSystem } from '../../core/systems/VolitionSystem';
-import type { LimbicState } from '../types';
+import { VolitionSystem } from '@core/systems/VolitionSystem';
+import type { LimbicState } from '@/types';
 
 const calmLimbic: LimbicState = {
     fear: 0.1,

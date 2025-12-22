@@ -8,9 +8,9 @@ import { describe, it, expect } from 'vitest';
 import {
   buildMinimalCortexState,
   validateCortexState
-} from '../../core/builders/CortexStateBuilder';
-import type { CortexState } from '../../core/types/CortexState';
-import type { MetaStates } from '../../core/types/MetaStates';
+} from '@core/builders/CortexStateBuilder';
+import type { CortexState } from '@core/types/CortexState';
+import type { MetaStates } from '@core/types/MetaStates';
 
 describe('CortexStateBuilder', () => {
   describe('buildMinimalCortexState', () => {

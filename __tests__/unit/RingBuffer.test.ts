@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { RingBuffer, LogEntry } from '../../core/utils/RingBuffer';
+import { RingBuffer, LogEntry } from '@core/utils/RingBuffer';
 
 describe('RingBuffer', () => {
   it('stores items up to capacity', () => {

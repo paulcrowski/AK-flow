@@ -1,7 +1,7 @@
 /**
  * IdentityCoherenceService Tests
  * 
- * Testy dla sprawdzania spójności tożsamości.
+ * Testy dla sprawdzania spójno�:ci tożsamo�:ci.
  */
 
 import { describe, it, expect } from 'vitest';
@@ -9,8 +9,8 @@ import {
   quickCoherenceCheck,
   buildCoherencePrompt,
   parseCoherenceResponse
-} from '../../core/services/IdentityCoherenceService';
-import type { IdentityShardWithId } from '../../core/types/IdentityShard';
+} from '@core/services/IdentityCoherenceService';
+import type { IdentityShardWithId } from '@core/types/IdentityShard';
 
 describe('IdentityCoherenceService', () => {
   const existingShards: IdentityShardWithId[] = [

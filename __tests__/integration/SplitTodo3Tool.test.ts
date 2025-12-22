@@ -1,15 +1,15 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { eventBus } from '../../core/EventBus';
-import { PacketType } from '../../types';
-import { createProcessOutputForTools, type ToolParserDeps } from '../../utils/toolParser';
+import { eventBus } from '@core/EventBus';
+import { PacketType } from '@/types';
+import { createProcessOutputForTools, type ToolParserDeps } from '@utils/toolParser';
 
-vi.mock('../../services/LibraryService', () => ({
+vi.mock('@services/LibraryService', () => ({
   searchLibraryChunks: vi.fn(),
   getLibraryChunkByIndex: vi.fn(),
   downloadLibraryDocumentText: vi.fn()
 }));
 
-import { downloadLibraryDocumentText } from '../../services/LibraryService';
+import { downloadLibraryDocumentText } from '@services/LibraryService';
 
 describe('SPLIT_TODO3 Tool (deterministic)', () => {
   let deps: ToolParserDeps;

@@ -1,8 +1,8 @@
 /**
  * Decision Gate Tests - Architektura 3-warstwowa
  * 
- * Testuje separację: Myśl → Decyzja → Akcja
- * Zgodne z: Kora przedczołowa → Jądra podstawy → Kora ruchowa
+ * Testuje separacj�": My�:l �  Decyzja �  Akcja
+ * Zgodne z: Kora przedczo�owa �  J�&dra podstawy �  Kora ruchowa
  */
 
 import { describe, it, expect, beforeEach } from 'vitest';
@@ -11,9 +11,9 @@ import {
   resetTurnStateForAgent,
   resetFullState,
   DEFAULT_POLICY
-} from '../../core/systems/DecisionGate';
-import type { CortexOutput } from '../../core/types/CortexOutput';
-import type { SomaState } from '../../types';
+} from '@core/systems/DecisionGate';
+import type { CortexOutput } from '@core/types/CortexOutput';
+import type { SomaState } from '@/types';
 
 // Mock SomaState
 const createSomaState = (energy: number = 80): SomaState => ({
@@ -34,7 +34,7 @@ const createOutput = (overrides: Partial<CortexOutput> = {}): CortexOutput => ({
 
 describe('Decision Gate - 3-Layer Architecture', () => {
   beforeEach(() => {
-    resetFullState();  // Pełny reset włącznie z cooldownami
+    resetFullState();  // Pe�ny reset w��&cznie z cooldownami
     resetTurnStateForAgent(TEST_AGENT_ID);
   });
 
@@ -163,7 +163,7 @@ describe('Decision Gate - 3-Layer Architecture', () => {
     });
 
     it('should respect max tools per turn', () => {
-      // Używamy różnych narzędzi żeby uniknąć cooldownu
+      // Używamy różnych narz�"dzi żeby unikn�&�! cooldownu
       const output1 = createOutput({
         tool_intent: { tool: 'SEARCH', query: 'first', reason: 'test' }
       });
@@ -244,7 +244,7 @@ describe('Decision Gate - 3-Layer Architecture', () => {
 
 describe('CortexOutput Validation', () => {
   it('should validate tool_intent structure', async () => {
-    const { isValidCortexOutput, isValidToolIntent } = await import('../../core/types/CortexOutput');
+    const { isValidCortexOutput, isValidToolIntent } = await import('@core/types/CortexOutput');
 
     const validIntent = {
       tool: 'SEARCH',
@@ -258,7 +258,7 @@ describe('CortexOutput Validation', () => {
   });
 
   it('should validate CortexOutput with tool_intent', async () => {
-    const { isValidCortexOutput } = await import('../../core/types/CortexOutput');
+    const { isValidCortexOutput } = await import('@core/types/CortexOutput');
 
     const validOutput = {
       internal_thought: 'thinking',

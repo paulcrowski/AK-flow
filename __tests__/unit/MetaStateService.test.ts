@@ -10,8 +10,8 @@ import {
   interpretMetaStates,
   createDefaultMetaStates,
   needsRest
-} from '../../core/services/MetaStateService';
-import type { MetaStates } from '../../core/types/MetaStates';
+} from '@core/services/MetaStateService';
+import type { MetaStates } from '@core/types/MetaStates';
 
 describe('MetaStateService', () => {
   describe('updateMetaStates', () => {

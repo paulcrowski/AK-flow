@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import type { DetectedIntent } from '../../types';
-import { parseDetectedIntent } from '../../core/systems/IntentContract';
-import { detectActionableIntentForTesting } from '../../core/systems/eventloop/ReactiveStep';
+import type { DetectedIntent } from '@/types';
+import { parseDetectedIntent } from '@core/systems/IntentContract';
+import { detectActionableIntentForTesting } from '@core/systems/eventloop/ReactiveStep';
 
 describe('IntentContract', () => {
     const safeDefault: DetectedIntent = {
