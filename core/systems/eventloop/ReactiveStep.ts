@@ -5,6 +5,8 @@ import { LimbicSystem } from '../LimbicSystem';
 import { CortexSystem } from '../CortexSystem';
 import { useArtifactStore } from '../../../stores/artifactStore';
 import { SYSTEM_CONFIG } from '../../config/systemConfig';
+import { getCurrentTraceId } from '../../trace/TraceContext';
+import { p0MetricAdd } from '../TickLifecycleTelemetry';
 
 // P0.1 COMMIT 3: Action-First Policy
 // Feature flag - can be disabled if causing issues
@@ -117,6 +119,8 @@ export async function runReactiveStep(input: {
       try {
         if (actionIntent.action === 'CREATE') {
           const id = store.create(target, '');
+          const traceId = getCurrentTraceId();
+          if (traceId) p0MetricAdd(traceId, { actionFirstTriggered: 1, actionType: 'CREATE' });
           callbacks.onMessage('assistant', `Utworzyłem ${target} (${id}). Poprawić coś?`, 'speech');
           updateContextAfterAction(ctx);
           return;
@@ -128,6 +132,8 @@ export async function runReactiveStep(input: {
             if (c.startsWith('art-')) {
               const art = store.get(c);
               if (art) {
+                const traceId = getCurrentTraceId();
+                if (traceId) p0MetricAdd(traceId, { actionFirstTriggered: 1, actionType: 'READ' });
                 callbacks.onMessage('assistant', `${art.name}:\n\n${art.content || '(pusty)'}`, 'speech');
                 updateContextAfterAction(ctx);
                 return;
@@ -137,6 +143,8 @@ export async function runReactiveStep(input: {
             const byName = store.getByName(c);
             if (byName.length === 1) {
               const art = byName[0];
+              const traceId = getCurrentTraceId();
+              if (traceId) p0MetricAdd(traceId, { actionFirstTriggered: 1, actionType: 'READ' });
               callbacks.onMessage('assistant', `${art.name}:\n\n${art.content || '(pusty)'}`, 'speech');
               updateContextAfterAction(ctx);
               return;
@@ -152,6 +160,8 @@ export async function runReactiveStep(input: {
             for (const c of candidates) {
               if (c.startsWith('art-')) {
                 store.append(c, `\n\n${payload}`);
+                const traceId = getCurrentTraceId();
+                if (traceId) p0MetricAdd(traceId, { actionFirstTriggered: 1, actionType: 'APPEND' });
                 callbacks.onMessage('assistant', `Dopisałem do ${c}. Poprawić coś?`, 'speech');
                 updateContextAfterAction(ctx);
                 return;
@@ -159,6 +169,8 @@ export async function runReactiveStep(input: {
               const byName = store.getByName(c);
               if (byName.length === 1) {
                 store.append(byName[0].id, `\n\n${payload}`);
+                const traceId = getCurrentTraceId();
+                if (traceId) p0MetricAdd(traceId, { actionFirstTriggered: 1, actionType: 'APPEND' });
                 callbacks.onMessage('assistant', `Dopisałem do ${byName[0].name}. Poprawić coś?`, 'speech');
                 updateContextAfterAction(ctx);
                 return;
@@ -175,6 +187,8 @@ export async function runReactiveStep(input: {
             if (c.startsWith('art-')) {
               const next = String(actionIntent.payload || '').trim() || `TODO: REPLACE requested\n\n${userInput}`;
               store.replace(c, next);
+              const traceId = getCurrentTraceId();
+              if (traceId) p0MetricAdd(traceId, { actionFirstTriggered: 1, actionType: 'REPLACE' });
               callbacks.onMessage('assistant', `Podmieniłem treść w ${c}. Poprawić coś?`, 'speech');
               updateContextAfterAction(ctx);
               return;
@@ -183,6 +197,8 @@ export async function runReactiveStep(input: {
             if (byName.length === 1) {
               const next = String(actionIntent.payload || '').trim() || `TODO: REPLACE requested\n\n${userInput}`;
               store.replace(byName[0].id, next);
+              const traceId = getCurrentTraceId();
+              if (traceId) p0MetricAdd(traceId, { actionFirstTriggered: 1, actionType: 'REPLACE' });
               callbacks.onMessage('assistant', `Podmieniłem treść w ${byName[0].name}. Poprawić coś?`, 'speech');
               updateContextAfterAction(ctx);
               replaced = true;

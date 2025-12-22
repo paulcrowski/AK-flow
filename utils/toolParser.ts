@@ -12,6 +12,7 @@ import * as LimbicSystem from '../core/systems/LimbicSystem';
 import { VISUAL_BASE_COOLDOWN_MS, VISUAL_ENERGY_COST_BASE } from '../core/constants';
 import { useArtifactStore, hashArtifactContent } from '../stores/artifactStore';
 import { SYSTEM_CONFIG } from '../core/config/systemConfig';
+import { p0MetricAdd } from '../core/systems/TickLifecycleTelemetry';
 import { consumeWorkspaceTags } from './workspaceTools';
 import { scheduleSoftTimeout, searchInFlight, visualInFlight, withTimeout } from './toolRuntime';
 
@@ -94,6 +95,8 @@ export const createProcessOutputForTools = (deps: ToolParserDeps) => {
     const isArtifactRefError = (r: ArtifactRefResult): r is Extract<ArtifactRefResult, { ok: false }> => !r.ok;
 
     const normalizeArtifactRef = (refRaw: string): ArtifactRefResult => {
+      const traceId = getCurrentTraceId();
+      if (traceId) p0MetricAdd(traceId, { artifactResolveAttempt: 1 });
       const store = useArtifactStore.getState();
       const raw = normalizeArg(refRaw);
       if (!P011_NORMALIZE_ARTIFACT_REF_ENABLED) {
@@ -106,8 +109,12 @@ export const createProcessOutputForTools = (deps: ToolParserDeps) => {
             };
       }
 
-      if (raw.startsWith('art-')) return { ok: true, id: raw };
+      if (raw.startsWith('art-')) {
+        if (traceId) p0MetricAdd(traceId, { artifactResolveSuccess: 1 });
+        return { ok: true, id: raw };
+      }
       if (!raw) {
+        if (traceId) p0MetricAdd(traceId, { artifactResolveFail: 1 });
         return {
           ok: false,
           code: 'NOT_FOUND',
@@ -124,8 +131,12 @@ export const createProcessOutputForTools = (deps: ToolParserDeps) => {
 
       for (const nameCandidate of candidates) {
         const byName = store.getByName(nameCandidate);
-        if (byName.length === 1) return { ok: true, id: byName[0].id, nameHint: byName[0].name };
+        if (byName.length === 1) {
+          if (traceId) p0MetricAdd(traceId, { artifactResolveSuccess: 1 });
+          return { ok: true, id: byName[0].id, nameHint: byName[0].name };
+        }
         if (byName.length > 1) {
+          if (traceId) p0MetricAdd(traceId, { artifactResolveFail: 1 });
           return {
             ok: false,
             code: 'AMBIGUOUS',
@@ -134,11 +145,23 @@ export const createProcessOutputForTools = (deps: ToolParserDeps) => {
         }
       }
 
+      if (traceId) p0MetricAdd(traceId, { artifactResolveFail: 1 });
       return {
         ok: false,
         code: 'NOT_FOUND',
         userMessage: `Nie znalazłem artefaktu '${raw}'. Użyj ID (art-123) albo utwórz nowy plik.`
       };
+    };
+
+    const emitToolResult = (params: { tool: string; payload: any; intentId: string }) => {
+      eventBus.publish({
+        id: generateUUID(),
+        timestamp: Date.now(),
+        source: AgentType.CORTEX_FLOW,
+        type: PacketType.TOOL_RESULT,
+        payload: { ...params.payload, tool: params.tool, intentId: params.intentId },
+        priority: 0.8
+      });
     };
 
     const handlePublishArtifact = async (artifactIdRaw: string) => {
@@ -200,17 +223,6 @@ export const createProcessOutputForTools = (deps: ToolParserDeps) => {
       } catch (e: any) {
         emitToolError({ tool, intentId, payload: { arg: artifactIdRaw }, error: e?.message || String(e) });
       }
-    };
-
-    const emitToolResult = (params: { tool: string; payload: any; intentId: string }) => {
-      eventBus.publish({
-        id: generateUUID(),
-        timestamp: Date.now(),
-        source: AgentType.CORTEX_FLOW,
-        type: PacketType.TOOL_RESULT,
-        payload: { ...params.payload, tool: params.tool, intentId: params.intentId },
-        priority: 0.8
-      });
     };
 
     const handleArtifactBlock = async (params: { kind: 'CREATE' | 'APPEND' | 'REPLACE'; header: string; body: string; raw: string }) => {

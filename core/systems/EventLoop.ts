@@ -20,7 +20,7 @@ import { TraceContext, generateTraceId, pushTraceId, popTraceId } from '../trace
 import { getCurrentAgentId } from '../../services/supabase';
 import { createMemorySpace } from './MemorySpace';
 import { TickCommitter } from './TickCommitter';
-import { publishTickStart, publishTickSkipped, publishThinkModeSelected, publishTickEnd } from './TickLifecycleTelemetry';
+import { publishTickStart, publishTickSkipped, publishThinkModeSelected, publishTickEnd, p0MetricStartTick, publishP0Metric } from './TickLifecycleTelemetry';
 import { isMainFeatureEnabled } from '../config/featureFlags';
 import { ThinkModeSelector, createAutonomyBudgetTracker, createTickTraceScope, runAutonomousVolitionStep, runReactiveStep, runGoalDrivenStep } from './eventloop/index';
 
@@ -99,6 +99,8 @@ export namespace EventLoop {
                 publishTickEnd
             }
         });
+
+        p0MetricStartTick(traceScope.trace.traceId, tickNumber);
         const trace: TraceContext = traceScope.trace;
 
         let skipped = false;
@@ -227,6 +229,7 @@ export namespace EventLoop {
 
             return ctx;
         } finally {
+            publishP0Metric(traceScope.trace.traceId, Date.now());
             traceScope.finalize({ skipped, skipReason });
         }
     }

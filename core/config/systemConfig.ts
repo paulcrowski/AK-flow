@@ -122,6 +122,7 @@ export const SYSTEM_CONFIG = {
     // P0.1.1: Stabilization flags (tools + action-first)
     P011_NORMALIZE_ARTIFACT_REF_ENABLED: true,
     P011_ACTION_FIRST_ENABLED: true,
+    P011_FAIL_CLOSED_JSON_ENABLED: true,
     /** @deprecated Use memory.recallRecentFallback */
     USE_MEMORY_RECALL_RECENT_FALLBACK: true,
     /** @deprecated Use memory.searchKnowledgeChunks */

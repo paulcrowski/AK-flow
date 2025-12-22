@@ -12,6 +12,7 @@ import { eventBus } from '../../core/EventBus';
 import { PacketType, CognitivePacket } from '../../types';
 import { createProcessOutputForTools, ToolParserDeps } from '../../utils/toolParser';
 import { useArtifactStore } from '../../stores/artifactStore';
+import { p0MetricStartTick, p0MetricAdd, publishP0Metric } from '../../core/systems/TickLifecycleTelemetry';
 import { CortexService } from '../../services/gemini';
 import {
   downloadLibraryDocumentText,
@@ -493,5 +494,32 @@ describe('P0 Tool Lifecycle', () => {
 	    expect(String((error as any)?.payload?.error || '')).toContain('Nie znalazłem artefaktu');
 	    expect(String((error as any)?.payload?.error || '')).not.toContain('ARTIFACT_ID_INVALID');
 	  });
+  });
+
+  describe('P0_METRIC telemetry', () => {
+    it('should publish P0_METRIC with required fields', async () => {
+      const traceId = 'trace_test_p0_metric';
+      p0MetricStartTick(traceId, 123);
+      p0MetricAdd(traceId, { artifactResolveAttempt: 1, artifactResolveSuccess: 1, actionFirstTriggered: 1, actionType: 'READ' });
+      p0MetricAdd(traceId, { autonomyCooldownMs: 25000, autonomyConsecutiveFailures: 2, autonomyAttempt: 1, autonomyFail: 1, parseFailCount: 1, workFirstPendingFound: false });
+      publishP0Metric(traceId, Date.now());
+
+      const e = eventBus.getHistory().find((x) => x.type === PacketType.SYSTEM_ALERT && x.traceId === traceId && x.payload?.event === 'P0_METRIC');
+      expect(e).toBeDefined();
+      const p = (e as any).payload;
+      expect(typeof p.tickNumber).toBe('number');
+      expect(typeof p.artifactResolveAttempt).toBe('number');
+      expect(typeof p.artifactResolveSuccess).toBe('number');
+      expect(typeof p.artifactResolveFail).toBe('number');
+      expect(typeof p.actionFirstTriggered).toBe('number');
+      expect('actionType' in p).toBe(true);
+      expect(typeof p.autonomyCooldownMs).toBe('number');
+      expect(typeof p.autonomyConsecutiveFailures).toBe('number');
+      expect(typeof p.autonomyAttempt).toBe('number');
+      expect(typeof p.autonomySuccess).toBe('number');
+      expect(typeof p.autonomyFail).toBe('number');
+      expect('workFirstPendingFound' in p).toBe(true);
+      expect(typeof p.parseFailCount).toBe('number');
+    });
   });
 });

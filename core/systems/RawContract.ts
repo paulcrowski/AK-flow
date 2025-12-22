@@ -1,4 +1,5 @@
 import { parseJsonFromLLM } from '../../utils/AIResponseParser';
+import { SYSTEM_CONFIG } from '../config/systemConfig';
 
 export type RawContractFailureReason =
     | 'EMPTY_RESPONSE'
@@ -93,6 +94,13 @@ export function applyAutonomyV2RawContract(
     }
 
     const sanitized = sanitizeText(rawText, maxRawLen);
+
+    const failClosedEnabled = (SYSTEM_CONFIG.features as Record<string, boolean>).P011_FAIL_CLOSED_JSON_ENABLED ?? true;
+    const trimmed = sanitized.trimStart();
+    if (failClosedEnabled && !trimmed.startsWith('{')) {
+        return { ok: false, value: silent, reason: 'NO_JSON_OBJECT', details: 'TRIM_NOT_JSON_OBJECT' };
+    }
+
     const parsedResult = parseJsonFromLLM<any>(sanitized, { allowRepair: true, requireJsonBlock: true });
     if (!parsedResult.ok) {
         if (parsedResult.reason === 'NO_JSON') {

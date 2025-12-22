@@ -4,6 +4,83 @@ import { isMainFeatureEnabled } from '../config/featureFlags';
 
 export type ThinkMode = 'reactive' | 'goal_driven' | 'autonomous' | 'idle';
 
+type P0MetricState = {
+    artifactResolveAttempt: number;
+    artifactResolveSuccess: number;
+    artifactResolveFail: number;
+    actionFirstTriggered: number;
+    actionType: string | null;
+    autonomyAttempt: number;
+    autonomySuccess: number;
+    autonomyFail: number;
+    autonomyCooldownMs: number;
+    autonomyConsecutiveFailures: number;
+    workFirstPendingFound: boolean | null;
+    parseFailCount: number;
+};
+
+const p0MetricByTraceId = new Map<string, { tickNumber: number; state: P0MetricState }>();
+
+function emptyP0MetricState(): P0MetricState {
+    return {
+        artifactResolveAttempt: 0,
+        artifactResolveSuccess: 0,
+        artifactResolveFail: 0,
+        actionFirstTriggered: 0,
+        actionType: null,
+        autonomyAttempt: 0,
+        autonomySuccess: 0,
+        autonomyFail: 0,
+        autonomyCooldownMs: 0,
+        autonomyConsecutiveFailures: 0,
+        workFirstPendingFound: null,
+        parseFailCount: 0
+    };
+}
+
+export function p0MetricStartTick(traceId: string, tickNumber: number): void {
+    if (!traceId) return;
+    p0MetricByTraceId.set(traceId, { tickNumber, state: emptyP0MetricState() });
+}
+
+export function p0MetricAdd(traceId: string, patch: Partial<P0MetricState>): void {
+    if (!traceId) return;
+    const cur = p0MetricByTraceId.get(traceId);
+    if (!cur) return;
+
+    const s = cur.state;
+    cur.state = {
+        ...s,
+        ...patch,
+        artifactResolveAttempt: s.artifactResolveAttempt + (patch.artifactResolveAttempt ?? 0),
+        artifactResolveSuccess: s.artifactResolveSuccess + (patch.artifactResolveSuccess ?? 0),
+        artifactResolveFail: s.artifactResolveFail + (patch.artifactResolveFail ?? 0),
+        actionFirstTriggered: s.actionFirstTriggered + (patch.actionFirstTriggered ?? 0),
+        autonomyAttempt: s.autonomyAttempt + (patch.autonomyAttempt ?? 0),
+        autonomySuccess: s.autonomySuccess + (patch.autonomySuccess ?? 0),
+        autonomyFail: s.autonomyFail + (patch.autonomyFail ?? 0),
+        parseFailCount: s.parseFailCount + (patch.parseFailCount ?? 0)
+    };
+    p0MetricByTraceId.set(traceId, cur);
+}
+
+export function publishP0Metric(traceId: string, endedAt: number): void {
+    const cur = traceId ? p0MetricByTraceId.get(traceId) : undefined;
+    if (!cur) return;
+
+    publishTickPacket({
+        id: `p0-metric-${cur.tickNumber}-${endedAt}`,
+        traceId,
+        timestamp: endedAt,
+        payload: {
+            event: 'P0_METRIC',
+            tickNumber: cur.tickNumber,
+            ...cur.state
+        },
+        priority: 0.7
+    });
+}
+
 function publishTickPacket(packet: {
     id: string;
     traceId: string;

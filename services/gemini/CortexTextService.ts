@@ -12,6 +12,10 @@ import { UnifiedContextBuilder, type UnifiedContext } from '../../core/context';
 import { applyAutonomyV2RawContract } from '../../core/systems/RawContract';
 import { parseDetectedIntent } from '../../core/systems/IntentContract';
 import { clamp01 } from '../../utils/math';
+import { eventBus } from '../../core/EventBus';
+import { getCurrentTraceId } from '../../core/trace/TraceContext';
+import { p0MetricAdd } from '../../core/systems/TickLifecycleTelemetry';
+import { generateUUID } from '../../utils/uuid';
 
 import { generateWithFallback } from './generateWithFallback';
 import { getGeminiText, getGeminiTextWithSource } from './text';
@@ -303,6 +307,25 @@ export function createCortexTextService(ai: GoogleGenAI) {
           });
 
           if (!contracted.ok) {
+            const traceId = getCurrentTraceId();
+            if (traceId) p0MetricAdd(traceId, { parseFailCount: 1 });
+            eventBus.publish({
+              id: generateUUID(),
+              traceId,
+              timestamp: Date.now(),
+              source: AgentType.CORTEX_FLOW,
+              type: PacketType.SYSTEM_ALERT,
+              payload: {
+                event: 'P0_PARSE_FAIL',
+                stage: 'AUTONOMY_V2',
+                reason: contracted.reason,
+                details: contracted.details,
+                raw_len: String(rawText || '').length,
+                raw_preview: String(rawText || '').slice(0, 120),
+                model: 'gemini-2.5-flash'
+              },
+              priority: 0.7
+            });
             return {
               internal_monologue: `[RAW_CONTRACT_FAIL] ${contracted.reason || 'UNKNOWN'}`,
               voice_pressure: 0,

@@ -16,6 +16,8 @@ import { VolitionSystem, calculatePoeticScore } from '../VolitionSystem';
 import { computeDialogThreshold } from '../../utils/thresholds';
 import { computeNovelty } from '../ExpressionPolicy';
 import { getAutonomyConfig } from '../../config/systemConfig';
+import { getCurrentTraceId } from '../../trace/TraceContext';
+import { p0MetricAdd } from '../TickLifecycleTelemetry';
 
 export type BudgetTracker = {
   checkBudget: (limit: number) => boolean;
@@ -130,11 +132,29 @@ export async function runAutonomousVolitionStep(input: {
   const autonomyCfg = getAutonomyConfig();
   const silenceMs = silenceDurationSec * 1000;
   const minSilenceMs = autonomyCfg.exploreMinSilenceSec * 1000;
+
+  const traceId = getCurrentTraceId();
+  const nowForMetrics = Date.now();
+  const cooldownMs = autonomyFailureState.consecutiveFailures >= 3
+    ? 300_000
+    : autonomyFailureState.baseCooldownMs * Math.pow(2, autonomyFailureState.consecutiveFailures);
+  if (traceId) {
+    p0MetricAdd(traceId, {
+      autonomyCooldownMs: cooldownMs,
+      autonomyConsecutiveFailures: autonomyFailureState.consecutiveFailures
+    });
+  }
   
   // P0.1: Backoff check - skip if in cooldown
   if (!shouldTriggerAutonomy(silenceMs, minSilenceMs)) {
+    if (traceId) {
+      // Explicitly record that autonomy was considered but suppressed by cooldown/silence
+      p0MetricAdd(traceId, { autonomyAttempt: 0 });
+    }
     return;
   }
+
+  if (traceId) p0MetricAdd(traceId, { autonomyAttempt: 1 });
   
   if (!VolitionSystem.shouldInitiateThought(silenceDurationSec, autonomyCfg.exploreMinSilenceSec)) {
     return;
@@ -191,6 +211,14 @@ export async function runAutonomousVolitionStep(input: {
 
   const actionDecision = AutonomyRepertoire.selectAction(unifiedContext);
 
+  if (traceId) {
+    if (actionDecision.action === 'WORK') {
+      p0MetricAdd(traceId, { workFirstPendingFound: true });
+    } else if (actionDecision.action === 'SILENCE' && actionDecision.reason.includes('No pending work')) {
+      p0MetricAdd(traceId, { workFirstPendingFound: false });
+    }
+  }
+
   const now = Date.now();
   const dedupeMs = SYSTEM_CONFIG.autonomy?.actionLogDedupeMs ?? 5000;
   const silenceSec = (now - ctx.silenceStart) / 1000;
@@ -225,6 +253,7 @@ export async function runAutonomousVolitionStep(input: {
   if (actionDecision.action === 'SILENCE') {
     if (shouldLog) callbacks.onThought(`[AUTONOMY_SILENCE] ${actionDecision.reason}`);
     onAutonomyResult(false); // P0.1: Failure - increment backoff
+    if (traceId) p0MetricAdd(traceId, { autonomyFail: 1 });
     return;
   }
 
@@ -281,6 +310,7 @@ export async function runAutonomousVolitionStep(input: {
     volition.voice_pressure = 0;
     callbacks.onThought(`[GROUNDING_BLOCKED] ${groundingValidation.reason}`);
     onAutonomyResult(false); // P0.1: Failure - grounding blocked
+    if (traceId) p0MetricAdd(traceId, { autonomyFail: 1 });
   } else {
     callbacks.onThought(volition.internal_monologue);
   }
@@ -420,6 +450,12 @@ export async function runAutonomousVolitionStep(input: {
     priority: 0.5
   });
 
+  if (gateDecision.reason === 'EMPTY_SPEECH') {
+    onAutonomyResult(false);
+    if (traceId) p0MetricAdd(traceId, { autonomyFail: 1 });
+    return;
+  }
+
   if (gateDecision.should_speak && gateDecision.winner) {
     const styleCfg = SYSTEM_CONFIG.styleGuard;
     const styleResult = styleCfg.enabled
@@ -440,6 +476,7 @@ export async function runAutonomousVolitionStep(input: {
       if (commit.committed) {
         callbacks.onMessage('assistant', styleResult.text, 'speech');
         onAutonomyResult(true); // P0.1: Success - reset backoff
+        if (traceId) p0MetricAdd(traceId, { autonomySuccess: 1 });
       }
 
       ctx.lastSpeakTimestamp = Date.now();
@@ -464,6 +501,7 @@ export async function runAutonomousVolitionStep(input: {
       }
       callbacks.onThought(`[STYLE_FILTERED] ${gateDecision.winner.internal_thought}`);
       onAutonomyResult(false); // P0.1: Failure - filtered too short
+      if (traceId) p0MetricAdd(traceId, { autonomyFail: 1 });
     }
   } else if (gateDecision.winner) {
     const suppressReason = gateDecision.debug?.social_block_reason
@@ -471,5 +509,6 @@ export async function runAutonomousVolitionStep(input: {
       : `[${gateDecision.reason}]`;
     callbacks.onThought(`${suppressReason} ${gateDecision.winner.internal_thought}`);
     onAutonomyResult(false); // P0.1: Failure - gate blocked
+    if (traceId) p0MetricAdd(traceId, { autonomyFail: 1 });
   }
 }
