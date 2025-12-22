@@ -10,7 +10,7 @@ import { generateUUID } from './uuid';
 import * as SomaSystem from '../core/systems/SomaSystem';
 import * as LimbicSystem from '../core/systems/LimbicSystem';
 import { VISUAL_BASE_COOLDOWN_MS, VISUAL_ENERGY_COST_BASE } from '../core/constants';
-import { useArtifactStore, hashArtifactContent } from '../stores/artifactStore';
+import { useArtifactStore, hashArtifactContent, normalizeArtifactRef as normalizeArtifactRefCore } from '../stores/artifactStore';
 import { SYSTEM_CONFIG } from '../core/config/systemConfig';
 import { p0MetricAdd } from '../core/systems/TickLifecycleTelemetry';
 import { consumeWorkspaceTags } from './workspaceTools';
@@ -97,10 +97,11 @@ export const createProcessOutputForTools = (deps: ToolParserDeps) => {
     const normalizeArtifactRef = (refRaw: string): ArtifactRefResult => {
       const traceId = getCurrentTraceId();
       if (traceId) p0MetricAdd(traceId, { artifactResolveAttempt: 1 });
-      const store = useArtifactStore.getState();
       const raw = normalizeArg(refRaw);
       if (!P011_NORMALIZE_ARTIFACT_REF_ENABLED) {
-        return raw.startsWith('art-')
+        const ok = raw.startsWith('art-');
+        if (traceId) p0MetricAdd(traceId, ok ? { artifactResolveSuccess: 1 } : { artifactResolveFail: 1 });
+        return ok
           ? { ok: true, id: raw }
           : {
               ok: false,
@@ -109,48 +110,9 @@ export const createProcessOutputForTools = (deps: ToolParserDeps) => {
             };
       }
 
-      if (raw.startsWith('art-')) {
-        if (traceId) p0MetricAdd(traceId, { artifactResolveSuccess: 1 });
-        return { ok: true, id: raw };
-      }
-      if (!raw) {
-        if (traceId) p0MetricAdd(traceId, { artifactResolveFail: 1 });
-        return {
-          ok: false,
-          code: 'NOT_FOUND',
-          userMessage: `Nie znalazłem artefaktu ''. Użyj ID (art-123) albo utwórz nowy plik.`
-        };
-      }
-
-      const candidates: string[] = [raw];
-      if (raw.toLowerCase().endsWith('.md')) {
-        candidates.push(raw.slice(0, -3));
-      } else {
-        candidates.push(`${raw}.md`);
-      }
-
-      for (const nameCandidate of candidates) {
-        const byName = store.getByName(nameCandidate);
-        if (byName.length === 1) {
-          if (traceId) p0MetricAdd(traceId, { artifactResolveSuccess: 1 });
-          return { ok: true, id: byName[0].id, nameHint: byName[0].name };
-        }
-        if (byName.length > 1) {
-          if (traceId) p0MetricAdd(traceId, { artifactResolveFail: 1 });
-          return {
-            ok: false,
-            code: 'AMBIGUOUS',
-            userMessage: `Nazwa artefaktu '${nameCandidate}' jest niejednoznaczna. Użyj ID (art-123).`
-          };
-        }
-      }
-
-      if (traceId) p0MetricAdd(traceId, { artifactResolveFail: 1 });
-      return {
-        ok: false,
-        code: 'NOT_FOUND',
-        userMessage: `Nie znalazłem artefaktu '${raw}'. Użyj ID (art-123) albo utwórz nowy plik.`
-      };
+      const r = normalizeArtifactRefCore(raw);
+      if (traceId) p0MetricAdd(traceId, r.ok ? { artifactResolveSuccess: 1 } : { artifactResolveFail: 1 });
+      return r as any;
     };
 
     const emitToolResult = (params: { tool: string; payload: any; intentId: string }) => {

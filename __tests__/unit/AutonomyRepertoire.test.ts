@@ -21,6 +21,7 @@ import {
 } from '../../core/systems/AutonomyRepertoire';
 import { UnifiedContextBuilder, type ContextBuilderInput, type BasePersona } from '../../core/context';
 import { getAutonomyConfig } from '../../core/config/systemConfig';
+import { useArtifactStore } from '../../stores/artifactStore';
 
 describe('AutonomyRepertoire', () => {
   
@@ -125,7 +126,9 @@ describe('AutonomyRepertoire', () => {
   
   describe('selectAction()', () => {
     
-    it('should select CONTINUE when active topic exists', () => {
+    it('should select SILENCE when no pending work exists', () => {
+      const store = useArtifactStore.getState();
+      store.resetForTesting();
       const ctx = buildContext({
         conversation: [
           { role: 'user', text: 'Tell me about machine learning' },
@@ -137,11 +140,13 @@ describe('AutonomyRepertoire', () => {
       
       const decision = selectAction(ctx);
       
-      expect(decision.action).toBe('CONTINUE');
+      expect(decision.action).toBe('SILENCE');
       expect(decision.allowed).toBe(true);
     });
     
-    it('should select CLARIFY when user needs clarification', () => {
+    it('should select SILENCE even when user needs clarification (P0.1.2 WORK/SILENCE only)', () => {
+      const store = useArtifactStore.getState();
+      store.resetForTesting();
       const ctx = buildContext({
         conversation: [
           { role: 'user', text: 'I don\'t understand what you mean' }
@@ -152,50 +157,24 @@ describe('AutonomyRepertoire', () => {
       
       const decision = selectAction(ctx);
       
-      expect(decision.action).toBe('CLARIFY');
+      expect(decision.action).toBe('SILENCE');
       expect(decision.allowed).toBe(true);
     });
     
-    it('should select SILENCE when EXPLORE conditions not met', () => {
+    it('should select WORK when pending artifact exists', () => {
+      const store = useArtifactStore.getState();
+      store.resetForTesting();
+      store.create('draft.md', 'hello');
       const ctx = buildContext({
-        conversation: [], // No active topic
-        silenceStart: Date.now() - 10000, // Only 10s silence (< 25s required)
+        conversation: [],
+        silenceStart: Date.now() - 10000,
         lastUserInteractionAt: Date.now() - 10000
       });
       
       const decision = selectAction(ctx);
       
-      expect(decision.action).toBe('SILENCE');
-      expect(decision.reason).toContain('EXPLORE blocked');
-    });
-    
-    it('should select EXPLORE when no topic AND silence > threshold', () => {
-      const ctx = buildContext({
-        conversation: [], // No active topic
-        silenceStart: Date.now() - 30000, // 30s silence (> 25s required)
-        lastUserInteractionAt: Date.now() - 30000
-      });
-      
-      const decision = selectAction(ctx);
-      
-      expect(decision.action).toBe('EXPLORE');
+      expect(decision.action).toBe('WORK');
       expect(decision.allowed).toBe(true);
-    });
-    
-    it('should NOT select EXPLORE when active topic exists', () => {
-      const ctx = buildContext({
-        conversation: [
-          { role: 'user', text: 'Tell me about AI' },
-          { role: 'assistant', text: 'AI is fascinating...' }
-        ],
-        silenceStart: Date.now() - 70000, // Long silence
-        lastUserInteractionAt: Date.now() - 70000
-      });
-      
-      const decision = selectAction(ctx);
-      
-      // Should CONTINUE, not EXPLORE
-      expect(decision.action).not.toBe('EXPLORE');
     });
   });
   

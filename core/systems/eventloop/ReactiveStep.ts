@@ -50,11 +50,35 @@ function splitTargetAndPayload(input: string): { target: string; payload: string
 
 function detectActionableIntent(input: string): ActionFirstResult {
   const lower = input.toLowerCase().trim();
+
+  const slugify = (s: string) => {
+    const raw = String(s || '')
+      .toLowerCase()
+      .trim()
+      .replace(/^o\s+/, '')
+      .replace(/[^a-z0-9]+/g, '-');
+    const collapsed = raw.replace(/-+/g, '-').replace(/^-|-$/g, '');
+    return collapsed.slice(0, 48);
+  };
+
+  const deriveCreateTarget = (rawTarget: string) => {
+    const t = String(rawTarget || '').trim();
+    if (!t) return 'artifact.md';
+    const first = t.split(/\s+/)[0];
+    const looksLikeFilename = first.includes('.') || first.length >= 3;
+    if (looksLikeFilename && !first.includes('/') && !first.includes('\\')) {
+      if (first.toLowerCase().endsWith('.md')) return first;
+      if (first.includes('.')) return first;
+      return `${first}.md`;
+    }
+    const slug = slugify(t);
+    return `${slug || 'artifact'}.md`;
+  };
   
   // CREATE patterns: "stwórz plik X", "create file X", "napisz X", "write X"
-  const createMatch = lower.match(/(?:stwórz|utwórz|create|napisz|write|zrób)\s+(?:plik\s+)?([^\s,]+(?:\.[a-z]+)?)/i);
+  const createMatch = lower.match(/(?:stw[óo]rz|utw[óo]rz|stworz|utworz|create|napisz|write|zr[óo]b|zrob)\s+(?:plik\s+)?(.+)/i);
   if (createMatch) {
-    return { handled: true, action: 'CREATE', target: createMatch[1] };
+    return { handled: true, action: 'CREATE', target: deriveCreateTarget(createMatch[1]) };
   }
   
   // APPEND patterns: require verb + target + payload (after ':')

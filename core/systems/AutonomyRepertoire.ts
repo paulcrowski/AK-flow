@@ -210,83 +210,29 @@ export function calculateGroundingScore(
 
 // ═══════════════════════════════════════════════════════════════════════════
 // ACTION SELECTION
-// ═══════════════════════════════════════════════════════════════════════════
-
 /**
  * Select appropriate autonomous action based on context
  */
 export function selectAction(ctx: UnifiedContext): ActionDecision {
   const grounding = analyzeGrounding(ctx);
-  const { exploreMinSilenceSec } = getAutonomyConfig();
-  
-  // Priority 1: If user needs clarification, CLARIFY
-  if (grounding.needsClarification && grounding.hasActiveTopic) {
+  getAutonomyConfig();
+
+  const pendingWork = findPendingWork();
+  if (pendingWork) {
     return {
-      action: 'CLARIFY',
+      action: 'WORK',
       allowed: true,
-      reason: 'User message suggests need for clarification',
-      groundingScore: 0.9,
-      suggestedPrompt: buildActionPrompt('CLARIFY', ctx, grounding)
+      reason: `Pending work: ${pendingWork.artifactName} (${pendingWork.reason})`,
+      groundingScore: 0.6,
+      suggestedPrompt: buildActionPrompt('WORK', ctx, grounding, pendingWork)
     };
-  }
-  
-  // Priority 2: If conversation is long and complex, offer SUMMARIZE
-  if (grounding.conversationDepth >= CONFIG.SUMMARIZE_MIN_TURNS && !grounding.isConversationStale) {
-    return {
-      action: 'SUMMARIZE',
-      allowed: true,
-      reason: `Conversation has ${grounding.conversationDepth} exchanges, may benefit from summary`,
-      groundingScore: 0.7,
-      suggestedPrompt: buildActionPrompt('SUMMARIZE', ctx, grounding)
-    };
-  }
-  
-  // Priority 3: If there's an active topic, CONTINUE
-  if (grounding.hasActiveTopic && !grounding.isConversationStale) {
-    return {
-      action: 'CONTINUE',
-      allowed: true,
-      reason: `Active topic: "${grounding.topicSummary}"`,
-      groundingScore: 0.8,
-      suggestedPrompt: buildActionPrompt('CONTINUE', ctx, grounding)
-    };
-  }
-  
-  // Priority 4: P0.1 Work-First - prefer WORK if pending exists, otherwise EXPLORE when allowed
-  if (!grounding.hasActiveTopic || grounding.isConversationStale) {
-    if (grounding.silenceDurationSec >= exploreMinSilenceSec) {
-      const pendingWork = findPendingWork();
-      if (pendingWork) {
-        return {
-          action: 'WORK',
-          allowed: true,
-          reason: `Pending work: ${pendingWork.artifactName} (${pendingWork.reason})`,
-          groundingScore: 0.6,
-          suggestedPrompt: buildActionPrompt('WORK', ctx, grounding, pendingWork)
-        };
-      }
-      return {
-        action: 'EXPLORE',
-        allowed: true,
-        reason: 'No active topic and silence threshold met, exploring new topic',
-        groundingScore: 0.4,
-        suggestedPrompt: buildActionPrompt('EXPLORE', ctx, grounding)
-      };
-    } else {
-      return {
-        action: 'SILENCE',
-        allowed: true,
-        reason: `EXPLORE blocked: silence ${grounding.silenceDurationSec.toFixed(0)}s < ${exploreMinSilenceSec}s required`,
-        groundingScore: 0
-      };
-    }
   }
   
   // Default: SILENCE
   return {
     action: 'SILENCE',
     allowed: true,
-    reason: 'No appropriate action available',
+    reason: 'No pending work',
     groundingScore: 0
   };
 }

@@ -60,6 +60,14 @@ describe('IntentContract', () => {
 });
 
 describe('P0.1.1 Action-First intent detection', () => {
+    it('CREATE: should accept "utworz" (no diacritics) and derive filename from phrase', () => {
+        const r = detectActionableIntentForTesting('utworz plik o kotkach');
+        expect(r.handled).toBe(true);
+        expect(r.action).toBe('CREATE');
+        expect(String(r.target || '')).toMatch(/\.md$/);
+        expect(String(r.target || '')).toContain('kotkach');
+    });
+
     it('APPEND: verb + target + payload required', () => {
         const r = detectActionableIntentForTesting('dopisz do note.md: hello');
         expect(r.handled).toBe(true);

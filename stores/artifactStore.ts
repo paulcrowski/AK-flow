@@ -31,6 +31,10 @@ export type EvidenceEntry =
       hash: string;
     };
 
+export type ArtifactRefResult =
+  | { ok: true; id: string; nameHint?: string }
+  | { ok: false; code: 'NOT_FOUND' | 'AMBIGUOUS'; userMessage: string };
+
 const MAX_ARTIFACT_CHARS_PER_OP = 50_000;
 const MAX_EVIDENCE = 5;
 
@@ -79,119 +83,125 @@ type ArtifactStoreState = {
 const isTestEnv = typeof process !== 'undefined' && process.env.NODE_ENV === 'test';
 
 const createStore = (set: any, get: any): ArtifactStoreState => ({
-      artifactsById: {},
-      order: [],
-      evidence: [],
+  artifactsById: {},
+  order: [],
+  evidence: [],
 
-      create: (name: string, content: string) => {
-        const safeName = String(name || '').trim() || 'artifact.txt';
-        const now = Date.now();
-        const id = `art-${generateUUID()}`;
-        const artifact: Artifact = {
-          id,
-          name: safeName,
-          content: clampAppendDelta(content),
-          createdAt: now,
-          updatedAt: now,
-          status: 'draft'
-        };
+  create: (name: string, content: string) => {
+    const safeName = String(name || '').trim() || 'artifact.txt';
+    const now = Date.now();
+    const id = `art-${generateUUID()}`;
+    const artifact: Artifact = {
+      id,
+      name: safeName,
+      content: clampAppendDelta(content),
+      createdAt: now,
+      updatedAt: now,
+      status: 'draft'
+    };
 
-        set((prev) => ({
-          artifactsById: { ...prev.artifactsById, [id]: artifact },
-          order: [id, ...prev.order.filter((x) => x !== id)]
-        }));
+    set((prev) => ({
+      artifactsById: { ...prev.artifactsById, [id]: artifact },
+      order: [id, ...prev.order.filter((x) => x !== id)]
+    }));
 
-        return id;
-      },
+    return id;
+  },
 
-      append: (id: string, content: string) => {
-        const key = ensureArtifactId(id);
-        const cur = get().artifactsById[key];
-        if (!cur) throw new Error('ARTIFACT_NOT_FOUND');
-        const delta = clampAppendDelta(content);
-        const nextContent = (cur.content || '') + delta;
-        const now = Date.now();
-        const updated: Artifact = { ...cur, content: nextContent, updatedAt: now };
+  append: (id: string, content: string) => {
+    const key = ensureArtifactId(id);
+    const state = get() as ArtifactStoreState;
+    const cur = state.artifactsById[key];
+    if (!cur) throw new Error('ARTIFACT_NOT_FOUND');
+    const delta = clampAppendDelta(content);
+    const nextContent = (cur.content || '') + delta;
+    const now = Date.now();
+    const updated: Artifact = { ...cur, content: nextContent, updatedAt: now };
 
-        set((prev) => ({
-          artifactsById: { ...prev.artifactsById, [key]: updated },
-          order: [key, ...prev.order.filter((x) => x !== key)]
-        }));
-      },
+    set((prev) => ({
+      artifactsById: { ...prev.artifactsById, [key]: updated },
+      order: [key, ...prev.order.filter((x) => x !== key)]
+    }));
+  },
 
-      replace: (id: string, content: string) => {
-        const key = ensureArtifactId(id);
-        const cur = get().artifactsById[key];
-        if (!cur) throw new Error('ARTIFACT_NOT_FOUND');
-        const now = Date.now();
-        const updated: Artifact = { ...cur, content: clampAppendDelta(content), updatedAt: now };
+  replace: (id: string, content: string) => {
+    const key = ensureArtifactId(id);
+    const state = get() as ArtifactStoreState;
+    const cur = state.artifactsById[key];
+    if (!cur) throw new Error('ARTIFACT_NOT_FOUND');
+    const now = Date.now();
+    const updated: Artifact = { ...cur, content: clampAppendDelta(content), updatedAt: now };
 
-        set((prev) => ({
-          artifactsById: { ...prev.artifactsById, [key]: updated },
-          order: [key, ...prev.order.filter((x) => x !== key)]
-        }));
-      },
+    set((prev) => ({
+      artifactsById: { ...prev.artifactsById, [key]: updated },
+      order: [key, ...prev.order.filter((x) => x !== key)]
+    }));
+  },
 
-      markComplete: (id: string, complete: boolean) => {
-        const key = ensureArtifactId(id);
-        const cur = get().artifactsById[key];
-        if (!cur) throw new Error('ARTIFACT_NOT_FOUND');
-        const now = Date.now();
-        const updated: Artifact = { ...cur, status: complete ? 'complete' : 'draft', updatedAt: now };
+  markComplete: (id: string, complete: boolean) => {
+    const key = ensureArtifactId(id);
+    const state = get() as ArtifactStoreState;
+    const cur = state.artifactsById[key];
+    if (!cur) throw new Error('ARTIFACT_NOT_FOUND');
+    const now = Date.now();
+    const updated: Artifact = { ...cur, status: complete ? 'complete' : 'draft', updatedAt: now };
 
-        set((prev) => ({
-          artifactsById: { ...prev.artifactsById, [key]: updated },
-          order: [key, ...prev.order.filter((x) => x !== key)]
-        }));
-      },
+    set((prev) => ({
+      artifactsById: { ...prev.artifactsById, [key]: updated },
+      order: [key, ...prev.order.filter((x) => x !== key)]
+    }));
+  },
 
-      remove: (id: string) => {
-        const key = ensureArtifactId(id);
-        const exists = get().artifactsById[key];
-        if (!exists) throw new Error('ARTIFACT_NOT_FOUND');
-        set((prev) => {
-          const nextArtifacts = { ...prev.artifactsById };
-          delete nextArtifacts[key];
-          return {
-            artifactsById: nextArtifacts,
-            order: prev.order.filter((x) => x !== key),
-            evidence: prev.evidence.filter((e) => (e as any).artifactId !== key)
-          };
-        });
-      },
-
-      get: (id: string) => {
-        const key = ensureArtifactId(id);
-        return get().artifactsById[key] || null;
-      },
-
-      getByName: (name: string) => {
-        const target = String(name || '').trim().toLowerCase();
-        if (!target) return [];
-        return Object.values(get().artifactsById).filter((a) => a.name.toLowerCase() === target);
-      },
-
-      list: () => {
-        const { order, artifactsById } = get();
-        return order.map((id) => artifactsById[id]).filter(Boolean);
-      },
-
-      addEvidence: (e: EvidenceEntry) => {
-        const ts = typeof (e as any)?.ts === 'number' ? (e as any).ts : Date.now();
-        const normalized: EvidenceEntry = { ...(e as any), ts };
-        set((prev) => ({
-          evidence: [normalized, ...prev.evidence].slice(0, MAX_EVIDENCE)
-        }));
-      },
-
-      clearEvidence: () => {
-        set({ evidence: [] });
-      },
-
-      resetForTesting: () => {
-        set({ artifactsById: {}, order: [], evidence: [] });
-      }
+  remove: (id: string) => {
+    const key = ensureArtifactId(id);
+    const state = get() as ArtifactStoreState;
+    const exists = state.artifactsById[key];
+    if (!exists) throw new Error('ARTIFACT_NOT_FOUND');
+    set((prev) => {
+      const nextArtifacts = { ...prev.artifactsById };
+      delete nextArtifacts[key];
+      return {
+        artifactsById: nextArtifacts,
+        order: prev.order.filter((x) => x !== key),
+        evidence: prev.evidence.filter((e) => (e as any).artifactId !== key)
+      };
     });
+  },
+
+  get: (id: string) => {
+    const key = ensureArtifactId(id);
+    const state = get() as ArtifactStoreState;
+    return state.artifactsById[key] || null;
+  },
+
+  getByName: (name: string) => {
+    const target = String(name || '').trim().toLowerCase();
+    if (!target) return [];
+    const state = get() as ArtifactStoreState;
+    return Object.values(state.artifactsById).filter((a) => a.name.toLowerCase() === target);
+  },
+
+  list: () => {
+    const state = get() as ArtifactStoreState;
+    return state.order.map((id) => state.artifactsById[id]).filter(Boolean);
+  },
+
+  addEvidence: (e: EvidenceEntry) => {
+    const ts = typeof (e as any)?.ts === 'number' ? (e as any).ts : Date.now();
+    const normalized: EvidenceEntry = { ...(e as any), ts };
+    set((prev) => ({
+      evidence: [normalized, ...prev.evidence].slice(0, MAX_EVIDENCE)
+    }));
+  },
+
+  clearEvidence: () => {
+    set({ evidence: [] });
+  },
+
+  resetForTesting: () => {
+    set({ artifactsById: {}, order: [], evidence: [] });
+  }
+});
 
 export const useArtifactStore = isTestEnv
   ? create<ArtifactStoreState>()(createStore as any)
@@ -201,6 +211,58 @@ export const useArtifactStore = isTestEnv
         storage: createJSONStorage(() => localStorage)
       })
     );
+
+function normalizeArtifactRefInput(refRaw: string): string {
+  let s = String(refRaw || '').trim();
+  if (
+    (s.startsWith('<') && s.endsWith('>')) ||
+    (s.startsWith('"') && s.endsWith('"')) ||
+    (s.startsWith("'") && s.endsWith("'")) ||
+    (s.startsWith('`') && s.endsWith('`'))
+  ) {
+    s = s.slice(1, -1).trim();
+  }
+  return s.replace(/\s+/g, ' ');
+}
+
+export function normalizeArtifactRef(refRaw: string): ArtifactRefResult {
+  const store = useArtifactStore.getState();
+  const raw = normalizeArtifactRefInput(refRaw);
+
+  if (raw.startsWith('art-')) return { ok: true, id: raw };
+  if (!raw) {
+    return {
+      ok: false,
+      code: 'NOT_FOUND',
+      userMessage: `Nie znalazłem artefaktu ''. Użyj ID (art-123) albo utwórz nowy plik.`
+    };
+  }
+
+  const candidates: string[] = [raw];
+  if (raw.toLowerCase().endsWith('.md')) {
+    candidates.push(raw.slice(0, -3));
+  } else {
+    candidates.push(`${raw}.md`);
+  }
+
+  for (const nameCandidate of candidates) {
+    const byName = store.getByName(nameCandidate);
+    if (byName.length === 1) return { ok: true, id: byName[0].id, nameHint: byName[0].name };
+    if (byName.length > 1) {
+      return {
+        ok: false,
+        code: 'AMBIGUOUS',
+        userMessage: `Nazwa artefaktu '${nameCandidate}' jest niejednoznaczna. Użyj ID (art-123).`
+      };
+    }
+  }
+
+  return {
+    ok: false,
+    code: 'NOT_FOUND',
+    userMessage: `Nie znalazłem artefaktu '${raw}'. Użyj ID (art-123) albo utwórz nowy plik.`
+  };
+}
 
 export function hashArtifactContent(content: string): string {
   return hashText(String(content || ''));

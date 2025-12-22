@@ -108,6 +108,10 @@ function onAutonomyResult(success: boolean): void {
   }
 }
 
+function onAutonomyNoop(): void {
+  autonomyFailureState.lastAttemptAt = Date.now();
+}
+
 // For testing
 export function resetAutonomyBackoff(): void {
   autonomyFailureState.lastAttemptAt = 0;
@@ -252,8 +256,7 @@ export async function runAutonomousVolitionStep(input: {
 
   if (actionDecision.action === 'SILENCE') {
     if (shouldLog) callbacks.onThought(`[AUTONOMY_SILENCE] ${actionDecision.reason}`);
-    onAutonomyResult(false); // P0.1: Failure - increment backoff
-    if (traceId) p0MetricAdd(traceId, { autonomyFail: 1 });
+    onAutonomyNoop();
     return;
   }
 
