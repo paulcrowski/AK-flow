@@ -482,6 +482,21 @@ describe('P0 Tool Lifecycle', () => {
 	    if (error) expect(String(error.payload?.error || '')).not.toContain('ARTIFACT_ID_INVALID');
 	  });
 
+	  it('APPEND should treat note same as note.md', async () => {
+	    const store = useArtifactStore.getState();
+	    store.resetForTesting();
+	    store.create('note.md', 'hello');
+
+	    const processOutput = createProcessOutputForTools(mockDeps);
+	    await processOutput('[APPEND: note] world');
+
+	    const updated = store.getByName('note.md')[0];
+	    expect(updated.content).toContain('world');
+	    const error = getEvents().find((e) => e.type === PacketType.TOOL_ERROR && e.payload?.tool === 'APPEND');
+	    if (error) expect(String(error.payload?.error || '')).not.toContain('ARTIFACT_ID_INVALID');
+	  });
+
+
 	  it('APPEND missing.md should emit controlled TOOL_ERROR (NOT_FOUND) and not throw ARTIFACT_ID_INVALID', async () => {
 	    const store = useArtifactStore.getState();
 	    store.resetForTesting();
@@ -500,8 +515,8 @@ describe('P0 Tool Lifecycle', () => {
     it('should publish P0_METRIC with required fields', async () => {
       const traceId = 'trace_test_p0_metric';
       p0MetricStartTick(traceId, 123);
-      p0MetricAdd(traceId, { artifactResolveAttempt: 1, artifactResolveSuccess: 1, actionFirstTriggered: 1, actionType: 'READ' });
-      p0MetricAdd(traceId, { autonomyCooldownMs: 25000, autonomyConsecutiveFailures: 2, autonomyAttempt: 1, autonomyFail: 1, parseFailCount: 1, workFirstPendingFound: false });
+      p0MetricAdd(traceId, { artifactResolveAttempt: 1, artifactResolveSuccess: 1, actionFirstTriggered: 1, actionFirstExecuted: 1, actionType: 'READ' });
+      p0MetricAdd(traceId, { autonomyCooldownMs: 25000, autonomyConsecutiveFailures: 2, autonomyAttempt: 1, autonomyFail: 1, parseFailCount: 1, workFirstPendingFound: false, autonomyActionName: 'WORK', autonomyActionReason: 'pending' });
       publishP0Metric(traceId, Date.now());
 
       const e = eventBus.getHistory().find((x) => x.type === PacketType.SYSTEM_ALERT && x.traceId === traceId && x.payload?.event === 'P0_METRIC');
@@ -512,12 +527,15 @@ describe('P0 Tool Lifecycle', () => {
       expect(typeof p.artifactResolveSuccess).toBe('number');
       expect(typeof p.artifactResolveFail).toBe('number');
       expect(typeof p.actionFirstTriggered).toBe('number');
+      expect(typeof p.actionFirstExecuted).toBe('number');
       expect('actionType' in p).toBe(true);
       expect(typeof p.autonomyCooldownMs).toBe('number');
       expect(typeof p.autonomyConsecutiveFailures).toBe('number');
       expect(typeof p.autonomyAttempt).toBe('number');
       expect(typeof p.autonomySuccess).toBe('number');
       expect(typeof p.autonomyFail).toBe('number');
+      expect(typeof p.autonomyActionName).toBe('string');
+      expect(typeof p.autonomyActionReason).toBe('string');
       expect('workFirstPendingFound' in p).toBe(true);
       expect(typeof p.parseFailCount).toBe('number');
     });

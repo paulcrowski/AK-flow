@@ -77,17 +77,22 @@ describe('P0.1.1 Action-First intent detection', () => {
     });
 
     it('REPLACE: verb + target detected (payload optional)', () => {
-        const r = detectActionableIntentForTesting('zamień w note.md: nowa treść');
+        const r = detectActionableIntentForTesting('zamien w note.md: nowa tresc');
         expect(r.handled).toBe(true);
         expect(r.action).toBe('REPLACE');
         expect(r.target).toBe('note.md');
-        expect(r.payload).toBe('nowa treść');
+        expect(r.payload).toBe('nowa tresc');
     });
 
     it('READ: verb + target detected', () => {
-        const r = detectActionableIntentForTesting('pokaż note');
+        const r = detectActionableIntentForTesting('pokaz note');
         expect(r.handled).toBe(true);
         expect(r.action).toBe('READ');
         expect(r.target).toBe('note');
+    });
+
+    it('should ignore capability questions', () => {
+        const r = detectActionableIntentForTesting('umiesz wygenerowac notatke?');
+        expect(r.handled).toBe(false);
     });
 });

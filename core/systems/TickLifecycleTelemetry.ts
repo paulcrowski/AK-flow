@@ -9,12 +9,15 @@ type P0MetricState = {
     artifactResolveSuccess: number;
     artifactResolveFail: number;
     actionFirstTriggered: number;
+    actionFirstExecuted: number;
     actionType: string | null;
     autonomyAttempt: number;
     autonomySuccess: number;
     autonomyFail: number;
     autonomyCooldownMs: number;
     autonomyConsecutiveFailures: number;
+    autonomyActionName: string | null;
+    autonomyActionReason: string | null;
     workFirstPendingFound: boolean | null;
     parseFailCount: number;
 };
@@ -35,12 +38,15 @@ function emptyP0MetricState(): P0MetricState {
         artifactResolveSuccess: 0,
         artifactResolveFail: 0,
         actionFirstTriggered: 0,
+        actionFirstExecuted: 0,
         actionType: null,
         autonomyAttempt: 0,
         autonomySuccess: 0,
         autonomyFail: 0,
         autonomyCooldownMs: 0,
         autonomyConsecutiveFailures: 0,
+        autonomyActionName: null,
+        autonomyActionReason: null,
         workFirstPendingFound: null,
         parseFailCount: 0
     };
@@ -66,6 +72,7 @@ export function p0MetricAdd(traceId: string, patch: Partial<P0MetricState>): voi
         artifactResolveSuccess: s.artifactResolveSuccess + (patch.artifactResolveSuccess ?? 0),
         artifactResolveFail: s.artifactResolveFail + (patch.artifactResolveFail ?? 0),
         actionFirstTriggered: s.actionFirstTriggered + (patch.actionFirstTriggered ?? 0),
+        actionFirstExecuted: s.actionFirstExecuted + (patch.actionFirstExecuted ?? 0),
         autonomyAttempt: s.autonomyAttempt + (patch.autonomyAttempt ?? 0),
         autonomySuccess: s.autonomySuccess + (patch.autonomySuccess ?? 0),
         autonomyFail: s.autonomyFail + (patch.autonomyFail ?? 0),

@@ -3,10 +3,13 @@ import { CortexService } from '../../../services/gemini';
 import { TickCommitter } from '../TickCommitter';
 import { LimbicSystem } from '../LimbicSystem';
 import { CortexSystem } from '../CortexSystem';
-import { useArtifactStore } from '../../../stores/artifactStore';
+import { useArtifactStore, normalizeArtifactRef } from '../../../stores/artifactStore';
 import { SYSTEM_CONFIG } from '../../config/systemConfig';
 import { getCurrentTraceId } from '../../trace/TraceContext';
 import { p0MetricAdd } from '../TickLifecycleTelemetry';
+import { eventBus } from '../../EventBus';
+import { AgentType, PacketType } from '../../../types';
+import { generateUUID } from '../../../utils/uuid';
 
 // P0.1 COMMIT 3: Action-First Policy
 // Feature flag - can be disabled if causing issues
@@ -30,15 +33,6 @@ function updateContextAfterAction(ctx: any): void {
   ctx.ticksSinceLastReward = 0;
 }
 
-function normalizeArtifactNameCandidates(rawTarget: string): string[] {
-  const t = String(rawTarget || '').trim();
-  if (!t) return [];
-  if (t.startsWith('art-')) return [t];
-  const lower = t.toLowerCase();
-  if (lower.endsWith('.md')) return [t, t.slice(0, -3)];
-  return [t, `${t}.md`];
-}
-
 function splitTargetAndPayload(input: string): { target: string; payload: string } {
   const idx = input.indexOf(':');
   if (idx < 0) return { target: input.trim(), payload: '' };
@@ -49,7 +43,22 @@ function splitTargetAndPayload(input: string): { target: string; payload: string
 }
 
 function detectActionableIntent(input: string): ActionFirstResult {
-  const lower = input.toLowerCase().trim();
+  const raw = String(input || '');
+  const trimmed = raw.trim();
+  const normalized = trimmed
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
+
+  if (
+    raw.includes('?') ||
+    normalized.startsWith('czy ') ||
+    normalized.includes('umiesz') ||
+    normalized.includes('mozesz') ||
+    normalized.includes('potrafisz')
+  ) {
+    return { handled: false };
+  }
 
   const slugify = (s: string) => {
     const raw = String(s || '')
@@ -75,15 +84,15 @@ function detectActionableIntent(input: string): ActionFirstResult {
     return `${slug || 'artifact'}.md`;
   };
   
-  // CREATE patterns: "stwórz plik X", "create file X", "napisz X", "write X"
-  const createMatch = lower.match(/(?:stw[óo]rz|utw[óo]rz|stworz|utworz|create|napisz|write|zr[óo]b|zrob)\s+(?:plik\s+)?(.+)/i);
+  // CREATE patterns: "stworz/utworz/zapisz plik X"
+  const createMatch = normalized.match(/(?:stworz|utworz|zapisz)\s+(?:plik\s+)?(.+)/i);
   if (createMatch) {
     return { handled: true, action: 'CREATE', target: deriveCreateTarget(createMatch[1]) };
   }
   
   // APPEND patterns: require verb + target + payload (after ':')
-  // Examples: "dopisz do note.md: ...", "dodaj do note: ...", "dorzuc do note.md: ..."
-  const appendMatch = lower.match(/(?:dopisz|dodaj|dorzuc|append|add)\s+(?:do|to)\s+(.+)/i);
+  // Examples: "dopisz do note.md: ...", "dodaj do note: ..."
+  const appendMatch = normalized.match(/(?:dopisz|dodaj)\s+(?:do)\s+(.+)/i);
   if (appendMatch) {
     const { target, payload } = splitTargetAndPayload(String(appendMatch[1] || ''));
     if (target && payload) return { handled: true, action: 'APPEND', target, payload };
@@ -91,14 +100,14 @@ function detectActionableIntent(input: string): ActionFirstResult {
 
   // REPLACE patterns: require verb + target; payload optional.
   // If payload is present after ':', we'll use it as new full content.
-  const replaceMatch = lower.match(/(?:zamień|zamien|zastąp|zastap|podmień|podmien|replace)\s+(?:w|w\s+pliku|in)\s+(.+)/i);
+  const replaceMatch = normalized.match(/(?:zamien|zastap)\s+(?:w|w\s+pliku)\s+(.+)/i);
   if (replaceMatch) {
     const { target, payload } = splitTargetAndPayload(String(replaceMatch[1] || ''));
     if (target) return { handled: true, action: 'REPLACE', target, payload };
   }
   
-  // READ patterns: "pokaż X", "read X", "otwórz X", "open X"
-  const readMatch = lower.match(/(?:pokaż|pokaz|read|otwórz|otworz|open|wyświetl|wyswietl|show)\s+([^\s,]+)/i);
+  // READ patterns: "pokaz X", "otworz X"
+  const readMatch = normalized.match(/(?:pokaz|otworz)\s+([^\s,]+)/i);
   if (readMatch) {
     return { handled: true, action: 'READ', target: readMatch[1] };
   }
@@ -139,98 +148,142 @@ export async function runReactiveStep(input: {
     if (actionIntent.handled && actionIntent.action && actionIntent.target) {
       const store = useArtifactStore.getState();
       const target = actionIntent.target;
-      
+
+      const resolveRef = (refRaw: string) => {
+        const traceId = getCurrentTraceId();
+        if (traceId) p0MetricAdd(traceId, { artifactResolveAttempt: 1 });
+        const resolved = normalizeArtifactRef(refRaw);
+        if (traceId) {
+          p0MetricAdd(traceId, resolved.ok ? { artifactResolveSuccess: 1 } : { artifactResolveFail: 1 });
+        }
+        return resolved;
+      };
+
+      const emitToolIntent = (tool: string, arg: string) => {
+        const intentId = generateUUID();
+        eventBus.publish({
+          id: intentId,
+          timestamp: Date.now(),
+          source: AgentType.CORTEX_FLOW,
+          type: PacketType.TOOL_INTENT,
+          payload: { tool, arg },
+          priority: 0.8
+        });
+        return intentId;
+      };
+
+      const emitToolResult = (tool: string, intentId: string, payload: Record<string, unknown>) => {
+        eventBus.publish({
+          id: generateUUID(),
+          timestamp: Date.now(),
+          source: AgentType.CORTEX_FLOW,
+          type: PacketType.TOOL_RESULT,
+          payload: { tool, intentId, ...payload },
+          priority: 0.8
+        });
+      };
+
+      const emitToolError = (tool: string, intentId: string, payload: Record<string, unknown>, error: string) => {
+        eventBus.publish({
+          id: generateUUID(),
+          timestamp: Date.now(),
+          source: AgentType.CORTEX_FLOW,
+          type: PacketType.TOOL_ERROR,
+          payload: { tool, intentId, ...payload, error },
+          priority: 0.9
+        });
+      };
+
       try {
         if (actionIntent.action === 'CREATE') {
-          const id = store.create(target, '');
+          const intentId = emitToolIntent('CREATE', target);
           const traceId = getCurrentTraceId();
           if (traceId) p0MetricAdd(traceId, { actionFirstTriggered: 1, actionType: 'CREATE' });
-          callbacks.onMessage('assistant', `Utworzyłem ${target} (${id}). Poprawić coś?`, 'speech');
+          try {
+            const id = store.create(target, '');
+            if (traceId) p0MetricAdd(traceId, { actionFirstExecuted: 1 });
+            emitToolResult('CREATE', intentId, { id, name: target });
+            callbacks.onMessage('assistant', `Utworzy?,em ${target} (${id}). Poprawi?? co?>?`, 'speech');
+            updateContextAfterAction(ctx);
+            return;
+          } catch (e) {
+            emitToolError('CREATE', intentId, { arg: target }, (e as Error)?.message || 'unknown');
+            return;
+          }
+        }
+
+        if (actionIntent.action === 'READ') {
+          const resolved = resolveRef(target);
+          const intentId = emitToolIntent('READ_ARTIFACT', resolved.ok ? resolved.id : target);
+          const traceId = getCurrentTraceId();
+          if (traceId) p0MetricAdd(traceId, { actionFirstTriggered: 1, actionType: 'READ' });
+          if (!resolved.ok) {
+            emitToolError('READ_ARTIFACT', intentId, { arg: target }, resolved.userMessage);
+            callbacks.onMessage('assistant', resolved.userMessage, 'speech');
+            return;
+          }
+          const art = store.get(resolved.id);
+          if (!art) {
+            emitToolError('READ_ARTIFACT', intentId, { arg: resolved.id }, 'ARTIFACT_NOT_FOUND');
+            return;
+          }
+          if (traceId) p0MetricAdd(traceId, { actionFirstExecuted: 1 });
+          emitToolResult('READ_ARTIFACT', intentId, { id: art.id, name: art.name, length: art.content.length });
+          callbacks.onMessage('assistant', `${art.name}\n\n${art.content || '(pusty)'}`, 'speech');
           updateContextAfterAction(ctx);
           return;
         }
-        
-        if (actionIntent.action === 'READ') {
-          const candidates = normalizeArtifactNameCandidates(target);
-          for (const c of candidates) {
-            if (c.startsWith('art-')) {
-              const art = store.get(c);
-              if (art) {
-                const traceId = getCurrentTraceId();
-                if (traceId) p0MetricAdd(traceId, { actionFirstTriggered: 1, actionType: 'READ' });
-                callbacks.onMessage('assistant', `${art.name}:\n\n${art.content || '(pusty)'}`, 'speech');
-                updateContextAfterAction(ctx);
-                return;
-              }
-              continue;
+
+        if (actionIntent.action === 'APPEND') {
+          const payload = String(actionIntent.payload || '').trim();
+          if (!payload) {
+            // No payload - fall through to LLM
+          } else {
+            const resolved = resolveRef(target);
+            const intentId = emitToolIntent('APPEND', resolved.ok ? resolved.id : target);
+            const traceId = getCurrentTraceId();
+            if (traceId) p0MetricAdd(traceId, { actionFirstTriggered: 1, actionType: 'APPEND' });
+            if (!resolved.ok) {
+              emitToolError('APPEND', intentId, { arg: target }, resolved.userMessage);
+              callbacks.onMessage('assistant', resolved.userMessage, 'speech');
+              return;
             }
-            const byName = store.getByName(c);
-            if (byName.length === 1) {
-              const art = byName[0];
-              const traceId = getCurrentTraceId();
-              if (traceId) p0MetricAdd(traceId, { actionFirstTriggered: 1, actionType: 'READ' });
-              callbacks.onMessage('assistant', `${art.name}:\n\n${art.content || '(pusty)'}`, 'speech');
+            try {
+              store.append(resolved.id, `\n\n${payload}`);
+              if (traceId) p0MetricAdd(traceId, { actionFirstExecuted: 1 });
+              emitToolResult('APPEND', intentId, { id: resolved.id });
+              callbacks.onMessage('assistant', `Dopisa?,em do ${resolved.nameHint || resolved.id}. Poprawi?? co?>?`, 'speech');
               updateContextAfterAction(ctx);
+              return;
+            } catch (e) {
+              emitToolError('APPEND', intentId, { arg: resolved.id }, (e as Error)?.message || 'unknown');
               return;
             }
           }
-          // Not found - fall through to LLM
-        }
-        
-        if (actionIntent.action === 'APPEND') {
-          const payload = String(actionIntent.payload || '').trim();
-          if (payload) {
-            const candidates = normalizeArtifactNameCandidates(target);
-            for (const c of candidates) {
-              if (c.startsWith('art-')) {
-                store.append(c, `\n\n${payload}`);
-                const traceId = getCurrentTraceId();
-                if (traceId) p0MetricAdd(traceId, { actionFirstTriggered: 1, actionType: 'APPEND' });
-                callbacks.onMessage('assistant', `Dopisałem do ${c}. Poprawić coś?`, 'speech');
-                updateContextAfterAction(ctx);
-                return;
-              }
-              const byName = store.getByName(c);
-              if (byName.length === 1) {
-                store.append(byName[0].id, `\n\n${payload}`);
-                const traceId = getCurrentTraceId();
-                if (traceId) p0MetricAdd(traceId, { actionFirstTriggered: 1, actionType: 'APPEND' });
-                callbacks.onMessage('assistant', `Dopisałem do ${byName[0].name}. Poprawić coś?`, 'speech');
-                updateContextAfterAction(ctx);
-                return;
-              }
-            }
-          }
-          // No payload or not found - fall through to LLM
         }
 
         if (actionIntent.action === 'REPLACE') {
-          const candidates = normalizeArtifactNameCandidates(target);
-          let replaced = false;
-          for (const c of candidates) {
-            if (c.startsWith('art-')) {
-              const next = String(actionIntent.payload || '').trim() || `TODO: REPLACE requested\n\n${userInput}`;
-              store.replace(c, next);
-              const traceId = getCurrentTraceId();
-              if (traceId) p0MetricAdd(traceId, { actionFirstTriggered: 1, actionType: 'REPLACE' });
-              callbacks.onMessage('assistant', `Podmieniłem treść w ${c}. Poprawić coś?`, 'speech');
-              updateContextAfterAction(ctx);
-              return;
-            }
-            const byName = store.getByName(c);
-            if (byName.length === 1) {
-              const next = String(actionIntent.payload || '').trim() || `TODO: REPLACE requested\n\n${userInput}`;
-              store.replace(byName[0].id, next);
-              const traceId = getCurrentTraceId();
-              if (traceId) p0MetricAdd(traceId, { actionFirstTriggered: 1, actionType: 'REPLACE' });
-              callbacks.onMessage('assistant', `Podmieniłem treść w ${byName[0].name}. Poprawić coś?`, 'speech');
-              updateContextAfterAction(ctx);
-              replaced = true;
-              break;
-            }
+          const resolved = resolveRef(target);
+          const next = String(actionIntent.payload || '').trim() || `TODO: REPLACE requested\n\n${userInput}`;
+          const intentId = emitToolIntent('REPLACE', resolved.ok ? resolved.id : target);
+          const traceId = getCurrentTraceId();
+          if (traceId) p0MetricAdd(traceId, { actionFirstTriggered: 1, actionType: 'REPLACE' });
+          if (!resolved.ok) {
+            emitToolError('REPLACE', intentId, { arg: target }, resolved.userMessage);
+            callbacks.onMessage('assistant', resolved.userMessage, 'speech');
+            return;
           }
-          if (replaced) return;
-          // Not found - fall through to LLM
+          try {
+            store.replace(resolved.id, next);
+            if (traceId) p0MetricAdd(traceId, { actionFirstExecuted: 1 });
+            emitToolResult('REPLACE', intentId, { id: resolved.id });
+            callbacks.onMessage('assistant', `Podmieni?,em tre?>?? w ${resolved.nameHint || resolved.id}. Poprawi?? co?>?`, 'speech');
+            updateContextAfterAction(ctx);
+            return;
+          } catch (e) {
+            emitToolError('REPLACE', intentId, { arg: resolved.id }, (e as Error)?.message || 'unknown');
+            return;
+          }
         }
       } catch (e) {
         // Action failed, fall through to normal processing
