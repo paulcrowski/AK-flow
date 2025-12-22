@@ -11,6 +11,7 @@ import * as SomaSystem from '../core/systems/SomaSystem';
 import * as LimbicSystem from '../core/systems/LimbicSystem';
 import { VISUAL_BASE_COOLDOWN_MS, VISUAL_ENERGY_COST_BASE } from '../core/constants';
 import { useArtifactStore, hashArtifactContent } from '../stores/artifactStore';
+import { SYSTEM_CONFIG } from '../core/config/systemConfig';
 import { consumeWorkspaceTags } from './workspaceTools';
 import { scheduleSoftTimeout, searchInFlight, visualInFlight, withTimeout } from './toolRuntime';
 
@@ -83,32 +84,81 @@ export const createProcessOutputForTools = (deps: ToolParserDeps) => {
       addMessage('assistant', `TOOL_ERROR: ${params.tool} :: ${params.error}`, 'thought');
     };
 
-    const resolveArtifactId = (header: string, opts: { autoCreate: boolean }) => {
-      const raw = normalizeArg(header);
+    const P011_NORMALIZE_ARTIFACT_REF_ENABLED =
+      (SYSTEM_CONFIG.features as Record<string, boolean>).P011_NORMALIZE_ARTIFACT_REF_ENABLED ?? true;
+
+    type ArtifactRefResult =
+      | { ok: true; id: string; nameHint?: string }
+      | { ok: false; code: 'NOT_FOUND' | 'AMBIGUOUS'; userMessage: string };
+
+    const isArtifactRefError = (r: ArtifactRefResult): r is Extract<ArtifactRefResult, { ok: false }> => !r.ok;
+
+    const normalizeArtifactRef = (refRaw: string): ArtifactRefResult => {
       const store = useArtifactStore.getState();
-      if (raw.startsWith('art-')) {
-        return { id: raw, created: false, name: raw };
+      const raw = normalizeArg(refRaw);
+      if (!P011_NORMALIZE_ARTIFACT_REF_ENABLED) {
+        return raw.startsWith('art-')
+          ? { ok: true, id: raw }
+          : {
+              ok: false,
+              code: 'NOT_FOUND',
+              userMessage: `Nie znalazłem artefaktu '${raw}'. Użyj ID (art-123) albo utwórz nowy plik.`
+            };
       }
-      const byName = store.getByName(raw);
-      if (byName.length === 1) return { id: byName[0].id, created: false, name: byName[0].name };
-      if (byName.length > 1) throw new Error('ARTIFACT_NAME_AMBIGUOUS');
-      if (!opts.autoCreate) throw new Error('ARTIFACT_NOT_FOUND');
-      const id = store.create(raw || 'artifact.txt', '');
-      return { id, created: true, name: raw || 'artifact.txt' };
+
+      if (raw.startsWith('art-')) return { ok: true, id: raw };
+      if (!raw) {
+        return {
+          ok: false,
+          code: 'NOT_FOUND',
+          userMessage: `Nie znalazłem artefaktu ''. Użyj ID (art-123) albo utwórz nowy plik.`
+        };
+      }
+
+      const candidates: string[] = [raw];
+      if (raw.toLowerCase().endsWith('.md')) {
+        candidates.push(raw.slice(0, -3));
+      } else {
+        candidates.push(`${raw}.md`);
+      }
+
+      for (const nameCandidate of candidates) {
+        const byName = store.getByName(nameCandidate);
+        if (byName.length === 1) return { ok: true, id: byName[0].id, nameHint: byName[0].name };
+        if (byName.length > 1) {
+          return {
+            ok: false,
+            code: 'AMBIGUOUS',
+            userMessage: `Nazwa artefaktu '${nameCandidate}' jest niejednoznaczna. Użyj ID (art-123).`
+          };
+        }
+      }
+
+      return {
+        ok: false,
+        code: 'NOT_FOUND',
+        userMessage: `Nie znalazłem artefaktu '${raw}'. Użyj ID (art-123) albo utwórz nowy plik.`
+      };
     };
 
     const handlePublishArtifact = async (artifactIdRaw: string) => {
       const tool = 'PUBLISH';
       const intentId = generateUUID();
-      const { id: resolvedId } = resolveArtifactId(artifactIdRaw, { autoCreate: false });
+      const resolved = normalizeArtifactRef(artifactIdRaw);
+      const argForIntent = isArtifactRefError(resolved) ? String(artifactIdRaw || '') : resolved.id;
       eventBus.publish({
         id: intentId,
         timestamp: Date.now(),
         source: AgentType.CORTEX_FLOW,
         type: PacketType.TOOL_INTENT,
-        payload: { tool, arg: resolvedId },
+        payload: { tool, arg: argForIntent },
         priority: 0.8
       });
+      if (isArtifactRefError(resolved)) {
+        emitToolError({ tool, intentId, payload: { arg: artifactIdRaw }, error: resolved.userMessage });
+        return;
+      }
+      const resolvedId = resolved.id;
       try {
         const store = useArtifactStore.getState();
         const art = store.get(resolvedId);
@@ -190,11 +240,12 @@ export const createProcessOutputForTools = (deps: ToolParserDeps) => {
           return;
         }
 
-        const { id, created, name } = resolveArtifactId(params.header, { autoCreate: true });
-        if (created) {
-          emitToolResult({ tool: 'CREATE', intentId, payload: { id, name } });
-          addMessage('assistant', `AUTO_CREATE_OK: ${id} (${name})`, 'tool_result');
+        const resolved = normalizeArtifactRef(params.header);
+        if (isArtifactRefError(resolved)) {
+          emitToolError({ tool, intentId, payload: { arg: params.header }, error: resolved.userMessage });
+          return;
         }
+        const id = resolved.id;
         if (params.kind === 'APPEND') {
           store.append(id, params.body);
           emitToolResult({ tool, intentId, payload: { id } });
@@ -225,8 +276,12 @@ export const createProcessOutputForTools = (deps: ToolParserDeps) => {
 
       try {
         const store = useArtifactStore.getState();
-        const { id } = resolveArtifactId(artifactId, { autoCreate: false });
-        const art = store.get(id);
+        const resolved = normalizeArtifactRef(artifactId);
+        if (isArtifactRefError(resolved)) {
+          emitToolError({ tool, intentId, payload: { arg: artifactId }, error: resolved.userMessage });
+          return;
+        }
+        const art = store.get(resolved.id);
         if (!art) throw new Error('ARTIFACT_NOT_FOUND');
         const hash = hashArtifactContent(art.content);
         store.addEvidence({ kind: 'artifact', ts: Date.now(), artifactId: art.id, name: art.name, hash });

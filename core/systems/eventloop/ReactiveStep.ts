@@ -4,15 +4,17 @@ import { TickCommitter } from '../TickCommitter';
 import { LimbicSystem } from '../LimbicSystem';
 import { CortexSystem } from '../CortexSystem';
 import { useArtifactStore } from '../../../stores/artifactStore';
+import { SYSTEM_CONFIG } from '../../config/systemConfig';
 
 // P0.1 COMMIT 3: Action-First Policy
 // Feature flag - can be disabled if causing issues
-const ACTION_FIRST_ENABLED = true;
+const ACTION_FIRST_ENABLED = (SYSTEM_CONFIG.features as Record<string, boolean>).P011_ACTION_FIRST_ENABLED ?? true;
 
 type ActionFirstResult = {
   handled: boolean;
-  action?: string;
+  action?: 'CREATE' | 'READ' | 'APPEND' | 'REPLACE';
   target?: string;
+  payload?: string;
   assumption?: string;
 };
 
@@ -26,6 +28,24 @@ function updateContextAfterAction(ctx: any): void {
   ctx.ticksSinceLastReward = 0;
 }
 
+function normalizeArtifactNameCandidates(rawTarget: string): string[] {
+  const t = String(rawTarget || '').trim();
+  if (!t) return [];
+  if (t.startsWith('art-')) return [t];
+  const lower = t.toLowerCase();
+  if (lower.endsWith('.md')) return [t, t.slice(0, -3)];
+  return [t, `${t}.md`];
+}
+
+function splitTargetAndPayload(input: string): { target: string; payload: string } {
+  const idx = input.indexOf(':');
+  if (idx < 0) return { target: input.trim(), payload: '' };
+  return {
+    target: input.slice(0, idx).trim(),
+    payload: input.slice(idx + 1).trim()
+  };
+}
+
 function detectActionableIntent(input: string): ActionFirstResult {
   const lower = input.toLowerCase().trim();
   
@@ -35,10 +55,20 @@ function detectActionableIntent(input: string): ActionFirstResult {
     return { handled: true, action: 'CREATE', target: createMatch[1] };
   }
   
-  // APPEND patterns: "dodaj do X", "append to X", "dopisz do X"
-  const appendMatch = lower.match(/(?:dodaj|dopisz|append|add)\s+(?:do|to)\s+([^\s,]+)/i);
+  // APPEND patterns: require verb + target + payload (after ':')
+  // Examples: "dopisz do note.md: ...", "dodaj do note: ...", "dorzuc do note.md: ..."
+  const appendMatch = lower.match(/(?:dopisz|dodaj|dorzuc|append|add)\s+(?:do|to)\s+(.+)/i);
   if (appendMatch) {
-    return { handled: true, action: 'APPEND', target: appendMatch[1] };
+    const { target, payload } = splitTargetAndPayload(String(appendMatch[1] || ''));
+    if (target && payload) return { handled: true, action: 'APPEND', target, payload };
+  }
+
+  // REPLACE patterns: require verb + target; payload optional.
+  // If payload is present after ':', we'll use it as new full content.
+  const replaceMatch = lower.match(/(?:zamień|zamien|zastąp|zastap|podmień|podmien|replace)\s+(?:w|w\s+pliku|in)\s+(.+)/i);
+  if (replaceMatch) {
+    const { target, payload } = splitTargetAndPayload(String(replaceMatch[1] || ''));
+    if (target) return { handled: true, action: 'REPLACE', target, payload };
   }
   
   // READ patterns: "pokaż X", "read X", "otwórz X", "open X"
@@ -48,6 +78,10 @@ function detectActionableIntent(input: string): ActionFirstResult {
   }
   
   return { handled: false };
+}
+
+export function detectActionableIntentForTesting(input: string): ActionFirstResult {
+  return detectActionableIntent(input);
 }
 
 export type TraceLike = {
@@ -89,15 +123,20 @@ export async function runReactiveStep(input: {
         }
         
         if (actionIntent.action === 'READ') {
-          const byName = store.getByName(target);
-          if (byName.length === 1) {
-            const art = byName[0];
-            callbacks.onMessage('assistant', `${art.name}:\n\n${art.content || '(pusty)'}`, 'speech');
-            updateContextAfterAction(ctx);
-            return;
-          } else if (target.startsWith('art-')) {
-            const art = store.get(target);
-            if (art) {
+          const candidates = normalizeArtifactNameCandidates(target);
+          for (const c of candidates) {
+            if (c.startsWith('art-')) {
+              const art = store.get(c);
+              if (art) {
+                callbacks.onMessage('assistant', `${art.name}:\n\n${art.content || '(pusty)'}`, 'speech');
+                updateContextAfterAction(ctx);
+                return;
+              }
+              continue;
+            }
+            const byName = store.getByName(c);
+            if (byName.length === 1) {
+              const art = byName[0];
               callbacks.onMessage('assistant', `${art.name}:\n\n${art.content || '(pusty)'}`, 'speech');
               updateContextAfterAction(ctx);
               return;
@@ -107,12 +146,51 @@ export async function runReactiveStep(input: {
         }
         
         if (actionIntent.action === 'APPEND') {
-          const byName = store.getByName(target);
-          if (byName.length === 1) {
-            // Found artifact, but need content from user - fall through to LLM
-            // LLM will generate content to append
+          const payload = String(actionIntent.payload || '').trim();
+          if (payload) {
+            const candidates = normalizeArtifactNameCandidates(target);
+            for (const c of candidates) {
+              if (c.startsWith('art-')) {
+                store.append(c, `\n\n${payload}`);
+                callbacks.onMessage('assistant', `Dopisałem do ${c}. Poprawić coś?`, 'speech');
+                updateContextAfterAction(ctx);
+                return;
+              }
+              const byName = store.getByName(c);
+              if (byName.length === 1) {
+                store.append(byName[0].id, `\n\n${payload}`);
+                callbacks.onMessage('assistant', `Dopisałem do ${byName[0].name}. Poprawić coś?`, 'speech');
+                updateContextAfterAction(ctx);
+                return;
+              }
+            }
           }
-          // Fall through to LLM for content generation
+          // No payload or not found - fall through to LLM
+        }
+
+        if (actionIntent.action === 'REPLACE') {
+          const candidates = normalizeArtifactNameCandidates(target);
+          let replaced = false;
+          for (const c of candidates) {
+            if (c.startsWith('art-')) {
+              const next = String(actionIntent.payload || '').trim() || `TODO: REPLACE requested\n\n${userInput}`;
+              store.replace(c, next);
+              callbacks.onMessage('assistant', `Podmieniłem treść w ${c}. Poprawić coś?`, 'speech');
+              updateContextAfterAction(ctx);
+              return;
+            }
+            const byName = store.getByName(c);
+            if (byName.length === 1) {
+              const next = String(actionIntent.payload || '').trim() || `TODO: REPLACE requested\n\n${userInput}`;
+              store.replace(byName[0].id, next);
+              callbacks.onMessage('assistant', `Podmieniłem treść w ${byName[0].name}. Poprawić coś?`, 'speech');
+              updateContextAfterAction(ctx);
+              replaced = true;
+              break;
+            }
+          }
+          if (replaced) return;
+          // Not found - fall through to LLM
         }
       } catch (e) {
         // Action failed, fall through to normal processing

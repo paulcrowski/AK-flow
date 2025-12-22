@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import type { DetectedIntent } from '../../types';
 import { parseDetectedIntent } from '../../core/systems/IntentContract';
+import { detectActionableIntentForTesting } from '../../core/systems/eventloop/ReactiveStep';
 
 describe('IntentContract', () => {
     const safeDefault: DetectedIntent = {
@@ -55,5 +56,30 @@ describe('IntentContract', () => {
         const r = parseDetectedIntent(text, safeDefault);
         expect(r.ok).toBe(true);
         expect(r.value.urgency).toBe('HIGH');
+    });
+});
+
+describe('P0.1.1 Action-First intent detection', () => {
+    it('APPEND: verb + target + payload required', () => {
+        const r = detectActionableIntentForTesting('dopisz do note.md: hello');
+        expect(r.handled).toBe(true);
+        expect(r.action).toBe('APPEND');
+        expect(r.target).toBe('note.md');
+        expect(r.payload).toBe('hello');
+    });
+
+    it('REPLACE: verb + target detected (payload optional)', () => {
+        const r = detectActionableIntentForTesting('zamień w note.md: nowa treść');
+        expect(r.handled).toBe(true);
+        expect(r.action).toBe('REPLACE');
+        expect(r.target).toBe('note.md');
+        expect(r.payload).toBe('nowa treść');
+    });
+
+    it('READ: verb + target detected', () => {
+        const r = detectActionableIntentForTesting('pokaż note');
+        expect(r.handled).toBe(true);
+        expect(r.action).toBe('READ');
+        expect(r.target).toBe('note');
     });
 });

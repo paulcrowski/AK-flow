@@ -11,6 +11,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { eventBus } from '../../core/EventBus';
 import { PacketType, CognitivePacket } from '../../types';
 import { createProcessOutputForTools, ToolParserDeps } from '../../utils/toolParser';
+import { useArtifactStore } from '../../stores/artifactStore';
 import { CortexService } from '../../services/gemini';
 import {
   downloadLibraryDocumentText,
@@ -465,5 +466,32 @@ describe('P0 Tool Lifecycle', () => {
       const error = getEvents().find((e) => e.type === PacketType.TOOL_ERROR && e.payload?.tool === 'PUBLISH');
       if (error) expect(String(error.payload?.error || '')).not.toContain('ARTIFACT_ID_INVALID');
     });
+
+	  it('APPEND should accept artifact name (note.md) and auto-resolve to id (no ARTIFACT_ID_INVALID)', async () => {
+	    const store = useArtifactStore.getState();
+	    store.resetForTesting();
+	    store.create('note.md', 'hello');
+
+	    const processOutput = createProcessOutputForTools(mockDeps);
+	    await processOutput('[APPEND: note.md] world');
+
+	    const updated = store.getByName('note.md')[0];
+	    expect(updated.content).toContain('world');
+	    const error = getEvents().find((e) => e.type === PacketType.TOOL_ERROR && e.payload?.tool === 'APPEND');
+	    if (error) expect(String(error.payload?.error || '')).not.toContain('ARTIFACT_ID_INVALID');
+	  });
+
+	  it('APPEND missing.md should emit controlled TOOL_ERROR (NOT_FOUND) and not throw ARTIFACT_ID_INVALID', async () => {
+	    const store = useArtifactStore.getState();
+	    store.resetForTesting();
+
+	    const processOutput = createProcessOutputForTools(mockDeps);
+	    await processOutput('[APPEND: missing.md] x');
+
+	    const error = getEvents().find((e) => e.type === PacketType.TOOL_ERROR && e.payload?.tool === 'APPEND');
+	    expect(error).toBeDefined();
+	    expect(String((error as any)?.payload?.error || '')).toContain('Nie znalazłem artefaktu');
+	    expect(String((error as any)?.payload?.error || '')).not.toContain('ARTIFACT_ID_INVALID');
+	  });
   });
 });

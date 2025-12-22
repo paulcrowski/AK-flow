@@ -118,6 +118,10 @@ export const SYSTEM_CONFIG = {
     USE_IDENTITY_COHERENCE_CHECK: false,
     /** @deprecated Use cortex.styleExamples */
     USE_STYLE_EXAMPLES: false,
+
+    // P0.1.1: Stabilization flags (tools + action-first)
+    P011_NORMALIZE_ARTIFACT_REF_ENABLED: true,
+    P011_ACTION_FIRST_ENABLED: true,
     /** @deprecated Use memory.recallRecentFallback */
     USE_MEMORY_RECALL_RECENT_FALLBACK: true,
     /** @deprecated Use memory.searchKnowledgeChunks */
