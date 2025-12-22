@@ -83,21 +83,35 @@ export const createProcessOutputForTools = (deps: ToolParserDeps) => {
       addMessage('assistant', `TOOL_ERROR: ${params.tool} :: ${params.error}`, 'thought');
     };
 
+    const resolveArtifactId = (header: string, opts: { autoCreate: boolean }) => {
+      const raw = normalizeArg(header);
+      const store = useArtifactStore.getState();
+      if (raw.startsWith('art-')) {
+        return { id: raw, created: false, name: raw };
+      }
+      const byName = store.getByName(raw);
+      if (byName.length === 1) return { id: byName[0].id, created: false, name: byName[0].name };
+      if (byName.length > 1) throw new Error('ARTIFACT_NAME_AMBIGUOUS');
+      if (!opts.autoCreate) throw new Error('ARTIFACT_NOT_FOUND');
+      const id = store.create(raw || 'artifact.txt', '');
+      return { id, created: true, name: raw || 'artifact.txt' };
+    };
+
     const handlePublishArtifact = async (artifactIdRaw: string) => {
       const tool = 'PUBLISH';
       const intentId = generateUUID();
-      const artifactId = normalizeArg(artifactIdRaw);
+      const { id: resolvedId } = resolveArtifactId(artifactIdRaw, { autoCreate: false });
       eventBus.publish({
         id: intentId,
         timestamp: Date.now(),
         source: AgentType.CORTEX_FLOW,
         type: PacketType.TOOL_INTENT,
-        payload: { tool, arg: artifactId },
+        payload: { tool, arg: resolvedId },
         priority: 0.8
       });
       try {
         const store = useArtifactStore.getState();
-        const art = store.get(artifactId);
+        const art = store.get(resolvedId);
         if (!art) throw new Error('ARTIFACT_NOT_FOUND');
         if (publishRequiresEvidence(art.name)) {
           const evidenceCount = Array.isArray((store as any).evidence) ? (store as any).evidence.length : 0;
@@ -147,20 +161,6 @@ export const createProcessOutputForTools = (deps: ToolParserDeps) => {
         payload: { ...params.payload, tool: params.tool, intentId: params.intentId },
         priority: 0.8
       });
-    };
-
-    const resolveArtifactId = (header: string, opts: { autoCreate: boolean }) => {
-      const raw = normalizeArg(header);
-      const store = useArtifactStore.getState();
-      if (raw.startsWith('art-')) {
-        return { id: raw, created: false, name: raw };
-      }
-      const byName = store.getByName(raw);
-      if (byName.length === 1) return { id: byName[0].id, created: false, name: byName[0].name };
-      if (byName.length > 1) throw new Error('ARTIFACT_NAME_AMBIGUOUS');
-      if (!opts.autoCreate) throw new Error('ARTIFACT_NOT_FOUND');
-      const id = store.create(raw || 'artifact.txt', '');
-      return { id, created: true, name: raw || 'artifact.txt' };
     };
 
     const handleArtifactBlock = async (params: { kind: 'CREATE' | 'APPEND' | 'REPLACE'; header: string; body: string; raw: string }) => {

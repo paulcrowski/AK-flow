@@ -74,6 +74,48 @@ export type AutonomousVolitionLoopContext = {
 let lastAutonomyActionSignature: string | null = null;
 let lastAutonomyActionLogAt = 0;
 
+// P0.1 COMMIT 2: Autonomy Backoff State
+const autonomyFailureState = {
+  lastAttemptAt: 0,
+  consecutiveFailures: 0,
+  baseCooldownMs: 25_000
+};
+
+function shouldTriggerAutonomy(silenceMs: number, minSilenceMs: number): boolean {
+  const now = Date.now();
+  const { lastAttemptAt, consecutiveFailures, baseCooldownMs } = autonomyFailureState;
+  
+  // Exponential backoff: 25s, 50s, 100s, then cap at 5 min
+  const cooldown = consecutiveFailures >= 3 
+    ? 300_000 
+    : baseCooldownMs * Math.pow(2, consecutiveFailures);
+  
+  if (now - lastAttemptAt < cooldown) {
+    return false;
+  }
+  
+  return silenceMs >= minSilenceMs;
+}
+
+function onAutonomyResult(success: boolean): void {
+  autonomyFailureState.lastAttemptAt = Date.now();
+  if (success) {
+    autonomyFailureState.consecutiveFailures = 0;
+  } else {
+    autonomyFailureState.consecutiveFailures++;
+  }
+}
+
+// For testing
+export function resetAutonomyBackoff(): void {
+  autonomyFailureState.lastAttemptAt = 0;
+  autonomyFailureState.consecutiveFailures = 0;
+}
+
+export function getAutonomyBackoffState() {
+  return { ...autonomyFailureState };
+}
+
 export async function runAutonomousVolitionStep(input: {
   ctx: AutonomousVolitionLoopContext;
   callbacks: LoopCallbacksLike;
@@ -86,6 +128,14 @@ export async function runAutonomousVolitionStep(input: {
   const { ctx, callbacks, memorySpace, trace, gateContext, silenceDurationSec, budgetTracker } = input;
 
   const autonomyCfg = getAutonomyConfig();
+  const silenceMs = silenceDurationSec * 1000;
+  const minSilenceMs = autonomyCfg.exploreMinSilenceSec * 1000;
+  
+  // P0.1: Backoff check - skip if in cooldown
+  if (!shouldTriggerAutonomy(silenceMs, minSilenceMs)) {
+    return;
+  }
+  
   if (!VolitionSystem.shouldInitiateThought(silenceDurationSec, autonomyCfg.exploreMinSilenceSec)) {
     return;
   }
@@ -174,6 +224,7 @@ export async function runAutonomousVolitionStep(input: {
 
   if (actionDecision.action === 'SILENCE') {
     if (shouldLog) callbacks.onThought(`[AUTONOMY_SILENCE] ${actionDecision.reason}`);
+    onAutonomyResult(false); // P0.1: Failure - increment backoff
     return;
   }
 
@@ -229,6 +280,7 @@ export async function runAutonomousVolitionStep(input: {
     volition.speech_content = '';
     volition.voice_pressure = 0;
     callbacks.onThought(`[GROUNDING_BLOCKED] ${groundingValidation.reason}`);
+    onAutonomyResult(false); // P0.1: Failure - grounding blocked
   } else {
     callbacks.onThought(volition.internal_monologue);
   }
@@ -387,6 +439,7 @@ export async function runAutonomousVolitionStep(input: {
 
       if (commit.committed) {
         callbacks.onMessage('assistant', styleResult.text, 'speech');
+        onAutonomyResult(true); // P0.1: Success - reset backoff
       }
 
       ctx.lastSpeakTimestamp = Date.now();
@@ -410,11 +463,13 @@ export async function runAutonomousVolitionStep(input: {
         });
       }
       callbacks.onThought(`[STYLE_FILTERED] ${gateDecision.winner.internal_thought}`);
+      onAutonomyResult(false); // P0.1: Failure - filtered too short
     }
   } else if (gateDecision.winner) {
     const suppressReason = gateDecision.debug?.social_block_reason
       ? `[SOCIAL_BLOCK:${gateDecision.debug.social_block_reason}]`
       : `[${gateDecision.reason}]`;
     callbacks.onThought(`${suppressReason} ${gateDecision.winner.internal_thought}`);
+    onAutonomyResult(false); // P0.1: Failure - gate blocked
   }
 }

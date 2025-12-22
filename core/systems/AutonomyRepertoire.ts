@@ -21,6 +21,43 @@
 
 import type { UnifiedContext } from '../context';
 import { getAutonomyConfig } from '../config/systemConfig';
+import { useArtifactStore } from '../../stores/artifactStore';
+
+// P0.1 COMMIT 4: Work-First Autonomy
+// Feature flag - can be disabled if causing issues
+const WORK_FIRST_AUTONOMY_ENABLED = true;
+
+type PendingWork = {
+  artifactId: string;
+  artifactName: string;
+  reason: 'last_touched' | 'draft_status';
+};
+
+function findPendingWork(): PendingWork | null {
+  if (!WORK_FIRST_AUTONOMY_ENABLED) return null;
+  
+  const store = useArtifactStore.getState();
+  const artifacts = store.list();
+  
+  if (artifacts.length === 0) return null;
+  
+  // Priority 1: Find draft artifacts
+  const drafts = artifacts.filter(a => a.status === 'draft');
+  if (drafts.length > 0) {
+    const mostRecent = drafts.sort((a, b) => b.updatedAt - a.updatedAt)[0];
+    return { artifactId: mostRecent.id, artifactName: mostRecent.name, reason: 'draft_status' };
+  }
+  
+  // Priority 2: Last touched artifact (within last 10 minutes)
+  const tenMinutesAgo = Date.now() - 10 * 60 * 1000;
+  const recentlyTouched = artifacts.filter(a => a.updatedAt > tenMinutesAgo);
+  if (recentlyTouched.length > 0) {
+    const mostRecent = recentlyTouched.sort((a, b) => b.updatedAt - a.updatedAt)[0];
+    return { artifactId: mostRecent.id, artifactName: mostRecent.name, reason: 'last_touched' };
+  }
+  
+  return null;
+}
 
 // ═══════════════════════════════════════════════════════════════════════════
 // TYPES
@@ -33,7 +70,8 @@ export type AutonomyAction =
   | 'CONTINUE'   // Continue current topic
   | 'CLARIFY'    // Ask clarifying question
   | 'SUMMARIZE'  // Summarize conversation
-  | 'EXPLORE'    // Propose new topic (restricted)
+  | 'EXPLORE'    // Propose new topic (restricted) - DEPRECATED in P0.1
+  | 'WORK'       // P0.1: Append to pending artifact
   | 'SILENCE';   // Say nothing (default fallback)
 
 /**
@@ -214,22 +252,32 @@ export function selectAction(ctx: UnifiedContext): ActionDecision {
     };
   }
   
-  // Priority 4: EXPLORE only if no active topic AND sufficient silence
+  // Priority 4: P0.1 Work-First - if pending work exists, WORK; otherwise SILENCE
+  // EXPLORE is deprecated - no more topic proposals
   if (!grounding.hasActiveTopic || grounding.isConversationStale) {
     if (grounding.silenceDurationSec >= exploreMinSilenceSec) {
-      return {
-        action: 'EXPLORE',
-        allowed: true,
-        reason: `No active topic, silence ${grounding.silenceDurationSec.toFixed(0)}s >= ${exploreMinSilenceSec}s`,
-        groundingScore: 0.4, // Lower grounding for exploration
-        suggestedPrompt: buildActionPrompt('EXPLORE', ctx, grounding)
-      };
-    } else {
-      // EXPLORE blocked - not enough silence
+      const pendingWork = findPendingWork();
+      if (pendingWork) {
+        return {
+          action: 'WORK',
+          allowed: true,
+          reason: `Pending work: ${pendingWork.artifactName} (${pendingWork.reason})`,
+          groundingScore: 0.6,
+          suggestedPrompt: buildActionPrompt('WORK', ctx, grounding, pendingWork)
+        };
+      }
+      // No pending work - SILENCE (no topic proposals)
       return {
         action: 'SILENCE',
         allowed: true,
-        reason: `EXPLORE blocked: silence ${grounding.silenceDurationSec.toFixed(0)}s < ${exploreMinSilenceSec}s required`,
+        reason: 'No pending work, staying silent (Work-First policy)',
+        groundingScore: 0
+      };
+    } else {
+      return {
+        action: 'SILENCE',
+        allowed: true,
+        reason: `Silence ${grounding.silenceDurationSec.toFixed(0)}s < ${exploreMinSilenceSec}s required`,
         groundingScore: 0
       };
     }
@@ -289,7 +337,8 @@ export function validateSpeech(
 function buildActionPrompt(
   action: AutonomyAction,
   ctx: UnifiedContext,
-  grounding: GroundingAnalysis
+  grounding: GroundingAnalysis,
+  pendingWork?: PendingWork | null
 ): string {
   switch (action) {
     case 'CONTINUE':
@@ -320,6 +369,14 @@ CONTEXT: No active topic, silence for ${grounding.silenceDurationSec.toFixed(0)}
 INSTRUCTION: Suggest ONE interesting topic related to your persona or previous conversations.
 DO NOT: Be random. Connect to something meaningful.`;
 
+    case 'WORK':
+      return `
+ACTION: WORK - continue pending artifact.
+ARTIFACT: "${pendingWork?.artifactName || 'unknown'}" (${pendingWork?.artifactId || 'unknown'})
+INSTRUCTION: Generate 1-2 paragraphs to append to this artifact. Use [APPEND: ${pendingWork?.artifactId}] tag.
+After appending, say ONE sentence: "Dodałem fragment do ${pendingWork?.artifactName}. Kontynuować?"
+DO NOT: Propose new topics. DO NOT ask "czy chciałbyś...". Just work.`;
+
     default:
       return '';
   }
@@ -334,6 +391,7 @@ export const AutonomyRepertoire = {
   calculateGroundingScore,
   selectAction,
   validateSpeech,
+  findPendingWork,
   CONFIG
 };
 
