@@ -1,7 +1,7 @@
 {
   "version": "1.0.0",
-  "lastUpdated": "2025-12-19T16:20:00.000Z",
-  "lastModified": "2025-12-19T16:20:00.000Z",
+  "lastUpdated": "2025-12-22T15:59:30.000Z",
+  "lastModified": "2025-12-22T15:59:30.000Z",
   "modifiedBy": "AI_WINDSURF",
   "project": "AK-Flow",
   "dailyGoal": "AgentTrajectory Phase 1 (Execution-First Autonomy)",
@@ -873,6 +873,17 @@
       ],
       "createdAt": "2025-12-19T16:20:00.000Z",
       "updatedAt": "2025-12-19T16:20:00.000Z"
+    },
+    {
+      "id": "note-013",
+      "title": "Daily Close: 2025-12-22",
+      "content": "DONE: P0.1.2 hardening. Artifacts: jedna brama normalizeArtifactRef (ID/nazwa, kontrolowane NOT_FOUND/AMBIGUOUS) + toolParser używa jej dla APPEND/REPLACE/READ_ARTIFACT/PUBLISH. Autonomia: selectAction tylko WORK/SILENCE (bez CONTINUE/EXPLORE) + SILENCE nie nabija backoff. Action-First: rozpoznaje utworz/stworz/zrob (bez diakrytyków) i tworzy nazwę .md z frazy (mniej ciężkich LLM/SEARCH). Token audit v1: CORTEX_PROMPT_STATS (skład/rozmiar promptu). RawContract: fail-closed, ale akceptuje bezpieczne obwiednie JSON (fenced + double-encoded).\nVERIFY: npm run build PASS. npm test PASS (588/588). npm test -- --run WiringValidator PASS.\nCOMMITS: 2a91bc5, d0cd0d0.\nNEXT: AgentTrajectory v1 (autonomia jako internal steps) + realne narzędzia katalogowe READ_FILE + SEARCH_IN_REPO + WorkLoop v1.",
+      "category": "INSIGHT",
+      "tags": [
+        "daily_close"
+      ],
+      "createdAt": "2025-12-22T15:59:30.000Z",
+      "updatedAt": "2025-12-22T15:59:30.000Z"
     }
   ],
   "stats": {
@@ -884,8 +895,8 @@
     "currentPhase": "FAZA 6.6: Integrity & Reliability",
     "todayCompleted": 2,
     "streak": 7,
-    "testsTotal": 571,
-    "testsPassing": 571,
+    "testsTotal": 588,
+    "testsPassing": 588,
     "blocked": 0,
     "notImplemented": 14
   },

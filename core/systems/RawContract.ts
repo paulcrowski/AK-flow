@@ -97,7 +97,9 @@ export function applyAutonomyV2RawContract(
 
     const failClosedEnabled = (SYSTEM_CONFIG.features as Record<string, boolean>).P011_FAIL_CLOSED_JSON_ENABLED ?? true;
     const trimmed = sanitized.trimStart();
-    if (failClosedEnabled && !trimmed.startsWith('{')) {
+    const looksLikeAllowedJsonEnvelope =
+        trimmed.startsWith('{') || trimmed.startsWith('```') || trimmed.startsWith('"');
+    if (failClosedEnabled && !looksLikeAllowedJsonEnvelope) {
         return { ok: false, value: silent, reason: 'NO_JSON_OBJECT', details: 'TRIM_NOT_JSON_OBJECT' };
     }
 

@@ -9,6 +9,22 @@ describe('RawContract', () => {
         expect(r.value.voice_pressure).toBe(0);
     });
 
+    it('should accept fenced json block', () => {
+        const raw = '```json\n{"internal_monologue":"x","voice_pressure":0.5,"speech_content":"y"}\n```';
+        const r = applyAutonomyV2RawContract(raw);
+        expect(r.ok).toBe(true);
+        expect(r.value.internal_monologue).toBe('x');
+        expect(r.value.speech_content).toBe('y');
+    });
+
+    it('should accept double-encoded json string literal', () => {
+        const rawObj = { internal_monologue: 'x', voice_pressure: 0.5, speech_content: 'y' };
+        const raw = JSON.stringify(JSON.stringify(rawObj));
+        const r = applyAutonomyV2RawContract(raw);
+        expect(r.ok).toBe(true);
+        expect(r.value.internal_monologue).toBe('x');
+    });
+
     it('should fail closed when no json object present', () => {
         const r = applyAutonomyV2RawContract('hello world');
         expect(r.ok).toBe(false);

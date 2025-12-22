@@ -1,9 +1,20 @@
 # 🧠 AK-FLOW Architecture Map
 
-> **Wersja:** 6.7 (2025-12-19)
+> **Wersja:** 6.8 (2025-12-22)
 > **Cel:** Prosta mapa jak działa agent i jaki ma flow
 
 ---
+
+## 🆕 FAZA 6.8: P0.1.2 Hardening (Autonomy WORK/SILENCE + Prompt Stats) (2025-12-22)
+
+**Cel:** ograniczyć “autonomię jako gadanie” oraz ustabilizować warsztat artefaktów i kontrakty JSON.
+
+**Wkład (rdzeń):**
+- AutonomyRepertoire: autonomia wybiera tylko `WORK` albo `SILENCE` (bez `CONTINUE/EXPLORE`).
+- Autonomy backoff: `SILENCE` nie nabija kar.
+- Action-First: rozpoznaje `utworz/stworz/zrob` (bez polskich znaków) i tworzy `.md` z frazy.
+- RawContract: fail-closed, ale akceptuje bezpieczne obwiednie JSON (fenced + double-encoded).
+- Token audit: metryka `CORTEX_PROMPT_STATS` (skład/rozmiar promptu) dla diagnozy skoków tokenów.
 
 ## 🆕 FAZA 6.7: Workspace Artifacts + Evidence Gate + Patch-as-Artifact (2025-12-19)
 

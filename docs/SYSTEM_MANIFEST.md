@@ -1,10 +1,24 @@
 # AK-FLOW: Cognitive Agent Architecture Manifest
-**System Version:** 6.6 (Strict Ownership RLS + Model Router Fallback)  
-**Last Updated:** 2025-12-19  
+**System Version:** 6.8 (P0.1.2 Hardening: Work-First Autonomy + Token Audit)  
+**Last Updated:** 2025-12-22  
 **Architecture Type:** Active Inference (Friston) + Global Workspace Theory + Multi-Modal RAG + **Stateless Inference Engine**  
 **Status:** Autonomous / Stateful / Modular / Self-Aware / Goal-Driven / Personality-Driven / **Emergent Identity**
 
 ---
+
+## 🆕 What's New in V6.8 (2025-12-22)
+
+### P0.1.2 Hardening: autonomy-as-work + safer artifacts
+
+**Cel:** ograniczyć „autonomię jako gadanie” i uszczelnić warsztat artefaktów, tak żeby agent mógł pracować deterministycznie i żeby debug tokenów był tani.
+
+**Wkład:**
+- Artifacts: jedna brama rozwiązywania referencji (`stores/artifactStore.ts`: `normalizeArtifactRef()`), użyta przez narzędzia w `utils/toolParser.ts`.
+- Autonomia: `core/systems/AutonomyRepertoire.ts` zwraca tylko `WORK|SILENCE` (bez `CONTINUE/EXPLORE` w autonomii).
+- Backoff: `SILENCE` nie nabija kar (`core/systems/eventloop/AutonomousVolitionStep.ts`).
+- Action-First: rozpoznaje polecenia bez polskich znaków (`utworz/stworz/zrob`) i generuje `.md` z frazy (`core/systems/eventloop/ReactiveStep.ts`).
+- RawContract: fail-closed, ale dopuszcza bezpieczne obwiednie JSON (fenced + double-encoded) (`core/systems/RawContract.ts`).
+- Token audit v1: metryka `CORTEX_PROMPT_STATS` (skład/rozmiar promptu) (`core/inference/CortexInference.ts`).
 
 ## 🆕 What's New in V6.7 (2025-12-19)
 
