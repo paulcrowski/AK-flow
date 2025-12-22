@@ -12,6 +12,7 @@ import type { CortexState } from '../types/CortexState';
 import type { CortexOutput } from '../types/CortexOutput';
 import { isValidCortexOutput, FALLBACK_CORTEX_OUTPUT } from '../types/CortexOutput';
 import { MINIMAL_CORTEX_SYSTEM_PROMPT, formatCortexStateForLLM } from '../prompts/MinimalCortexPrompt';
+import { MAX_CORTEX_STATE_SIZE } from '../types/CortexState';
 import { eventBus } from '../EventBus';
 import { AgentType, PacketType } from '../../types';
 import { generateUUID } from '../../utils/uuid';
@@ -190,6 +191,32 @@ INSTRUCTIONS:
 3. DO NOT include any text before or after the JSON.
 4. DO NOT use markdown code blocks like \`\`\`json.
 5. Just raw JSON.`;
+
+  eventBus.publish({
+    id: generateUUID(),
+    timestamp: Date.now(),
+    source: AgentType.CORTEX_FLOW,
+    type: PacketType.COGNITIVE_METRIC,
+    payload: {
+      metric: 'CORTEX_PROMPT_STATS',
+      operation: 'generateFromCortexState',
+      stateJsonChars: stateJson.length,
+      fullPromptChars: fullPrompt.length,
+      stateOverCharLimit: stateJson.length > MAX_CORTEX_STATE_SIZE,
+      memoryContextCount: Array.isArray(state.memory_context) ? state.memory_context.length : 0,
+      memoryContextChars: Array.isArray(state.memory_context)
+        ? state.memory_context.reduce((acc, s) => acc + String(s || '').length, 0)
+        : 0,
+      goalsCount: Array.isArray(state.goals) ? state.goals.length : 0,
+      goalsChars: Array.isArray(state.goals) ? state.goals.reduce((acc, s) => acc + String(s || '').length, 0) : 0,
+      identityShardsCount: Array.isArray(state.identity_shards) ? state.identity_shards.length : 0,
+      styleExamplesCount: Array.isArray(state.style_examples) ? state.style_examples.length : 0,
+      userInputChars: String(state.user_input || '').length,
+      lastAgentOutputChars: String(state.last_agent_output || '').length,
+      hardFactsPresent: Boolean(state.hard_facts)
+    },
+    priority: 0.1
+  });
 
   return withRetry(async () => {
     const genAI = getAI();
