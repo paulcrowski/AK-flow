@@ -30,17 +30,19 @@ import { INITIAL_LIMBIC, INITIAL_NEURO } from '../core/kernel/initialState';
  * - 0 LLM calls (pure heuristics)
  */
 export class ConfessionService {
-    private static instance: ConfessionService;
+    private bus: {
+        subscribe(eventType: PacketType, handler: (packet: CognitivePacket) => void): () => void;
+        publish(packet: CognitivePacket): void;
+    };
 
-    private constructor() {
+    private unsubscribers: Array<() => void> = [];
+
+    public constructor(bus: {
+        subscribe(eventType: PacketType, handler: (packet: CognitivePacket) => void): () => void;
+        publish(packet: CognitivePacket): void;
+    }) {
+        this.bus = bus;
         this.initialize();
-    }
-
-    public static getInstance(): ConfessionService {
-        if (!ConfessionService.instance) {
-            ConfessionService.instance = new ConfessionService();
-        }
-        return ConfessionService.instance;
     }
 
     // Neurochemical state for pain calculation (updated via eventBus)
@@ -49,19 +51,33 @@ export class ConfessionService {
     private limbicState: LimbicState = { ...INITIAL_LIMBIC };
 
     private initialize() {
-        eventBus.subscribe(PacketType.MOTOR_COMMAND, (packet: CognitivePacket) => {
+        const unsubMotor = this.bus.subscribe(PacketType.MOTOR_COMMAND, (packet: CognitivePacket) => {
             if (packet.source === AgentType.MOTOR && packet.payload?.action === 'SPEAK') {
                 this.runConfessionProtocol(packet.payload.content);
             }
         });
         
         // Subscribe to state updates for pain calculation
-        eventBus.subscribe(PacketType.STATE_UPDATE, (packet: CognitivePacket) => {
+        const unsubState = this.bus.subscribe(PacketType.STATE_UPDATE, (packet: CognitivePacket) => {
             if (packet.payload?.neuro) this.neuroState = packet.payload.neuro;
             if (packet.payload?.limbic) this.limbicState = packet.payload.limbic;
         });
+
+        this.unsubscribers.push(unsubMotor, unsubState);
         
         console.log('[ConfessionService] v2.1 Pain-Based initialized.');
+    }
+
+    public dispose() {
+        for (const unsub of this.unsubscribers) {
+            try {
+                unsub();
+            } catch {
+                // ignore
+            }
+        }
+        this.unsubscribers = [];
+        console.log('[ConfessionService] disposed');
     }
 
     /**
@@ -200,7 +216,7 @@ export class ConfessionService {
     private runConfessionProtocol(agentResponse: string) {
         const report = this.generateReport(agentResponse);
 
-        eventBus.publish({
+        this.bus.publish({
             id: crypto.randomUUID(),
             timestamp: Date.now(),
             source: AgentType.MORAL,
@@ -289,4 +305,11 @@ export class ConfessionService {
     }
 }
 
-export const confessionService = ConfessionService.getInstance();
+export function initConfessionService(
+    bus: {
+        subscribe(eventType: PacketType, handler: (packet: CognitivePacket) => void): () => void;
+        publish(packet: CognitivePacket): void;
+    } = eventBus
+) {
+    return new ConfessionService(bus);
+}

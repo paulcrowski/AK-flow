@@ -1,11 +1,8 @@
-import { describe, it, expect, beforeEach } from 'vitest';
-import { confessionService } from '../../services/ConfessionService';
+import { describe, it, expect, beforeEach, beforeAll, afterAll } from 'vitest';
+import { initConfessionService } from '../../services/ConfessionService';
 import { eventBus } from '../../core/EventBus';
 import { PacketType, AgentType, ConfessionReport } from '../../types';
 import { waitForEventBus } from '../utils';
-
-// Force singleton initialization
-const _init = confessionService;
 
 // Helper: get last confession report
 const getLastConfessionReport = (): ConfessionReport | undefined => {
@@ -29,6 +26,17 @@ const triggerSpeech = async (content: string) => {
 };
 
 describe('ConfessionService v2.0', () => {
+    let svc: { dispose(): void } | null = null;
+
+    beforeAll(() => {
+        svc = initConfessionService(eventBus as any) as any;
+    });
+
+    afterAll(() => {
+        svc?.dispose();
+        svc = null;
+    });
+
     beforeEach(async () => {
         eventBus.clear();
         await waitForEventBus();

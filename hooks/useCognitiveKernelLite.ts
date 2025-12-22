@@ -33,6 +33,7 @@ import { isMemorySubEnabled } from '../core/config/featureFlags';
 import { getCurrentTraceId, getStartupTraceId } from '../core/trace/TraceContext';
 import { loadConversation, loadConversationForSession, syncToLocalStorage, mapTurnsToUiMessages } from '../core/memory/ConversationStore';
 import { KernelController } from '../core/runner/KernelController';
+import { initRuntime, type RuntimeHandle } from '../core/initRuntime';
 
 // Deterministic RNG for reproducible behavior
 const rng = createRng(SYSTEM_CONFIG.rng.seed);
@@ -157,11 +158,20 @@ export const useCognitiveKernelLite = (loadedIdentity?: AgentIdentity | null) =>
   // REFS (mutable, no re-render)
   // ─────────────────────────────────────────────────────────────────────────
   const hasBootedRef = useRef(false);
+  const runtimeRef = useRef<RuntimeHandle | null>(null);
   const loadedIdentityRef = useRef(loadedIdentity);
   const sessionIdRef = useRef<string | null>(null);
   const lastVisualTimestampRef = useRef(0);
   const visualBingeCountRef = useRef(0);
   const toolStateRef = useRef<{ limbicState: any }>({ limbicState });
+
+  useEffect(() => {
+    runtimeRef.current = initRuntime();
+    return () => {
+      runtimeRef.current?.dispose();
+      runtimeRef.current = null;
+    };
+  }, []);
 
   const upsertLocalSessionSummary = useCallback((sessionId: string, preview: string, timestamp: number) => {
     const prev = getCognitiveState().conversationSessions;
