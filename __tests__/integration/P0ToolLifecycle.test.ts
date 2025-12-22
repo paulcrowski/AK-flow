@@ -22,6 +22,32 @@ import {
   uploadLibraryFile
 } from '../../services/LibraryService';
 
+// Mock SnapshotService
+vi.mock('../../services/SnapshotService', () => ({
+  exportFullSnapshot: vi.fn(async (agentId: string, sessionId: string) => ({
+    version: '1.0',
+    agentId,
+    sessionId,
+    exportedAt: 123,
+    conversation: { type: 'conversation', agentId, sessionId, messages: [], totalCount: 0, exportedAt: 123 },
+    runtime: {
+      type: 'runtime',
+      agentId,
+      sessionId,
+      recentMessages: [],
+      currentState: {
+        limbic: { fear: 0, curiosity: 0.5, frustration: 0, satisfaction: 0.5 },
+        chemistry: { dopamine: 50, serotonin: 50, norepinephrine: 50 },
+        soma: { energy: 80, cognitiveLoad: 20, isSleeping: false }
+      },
+      stateHistory: [],
+      exportedAt: 123
+    },
+    logs: { type: 'logs', agentId, sessionId, logs: [], bufferSize: 0, exportedAt: 123 }
+  })),
+  saveSnapshotToDb: vi.fn(async () => null)
+}));
+
 // Mock CortexService
 vi.mock('../../services/gemini', () => ({
   CortexService: {
@@ -70,6 +96,9 @@ describe('P0 Tool Lifecycle', () => {
     vi.clearAllMocks();
     eventBus.clear();
 
+    const store = useArtifactStore.getState();
+    store.resetForTesting();
+
     // Default: resolve non-UUID document refs like "doc_1" by name.
     vi.mocked(findLibraryDocumentByName).mockResolvedValue({
       ok: true,
@@ -84,7 +113,8 @@ describe('P0 Tool Lifecycle', () => {
       setLimbicState: vi.fn(),
       lastVisualTimestampRef: { current: 0 },
       visualBingeCountRef: { current: 0 },
-      stateRef: { current: { limbicState: { fear: 0, curiosity: 0.5, frustration: 0, satisfaction: 0.5 } } }
+      stateRef: { current: { limbicState: { fear: 0, curiosity: 0.5, frustration: 0, satisfaction: 0.5 } } },
+      getActiveSessionId: () => 'sess_test'
     };
   });
 
@@ -259,6 +289,26 @@ describe('P0 Tool Lifecycle', () => {
       expect(resultEvent).toBeDefined();
       expect(resultEvent!.payload.tool).toBe('READ_LIBRARY_RANGE');
       expect(resultEvent!.payload.range).toEqual({ start: 5, end: 10 });
+    });
+  });
+
+  describe('SNAPSHOT Tool', () => {
+    it('should emit TOOL_INTENT and TOOL_RESULT and create an artifact', async () => {
+      const store = useArtifactStore.getState();
+      expect(store.list().length).toBe(0);
+
+      const processOutput = createProcessOutputForTools(mockDeps);
+      await processOutput('Please persist state. [SNAPSHOT]');
+
+      const events = getEvents();
+      const intentEvent = events.find((e) => e.type === PacketType.TOOL_INTENT && e.payload?.tool === 'SNAPSHOT');
+      const resultEvent = events.find((e) => e.type === PacketType.TOOL_RESULT && e.payload?.tool === 'SNAPSHOT');
+
+      expect(intentEvent).toBeDefined();
+      expect(resultEvent).toBeDefined();
+      expect(store.list().length).toBe(1);
+      expect(store.list()[0].name).toContain('snapshot_');
+      expect(String((resultEvent as any)?.payload?.artifactId || '')).toContain('art-');
     });
   });
 

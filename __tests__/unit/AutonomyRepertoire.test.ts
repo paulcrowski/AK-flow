@@ -10,7 +10,7 @@
  * 4. SILENCE returned when no appropriate action
  */
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { 
   AutonomyRepertoire,
   analyzeGrounding,
@@ -175,6 +175,54 @@ describe('AutonomyRepertoire', () => {
       
       expect(decision.action).toBe('WORK');
       expect(decision.allowed).toBe(true);
+    });
+
+    it('should select MAINTAIN when no pending work and silence > 5min', () => {
+      const store = useArtifactStore.getState();
+      store.resetForTesting();
+      const now = Date.now();
+      const ctx = buildContext({
+        conversation: [],
+        silenceStart: now - 400000,
+        lastUserInteractionAt: now - 400000
+      });
+
+      const decision = selectAction(ctx);
+
+      expect(decision.action).toBe('MAINTAIN');
+      expect(decision.allowed).toBe(true);
+      expect(decision.suggestedPrompt).toContain('[SNAPSHOT]');
+    });
+
+    it('should select MAINTAIN when no pending work and artifact debt > 5', () => {
+      const store = useArtifactStore.getState();
+      store.resetForTesting();
+
+      vi.useFakeTimers();
+      const old = Date.now() - 20 * 60 * 1000;
+      vi.setSystemTime(old);
+
+      const ids: string[] = [];
+      for (let i = 0; i < 6; i++) {
+        const id = store.create(`a${i}.md`, 'x');
+        store.markComplete(id, true);
+        ids.push(id);
+      }
+
+      vi.setSystemTime(Date.now() + 20 * 60 * 1000);
+
+      const ctx = buildContext({
+        conversation: [],
+        silenceStart: Date.now() - 10,
+        lastUserInteractionAt: Date.now() - 10
+      });
+
+      const decision = selectAction(ctx);
+
+      expect(decision.action).toBe('MAINTAIN');
+      expect(decision.allowed).toBe(true);
+
+      vi.useRealTimers();
     });
   });
   
