@@ -11,6 +11,7 @@ import * as SomaSystem from '../core/systems/SomaSystem';
 import * as LimbicSystem from '../core/systems/LimbicSystem';
 import { VISUAL_BASE_COOLDOWN_MS, VISUAL_ENERGY_COST_BASE } from '../core/constants';
 import { useArtifactStore, hashArtifactContent, normalizeArtifactRef as normalizeArtifactRefCore } from '../stores/artifactStore';
+import { getCognitiveState } from '../stores/cognitiveStore';
 import { SYSTEM_CONFIG } from '../core/config/systemConfig';
 import { p0MetricAdd } from '../core/systems/TickLifecycleTelemetry';
 import { consumeWorkspaceTags } from './workspaceTools';
@@ -401,6 +402,78 @@ export const createProcessOutputForTools = (deps: ToolParserDeps) => {
       makeId: generateUUID,
       publish: (packet) => eventBus.publish(packet)
     });
+
+    // SNAPSHOT TOOL
+    // [SNAPSHOT]
+    const snapshotMatch = cleanText.match(/\[SNAPSHOT\]/i);
+    if (snapshotMatch) {
+      cleanText = cleanText.replace(snapshotMatch[0], '').trim();
+      const tool = 'SNAPSHOT';
+      const intentId = generateUUID();
+
+      eventBus.publish({
+        id: intentId,
+        timestamp: Date.now(),
+        source: AgentType.CORTEX_FLOW,
+        type: PacketType.TOOL_INTENT,
+        payload: { tool },
+        priority: 0.8
+      });
+
+      addMessage('assistant', 'Invoking SNAPSHOT', 'action');
+      setCurrentThought('Generating snapshot...');
+
+      try {
+        const agentId = getCurrentAgentId() ?? 'unknown';
+        const sessionId = deps.getActiveSessionId?.() ?? 'unknown';
+        const state = getCognitiveState();
+
+        const kernelState = {
+          conversation: (state.uiConversation || []).slice(-200).map((m: any, idx: number) => ({
+            id: String(m?.id || `${intentId}-${idx}`),
+            role: String(m?.role || 'unknown'),
+            content: String(m?.text || ''),
+            timestamp: Date.now()
+          })),
+          limbicState: state.limbic,
+          chemState: state.neuro,
+          somaState: state.soma,
+          activeGoal: state.goalState?.activeGoal
+        } as any;
+
+        const { exportFullSnapshot, saveSnapshotToDb } = await import('../services/SnapshotService');
+        const snapshot = await exportFullSnapshot(agentId, sessionId, kernelState);
+
+        const artifactName = `snapshot_${snapshot.exportedAt}.json`;
+        const store = useArtifactStore.getState();
+        const artifactId = store.create(artifactName, JSON.stringify(snapshot, null, 2));
+
+        let snapshotId: string | null = null;
+        try {
+          snapshotId = await saveSnapshotToDb(snapshot);
+        } catch {
+          snapshotId = null;
+        }
+
+        emitToolResult({
+          tool,
+          intentId,
+          payload: {
+            artifactId,
+            artifactName,
+            ...(snapshotId ? { snapshotId } : {})
+          }
+        });
+
+        addMessage(
+          'assistant',
+          `SNAPSHOT_OK: ${artifactId} (${artifactName})${snapshotId ? ` db=${snapshotId}` : ''}`,
+          'tool_result'
+        );
+      } catch (e: any) {
+        emitToolError({ tool: 'SNAPSHOT', intentId, payload: {}, error: e?.message || String(e) });
+      }
+    }
 
     // 1. SEARCH TAG
     let searchMatch = cleanText.match(/\[SEARCH:\s*(.*?)\]/i);
