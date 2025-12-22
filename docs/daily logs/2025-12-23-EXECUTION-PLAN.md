@@ -471,8 +471,358 @@ describe('AutonomyRepertoire MAINTAIN', () => {
 
 ---
 
-## P1 Preview (nie dzisiaj)
+---
 
-- `useKernelTick.ts` - pierwszy do wydzielenia z hooka
-- `useKernelPersistence.ts` - drugi
-- `useKernelAutonomy.ts` - trzeci (najbardziej splątany)
+# P1 - PORZĄDKOWANIE STRUKTURY KODU
+
+## Cel P1
+
+**Root repo = tylko konfiguracja i meta**
+- `vite.config.ts`, `tsconfig.json`, `package.json`, `vitest.config.ts`
+- `docs/`, `database/`, `.windsurf/`, `.github/`
+- `index.html` (entry HTML)
+
+**Cały kod aplikacji = `src/`**
+
+**Testy = jedno miejsce: `__tests__/`**
+
+**Ghosty = jawnie OFF w `src/legacy/` z README**
+
+---
+
+## OBECNA STRUKTURA (problemy)
+
+```
+root/
+├── App.tsx              ← entry w root (❌)
+├── index.tsx            ← entry w root (❌)
+├── types.ts             ← typy w root (❌)
+├── core/                ← kod w root (❌)
+├── components/          ← kod w root (❌)
+├── hooks/               ← kod w root (❌)
+├── services/            ← kod w root (❌)
+├── utils/               ← kod w root (❌)
+├── stores/              ← kod w root (❌)
+├── contexts/            ← kod w root (❌)
+├── src/                 ← prawie puste! (tylko .d.ts)
+├── __tests__/           ← OK
+├── core/tests/          ← duplikat (❌)
+└── tests/               ← pusty katalog (❌)
+```
+
+---
+
+## DOCELOWA STRUKTURA
+
+```
+root/
+├── index.html
+├── vite.config.ts
+├── tsconfig.json
+├── vitest.config.ts
+├── package.json
+├── docs/
+├── database/
+├── __tests__/           ← JEDYNE miejsce testów
+│   ├── unit/
+│   ├── integration/
+│   └── e2e/
+└── src/
+    ├── app/
+    │   ├── main.tsx     ← entry
+    │   └── App.tsx
+    ├── core/
+    │   ├── config/
+    │   ├── context/
+    │   ├── inference/
+    │   ├── kernel/
+    │   ├── memory/
+    │   ├── runtime/
+    │   ├── systems/
+    │   ├── telemetry/
+    │   ├── types/
+    │   └── index.ts
+    ├── components/
+    ├── hooks/
+    ├── services/
+    ├── stores/
+    ├── contexts/
+    ├── utils/
+    ├── types.ts
+    └── legacy/          ← ghosty z README
+```
+
+---
+
+## P1.0 - ROOT HYGIENE + PRZENIESIENIE DO SRC
+
+### P1.0.1 - Utworzenie szkieletu src/
+
+```bash
+# Struktura do utworzenia
+src/
+├── app/
+├── core/
+├── components/
+├── hooks/
+├── services/
+├── stores/
+├── contexts/
+├── utils/
+└── legacy/
+```
+
+**Akcja:** Utworzyć katalogi (bez przenoszenia plików)
+
+---
+
+### P1.0.2 - Przeniesienie entrypointów
+
+| Źródło | Cel |
+|--------|-----|
+| `index.tsx` | `src/app/main.tsx` |
+| `App.tsx` | `src/app/App.tsx` |
+| `types.ts` | `src/types.ts` |
+
+**Zmiany w plikach:**
+- `index.html`: zmień `src="/index.tsx"` → `src="/src/app/main.tsx"`
+- `src/app/main.tsx`: zaktualizuj importy
+
+---
+
+### P1.0.3 - Przeniesienie katalogów 1:1
+
+| Źródło | Cel |
+|--------|-----|
+| `core/` | `src/core/` |
+| `hooks/` | `src/hooks/` |
+| `components/` | `src/components/` |
+| `services/` | `src/services/` |
+| `utils/` | `src/utils/` |
+| `stores/` | `src/stores/` |
+| `contexts/` | `src/contexts/` |
+
+**Metoda:** `git mv` dla zachowania historii
+
+---
+
+### P1.0.4 - Aktualizacja aliasów
+
+**tsconfig.json:**
+```json
+"paths": {
+  "@/*": ["./src/*"]
+}
+```
+
+**vite.config.ts:**
+```typescript
+alias: {
+  '@': path.resolve(__dirname, './src'),
+}
+```
+
+**vitest.config.ts:**
+```typescript
+alias: {
+  '@': path.resolve(__dirname, './src'),
+  '@core': path.resolve(__dirname, './src/core'),
+  '@services': path.resolve(__dirname, './src/services'),
+  '@utils': path.resolve(__dirname, './src/utils'),
+  '@tests': path.resolve(__dirname, './__tests__')
+}
+```
+
+---
+
+### P1.0.5 - Aktualizacja importów w testach
+
+Wszystkie importy w `__tests__/` muszą używać nowych ścieżek:
+- `../core/...` → `@/core/...` lub `../src/core/...`
+- `../services/...` → `@/services/...`
+
+**DONE P1.0:**
+- [ ] `npm test` PASS
+- [ ] `npm run build` PASS
+- [ ] UI działa na localhost:3000
+
+---
+
+## P1.1 - UPORZĄDKOWANIE TESTÓW
+
+### Obecny stan testów:
+
+| Lokalizacja | Status |
+|-------------|--------|
+| `__tests__/` | ✅ KEEP (główne) |
+| `core/tests/` | ⚠️ PRZENIEŚĆ do `__tests__/unit/core/` |
+| `tests/` | ❌ PUSTY - USUNĄĆ |
+
+### Akcje:
+
+1. **Przenieś** `core/tests/*.test.ts` → `__tests__/unit/core/`
+2. **Usuń** pusty katalog `tests/`
+3. **Zweryfikuj** `vitest.config.ts` - tylko `__tests__/**/*.test.ts`
+
+**DONE P1.1:**
+- [ ] Jedno źródło prawdy o testach
+- [ ] `vitest.config.ts` nie ma duplikatów
+
+---
+
+## P1.2 - GHOST TRIAGE
+
+### Reguła 3 koszyków:
+
+| Koszyk | Definicja | Akcja |
+|--------|-----------|-------|
+| **KEEP** | ma init + użycie + test | zostaw w `src/` |
+| **QUARANTINE** | brak użycia, ale cenny pomysł | przenieś do `src/legacy/` |
+| **KILL** | brak wartości lub zastąpione | usuń |
+
+### Audyt do przeprowadzenia:
+
+Sprawdzić każdy serwis/system pod kątem:
+1. Czy ma `init()` wywoływane z runtime?
+2. Czy jest używany w kodzie (nie tylko importowany)?
+3. Czy ma testy?
+
+### Format dokumentacji (`docs/architecture/ghosts.md`):
+
+```markdown
+# Ghost Triage - P1.2
+
+## KEEP (aktywne)
+- `ConfessionService` - init w runtime, używany, testy
+- `LimbicSystem` - init w kernel, centralne emocje
+
+## QUARANTINE (src/legacy/)
+- `DreamConsolidationService` - brak triggera, ale cenny koncept
+  - README: "Przywrócić gdy sleep mode aktywny"
+
+## KILL (usunięte)
+- `OldPersonaService` - zastąpione przez PersonaGuard
+```
+
+**DONE P1.2:**
+- [ ] `docs/architecture/ghosts.md` istnieje
+- [ ] Każdy ghost ma kategorię z uzasadnieniem
+
+---
+
+## P1.3 - STRUKTURA DOMENOWA (opcjonalnie)
+
+### Minimalny układ domen w `src/core/`:
+
+```
+src/core/
+├── runtime/        ← initRuntime, lifecycle
+├── systems/        ← autonomy, limbic, soma, memory, evaluation
+├── tools/          ← toolParser + narzędzia (SNAPSHOT, etc.)
+├── memory/         ← session/long-term/snapshots
+├── kernel/         ← główna pętla
+├── inference/      ← LLM integration
+├── types/          ← typy core
+└── index.ts        ← barrel export
+```
+
+### LLM abstraction (przyszłość):
+
+```
+src/llm/
+├── LLMClient.ts    ← interface
+├── providers/
+│   ├── gemini.ts
+│   └── claude.ts
+└── router.ts       ← wybór providera + fallback
+```
+
+**DONE P1.3:**
+- [ ] Struktura domenowa czytelna
+- [ ] Łatwy swap providera LLM
+
+---
+
+## P1.4 - BARRELS + GODFILE POLICY
+
+### 6.1 Barrels tylko na granicy domen
+
+```typescript
+// src/core/systems/index.ts
+export { LimbicSystem } from './LimbicSystem';
+export { SomaSystem } from './SomaSystem';
+export { selectAction } from './AutonomyRepertoire';
+// ... tylko publiczne API
+```
+
+**Zasada:**
+- W środku domeny: importy względne (`./LimbicSystem`)
+- Na zewnątrz: import przez barrel (`@/core/systems`)
+
+### 6.2 Godfile check policy
+
+**Progi rozmiaru:**
+| Linie | Status |
+|-------|--------|
+| < 150 | ✅ OK |
+| 150-500 | ✅ OK |
+| 500-700 | ⚠️ Rozważ podział |
+| > 700 | ❌ Wymaga uzasadnienia lub testów modułowych |
+
+**Script:** `scripts/godfile-check.js` (już istnieje)
+
+**DONE P1.4:**
+- [ ] Każda domena ma `index.ts` barrel
+- [ ] Brak plików > 700 linii bez uzasadnienia
+
+---
+
+## KOLEJNOŚĆ WYKONANIA P1
+
+```
+P1.0.1 → P1.0.2 → P1.0.3 → P1.0.4 → P1.0.5 → TEST
+                                              ↓
+P1.1 → TEST → P1.2 → P1.3 (opcja) → P1.4 → FINAL TEST
+```
+
+**Każdy commit = działający build + testy**
+
+---
+
+## KOMENDY WERYFIKACYJNE
+
+```bash
+# Po każdym kroku
+npm test
+npm run build
+
+# Po P1.0
+npm run dev  # sprawdź UI
+
+# Po P1.4
+node scripts/godfile-check.js
+```
+
+---
+
+## RYZYKO I MITYGACJA
+
+| Ryzyko | Mitygacja |
+|--------|-----------|
+| Złamane importy | Aliasy `@/*` + search/replace |
+| Utrata historii git | Używaj `git mv` |
+| Testy failują | Fix importów przed kolejnym krokiem |
+| UI nie działa | Sprawdź entry w index.html |
+
+---
+
+## ESTYMACJA CZASU
+
+| Krok | Czas |
+|------|------|
+| P1.0 (migracja) | 2-3h |
+| P1.1 (testy) | 30min |
+| P1.2 (ghosty) | 1h |
+| P1.3 (domeny) | 1h |
+| P1.4 (barrels) | 1h |
+| **TOTAL** | **5-7h** |

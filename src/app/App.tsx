@@ -1,16 +1,15 @@
-
 import React, { useEffect } from 'react';
-import { useSession } from './contexts/SessionContext';
-import { LoginScreen } from './components/LoginScreen';
-import { AgentSelector } from './components/AgentSelector';
-import { CognitiveInterface } from './components/CognitiveInterface';
-import { ComponentErrorBoundary } from './components/ComponentErrorBoundary';
+import { useSession } from '../../contexts/SessionContext';
+import { LoginScreen } from '../../components/LoginScreen';
+import { AgentSelector } from '../../components/AgentSelector';
+import { CognitiveInterface } from '../../components/CognitiveInterface';
+import { ComponentErrorBoundary } from '../../components/ComponentErrorBoundary';
 import { Brain, Loader2 } from 'lucide-react';
-import { setCurrentAgentId } from './services/supabase';
-import { logSystemConfig, validateWiring } from './core/config';
-import { eventBus } from './core/EventBus';
-import { PacketType } from './types';
-import { generateUUID } from './utils/uuid';
+import { setCurrentAgentId } from '../../services/supabase';
+import { logSystemConfig, validateWiring } from '../../core/config';
+import { eventBus } from '../../core/EventBus';
+import { PacketType } from '../../types';
+import { generateUUID } from '../../utils/uuid';
 
 // ALARM 3: Log system config and validate wiring at startup
 // This runs ONCE when the module is loaded
