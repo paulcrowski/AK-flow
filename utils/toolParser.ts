@@ -149,6 +149,20 @@ export const createProcessOutputForTools = (deps: ToolParserDeps) => {
       });
     };
 
+    const resolveArtifactId = (header: string, opts: { autoCreate: boolean }) => {
+      const raw = normalizeArg(header);
+      const store = useArtifactStore.getState();
+      if (raw.startsWith('art-')) {
+        return { id: raw, created: false, name: raw };
+      }
+      const byName = store.getByName(raw);
+      if (byName.length === 1) return { id: byName[0].id, created: false, name: byName[0].name };
+      if (byName.length > 1) throw new Error('ARTIFACT_NAME_AMBIGUOUS');
+      if (!opts.autoCreate) throw new Error('ARTIFACT_NOT_FOUND');
+      const id = store.create(raw || 'artifact.txt', '');
+      return { id, created: true, name: raw || 'artifact.txt' };
+    };
+
     const handleArtifactBlock = async (params: { kind: 'CREATE' | 'APPEND' | 'REPLACE'; header: string; body: string; raw: string }) => {
       const tool = params.kind;
       const intentId = generateUUID();
@@ -167,10 +181,20 @@ export const createProcessOutputForTools = (deps: ToolParserDeps) => {
           const id = store.create(params.header, params.body);
           emitToolResult({ tool, intentId, payload: { id, name: params.header } });
           addMessage('assistant', `CREATE_OK: ${id} (${params.header})`, 'tool_result');
+          const created = store.get(id);
+          if (created) {
+            const hash = hashArtifactContent(created.content);
+            store.addEvidence({ kind: 'artifact', ts: Date.now(), artifactId: created.id, name: created.name, hash });
+            addMessage('assistant', `READ_ARTIFACT ${created.id} (${created.name}) hash=${hash}\n\n${created.content}`, 'tool_result');
+          }
           return;
         }
 
-        const id = String(params.header || '').trim();
+        const { id, created, name } = resolveArtifactId(params.header, { autoCreate: true });
+        if (created) {
+          emitToolResult({ tool: 'CREATE', intentId, payload: { id, name } });
+          addMessage('assistant', `AUTO_CREATE_OK: ${id} (${name})`, 'tool_result');
+        }
         if (params.kind === 'APPEND') {
           store.append(id, params.body);
           emitToolResult({ tool, intentId, payload: { id } });
@@ -201,7 +225,8 @@ export const createProcessOutputForTools = (deps: ToolParserDeps) => {
 
       try {
         const store = useArtifactStore.getState();
-        const art = store.get(artifactId);
+        const { id } = resolveArtifactId(artifactId, { autoCreate: false });
+        const art = store.get(id);
         if (!art) throw new Error('ARTIFACT_NOT_FOUND');
         const hash = hashArtifactContent(art.content);
         store.addEvidence({ kind: 'artifact', ts: Date.now(), artifactId: art.id, name: art.name, hash });
@@ -224,6 +249,17 @@ export const createProcessOutputForTools = (deps: ToolParserDeps) => {
       if (readMatch) {
         cleanText = cleanText.replace(readMatch[0], '').trim();
         await handleReadArtifact(readMatch[1], readMatch[0]);
+        continue;
+      }
+
+      // Allow single-line APPEND/REPLACE without closing tag: [APPEND: name]content
+      const singleLineMatch = cleanText.match(/\[(APPEND|REPLACE):\s*([^\]]+?)\]([^\[]+)/i);
+      if (singleLineMatch) {
+        const kind = String(singleLineMatch[1] || '').toUpperCase() as any;
+        const header = String(singleLineMatch[2] || '').trim();
+        const body = String(singleLineMatch[3] || '').trim();
+        cleanText = cleanText.replace(singleLineMatch[0], '').trim();
+        await handleArtifactBlock({ kind, header, body, raw: singleLineMatch[0] });
         continue;
       }
 

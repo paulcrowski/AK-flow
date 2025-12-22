@@ -6,7 +6,7 @@
  * @module components/layout/LeftSidebar
  */
 
-import React from 'react';
+import React, { useMemo } from 'react';
 import { LogOut, Power, Moon, Sun, Zap, RefreshCw, Pin, Copy, Trash2, FileText, ChevronDown, ChevronUp } from 'lucide-react';
 import { AgentSelector } from '../AgentSelector';
 import { LibraryPanel } from '../LibraryPanel';
@@ -57,16 +57,46 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
   const sortedSessions = [...pinned, ...unpinned];
 
   const [artifactsOpen, setArtifactsOpen] = React.useState(false);
-  const artifacts = useArtifactStore((s) => s.list());
+  const artifactOrder = useArtifactStore((s) => s.order);
+  const artifactsById = useArtifactStore((s) => s.artifactsById);
+  const artifacts = useMemo(
+    () => artifactOrder.map((id) => artifactsById[id]).filter(Boolean),
+    [artifactOrder, artifactsById]
+  );
   const evidenceCount = useArtifactStore((s) => s.evidence.length);
   const clearEvidence = useArtifactStore((s) => s.clearEvidence);
+  const removeArtifact = useArtifactStore((s) => s.remove);
+  const [lastAction, setLastAction] = React.useState<string | null>(null);
 
   const copyText = async (text: string) => {
+    const payload = String(text || '');
     try {
-      if (typeof navigator === 'undefined' || !navigator.clipboard) return;
-      await navigator.clipboard.writeText(String(text || ''));
+      if (typeof navigator !== 'undefined' && navigator.clipboard) {
+        await navigator.clipboard.writeText(payload);
+        return;
+      }
+      // Fallback for http / blocked clipboard: hidden textarea + execCommand
+      const el = document.createElement('textarea');
+      el.value = payload;
+      el.style.position = 'fixed';
+      el.style.opacity = '0';
+      document.body.appendChild(el);
+      el.select();
+      document.execCommand('copy');
+      document.body.removeChild(el);
     } catch {
-      // ignore
+      // ignore to keep UI silent
+    }
+  };
+
+  const handleRemove = (id: string) => {
+    try {
+      removeArtifact(id);
+      setLastAction(`Deleted ${id}`);
+      setTimeout(() => setLastAction(null), 2500);
+    } catch {
+      setLastAction('Delete failed');
+      setTimeout(() => setLastAction(null), 2500);
     }
   };
 
@@ -169,6 +199,7 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
                 <Trash2 size={12} /> CLEAR
               </button>
             </div>
+            {lastAction && <div className="text-[10px] text-gray-500 mb-2 font-mono">{lastAction}</div>}
 
             <div className="space-y-1.5">
               {artifacts.slice(0, 10).map((a) => (
@@ -192,6 +223,13 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
                         title="Copy content"
                       >
                         <Copy size={12} />
+                      </button>
+                      <button
+                        onClick={() => handleRemove(a.id)}
+                        className="p-1 rounded border border-gray-800/60 text-gray-500 hover:text-red-300 hover:bg-gray-800/30 transition-colors"
+                        title="Delete artifact"
+                      >
+                        <Trash2 size={12} />
                       </button>
                     </div>
                   </div>

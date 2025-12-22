@@ -64,8 +64,10 @@ type ArtifactStoreState = {
   append: (id: string, content: string) => void;
   replace: (id: string, content: string) => void;
   markComplete: (id: string, complete: boolean) => void;
+  remove: (id: string) => void;
 
   get: (id: string) => Artifact | null;
+  getByName: (name: string) => Artifact[];
   list: () => Artifact[];
 
   addEvidence: (e: EvidenceEntry) => void;
@@ -143,9 +145,30 @@ const createStore = (set: any, get: any): ArtifactStoreState => ({
         }));
       },
 
+      remove: (id: string) => {
+        const key = ensureArtifactId(id);
+        const exists = get().artifactsById[key];
+        if (!exists) throw new Error('ARTIFACT_NOT_FOUND');
+        set((prev) => {
+          const nextArtifacts = { ...prev.artifactsById };
+          delete nextArtifacts[key];
+          return {
+            artifactsById: nextArtifacts,
+            order: prev.order.filter((x) => x !== key),
+            evidence: prev.evidence.filter((e) => (e as any).artifactId !== key)
+          };
+        });
+      },
+
       get: (id: string) => {
         const key = ensureArtifactId(id);
         return get().artifactsById[key] || null;
+      },
+
+      getByName: (name: string) => {
+        const target = String(name || '').trim().toLowerCase();
+        if (!target) return [];
+        return Object.values(get().artifactsById).filter((a) => a.name.toLowerCase() === target);
       },
 
       list: () => {
