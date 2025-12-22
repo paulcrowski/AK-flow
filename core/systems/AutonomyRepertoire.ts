@@ -73,6 +73,7 @@ export type AutonomyAction =
   | 'SUMMARIZE'  // Summarize conversation
   | 'EXPLORE'    // Propose new topic (restricted) - DEPRECATED in P0.1
   | 'WORK'       // P0.1: Append to pending artifact
+  | 'MAINTAIN'   // P0: System maintenance (snapshot, cleanup)
   | 'SILENCE';   // Say nothing (default fallback)
 
 /**
@@ -228,6 +229,20 @@ export function selectAction(ctx: UnifiedContext): ActionDecision {
       suggestedPrompt: buildActionPrompt('WORK', ctx, grounding, pendingWork)
     };
   }
+
+  const store = useArtifactStore.getState();
+  const artifacts = store.list();
+  const isStale = grounding.silenceDurationSec > 300;
+  const needsSnapshot = artifacts.length > 5;
+  if (!pendingWork && (isStale || needsSnapshot)) {
+    return {
+      action: 'MAINTAIN',
+      allowed: true,
+      reason: isStale ? 'No pending work and conversation stale (>5min)' : 'No pending work and artifact debt (>5)',
+      groundingScore: 0.5,
+      suggestedPrompt: buildActionPrompt('MAINTAIN', ctx, grounding)
+    };
+  }
   
   // Default: SILENCE
   return {
@@ -322,6 +337,13 @@ ARTIFACT: "${pendingWork?.artifactName || 'unknown'}" (${pendingWork?.artifactId
 INSTRUCTION: Generate 1-2 paragraphs to append to this artifact. Use [APPEND: ${pendingWork?.artifactId}] tag.
 After appending, say ONE sentence: "Dodałem fragment do ${pendingWork?.artifactName}. Kontynuować?"
 DO NOT: Propose new topics. DO NOT ask "czy chciałbyś...". Just work.`;
+
+    case 'MAINTAIN':
+      return `
+ACTION: MAINTAIN - preserve state.
+INSTRUCTION: Create a snapshot now by outputting exactly: [SNAPSHOT]
+Then say one short sentence in Polish confirming snapshot creation.
+DO NOT: Start new topics.`;
 
     default:
       return '';
