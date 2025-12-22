@@ -19,7 +19,15 @@ type P0MetricState = {
     parseFailCount: number;
 };
 
-const p0MetricByTraceId = new Map<string, { tickNumber: number; state: P0MetricState }>();
+const getP0MetricStore = (() => {
+    let store: Map<string, { tickNumber: number; state: P0MetricState }> | null = null;
+    return () => {
+        if (!store) {
+            store = new Map();
+        }
+        return store;
+    };
+})();
 
 function emptyP0MetricState(): P0MetricState {
     return {
@@ -40,12 +48,14 @@ function emptyP0MetricState(): P0MetricState {
 
 export function p0MetricStartTick(traceId: string, tickNumber: number): void {
     if (!traceId) return;
-    p0MetricByTraceId.set(traceId, { tickNumber, state: emptyP0MetricState() });
+    const store = getP0MetricStore();
+    store.set(traceId, { tickNumber, state: emptyP0MetricState() });
 }
 
 export function p0MetricAdd(traceId: string, patch: Partial<P0MetricState>): void {
     if (!traceId) return;
-    const cur = p0MetricByTraceId.get(traceId);
+    const store = getP0MetricStore();
+    const cur = store.get(traceId);
     if (!cur) return;
 
     const s = cur.state;
@@ -61,11 +71,12 @@ export function p0MetricAdd(traceId: string, patch: Partial<P0MetricState>): voi
         autonomyFail: s.autonomyFail + (patch.autonomyFail ?? 0),
         parseFailCount: s.parseFailCount + (patch.parseFailCount ?? 0)
     };
-    p0MetricByTraceId.set(traceId, cur);
+    store.set(traceId, cur);
 }
 
 export function publishP0Metric(traceId: string, endedAt: number): void {
-    const cur = traceId ? p0MetricByTraceId.get(traceId) : undefined;
+    const store = getP0MetricStore();
+    const cur = traceId ? store.get(traceId) : undefined;
     if (!cur) return;
 
     publishTickPacket({

@@ -252,8 +252,7 @@ export function selectAction(ctx: UnifiedContext): ActionDecision {
     };
   }
   
-  // Priority 4: P0.1 Work-First - if pending work exists, WORK; otherwise SILENCE
-  // EXPLORE is deprecated - no more topic proposals
+  // Priority 4: P0.1 Work-First - prefer WORK if pending exists, otherwise EXPLORE when allowed
   if (!grounding.hasActiveTopic || grounding.isConversationStale) {
     if (grounding.silenceDurationSec >= exploreMinSilenceSec) {
       const pendingWork = findPendingWork();
@@ -266,18 +265,18 @@ export function selectAction(ctx: UnifiedContext): ActionDecision {
           suggestedPrompt: buildActionPrompt('WORK', ctx, grounding, pendingWork)
         };
       }
-      // No pending work - SILENCE (no topic proposals)
       return {
-        action: 'SILENCE',
+        action: 'EXPLORE',
         allowed: true,
-        reason: 'No pending work, staying silent (Work-First policy)',
-        groundingScore: 0
+        reason: 'No active topic and silence threshold met, exploring new topic',
+        groundingScore: 0.4,
+        suggestedPrompt: buildActionPrompt('EXPLORE', ctx, grounding)
       };
     } else {
       return {
         action: 'SILENCE',
         allowed: true,
-        reason: `Silence ${grounding.silenceDurationSec.toFixed(0)}s < ${exploreMinSilenceSec}s required`,
+        reason: `EXPLORE blocked: silence ${grounding.silenceDurationSec.toFixed(0)}s < ${exploreMinSilenceSec}s required`,
         groundingScore: 0
       };
     }
