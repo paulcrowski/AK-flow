@@ -33,7 +33,7 @@ import { isMemorySubEnabled } from '../core/config/featureFlags';
 import { getCurrentTraceId, getStartupTraceId } from '../core/trace/TraceContext';
 import { loadConversation, loadConversationForSession, syncToLocalStorage, mapTurnsToUiMessages } from '../core/memory/ConversationStore';
 import { KernelController } from '../core/runner/KernelController';
-import { initRuntime, type RuntimeHandle } from '../runtime/initRuntime';
+import { initRuntime, type RuntimeHandle } from '@runtime/initRuntime';
 
 // Deterministic RNG for reproducible behavior
 const rng = createRng(SYSTEM_CONFIG.rng.seed);

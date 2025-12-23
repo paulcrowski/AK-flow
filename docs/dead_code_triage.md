@@ -7,23 +7,83 @@ Rules:
 - QUARANTINE: no callsite, but historical/reference value.
 - DELETE: no callsite + no reference value + causes confusion.
 
-Fields:
-- Candidate: file or symbol
-- Purpose: why it exists
-- Callsite: exact path(s) or "none"
-- Flags: feature flag or runtime condition
-- Decision: KEEP / QUARANTINE / DELETE
-- Notes: follow-ups
+Pola (skrót):
+- Co robi
+- Korzyść
+- Wada/ryzyko
+- Callsite (gdzie żyje)
+- Decyzja (KEEP / QUARANTINE / DELETE)
 
-| Candidate | Purpose | Callsite | Flags | Decision | Notes |
-| --- | --- | --- | --- | --- | --- |
-| `VolitionSystem.shouldSpeak` | Legacy speech gate: checks content, repetition, refractory window, limbic fear, silence bonus, pressure threshold | `__tests__/unit/VolitionSystem.test.ts` only | None | TBD | No runtime callsites; candidate to quarantine or delete. |
-| `VolitionSystem.evaluateVolition` | Legacy simple gate: content present + voicePressure > 0.75 | `src/core/systems/VolitionSystem.ts` export only | None | TBD | No runtime callsites; consider removing after audit. |
-| `SessionMemoryService` | Session stats for "yesterday/today" questions | `src/core/systems/cortex/processUserMessage.ts`, `src/core/systems/eventloop/AutonomousVolitionStep.ts` | None | KEEP | Active runtime usage. |
-| `SnapshotService` | Snapshot export + DB save | `src/tools/toolParser.ts` (lazy import) | None | KEEP | Active tool path. |
-| `GoalSystem` | Goal formation + journal | `src/core/systems/EventLoop.ts` | None | KEEP | Used in runtime loop. |
-| `ConversationArchive` | Supabase message archive | `src/hooks/useCognitiveKernelLite.ts`, `src/core/memory/ConversationStore.ts`, `src/services/SnapshotService.ts` | None | KEEP | Used in runtime. |
-| `PrismMetrics` | Trust index + penalty caps | `src/core/systems/FactEchoPipeline.ts` | None | KEEP | Used in pipeline. |
-| `BiologicalClock` | Tick schedule defaults | `src/core/kernel/reducer/handlers/tick.ts` | None | KEEP | Used in kernel reducer. |
-| `ConfessionService` | Self-regulation reporting | `src/runtime/initRuntime.ts` | None | KEEP | Runtime init. |
-| `TraitEvolutionEngine` | Trait homeostasis | `src/core/services/WakeService.ts` | None | KEEP | Singleton in runtime. |
+## KEEP (używane w runtime)
+
+`SessionMemoryService`
+Co robi: Dostarcza fakty o sesjach (dziś/wczoraj/tematy) do kontekstu LLM.
+Korzyść: Odpowiedzi na pytania o historię są ugruntowane.
+Wada/ryzyko: Zależy od storage; trzeba defensywnie fallbackować.
+Callsite: `src/core/systems/cortex/processUserMessage.ts`, `src/core/systems/eventloop/AutonomousVolitionStep.ts`.
+Decyzja: KEEP.
+
+`SnapshotService`
+Co robi: Generuje snapshot + zapis do DB.
+Korzyść: Twardy artefakt stanu.
+Wada/ryzyko: Wymaga supabase; bez niego tylko lokalnie.
+Callsite: `src/tools/toolParser.ts` (lazy import).
+Decyzja: KEEP.
+
+`GoalSystem`
+Co robi: Formowanie celów + journaling.
+Korzyść: Autonomia ma „co robić”.
+Wada/ryzyko: Może spamować celami bez zdrowych limitów.
+Callsite: `src/core/systems/EventLoop.ts`.
+Decyzja: KEEP.
+
+`ConversationArchive`
+Co robi: Archiwizuje rozmowy do bazy.
+Korzyść: Historia rozmów i session stats.
+Wada/ryzyko: Supabase down = brak danych.
+Callsite: `src/hooks/useCognitiveKernelLite.ts`, `src/core/memory/ConversationStore.ts`, `src/services/SnapshotService.ts`.
+Decyzja: KEEP.
+
+`PrismMetrics`
+Co robi: Trust index + limity kar.
+Korzyść: Chroni przed nadmiernym karaniem i drift.
+Wada/ryzyko: Trudne do debugowania, jeśli metryki się rozjadą.
+Callsite: `src/core/systems/FactEchoPipeline.ts`.
+Decyzja: KEEP.
+
+`BiologicalClock`
+Co robi: Harmonogram ticków (sen/czuwanie).
+Korzyść: Stabilny rytm ticków.
+Wada/ryzyko: Złe progi mogą spowolnić reakcje.
+Callsite: `src/core/kernel/reducer/handlers/tick.ts`.
+Decyzja: KEEP.
+
+`ConfessionService`
+Co robi: Samoregulacja + raporty zgodności.
+Korzyść: Kontrola jakości i transparentność.
+Wada/ryzyko: Głośne logi przy awariach.
+Callsite: `src/runtime/initRuntime.ts`.
+Decyzja: KEEP.
+
+`TraitEvolutionEngine`
+Co robi: Homeostaza cech osobowości.
+Korzyść: Stabilna ewolucja traits.
+Wada/ryzyko: Ukryty singleton (trudniej testować).
+Callsite: `src/core/services/WakeService.ts`.
+Decyzja: KEEP.
+
+## KANDYDACI DO ZMIANY (TBD)
+
+`VolitionSystem.shouldSpeak`
+Co robi: Legacy gate mowy (treść, powtórki, refractory window, limbic fear, silence bonus, próg).
+Korzyść: Było główną logiką mowy przed ExecutiveGate.
+Wada/ryzyko: Dual-path, brak callsite w runtime.
+Callsite: `__tests__/unit/VolitionSystem.test.ts` tylko.
+Decyzja: QUARANTINE albo DELETE.
+
+`VolitionSystem.evaluateVolition`
+Co robi: Prosty legacy gate (content + voicePressure > 0.75).
+Korzyść: Minimalny wrapper wsteczny.
+Wada/ryzyko: Nieużywany, może mylić.
+Callsite: `src/core/systems/VolitionSystem.ts` export only.
+Decyzja: QUARANTINE albo DELETE.
