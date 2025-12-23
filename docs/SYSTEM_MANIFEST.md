@@ -1,6 +1,6 @@
 # AK-FLOW: Cognitive Agent Architecture Manifest
-**System Version:** 6.8 (P0.1.2 Hardening: Work-First Autonomy + Token Audit)  
-**Last Updated:** 2025-12-22  
+**System Version:** 6.9 (P1.1-1.5 Stabilization + Persona Contract)  
+**Last Updated:** 2025-12-23  
 **Architecture Type:** Active Inference (Friston) + Global Workspace Theory + Multi-Modal RAG + **Stateless Inference Engine**  
 **Status:** Autonomous / Stateful / Modular / Self-Aware / Goal-Driven / Personality-Driven / **Emergent Identity**
 
@@ -28,6 +28,22 @@ We embrace the artificial nature as a feature, not a bug.
 - **Measurable Soul:** Emotions and "vibes" are allowed, but they must map to system metrics (Energy, Dopamine), not just literary roleplay.
 
 ---
+
+## What's New in V6.9 (2025-12-23)
+
+### P1.1-1.5 Stabilization + Persona Contract
+
+**Cel:** ugruntowanie pamieci sesji, jedna bramka mowy, czytelny contract persony, lepsza widocznosc artefaktow i izolacja legacy.
+
+**Wklad:**
+- SessionMemoryService: dane 'wczoraj/dzisiaj/tematy' w kontekscie (safe fallback + testy).
+- Single speech gate: reactive/goal/autonomy przez ExecutiveGate + legacy gate w kwarantannie.
+- Persona Contract: reguly zachowania (evidence-first, no-assistant-speak) + guard retry.
+- Artifact visibility: auto-open panel + explicit confirmations + small-screen dropdown.
+- Legacy isolation: docs/_archive/ + src/_legacy/VolitionSpeechGate.ts.
+
+**Testy:**
+- npm test / npm run build: last known PASS earlier in session; not rerun after latest commits.
 
 ## 🆕 What's New in V6.8 (2025-12-22)
 

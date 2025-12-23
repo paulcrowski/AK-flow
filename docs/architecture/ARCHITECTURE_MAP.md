@@ -1,6 +1,6 @@
 # 🧠 AK-FLOW Architecture Map
 
-> **Wersja:** 6.8 (2025-12-22)
+> **Wersja:** 6.9 (2025-12-23)
 > **Cel:** Prosta mapa jak działa agent i jaki ma flow
 
 ## Archive policy
@@ -9,6 +9,17 @@
 Ten katalog jest wykluczony z kompilacji TypeScript i służy wyłącznie jako referencja do poprzednich iteracji.
 
 ---
+
+## FAZA 6.9: Stabilization + Persona Contract (2025-12-23)
+
+**Cel:** uporzadkowanie sciezki mowy, pamieci sesji i zachowania persony; poprawa widocznosci artefaktow; izolacja legacy.
+
+**Mechanika:**
+- SessionMemoryService -> UnifiedContext (reactive + autonomy) z bezpiecznym fallback.
+- Jedna bramka mowy: ExecutiveGate; legacy Volition gate przeniesiony do src/_legacy.
+- Persona Contract w promptach + guard wykrywajacy assistant-speak.
+- Artefakty: auto-open panel + jawne potwierdzenia + dropdown na male ekrany.
+- Legacy archiwum: docs/_archive/.
 
 ## 🆕 FAZA 6.8: P0.1.2 Hardening (Autonomy WORK/SILENCE + Prompt Stats) (2025-12-22)
 

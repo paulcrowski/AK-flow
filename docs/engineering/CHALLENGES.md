@@ -25,6 +25,30 @@
 
 ---
 
+## Problem #25: Assistant-speak i persona drift
+
+**Data:** 2025-12-23
+**Trudnosc:** 2/5
+**Status:** ROZWIAZANY (Persona Contract + guard)
+
+### Objawy
+- Odpowiedzi zbyt 'asystenckie' (np. 'jak moge pomoc'), bez twardego oparcia w faktach.
+
+### Diagnoza
+- Brak twardego kontraktu zachowania w promptach.
+- Guard nie wykrywal genericznych fraz pomocowych.
+
+### Rozwiazanie
+- Dodano Persona Contract do promptu (evidence-first, brak assistant-speak).
+- PersonaGuard wykrywa assistant-speak i wymusza retry.
+
+### Pliki
+- src/core/context/UnifiedContextBuilder.ts
+- src/core/systems/PersonaGuard.ts
+- docs/architecture/PERSONA_CONTRACT.md
+
+---
+
 ## Problem #24: Strict Grounded Mode — provenance confusion + parse fallback
 
 **Data:** 2025-12-17
