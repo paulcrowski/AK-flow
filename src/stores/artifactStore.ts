@@ -63,6 +63,8 @@ type ArtifactStoreState = {
   artifactsById: Record<string, Artifact>;
   order: string[];
   evidence: EvidenceEntry[];
+  lastCreatedId: string | null;
+  lastCreatedAt: number | null;
 
   create: (name: string, content: string) => string;
   append: (id: string, content: string) => void;
@@ -96,6 +98,8 @@ const createStore = (set: StoreSet, get: StoreGet): ArtifactStoreState => ({
   artifactsById: {},
   order: [],
   evidence: [],
+  lastCreatedId: null,
+  lastCreatedAt: null,
 
   create: (name: string, content: string) => {
     const safeName = String(name || '').trim() || 'artifact.txt';
@@ -112,7 +116,9 @@ const createStore = (set: StoreSet, get: StoreGet): ArtifactStoreState => ({
 
     set((prev) => ({
       artifactsById: { ...prev.artifactsById, [id]: artifact },
-      order: [id, ...prev.order.filter((x: string) => x !== id)]
+      order: [id, ...prev.order.filter((x: string) => x !== id)],
+      lastCreatedId: id,
+      lastCreatedAt: now
     }));
 
     return id;
@@ -208,7 +214,7 @@ const createStore = (set: StoreSet, get: StoreGet): ArtifactStoreState => ({
   },
 
   resetForTesting: () => {
-    set({ artifactsById: {}, order: [], evidence: [] });
+    set({ artifactsById: {}, order: [], evidence: [], lastCreatedId: null, lastCreatedAt: null });
   }
 });
 

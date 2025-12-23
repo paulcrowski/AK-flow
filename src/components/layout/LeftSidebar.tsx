@@ -59,6 +59,7 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
   const [artifactsOpen, setArtifactsOpen] = React.useState(false);
   const artifactOrder = useArtifactStore((s) => s.order);
   const artifactsById = useArtifactStore((s) => s.artifactsById);
+  const lastCreatedId = useArtifactStore((s) => s.lastCreatedId);
   const artifacts = useMemo(
     () => artifactOrder.map((id) => artifactsById[id]).filter(Boolean),
     [artifactOrder, artifactsById]
@@ -67,6 +68,18 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
   const clearEvidence = useArtifactStore((s) => s.clearEvidence);
   const removeArtifact = useArtifactStore((s) => s.remove);
   const [lastAction, setLastAction] = React.useState<string | null>(null);
+  const lastCreatedIdRef = React.useRef<string | null>(null);
+
+  React.useEffect(() => {
+    if (!lastCreatedId || lastCreatedIdRef.current === lastCreatedId) return;
+    lastCreatedIdRef.current = lastCreatedId;
+    const created = artifactsById[lastCreatedId];
+    if (!created) return;
+    setArtifactsOpen(true);
+    setLastAction(`Created ${created.name}`);
+    const t = setTimeout(() => setLastAction(null), 2500);
+    return () => clearTimeout(t);
+  }, [artifactsById, lastCreatedId]);
 
   const copyText = async (text: string) => {
     const payload = String(text || '');
