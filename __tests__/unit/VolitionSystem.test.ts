@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { VolitionSystem } from '@core/systems/VolitionSystem';
+import { VolitionSpeechGate } from '@/_legacy/VolitionSpeechGate';
 import type { LimbicState } from '@/types';
 
 const calmLimbic: LimbicState = {
@@ -9,27 +9,27 @@ const calmLimbic: LimbicState = {
     satisfaction: 0.5
 };
 
-describe('VolitionSystem.shouldSpeak', () => {
+describe('VolitionSpeechGate.shouldSpeak', () => {
     it('should inhibit empty content', () => {
-        const d = VolitionSystem.shouldSpeak('', 1, 0, calmLimbic, []);
+        const d = VolitionSpeechGate.shouldSpeak('', 1, 0, calmLimbic, []);
         expect(d.shouldSpeak).toBe(false);
         expect(d.reason).toBe('NO_CONTENT');
     });
 
     it('should respect speech refractory window', () => {
         const now = Date.now();
-        const d = VolitionSystem.shouldSpeak('hello', 1, 0, calmLimbic, [], now - 100, now, false);
+        const d = VolitionSpeechGate.shouldSpeak('hello', 1, 0, calmLimbic, [], now - 100, now, false);
         expect(d.shouldSpeak).toBe(false);
         expect(d.reason).toBe('SPEECH_REFRACTORY');
     });
 
     it('should speak when pressure + silence bonus crosses threshold', () => {
-        const d = VolitionSystem.shouldSpeak('hello', 0.6, 100, calmLimbic, [], undefined, undefined, false);
+        const d = VolitionSpeechGate.shouldSpeak('hello', 0.6, 100, calmLimbic, [], undefined, undefined, false);
         expect(d.shouldSpeak).toBe(true);
     });
 
     it('should not speak while sleeping', () => {
-        const d = VolitionSystem.shouldSpeak(
+        const d = VolitionSpeechGate.shouldSpeak(
             'hello', 1, 100, calmLimbic, [],
             undefined, undefined, false, true
         );

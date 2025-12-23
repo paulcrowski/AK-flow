@@ -74,16 +74,16 @@ Decyzja: KEEP.
 
 ## KANDYDACI DO ZMIANY (TBD)
 
-`VolitionSystem.shouldSpeak`
+`VolitionSystem.shouldSpeak` → przeniesione do `src/_legacy/VolitionSpeechGate.ts`
 Co robi: Legacy gate mowy (treść, powtórki, refractory window, limbic fear, silence bonus, próg).
-Korzyść: Było główną logiką mowy przed ExecutiveGate.
-Wada/ryzyko: Dual-path, brak callsite w runtime.
-Callsite: `__tests__/unit/VolitionSystem.test.ts` tylko.
-Decyzja: QUARANTINE albo DELETE.
+Korzyść: Zachowuje historyczną logikę do porównań/testów.
+Wada/ryzyko: Dual-path, nie używać w runtime.
+Callsite: `__tests__/unit/VolitionSystem.test.ts` (legacy).
+Decyzja: QUARANTINE.
 
-`VolitionSystem.evaluateVolition`
+`VolitionSystem.evaluateVolition` → przeniesione do `src/_legacy/VolitionSpeechGate.ts`
 Co robi: Prosty legacy gate (content + voicePressure > 0.75).
-Korzyść: Minimalny wrapper wsteczny.
+Korzyść: Wsteczna referencja.
 Wada/ryzyko: Nieużywany, może mylić.
-Callsite: `src/core/systems/VolitionSystem.ts` export only.
-Decyzja: QUARANTINE albo DELETE.
+Callsite: `src/_legacy/VolitionSpeechGate.ts` only.
+Decyzja: QUARANTINE.
