@@ -19,6 +19,7 @@ describe('SessionMemory', () => {
     it('should show "first conversation today" when sessionsToday is 0', () => {
       const session: SessionMemory = {
         sessionsToday: 0,
+        sessionsYesterday: 0,
         sessionsThisWeek: 0,
         messagesToday: 0,
         lastInteractionAt: null,
@@ -33,6 +34,7 @@ describe('SessionMemory', () => {
     it('should show sessions and messages count when > 0', () => {
       const session: SessionMemory = {
         sessionsToday: 3,
+        sessionsYesterday: 2,
         sessionsThisWeek: 5,
         messagesToday: 25,
         lastInteractionAt: null,
@@ -44,6 +46,7 @@ describe('SessionMemory', () => {
       expect(result).toContain('Sessions today: 3');
       expect(result).toContain('Messages today: 25');
       expect(result).toContain('Sessions this week: 5');
+      expect(result).toContain('Sessions yesterday: 2');
     });
     
     it('should show last interaction time in minutes', () => {
@@ -51,6 +54,7 @@ describe('SessionMemory', () => {
       
       const session: SessionMemory = {
         sessionsToday: 1,
+        sessionsYesterday: 0,
         sessionsThisWeek: 1,
         messagesToday: 5,
         lastInteractionAt: tenMinutesAgo,
@@ -68,6 +72,7 @@ describe('SessionMemory', () => {
       
       const session: SessionMemory = {
         sessionsToday: 1,
+        sessionsYesterday: 0,
         sessionsThisWeek: 1,
         messagesToday: 5,
         lastInteractionAt: threeHoursAgo,
@@ -83,6 +88,7 @@ describe('SessionMemory', () => {
     it('should show recent topics', () => {
       const session: SessionMemory = {
         sessionsToday: 2,
+        sessionsYesterday: 0,
         sessionsThisWeek: 2,
         messagesToday: 10,
         lastInteractionAt: null,
@@ -99,6 +105,7 @@ describe('SessionMemory', () => {
     it('should limit recent topics to 3', () => {
       const session: SessionMemory = {
         sessionsToday: 1,
+        sessionsYesterday: 0,
         sessionsThisWeek: 1,
         messagesToday: 5,
         lastInteractionAt: null,
@@ -117,6 +124,7 @@ describe('SessionMemory', () => {
     it('should not show week sessions if same as today', () => {
       const session: SessionMemory = {
         sessionsToday: 3,
+        sessionsYesterday: 0,
         sessionsThisWeek: 3, // Same as today
         messagesToday: 15,
         lastInteractionAt: null,
@@ -153,6 +161,7 @@ describe('SessionMemory', () => {
         lastUserInteractionAt: Date.now(),
         sessionMemory: {
           sessionsToday: 2,
+          sessionsYesterday: 0,
           sessionsThisWeek: 5,
           messagesToday: 20,
           lastInteractionAt: new Date(Date.now() - 30 * 60 * 1000).toISOString(),

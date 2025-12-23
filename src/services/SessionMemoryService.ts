@@ -23,6 +23,8 @@ import { getCurrentAgentId } from './supabase';
 export interface SessionStats {
   /** Liczba sesji dzisiaj */
   sessionsToday: number;
+  /** Liczba sesji wczoraj */
+  sessionsYesterday: number;
   /** Liczba sesji w tym tygodniu */
   sessionsThisWeek: number;
   /** Liczba wiadomości dzisiaj */
@@ -82,6 +84,7 @@ export const SessionMemoryService = {
       const now = new Date();
       const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
       const weekStart = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
+      const yesterdayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1).toISOString();
       
       // Query messages from today
       const { data: todayMessages, error: todayError } = await supabase
@@ -111,6 +114,17 @@ export const SessionMemoryService = {
       // Calculate stats
       const todaySessions = new Set((todayMessages || []).map(m => m.session_id));
       const weekSessions = new Set((weekMessages || []).map(m => m.session_id));
+
+      const yesterdayStartMs = Date.parse(yesterdayStart);
+      const todayStartMs = Date.parse(todayStart);
+      const yesterdaySessions = new Set(
+        (weekMessages || [])
+          .filter((m: any) => {
+            const ts = Number(m?.timestamp);
+            return Number.isFinite(ts) && ts >= yesterdayStartMs && ts < todayStartMs;
+          })
+          .map((m: any) => m.session_id)
+      );
       
       // Extract recent topics (simple: first 5 words of last 3 user messages)
       const recentTopics = (todayMessages || [])
@@ -138,6 +152,7 @@ export const SessionMemoryService = {
       
       const stats: SessionStats = {
         sessionsToday: todaySessions.size,
+        sessionsYesterday: yesterdaySessions.size,
         sessionsThisWeek: weekSessions.size,
         messagesToday: (todayMessages || []).length,
         lastInteractionAt,
@@ -163,6 +178,7 @@ export const SessionMemoryService = {
   getEmptyStats(): SessionStats {
     return {
       sessionsToday: 0,
+      sessionsYesterday: 0,
       sessionsThisWeek: 0,
       messagesToday: 0,
       lastInteractionAt: null,
@@ -186,6 +202,12 @@ export const SessionMemoryService = {
     
     if (stats.sessionsThisWeek > stats.sessionsToday) {
       lines.push(`- Sessions this week: ${stats.sessionsThisWeek}`);
+    }
+
+    if (stats.sessionsYesterday > 0) {
+      lines.push(`- Sessions yesterday: ${stats.sessionsYesterday}`);
+    } else {
+      lines.push('- No sessions yesterday');
     }
     
     if (stats.lastInteractionAt) {

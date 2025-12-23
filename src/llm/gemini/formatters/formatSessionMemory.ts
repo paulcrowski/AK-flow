@@ -16,6 +16,12 @@ export function formatSessionMemory(ctx: UnifiedContext): string {
     lines.push(`- Sessions this week: ${session.sessionsThisWeek}`);
   }
 
+  if (session.sessionsYesterday > 0) {
+    lines.push(`- Sessions yesterday: ${session.sessionsYesterday}`);
+  } else {
+    lines.push('- No sessions yesterday');
+  }
+
   if (session.lastInteractionAt) {
     const lastTime = new Date(session.lastInteractionAt);
     const now = new Date();

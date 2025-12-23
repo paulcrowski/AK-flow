@@ -99,6 +99,7 @@ export interface HardFacts {
  */
 export interface SessionMemory {
   sessionsToday: number;
+  sessionsYesterday: number;
   sessionsThisWeek: number;
   messagesToday: number;
   lastInteractionAt: string | null;
@@ -383,6 +384,12 @@ ACTIVE GOAL (${activeGoal.source.toUpperCase()}):
     
     if (session.sessionsThisWeek > session.sessionsToday) {
       lines.push(`- Sessions this week: ${session.sessionsThisWeek}`);
+    }
+
+    if (session.sessionsYesterday > 0) {
+      lines.push(`- Sessions yesterday: ${session.sessionsYesterday}`);
+    } else {
+      lines.push('- No sessions yesterday');
     }
     
     if (session.lastInteractionAt) {
