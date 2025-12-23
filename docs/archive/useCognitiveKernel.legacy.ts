@@ -1,4 +1,6 @@
 
+// LEGACY - nie używać, nie kompiluje się, referencja historyczna
+
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { eventBus } from '../core/EventBus';
 import { CortexService } from '../services/gemini';

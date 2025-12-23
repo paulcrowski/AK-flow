@@ -3,6 +3,11 @@
 > **Wersja:** 6.8 (2025-12-22)
 > **Cel:** Prosta mapa jak działa agent i jaki ma flow
 
+## Archive policy
+
+`docs/archive/` to kwarantanna na historyczne pliki (LEGACY) – **nie używać w produkcji**.
+Ten katalog jest wykluczony z kompilacji TypeScript i służy wyłącznie jako referencja do poprzednich iteracji.
+
 ---
 
 ## 🆕 FAZA 6.8: P0.1.2 Hardening (Autonomy WORK/SILENCE + Prompt Stats) (2025-12-22)

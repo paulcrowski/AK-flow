@@ -1,11 +1,12 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { EventLoop } from './EventLoop';
-import { eventBus } from '../EventBus';
-import { getCurrentAgentId } from '../../services/supabase';
-import { ThinkModeSelector } from './eventloop/index';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { EventLoop } from '@core/systems/EventLoop';
+import { eventBus } from '@core/EventBus';
+import { getCurrentAgentId } from '@services/supabase';
+import { ThinkModeSelector } from '@core/systems/eventloop/ThinkModeSelector';
+import { resetAutonomyBackoff } from '@core/systems/eventloop/AutonomousVolitionStep';
 
 // Mock dependencies
-vi.mock('./LimbicSystem', () => ({
+vi.mock('@core/systems/LimbicSystem', () => ({
     LimbicSystem: {
         applyHomeostasis: (l: any) => l,
         applyMoodShift: (l: any) => l,
@@ -14,7 +15,7 @@ vi.mock('./LimbicSystem', () => ({
     }
 }));
 
-vi.mock('./CortexSystem', () => ({
+vi.mock('@core/systems/CortexSystem', () => ({
     CortexSystem: {
         processUserMessage: vi.fn().mockResolvedValue({
             responseText: 'Mock Response',
@@ -24,9 +25,22 @@ vi.mock('./CortexSystem', () => ({
     }
 }));
 
-vi.mock('../../llm/gemini', () => ({
+vi.mock('@core/systems/GoalSystem', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('@core/systems/GoalSystem')>();
+    return {
+        ...actual,
+        formGoal: vi.fn().mockResolvedValue(null)
+    };
+});
+
+vi.mock('@llm/gemini', () => ({
     CortexService: {
         autonomousVolition: vi.fn().mockResolvedValue({
+            internal_monologue: 'Autonomous processing...',
+            voice_pressure: 0.8,
+            speech_content: 'Autonomous Speech'
+        }),
+        autonomousVolitionV2: vi.fn().mockResolvedValue({
             internal_monologue: 'Autonomous processing...',
             voice_pressure: 0.8,
             speech_content: 'Autonomous Speech'
@@ -37,12 +51,16 @@ vi.mock('../../llm/gemini', () => ({
     }
 }));
 
-vi.mock('../../services/supabase', () => ({
-    getCurrentAgentId: vi.fn().mockReturnValue('test-agent'),
-    setCurrentAgentId: vi.fn()
-}));
+vi.mock('@services/supabase', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('@services/supabase')>();
+    return {
+        ...actual,
+        getCurrentAgentId: vi.fn().mockReturnValue('test-agent'),
+        setCurrentAgentId: vi.fn()
+    };
+});
 
-vi.mock('./VolitionSystem', () => ({
+vi.mock('@core/systems/VolitionSystem', () => ({
     VolitionSystem: {
         shouldInitiateThought: vi.fn().mockReturnValue(true),
         shouldSpeak: vi.fn().mockReturnValue({ shouldSpeak: true })
@@ -55,8 +73,15 @@ describe('EventLoop', () => {
     let mockCallbacks: EventLoop.LoopCallbacks;
 
     beforeEach(() => {
+        const baseNow = Date.now();
+        vi.useFakeTimers();
+        vi.setSystemTime(baseNow + 3_600_000);
+
+        resetAutonomyBackoff();
         eventBus.clear();
         vi.mocked(getCurrentAgentId).mockReturnValue('test-agent');
+
+        const longAgo = Date.now() - 1_000_000;
 
         mockCtx = {
             soma: { energy: 100, cognitiveLoad: 0, isSleeping: false },
@@ -65,7 +90,7 @@ describe('EventLoop', () => {
             conversation: [],
             autonomousMode: true,
             lastSpeakTimestamp: 0,
-            silenceStart: 0,
+            silenceStart: longAgo,
             thoughtHistory: [],
             poeticMode: false,
             autonomousLimitPerMinute: 2,
@@ -73,7 +98,7 @@ describe('EventLoop', () => {
             goalState: {
                 activeGoal: null,
                 backlog: [],
-                lastUserInteractionAt: Date.now(),
+                lastUserInteractionAt: longAgo,
                 goalsFormedTimestamps: [],
                 lastGoals: []
             },
@@ -98,10 +123,20 @@ describe('EventLoop', () => {
         };
     });
 
+    afterEach(() => {
+        vi.useRealTimers();
+    });
+
     it('should process user input correctly', async () => {
         const result = await EventLoop.runSingleStep(mockCtx, "Hello", mockCallbacks);
 
-        expect(mockCallbacks.onMessage).toHaveBeenCalledWith('assistant', 'Mock Response', 'speech');
+        expect(mockCallbacks.onMessage).toHaveBeenCalledWith('assistant', 'Mock Thought', 'thought');
+        expect(mockCallbacks.onMessage).toHaveBeenCalledWith(
+            'assistant',
+            'Mock Response',
+            'speech',
+            expect.anything()
+        );
         expect(result.silenceStart).toBeGreaterThan(0);
     });
 
@@ -156,15 +191,21 @@ describe('EventLoop', () => {
     it('should respect autonomous budget limit', async () => {
         // 1st run - should pass
         await EventLoop.runSingleStep(mockCtx, null, mockCallbacks);
-        expect(mockCallbacks.onThought).toHaveBeenCalledWith("Autonomous processing...");
+        expect(mockCallbacks.onThought).toHaveBeenCalledWith('Autonomous processing...');
+        const t1 = (mockCallbacks.onThought as any).mock.calls.length;
 
         // 2nd run - should pass
+        vi.advanceTimersByTime(30_000);
         await EventLoop.runSingleStep(mockCtx, null, mockCallbacks);
+        const t2 = (mockCallbacks.onThought as any).mock.calls.length;
+        expect(t2).toBeGreaterThanOrEqual(t1);
 
         // 3rd run - should be blocked by limit (2)
-        (mockCallbacks.onThought as any).mockClear();
+        const beforeThird = (mockCallbacks.onThought as any).mock.calls.length;
+        vi.advanceTimersByTime(30_000);
         await EventLoop.runSingleStep(mockCtx, null, mockCallbacks);
-        expect(mockCallbacks.onThought).not.toHaveBeenCalled();
+        const afterThird = (mockCallbacks.onThought as any).mock.calls.length;
+        expect(afterThird).toBe(beforeThird);
     });
 
     it.skip('should run autonomous step without chemistry when disabled', async () => {

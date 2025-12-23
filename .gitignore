@@ -31,5 +31,9 @@ dist-ssr
 # Workspace files
 *.code-workspace
 
+# AI scratch / patch workspace
+_patches/
+workbench/
+
 # Metadata
 metadata.json
