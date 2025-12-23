@@ -74,7 +74,6 @@ function findGlobalStateFindings(fileAbs: string): Finding[] {
 // Allowlist = known existing module-level state that is explicitly tolerated for now.
 // This test protects against regressions (new global mutable state).
 const ALLOWLIST: Array<{ file: string; kind?: Finding['kind']; contains?: string }> = [
-  { file: 'src/core/systems/LimbicSystem.ts', kind: 'let', contains: 'synapticMemory' },
   { file: 'src/core/systems/TickCommitter.ts', kind: 'let' },
   { file: 'src/core/systems/TickCommitter.ts', kind: 'newMap', contains: 'lastSpeechByAgent' },
   { file: 'src/core/systems/DecisionGate.ts', kind: 'newMap', contains: 'gateStateByAgent' },

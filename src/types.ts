@@ -55,6 +55,27 @@ export interface LimbicState {
   curiosity: number; // 0-1
   frustration: number; // 0-1
   satisfaction: number; // 0-1
+  synapticMemory?: LimbicSynapticMemory;
+}
+
+export interface LimbicSynapticMemory {
+  lastFearDelta: number;
+  lastCuriosityDelta: number;
+  lastSatisfactionDelta: number;
+  lastFrustrationDelta: number;
+  lastShiftTime: number;
+  consecutiveSameDirection: { fear: number; curiosity: number; satisfaction: number; frustration: number };
+}
+
+export function createInitialSynapticMemory(): LimbicSynapticMemory {
+  return {
+    lastFearDelta: 0,
+    lastCuriosityDelta: 0,
+    lastSatisfactionDelta: 0,
+    lastFrustrationDelta: 0,
+    lastShiftTime: 0,
+    consecutiveSameDirection: { fear: 0, curiosity: 0, satisfaction: 0, frustration: 0 }
+  };
 }
 
 export interface SomaState {

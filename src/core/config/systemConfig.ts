@@ -227,6 +227,12 @@ export const SYSTEM_CONFIG = {
     actionLogDedupeMs: 5000,
   },
 
+  // TICK COMMITTER (staleness guard for autonomous speech)
+  tickCommitter: {
+    /** Minimum time since user input before autonomous/goal speech is allowed (ms) */
+    userInputStalenessMs: 2000,
+  },
+
   // ─────────────────────────────────────────────────────────────────────────
   // RPE (Reward Prediction Error) - Dopamine decay
   // ─────────────────────────────────────────────────────────────────────────
@@ -424,6 +430,7 @@ export type SocialDynamicsConfig = typeof SYSTEM_CONFIG.socialDynamics;
 export type StyleGuardConfig = typeof SYSTEM_CONFIG.styleGuard;
 export type VolitionConfig = typeof SYSTEM_CONFIG.volition;
 export type LimbicConfig = typeof SYSTEM_CONFIG.limbic;
+export type TickCommitterConfig = typeof SYSTEM_CONFIG.tickCommitter;
 
 // ═══════════════════════════════════════════════════════════════════════════
 // ACCESSOR FUNCTIONS (Type-safe getters)
@@ -487,6 +494,10 @@ export function getVolitionConfig(): VolitionConfig {
 
 export function getAutonomyConfig(): AutonomyConfig {
   return SYSTEM_CONFIG.autonomy as AutonomyConfig;
+}
+
+export function getTickCommitterConfig(): TickCommitterConfig {
+  return SYSTEM_CONFIG.tickCommitter;
 }
 
 /**

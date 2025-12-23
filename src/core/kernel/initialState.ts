@@ -8,6 +8,7 @@
  */
 
 import type { LimbicState, SomaState, NeurotransmitterState, GoalState, ResonanceField } from '../../types';
+import { createInitialSynapticMemory } from '../../types';
 import type { KernelState } from './types';
 import { DEFAULT_TRAIT_VECTOR } from '../types/TraitVector';
 
@@ -22,7 +23,8 @@ export const INITIAL_LIMBIC: LimbicState = {
   fear: 0.1,
   curiosity: 0.8,       // High curiosity start (11/10 MODE)
   frustration: 0.0,
-  satisfaction: 0.5
+  satisfaction: 0.5,
+  synapticMemory: createInitialSynapticMemory()
 };
 
 export const INITIAL_SOMA: SomaState = {
@@ -75,10 +77,14 @@ export const INITIAL_GOAL_STATE: GoalState = {
 
 export const createInitialKernelState = (overrides?: Partial<KernelState>): KernelState => {
   const now = Date.now();
+  const baseLimbic: LimbicState = {
+    ...INITIAL_LIMBIC,
+    synapticMemory: createInitialSynapticMemory()
+  };
   
-  return {
+  const baseState: KernelState = {
     // Biological substrates
-    limbic: INITIAL_LIMBIC,
+    limbic: baseLimbic,
     soma: INITIAL_SOMA,
     neuro: INITIAL_NEURO,
     resonance: INITIAL_RESONANCE,
@@ -110,9 +116,16 @@ export const createInitialKernelState = (overrides?: Partial<KernelState>): Kern
     
     // Conversation (bounded to 50 turns)
     conversation: [],
-    
-    // Apply overrides
-    ...overrides
+  };
+
+  return {
+    ...baseState,
+    ...overrides,
+    limbic: {
+      ...baseState.limbic,
+      ...(overrides?.limbic ?? {}),
+      synapticMemory: overrides?.limbic?.synapticMemory ?? baseState.limbic.synapticMemory
+    }
   };
 };
 

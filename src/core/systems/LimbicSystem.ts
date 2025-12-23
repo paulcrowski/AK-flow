@@ -12,7 +12,8 @@
  * - Habituation (repeated stimuli have diminishing effect)
  */
 
-import type { LimbicState } from '../../types';
+import type { LimbicState, LimbicSynapticMemory } from '../../types';
+import { createInitialSynapticMemory } from '../../types';
 import { clamp01 } from '../../utils/math';
 import { getLimbicConfig } from '../config/systemConfig';
 import { createLogger } from '../services/LoggerService';
@@ -31,62 +32,46 @@ export interface EmotionalStimulus {
 // BIOLOGICAL EMOTIONAL DAMPER - Stateful synaptic memory
 // ═══════════════════════════════════════════════════════════════════════════
 
-interface SynapticMemory {
-    lastFearDelta: number;
-    lastCuriosityDelta: number;
-    lastSatisfactionDelta: number;
-    lastFrustrationDelta: number;
-    lastShiftTime: number;
-    consecutiveSameDirection: { fear: number; curiosity: number; satisfaction: number; frustration: number };
-}
-
-// Module-level synaptic memory (like long-term potentiation state)
-let synapticMemory: SynapticMemory = {
-    lastFearDelta: 0,
-    lastCuriosityDelta: 0,
-    lastSatisfactionDelta: 0,
-    lastFrustrationDelta: 0,
-    lastShiftTime: 0,
-    consecutiveSameDirection: { fear: 0, curiosity: 0, satisfaction: 0, frustration: 0 }
-};
-
 /**
  * Reset synaptic memory (e.g., on kernel reset)
  */
-export function resetSynapticMemory(): void {
-    synapticMemory = {
-        lastFearDelta: 0,
-        lastCuriosityDelta: 0,
-        lastSatisfactionDelta: 0,
-        lastFrustrationDelta: 0,
-        lastShiftTime: 0,
-        consecutiveSameDirection: { fear: 0, curiosity: 0, satisfaction: 0, frustration: 0 }
-    };
+export function resetSynapticMemory(limbic?: LimbicState): LimbicSynapticMemory | LimbicState {
+    const reset = createInitialSynapticMemory();
+    if (!limbic) return reset;
+    return { ...limbic, synapticMemory: reset };
 }
 
 type EmotionDimension = 'fear' | 'curiosity' | 'satisfaction' | 'frustration';
 
+function ensureSynapticMemory(limbic: LimbicState): LimbicSynapticMemory {
+    const memory = limbic.synapticMemory ?? createInitialSynapticMemory();
+    return {
+        ...memory,
+        consecutiveSameDirection: { ...memory.consecutiveSameDirection }
+    };
+}
+
 /**
  * Get last delta for a given emotion dimension
  */
-function getLastDelta(dimension: EmotionDimension): number {
+function getLastDelta(memory: LimbicSynapticMemory, dimension: EmotionDimension): number {
     switch (dimension) {
-        case 'fear': return synapticMemory.lastFearDelta;
-        case 'curiosity': return synapticMemory.lastCuriosityDelta;
-        case 'satisfaction': return synapticMemory.lastSatisfactionDelta;
-        case 'frustration': return synapticMemory.lastFrustrationDelta;
+        case 'fear': return memory.lastFearDelta;
+        case 'curiosity': return memory.lastCuriosityDelta;
+        case 'satisfaction': return memory.lastSatisfactionDelta;
+        case 'frustration': return memory.lastFrustrationDelta;
     }
 }
 
 /**
  * Set last delta for a given emotion dimension
  */
-function setLastDelta(dimension: EmotionDimension, value: number): void {
+function setLastDelta(memory: LimbicSynapticMemory, dimension: EmotionDimension, value: number): void {
     switch (dimension) {
-        case 'fear': synapticMemory.lastFearDelta = value; break;
-        case 'curiosity': synapticMemory.lastCuriosityDelta = value; break;
-        case 'satisfaction': synapticMemory.lastSatisfactionDelta = value; break;
-        case 'frustration': synapticMemory.lastFrustrationDelta = value; break;
+        case 'fear': memory.lastFearDelta = value; break;
+        case 'curiosity': memory.lastCuriosityDelta = value; break;
+        case 'satisfaction': memory.lastSatisfactionDelta = value; break;
+        case 'frustration': memory.lastFrustrationDelta = value; break;
     }
 }
 
@@ -102,19 +87,27 @@ function setLastDelta(dimension: EmotionDimension, value: number): void {
  * @param dimension - emotion dimension
  * @returns Biologically damped delta
  */
-function biologicalDamping(rawDelta: number, dimension: EmotionDimension): number {
+function biologicalDamping(
+    rawDelta: number,
+    dimension: EmotionDimension,
+    memory: LimbicSynapticMemory,
+    now: number
+): { dampedDelta: number; nextMemory: LimbicSynapticMemory } {
     const config = getLimbicConfig();
-    const now = Date.now();
+    const nextMemory: LimbicSynapticMemory = {
+        ...memory,
+        consecutiveSameDirection: { ...memory.consecutiveSameDirection }
+    };
     
     // 1. EMA SMOOTHING (α = 0.4 → 40% new, 60% old)
     // Like synaptic integration - signals blend over time
     const alpha = config.emaSmoothingAlpha ?? 0.4;
-    const lastDelta = getLastDelta(dimension);
+    const lastDelta = getLastDelta(nextMemory, dimension);
     const smoothedDelta = alpha * rawDelta + (1 - alpha) * lastDelta;
     
     // 2. REFRACTORY PERIOD
     // After recent emotional shift, sensitivity is reduced (like neuron recharge)
-    const timeSinceLastShift = now - synapticMemory.lastShiftTime;
+    const timeSinceLastShift = now - nextMemory.lastShiftTime;
     const refractoryMs = config.refractoryPeriodMs ?? 2000; // 2 seconds
     let refractoryFactor = 1.0;
     if (timeSinceLastShift < refractoryMs) {
@@ -124,26 +117,26 @@ function biologicalDamping(rawDelta: number, dimension: EmotionDimension): numbe
     
     // 3. HABITUATION (Synaptic Fatigue)
     // Repeated same-direction shifts have diminishing effect
-    const consecutive = synapticMemory.consecutiveSameDirection[dimension];
+    const consecutive = nextMemory.consecutiveSameDirection[dimension];
     const habituationFactor = 1 / (1 + consecutive * 0.2); // 20% reduction per consecutive
     
     // Combined biological damping
     const dampedDelta = smoothedDelta * refractoryFactor * habituationFactor;
     
     // Update synaptic memory
-    setLastDelta(dimension, smoothedDelta);
+    setLastDelta(nextMemory, dimension, smoothedDelta);
     
     // Track same-direction shifts for habituation
     const sameDirection = (rawDelta > 0 && lastDelta > 0) || (rawDelta < 0 && lastDelta < 0);
     if (sameDirection && Math.abs(rawDelta) > 0.01) {
-        synapticMemory.consecutiveSameDirection[dimension]++;
+        nextMemory.consecutiveSameDirection[dimension]++;
     } else {
-        synapticMemory.consecutiveSameDirection[dimension] = 0; // Reset on direction change
+        nextMemory.consecutiveSameDirection[dimension] = 0; // Reset on direction change
     }
     
-    synapticMemory.lastShiftTime = now;
+    nextMemory.lastShiftTime = now;
     
-    return dampedDelta;
+    return { dampedDelta, nextMemory };
 }
 
 export const LimbicSystem = {
@@ -191,7 +184,8 @@ export const LimbicSystem = {
             fear: Math.max(config.fearBaseline, Math.min(1, fear)),
             curiosity: Math.max(config.curiosityBaseline, Math.min(1, curiosity)),
             satisfaction: Math.max(config.satisfactionBaseline, Math.min(1, satisfaction)),
-            frustration: Math.max(config.frustrationBaseline, Math.min(1, frustration))
+            frustration: Math.max(config.frustrationBaseline, Math.min(1, frustration)),
+            synapticMemory: currentLimbic.synapticMemory
         };
     },
 
@@ -224,7 +218,8 @@ export const LimbicSystem = {
             fear: decay(current.fear, config.fearBaseline),
             curiosity: decay(current.curiosity, config.curiosityBaseline),
             frustration: decay(current.frustration, config.frustrationBaseline),
-            satisfaction: decay(current.satisfaction, config.satisfactionBaseline)
+            satisfaction: decay(current.satisfaction, config.satisfactionBaseline),
+            synapticMemory: current.synapticMemory
         };
     },
 
@@ -247,6 +242,8 @@ export const LimbicSystem = {
         }
     ): LimbicState {
         const config = getLimbicConfig();
+        const now = Date.now();
+        let synapticMemory = ensureSynapticMemory(currentLimbic);
         
         // Apply biological damping to raw deltas
         let dampedFear: number | undefined;
@@ -255,7 +252,9 @@ export const LimbicSystem = {
         let dampedFrustration: number | undefined;
         
         if (moodShift.fear_delta !== undefined) {
-            dampedFear = biologicalDamping(moodShift.fear_delta, 'fear');
+            const result = biologicalDamping(moodShift.fear_delta, 'fear', synapticMemory, now);
+            dampedFear = result.dampedDelta;
+            synapticMemory = result.nextMemory;
             
             // Log significant damping (for debugging)
             const dampingRatio = Math.abs(dampedFear) / (Math.abs(moodShift.fear_delta) + 0.001);
@@ -267,7 +266,9 @@ export const LimbicSystem = {
         }
         
         if (moodShift.curiosity_delta !== undefined) {
-            dampedCuriosity = biologicalDamping(moodShift.curiosity_delta, 'curiosity');
+            const result = biologicalDamping(moodShift.curiosity_delta, 'curiosity', synapticMemory, now);
+            dampedCuriosity = result.dampedDelta;
+            synapticMemory = result.nextMemory;
             
             const dampingRatio = Math.abs(dampedCuriosity) / (Math.abs(moodShift.curiosity_delta) + 0.001);
             if (dampingRatio < 0.5 && Math.abs(moodShift.curiosity_delta) > 0.1) {
@@ -279,11 +280,15 @@ export const LimbicSystem = {
         
         // PIONEER: Apply damping to satisfaction and frustration too
         if (moodShift.satisfaction_delta !== undefined) {
-            dampedSatisfaction = biologicalDamping(moodShift.satisfaction_delta, 'satisfaction');
+            const result = biologicalDamping(moodShift.satisfaction_delta, 'satisfaction', synapticMemory, now);
+            dampedSatisfaction = result.dampedDelta;
+            synapticMemory = result.nextMemory;
         }
         
         if (moodShift.frustration_delta !== undefined) {
-            dampedFrustration = biologicalDamping(moodShift.frustration_delta, 'frustration');
+            const result = biologicalDamping(moodShift.frustration_delta, 'frustration', synapticMemory, now);
+            dampedFrustration = result.dampedDelta;
+            synapticMemory = result.nextMemory;
         }
         
         // Safety net: final clamp (should rarely trigger with biological damping)
@@ -297,12 +302,13 @@ export const LimbicSystem = {
             return clamped;
         };
         
-        return LimbicSystem.updateEmotionalState(currentLimbic, {
+        const next = LimbicSystem.updateEmotionalState(currentLimbic, {
             fear_delta: safeClamp(dampedFear),
             curiosity_delta: safeClamp(dampedCuriosity),
             satisfaction_delta: safeClamp(dampedSatisfaction),
             frustration_delta: safeClamp(dampedFrustration)
         });
+        return { ...next, synapticMemory };
     },
 
     /**
@@ -312,7 +318,8 @@ export const LimbicSystem = {
         return {
             ...currentLimbic,
             satisfaction: Math.min(1, currentLimbic.satisfaction + 0.1),
-            curiosity: Math.max(0, currentLimbic.curiosity - 0.2) // Curiosity satisfied by speaking
+            curiosity: Math.max(0, currentLimbic.curiosity - 0.2), // Curiosity satisfied by speaking
+            synapticMemory: currentLimbic.synapticMemory
         };
     },
 
@@ -328,7 +335,8 @@ export const LimbicSystem = {
         return {
             ...currentLimbic,
             satisfaction: Math.min(1, currentLimbic.satisfaction + satisfactionGain),
-            curiosity: Math.max(0.1, currentLimbic.curiosity - 0.5)
+            curiosity: Math.max(0.1, currentLimbic.curiosity - 0.5),
+            synapticMemory: currentLimbic.synapticMemory
         };
     },
 
@@ -345,7 +353,8 @@ export const LimbicSystem = {
         return {
             ...state,
             satisfaction: Math.max(0, state.satisfaction - (score * 0.03)),
-            frustration: Math.min(1, state.frustration + (score * 0.01)) // Slight frustration from complexity
+            frustration: Math.min(1, state.frustration + (score * 0.01)), // Slight frustration from complexity
+            synapticMemory: state.synapticMemory
         };
     },
 
@@ -354,12 +363,13 @@ export const LimbicSystem = {
      */
     setEmotionalValue(
         currentLimbic: LimbicState,
-        key: keyof LimbicState,
+        key: keyof Omit<LimbicState, 'synapticMemory'>,
         value: number
     ): LimbicState {
         return {
             ...currentLimbic,
-            [key]: clamp01(value)
+            [key]: clamp01(value),
+            synapticMemory: currentLimbic.synapticMemory
         };
     }
 };

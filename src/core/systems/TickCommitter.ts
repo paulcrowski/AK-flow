@@ -1,6 +1,7 @@
 import { eventBus } from '../EventBus';
 import { AgentType, PacketType } from '../../types';
 import { generateUUID } from '../../utils/uuid';
+import { getTickCommitterConfig } from '../config/systemConfig';
 
 export type TickCommitBlockReason =
     | 'DEDUPED'
@@ -54,7 +55,8 @@ export const TickCommitter = {
         // This prevents "Niesamowite, prawda" when user asked about Einstein
         if (input.origin !== 'reactive' && lastUserInputAt > 0) {
             const staleness = now - lastUserInputAt;
-            if (staleness < 2000) {  // Within 2s of user input = stale autonomous
+            const minStalenessMs = getTickCommitterConfig().userInputStalenessMs;
+            if (staleness < minStalenessMs) {  // Within staleness window = stale autonomous
                 blockedCommits++;
                 totalCommits++;
                 
