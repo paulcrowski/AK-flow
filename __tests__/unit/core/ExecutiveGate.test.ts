@@ -86,6 +86,52 @@ describe('ExecutiveGate - Reactive VETO', () => {
     expect(decision.should_speak).toBe(true);
     expect(decision.reason).toBe('REACTIVE_VETO');
   });
+
+  test('SingleSpeechGatePath: reactive publish uses ExecutiveGate.decide', async () => {
+    const mod = await import('@core/systems/eventloop/ReactiveStep');
+
+    // Spy without adding a new dependency framework
+    const original = ExecutiveGate.decide.bind(ExecutiveGate);
+    let callCount = 0;
+    (ExecutiveGate as any).decide = (...args: any[]) => {
+      callCount++;
+      return (original as any)(...args);
+    };
+
+    try {
+      const callbacks = {
+        onMessage: () => void 0,
+        onThought: () => void 0,
+        onLimbicUpdate: () => void 0
+      };
+
+      const ctx: any = {
+        limbic: createLimbic(),
+        soma: { energy: 100, cognitiveLoad: 0, isSleeping: false },
+        neuro: { dopamine: 55, serotonin: 60, norepinephrine: 50 },
+        conversation: [],
+        silenceStart: Date.now() - 100000,
+        lastSpeakTimestamp: 0,
+        goalState: { lastUserInteractionAt: Date.now() - 100000 },
+        consecutiveAgentSpeeches: 0,
+        hadExternalRewardThisTick: false,
+        ticksSinceLastReward: 0,
+        poeticMode: false
+      };
+
+      await mod.runReactiveStep({
+        ctx,
+        userInput: 'hello',
+        callbacks,
+        memorySpace: { hot: { semanticSearch: async () => [] } },
+        trace: { traceId: 'trace_single_gate', tickNumber: 1, agentId: 'agent-1' }
+      });
+
+      expect(callCount).toBeGreaterThan(0);
+    } finally {
+      (ExecutiveGate as any).decide = original;
+    }
+  });
 });
 
 // ═══════════════════════════════════════════════════════════════════════════

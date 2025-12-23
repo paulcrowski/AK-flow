@@ -3,6 +3,7 @@ import { CortexService } from '../../../llm/gemini';
 import { TickCommitter } from '../TickCommitter';
 import { LimbicSystem } from '../LimbicSystem';
 import { CortexSystem } from '../CortexSystem';
+import { ExecutiveGate } from '../ExecutiveGate';
 import { useArtifactStore, normalizeArtifactRef } from '../../../stores/artifactStore';
 import { SYSTEM_CONFIG } from '../../config/systemConfig';
 import { getCurrentTraceId } from '../../trace/TraceContext';
@@ -22,6 +23,51 @@ type ActionFirstResult = {
   payload?: string;
   assumption?: string;
 };
+
+function publishReactiveSpeech(params: {
+  ctx: any;
+  trace: TraceLike;
+  callbacks: ReactiveCallbacksLike;
+  speechText: string;
+  internalThought: string;
+  meta?: { knowledgeSource?: any; evidenceSource?: any; evidenceDetail?: any; generator?: any };
+}): void {
+  const { ctx, trace, callbacks, speechText, internalThought, meta } = params;
+  const candidate = ExecutiveGate.createReactiveCandidate(speechText, internalThought, `reactive-${trace.traceId}-${trace.tickNumber}`);
+  const gateContext = {
+    ...ExecutiveGate.getDefaultContext(ctx.limbic, 0),
+    socialDynamics: ctx.socialDynamics
+  };
+  const gateDecision = ExecutiveGate.decide([candidate], gateContext);
+
+  if (!gateDecision.should_speak || !gateDecision.winner) {
+    callbacks.onThought(`[REACTIVE_SUPPRESSED] ${gateDecision.reason}`);
+    return;
+  }
+
+  if (isMainFeatureEnabled('ONE_MIND_ENABLED') && trace.agentId) {
+    try {
+      const commit = TickCommitter.commitSpeech({
+        agentId: trace.agentId,
+        traceId: trace.traceId,
+        tickNumber: trace.tickNumber,
+        origin: 'reactive',
+        speechText: gateDecision.winner.speech_content
+      });
+
+      if (commit.committed) {
+        callbacks.onMessage('assistant', gateDecision.winner.speech_content, 'speech', meta);
+      } else {
+        callbacks.onThought(`[REACTIVE_SUPPRESSED] ${commit.blockReason || 'UNKNOWN'}`);
+      }
+      return;
+    } catch (e) {
+      callbacks.onThought(`[REACTIVE_COMMIT_ERROR] ${(e as Error)?.message || 'unknown'}`);
+    }
+  }
+
+  callbacks.onMessage('assistant', gateDecision.winner.speech_content, 'speech', meta);
+}
 
 function updateContextAfterAction(ctx: any): void {
   const now = Date.now();
@@ -219,7 +265,7 @@ export async function runReactiveStep(input: {
           if (traceId) p0MetricAdd(traceId, { actionFirstTriggered: 1, actionType: 'READ' });
           if (!resolved.ok) {
             emitToolError('READ_ARTIFACT', intentId, { arg: target }, resolved.userMessage);
-            callbacks.onMessage('assistant', resolved.userMessage, 'speech');
+            publishReactiveSpeech({ ctx, trace, callbacks, speechText: resolved.userMessage, internalThought: '' });
             return;
           }
           const art = store.get(resolved.id);
@@ -229,7 +275,7 @@ export async function runReactiveStep(input: {
           }
           if (traceId) p0MetricAdd(traceId, { actionFirstExecuted: 1 });
           emitToolResult('READ_ARTIFACT', intentId, { id: art.id, name: art.name, length: art.content.length });
-          callbacks.onMessage('assistant', `${art.name}\n\n${art.content || '(pusty)'}`, 'speech');
+          publishReactiveSpeech({ ctx, trace, callbacks, speechText: `${art.name}\n\n${art.content || '(pusty)'}`, internalThought: '' });
           updateContextAfterAction(ctx);
           return;
         }
@@ -245,14 +291,20 @@ export async function runReactiveStep(input: {
             if (traceId) p0MetricAdd(traceId, { actionFirstTriggered: 1, actionType: 'APPEND' });
             if (!resolved.ok) {
               emitToolError('APPEND', intentId, { arg: target }, resolved.userMessage);
-              callbacks.onMessage('assistant', resolved.userMessage, 'speech');
+              publishReactiveSpeech({ ctx, trace, callbacks, speechText: resolved.userMessage, internalThought: '' });
               return;
             }
             try {
               store.append(resolved.id, `\n\n${payload}`);
               if (traceId) p0MetricAdd(traceId, { actionFirstExecuted: 1 });
               emitToolResult('APPEND', intentId, { id: resolved.id });
-              callbacks.onMessage('assistant', `Dopisa?,em do ${resolved.nameHint || resolved.id}. Poprawi?? co?>?`, 'speech');
+              publishReactiveSpeech({
+                ctx,
+                trace,
+                callbacks,
+                speechText: `Dopisa?,em do ${resolved.nameHint || resolved.id}. Poprawi?? co?>?`,
+                internalThought: ''
+              });
               updateContextAfterAction(ctx);
               return;
             } catch (e) {
@@ -270,14 +322,20 @@ export async function runReactiveStep(input: {
           if (traceId) p0MetricAdd(traceId, { actionFirstTriggered: 1, actionType: 'REPLACE' });
           if (!resolved.ok) {
             emitToolError('REPLACE', intentId, { arg: target }, resolved.userMessage);
-            callbacks.onMessage('assistant', resolved.userMessage, 'speech');
+            publishReactiveSpeech({ ctx, trace, callbacks, speechText: resolved.userMessage, internalThought: '' });
             return;
           }
           try {
             store.replace(resolved.id, next);
             if (traceId) p0MetricAdd(traceId, { actionFirstExecuted: 1 });
             emitToolResult('REPLACE', intentId, { id: resolved.id });
-            callbacks.onMessage('assistant', `Podmieni?,em tre?>?? w ${resolved.nameHint || resolved.id}. Poprawi?? co?>?`, 'speech');
+            publishReactiveSpeech({
+              ctx,
+              trace,
+              callbacks,
+              speechText: `Podmieni?,em tre?>?? w ${resolved.nameHint || resolved.id}. Poprawi?? co?>?`,
+              internalThought: ''
+            });
             updateContextAfterAction(ctx);
             return;
           } catch (e) {
@@ -328,43 +386,19 @@ export async function runReactiveStep(input: {
     callbacks.onMessage('assistant', result.internalThought, 'thought');
   }
 
-  if (isMainFeatureEnabled('ONE_MIND_ENABLED') && trace.agentId) {
-    try {
-      const commit = TickCommitter.commitSpeech({
-        agentId: trace.agentId,
-        traceId: trace.traceId,
-        tickNumber: trace.tickNumber,
-        origin: 'reactive',
-        speechText: result.responseText
-      });
-
-      if (commit.committed) {
-        callbacks.onMessage('assistant', result.responseText, 'speech', {
-          knowledgeSource: result.knowledgeSource,
-          evidenceSource: result.evidenceSource,
-          evidenceDetail: result.evidenceDetail,
-          generator: result.generator
-        });
-      } else {
-        callbacks.onThought(`[REACTIVE_SUPPRESSED] ${commit.blockReason || 'UNKNOWN'}`);
-      }
-    } catch (e) {
-      callbacks.onThought(`[REACTIVE_COMMIT_ERROR] ${(e as Error)?.message || 'unknown'}`);
-      callbacks.onMessage('assistant', result.responseText, 'speech', {
-        knowledgeSource: result.knowledgeSource,
-        evidenceSource: result.evidenceSource,
-        evidenceDetail: result.evidenceDetail,
-        generator: result.generator
-      });
-    }
-  } else {
-    callbacks.onMessage('assistant', result.responseText, 'speech', {
+  publishReactiveSpeech({
+    ctx,
+    trace,
+    callbacks,
+    speechText: result.responseText,
+    internalThought: result.internalThought || '',
+    meta: {
       knowledgeSource: result.knowledgeSource,
       evidenceSource: result.evidenceSource,
       evidenceDetail: result.evidenceDetail,
       generator: result.generator
-    });
-  }
+    }
+  });
 
   const now = Date.now();
   ctx.silenceStart = now;

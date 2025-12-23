@@ -34,6 +34,9 @@ export const VolitionSystem = {
      * 1. GABA Repetition Inhibition: Prevents repeating similar thoughts.
      * 2. Speech Refractory: Prevents speaking too soon after the last message.
      * 3. Pressure Threshold: Speaks if pressure > threshold (modulated by fear/silence).
+     *
+     * @deprecated Speech gating is unified in ExecutiveGate.decide().
+     * Keep for legacy callers only; do not add new callsites.
      */
     shouldSpeak(
         thought: string,
@@ -131,6 +134,10 @@ export const VolitionSystem = {
     },
 
     // Legacy support for existing calls if any (though we should migrate them)
+    /**
+     * @deprecated Speech gating is unified in ExecutiveGate.decide().
+     * Keep for legacy callers only; do not add new callsites.
+     */
     evaluateVolition(
         voicePressure: number,
         speechContent: string
