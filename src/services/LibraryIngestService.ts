@@ -1,5 +1,5 @@
 import { supabase, MemoryService } from './supabase';
-import { CortexService } from './gemini';
+import { CortexService } from '../llm/gemini';
 import type { LibraryDocument } from './LibraryService';
 import { WorkspaceHomeostasisService } from './WorkspaceHomeostasisService';
 import { isMemorySubEnabled } from '../core/config/featureFlags';

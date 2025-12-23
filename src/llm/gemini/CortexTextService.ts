@@ -2,7 +2,7 @@ import { Type } from '@google/genai';
 import type { GoogleGenAI } from '@google/genai';
 
 import { AgentType, PacketType, CognitiveError, DetectedIntent } from '../../types';
-import { getCurrentAgentId } from '../supabase';
+import { getCurrentAgentId } from '../../services/supabase';
 import { isCortexSubEnabled, isMainFeatureEnabled } from '../../core/config/featureFlags';
 import { buildMinimalCortexState } from '../../core/builders';
 import { generateFromCortexState } from '../../core/inference';

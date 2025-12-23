@@ -1,10 +1,9 @@
-
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { processDecisionGate, resetTurnStateForAgent, GateDecision } from '../systems/DecisionGate';
-import { buildMinimalCortexState } from '../builders/MinimalCortexStateBuilder';
-import { setCachedIdentity, clearIdentityCache } from '../builders/MinimalCortexStateBuilder';
-import type { CortexOutput } from '../types/CortexOutput';
-import type { SomaState } from '../../types';
+import { processDecisionGate, resetTurnStateForAgent, GateDecision } from '@core/systems/DecisionGate';
+import { buildMinimalCortexState } from '@core/builders/MinimalCortexStateBuilder';
+import { setCachedIdentity, clearIdentityCache } from '@core/builders/MinimalCortexStateBuilder';
+import type { CortexOutput } from '@core/types/CortexOutput';
+import type { SomaState } from '@/types';
 
 // Mock dependencies
 const mockIdentity = {
@@ -14,11 +13,11 @@ const mockIdentity = {
 };
 
 const mockTraits = {
-    openness: 0.8,
+    arousal: 0.3,
+    verbosity: 0.4,
     conscientiousness: 0.9,
-    extraversion: 0.5,
-    agreeableness: 0.7,
-    neuroticism: 0.1
+    socialAwareness: 0.7,
+    curiosity: 0.8
 };
 
 describe('Tagged Cognition & Persona-Less Cortex', () => {
@@ -38,7 +37,7 @@ describe('Tagged Cognition & Persona-Less Cortex', () => {
             // Execute: Build state
             const state = buildMinimalCortexState({
                 agentId: TEST_AGENT_ID,
-                metaStates: { energy: 100, stress: 0, confidence: 100, dopamine: 50 },
+                metaStates: { energy: 100, stress: 0, confidence: 100 },
                 userInput: 'Who are you?'
             });
 
@@ -52,7 +51,7 @@ describe('Tagged Cognition & Persona-Less Cortex', () => {
             // FAZA 5.1: Fallback is now UNINITIALIZED_AGENT (not Assistant) to flag identity issues
             const state = buildMinimalCortexState({
                 agentId: 'unknown-agent',
-                metaStates: { energy: 100, stress: 0, confidence: 100, dopamine: 50 },
+                metaStates: { energy: 100, stress: 0, confidence: 100 },
                 userInput: 'Who are you?'
             });
 

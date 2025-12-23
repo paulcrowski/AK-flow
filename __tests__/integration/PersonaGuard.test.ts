@@ -51,7 +51,7 @@ describe('PersonaGuard', () => {
       const result = guard.check(response, hardFacts);
 
       expect(result.action).toBe('RETRY');
-      expect(result.issues.some(i => i.type === 'fact_mutation' || i.type === 'fact_approximation')).toBe(true);
+      expect(result.issues.some((i: any) => i.type === 'fact_mutation' || i.type === 'fact_approximation')).toBe(true);
     });
 
     it('detects fact approximation without literal', () => {
@@ -61,7 +61,7 @@ describe('PersonaGuard', () => {
       const result = guard.check(response, hardFacts);
 
       expect(result.action).toBe('RETRY');
-      const approxIssue = result.issues.find(i => 
+      const approxIssue = result.issues.find((i: any) => 
         i.type === 'fact_approximation' || i.type === 'fact_mutation'
       );
       expect(approxIssue).toBeDefined();
@@ -110,7 +110,7 @@ describe('PersonaGuard', () => {
       const result = guard.check(response, {});
 
       expect(result.action).toBe('RETRY');
-      expect(result.issues.some(i => i.type === 'identity_leak')).toBe(true);
+      expect(result.issues.some((i: any) => i.type === 'identity_leak')).toBe(true);
     });
 
     it('detects "I am a language model" pattern', () => {
@@ -119,7 +119,7 @@ describe('PersonaGuard', () => {
       const result = guard.check(response, {});
 
       expect(result.action).toBe('RETRY');
-      expect(result.issues.some(i => i.type === 'identity_leak')).toBe(true);
+      expect(result.issues.some((i: any) => i.type === 'identity_leak')).toBe(true);
     });
 
     it('detects model name mentions', () => {
@@ -144,7 +144,7 @@ describe('PersonaGuard', () => {
       const result = guard.check(response, {});
 
       expect(result.action).toBe('RETRY');
-      expect(result.issues.some(i => i.type === 'identity_leak')).toBe(true);
+      expect(result.issues.some((i: any) => i.type === 'identity_leak')).toBe(true);
     });
 
     it('PASS when no identity leak', () => {

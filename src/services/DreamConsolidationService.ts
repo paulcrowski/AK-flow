@@ -14,7 +14,7 @@
  */
 
 import { supabase, getCurrentAgentId, MemoryService } from './supabase';
-import { CortexService } from './gemini';
+import { CortexService } from '../llm/gemini';
 import { eventBus } from '../core/EventBus';
 import { AgentType, PacketType, LimbicState, TraitVector } from '../types';
 import { generateUUID } from '../utils/uuid';

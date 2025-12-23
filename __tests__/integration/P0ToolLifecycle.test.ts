@@ -10,10 +10,10 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { eventBus } from '@core/EventBus';
 import { PacketType, CognitivePacket } from '@/types';
-import { createProcessOutputForTools, ToolParserDeps } from '@utils/toolParser';
+import { createProcessOutputForTools, ToolParserDeps } from '@tools/toolParser';
 import { useArtifactStore } from '@/stores/artifactStore';
 import { p0MetricStartTick, p0MetricAdd, publishP0Metric } from '@core/systems/TickLifecycleTelemetry';
-import { CortexService } from '@services/gemini';
+import { CortexService } from '@llm/gemini';
 import {
   downloadLibraryDocumentText,
   findLibraryDocumentByName,
@@ -49,7 +49,7 @@ vi.mock('@services/SnapshotService', () => ({
 }));
 
 // Mock CortexService
-vi.mock('@services/gemini', () => ({
+vi.mock('@llm/gemini', () => ({
   CortexService: {
     performDeepResearch: vi.fn(),
     generateVisualThought: vi.fn(),

@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { eventBus } from '@core/EventBus';
 import { PacketType, CognitivePacket } from '@/types';
-import { createProcessOutputForTools, type ToolParserDeps } from '@utils/toolParser';
+import { createProcessOutputForTools, type ToolParserDeps } from '@tools/toolParser';
 
 vi.mock('@services/LibraryService', () => ({
   searchLibraryChunks: vi.fn(),

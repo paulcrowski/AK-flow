@@ -2,7 +2,7 @@ import { describe, it, expect, vi, afterEach, beforeAll } from 'vitest';
 import { loadEnv } from 'vite';
 import { ShadowFactory } from './ShadowFactory';
 import { EventLoop } from '@core/systems/EventLoop';
-import { CortexService } from '@services/gemini';
+import { CortexService } from '@llm/gemini';
 import { MemoryService, setCurrentAgentId } from '@services/supabase';
 import { LimbicState, SomaState, NeurotransmitterState, GoalState, TraitVector } from '@/types';
 
@@ -53,7 +53,7 @@ const createShadowContext = (agentId: string): EventLoop.LoopContext => ({
 
 // Mock LLM to avoid token costs & nondeterminism
 // We only want to test the PLUMBING (State -> DB logic)
-vi.mock('@services/gemini', () => ({
+vi.mock('@llm/gemini', () => ({
     CortexService: {
         detectIntent: vi.fn().mockResolvedValue({ style: 'SIMPLE', intent: 'casual' }),
         generateEmbedding: vi.fn().mockResolvedValue(Array(768).fill(0.1)),

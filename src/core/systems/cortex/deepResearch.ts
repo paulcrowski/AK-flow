@@ -1,4 +1,4 @@
-import { CortexService } from '../../../services/gemini';
+import { CortexService } from '../../../llm/gemini';
 import { createLogger } from '../../services/LoggerService';
 
 const log = createLogger('DeepResearch');

@@ -78,7 +78,7 @@ vi.mock('@services/supabase', () => ({
 }));
 
 // Mock gemini service
-vi.mock('@services/gemini', () => ({
+vi.mock('@llm/gemini', () => ({
     CortexService: {
         generateEmbedding: vi.fn(async () => new Array(768).fill(0.1)),
         structuredDialogue: vi.fn(async () => ({

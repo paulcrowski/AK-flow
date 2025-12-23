@@ -1,4 +1,4 @@
-import { eventBus } from './EventBus';
+import { eventBus } from '../core/EventBus';
 import * as ConfessionModule from '../services/ConfessionService';
 
 export interface RuntimeHandle {

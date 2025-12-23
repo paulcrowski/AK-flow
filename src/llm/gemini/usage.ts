@@ -1,7 +1,7 @@
 import { eventBus } from '../../core/EventBus';
 import { AgentType, PacketType } from '../../types';
 import { generateUUID } from '../../utils/uuid';
-import { getCurrentAgentId } from '../supabase';
+import { getCurrentAgentId } from '../../services/supabase';
 import { TokenUsageLedger } from '../../core/telemetry/TokenUsageLedger';
 
 export function logUsage(operation: string, response: any) {

@@ -5,7 +5,7 @@ import { setCurrentAgentId } from '@services/supabase';
 import { setFeatureFlagForTesting } from '@core/config/featureFlags';
 
 // Mock LLM plumbing for reactive path
-vi.mock('@services/gemini', () => ({
+vi.mock('@llm/gemini', () => ({
   CortexService: {
     detectIntent: vi.fn().mockResolvedValue({ style: 'SIMPLE', intent: 'casual' })
   }

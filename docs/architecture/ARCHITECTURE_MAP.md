@@ -22,15 +22,15 @@
 
 **Mechanika (Expression / tools):**
 - ArtifactBuffer: `stores/artifactStore.ts` (artifacts + evidence ring buffer).
-- Tool tags (parser): `utils/toolParser.ts`
+- Tool tags (parser): `tools/toolParser.ts`
   - `CREATE`, `APPEND`, `REPLACE`, `READ_ARTIFACT`
   - `PUBLISH` (upload do Supabase Library)
 
 **Evidence Gate:**
 - Reguła minimalna: publikacja artefaktów “kodowych” (`.ts/.tsx/.diff/.patch/...`) wymaga świeżego evidence.
-- Evidence źródła:
-  - `READ_LIBRARY_RANGE` (`utils/workspaceTools.ts`)
-  - `READ_ARTIFACT` (`utils/toolParser.ts`)
+- **Evidence źródła:**
+- `READ_LIBRARY_RANGE` (`tools/workspaceTools.ts`)
+- `READ_ARTIFACT` (`tools/toolParser.ts`)
 
 **B2: Patch-as-artifact (standard bez IPC):**
 - Patch jest artefaktem (`patch.diff`), człowiek aplikuje `git apply --check` + `git apply`.
@@ -51,6 +51,17 @@
 - Przełącznik: `Flash (Standard) → Pro (Emergency)`.
 - Fallback przy błędach: `429`, `503`.
 - Telemetria: `MODEL_FALLBACK_TRIGGERED`.
+
+---
+
+## 🧱 P1.4: Godfile Policy (bez overengineeringu)
+
+Zasady utrzymania „czystego” repo (13/10):
+
+- **Brak godfiles**: plik >300 linii musi mieć powód (profilowanie / hot path / testy) albo zostać rozbity.
+- **Barrels tylko na granicach domen** i tylko jeśli mają ≥3 realne importy.
+- **Nie twórz `index.ts` dla jednej rzeczy** (jeśli domena ma 1 moduł – importuj bezpośrednio).
+- **Nazwy bez Manager/Handler/Factory/Processor** – wolimy funkcje i proste moduły.
 
 
 ## 🆕 FAZA 6.5: Grounded Strict + Provenance + Dream Topic Shards (2025-12-17)

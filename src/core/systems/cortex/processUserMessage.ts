@@ -1,7 +1,8 @@
-import { CortexService } from '../../../services/gemini';
+import { CortexService } from '../../../llm/gemini';
 import { MemoryService, getCurrentAgentId } from '../../../services/supabase';
 import { EpisodicMemoryService } from '../../../services/EpisodicMemoryService';
 import { AgentType, PacketType } from '../../../types';
+import { generateUUID } from '../../../utils/uuid';
 import { EmotionEngine } from '../EmotionEngine';
 import { mapStimulusResponseToWeights } from '../../inference/CortexInference';
 import { buildMinimalCortexState } from '../../builders';

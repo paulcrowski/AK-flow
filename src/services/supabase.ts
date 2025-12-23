@@ -1,7 +1,6 @@
-
 import { createClient } from '@supabase/supabase-js';
 import { MemoryTrace } from '../types';
-import { CortexService } from './gemini';
+import { CortexService } from '../llm/gemini';
 import { RLSDiagnostics } from './RLSDiagnostics';
 import { eventBus } from '../core/EventBus';
 import { AgentType, PacketType } from '../types';

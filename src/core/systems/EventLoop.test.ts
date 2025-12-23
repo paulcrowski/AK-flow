@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { EventLoop } from './EventLoop';
 import { eventBus } from '../EventBus';
 import { getCurrentAgentId } from '../../services/supabase';
+import { ThinkModeSelector } from './eventloop/index';
 
 // Mock dependencies
 vi.mock('./LimbicSystem', () => ({
@@ -23,7 +24,7 @@ vi.mock('./CortexSystem', () => ({
     }
 }));
 
-vi.mock('../../services/gemini', () => ({
+vi.mock('../../llm/gemini', () => ({
     CortexService: {
         autonomousVolition: vi.fn().mockResolvedValue({
             internal_monologue: 'Autonomous processing...',
@@ -105,12 +106,12 @@ describe('EventLoop', () => {
     });
 
     it('selectThinkMode should return reactive when input is present', () => {
-        expect(EventLoop.selectThinkMode(mockCtx, 'Hello')).toBe('reactive');
+        expect(ThinkModeSelector.select('Hello', mockCtx.autonomousMode, Boolean(mockCtx.goalState?.activeGoal))).toBe('reactive');
     });
 
     it('selectThinkMode should return idle when no input and autonomousMode is off', () => {
         const ctx = { ...mockCtx, autonomousMode: false };
-        expect(EventLoop.selectThinkMode(ctx, null)).toBe('idle');
+        expect(ThinkModeSelector.select(null, ctx.autonomousMode, Boolean(ctx.goalState?.activeGoal))).toBe('idle');
     });
 
     it('selectThinkMode should return goal_driven when activeGoal exists', () => {
@@ -121,7 +122,7 @@ describe('EventLoop', () => {
                 activeGoal: { id: 'g1', source: 'curiosity', description: 'x', priority: 0.7 } as any
             }
         };
-        expect(EventLoop.selectThinkMode(ctx, null)).toBe('goal_driven');
+        expect(ThinkModeSelector.select(null, ctx.autonomousMode, Boolean(ctx.goalState?.activeGoal))).toBe('goal_driven');
     });
 
     it('selectThinkMode should return autonomous when no input, autonomousMode on, and no activeGoal', () => {
@@ -130,7 +131,7 @@ describe('EventLoop', () => {
             autonomousMode: true,
             goalState: { ...mockCtx.goalState, activeGoal: null }
         };
-        expect(EventLoop.selectThinkMode(ctx, null)).toBe('autonomous');
+        expect(ThinkModeSelector.select(null, ctx.autonomousMode, Boolean(ctx.goalState?.activeGoal))).toBe('autonomous');
     });
 
     it('should skip tick when no agentId is selected', async () => {

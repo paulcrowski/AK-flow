@@ -5,7 +5,7 @@ import { eventBus } from '../../EventBus';
 import { SYSTEM_CONFIG } from '../../config/systemConfig';
 import { isMainFeatureEnabled } from '../../config/featureFlags';
 import { UnifiedContextBuilder, type BasePersona, type StylePrefs } from '../../context';
-import { CortexService } from '../../../services/gemini';
+import { CortexService } from '../../../llm/gemini';
 import { AutonomyRepertoire } from '../AutonomyRepertoire';
 import { ExecutiveGate } from '../ExecutiveGate';
 import { LimbicSystem } from '../LimbicSystem';

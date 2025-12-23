@@ -11,7 +11,7 @@
  */
 
 import { supabase } from './supabase';
-import { CortexService } from './gemini';
+import { CortexService } from '../llm/gemini';
 import { LimbicState } from '../types';
 import { generateUUID } from '../utils/uuid';
 

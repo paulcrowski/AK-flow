@@ -1,7 +1,7 @@
 import { eventBus } from '../../core/EventBus';
 import { AgentType, PacketType } from '../../types';
 import { generateUUID } from '../../utils/uuid';
-import { ModelRouter, runWithModelFallback } from '../ModelRouter';
+import { ModelRouter, runWithModelFallback } from '../../services/ModelRouter';
 
 import type { GoogleGenAI } from '@google/genai';
 

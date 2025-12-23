@@ -1,4 +1,4 @@
-import { CortexService } from '../../../services/gemini';
+import { CortexService } from '../../../llm/gemini';
 import { MemoryService } from '../../../services/supabase';
 import { AgentType, PacketType, type Goal } from '../../../types';
 import { generateUUID } from '../../../utils/uuid';

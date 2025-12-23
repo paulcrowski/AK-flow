@@ -10,7 +10,7 @@ import type { SocialDynamics } from '../kernel/types';
 import { LimbicSystem } from './LimbicSystem';
 import { CortexSystem, ConversationTurn } from './CortexSystem';
 import type { CortexSystem as CortexSystemNS } from './CortexSystem';
-import { CortexService } from '../../services/gemini';
+import { CortexService } from '../../llm/gemini';
 import { eventBus } from '../EventBus';
 import * as GoalSystem from './GoalSystem';
 import { GoalContext } from './GoalSystem';

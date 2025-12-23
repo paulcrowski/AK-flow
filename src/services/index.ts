@@ -1,7 +1,6 @@
 // Services Index - Centralized exports for all services
 
 export * from './supabase';
-export * from './gemini';
 export * from './ConfessionService';
 export * from './DreamConsolidationService';
 export * from './EpisodicMemoryService';

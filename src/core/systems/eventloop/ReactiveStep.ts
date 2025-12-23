@@ -1,5 +1,5 @@
 import { isMainFeatureEnabled } from '../../config/featureFlags';
-import { CortexService } from '../../../services/gemini';
+import { CortexService } from '../../../llm/gemini';
 import { TickCommitter } from '../TickCommitter';
 import { LimbicSystem } from '../LimbicSystem';
 import { CortexSystem } from '../CortexSystem';

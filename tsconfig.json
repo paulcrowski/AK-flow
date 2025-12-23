@@ -1,5 +1,5 @@
 {
-  "exclude": ["docs/archive", "__tests__", "**/*.test.ts"],
+  "exclude": ["docs/archive"],
   "compilerOptions": {
     "baseUrl": ".",
     "target": "ES2020",
@@ -29,6 +29,15 @@
       ],
       "@utils/*": [
         "./src/utils/*"
+      ],
+      "@llm/*": [
+        "./src/llm/*"
+      ],
+      "@tools/*": [
+        "./src/tools/*"
+      ],
+      "@runtime/*": [
+        "./src/runtime/*"
       ],
       "@tests/*": [
         "./__tests__/*"

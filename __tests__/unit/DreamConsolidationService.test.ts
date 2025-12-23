@@ -16,7 +16,7 @@ vi.mock('@services/supabase', () => ({
 
 const mockStructuredDialogue = vi.fn();
 
-vi.mock('@services/gemini', () => ({
+vi.mock('@llm/gemini', () => ({
     CortexService: {
         structuredDialogue: (...args: any[]) => mockStructuredDialogue(...args)
     }

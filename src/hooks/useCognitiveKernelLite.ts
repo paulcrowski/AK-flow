@@ -26,14 +26,14 @@ import { DreamConsolidationService } from '../services/DreamConsolidationService
 import { executeWakeProcess } from '../core/services/WakeService';
 import { getAutonomyConfig } from '../core/config/systemConfig';
 import { archiveMessage, getConversationHistory, getRecentSessions, type ConversationSessionSummary } from '../services/ConversationArchive';
-import { createProcessOutputForTools } from '../utils/toolParser';
+import { createProcessOutputForTools } from '../tools/toolParser';
 import { createRng } from '../core/utils/rng';
 import { SYSTEM_CONFIG } from '../core/config/systemConfig';
 import { isMemorySubEnabled } from '../core/config/featureFlags';
 import { getCurrentTraceId, getStartupTraceId } from '../core/trace/TraceContext';
 import { loadConversation, loadConversationForSession, syncToLocalStorage, mapTurnsToUiMessages } from '../core/memory/ConversationStore';
 import { KernelController } from '../core/runner/KernelController';
-import { initRuntime, type RuntimeHandle } from '../core/initRuntime';
+import { initRuntime, type RuntimeHandle } from '../runtime/initRuntime';
 
 // Deterministic RNG for reproducible behavior
 const rng = createRng(SYSTEM_CONFIG.rng.seed);

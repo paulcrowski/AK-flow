@@ -15,7 +15,7 @@ export default defineConfig({
       provider: 'v8',
       reporter: ['text', 'json', 'html'],
       reportsDirectory: './coverage',
-      include: ['src/core/**', 'src/services/**', 'src/utils/**'],
+      include: ['src/core/**', 'src/services/**', 'src/utils/**', 'src/llm/**', 'src/tools/**', 'src/runtime/**'],
       exclude: ['**/*.d.ts', '**/index.ts', '**/types/**'],
       thresholds: {
         lines: 80,
@@ -48,6 +48,9 @@ export default defineConfig({
       '@core': path.resolve(__dirname, './src/core'),
       '@services': path.resolve(__dirname, './src/services'),
       '@utils': path.resolve(__dirname, './src/utils'),
+      '@llm': path.resolve(__dirname, './src/llm'),
+      '@tools': path.resolve(__dirname, './src/tools'),
+      '@runtime': path.resolve(__dirname, './src/runtime'),
       '@tests': path.resolve(__dirname, '__tests__')
     }
   }

@@ -1,12 +1,12 @@
 import { eventBus } from '../core/EventBus';
-import { CortexService } from '../services/gemini';
+import { CortexService } from '../llm/gemini';
 import { MemoryService, getCurrentAgentId, getCurrentOwnerId, getCurrentUserEmail } from '../services/supabase';
 import { persistSearchKnowledgeChunk } from '../services/SearchKnowledgeChunker';
 import { downloadLibraryDocumentText, uploadLibraryFile } from '../services/LibraryService';
-import { safeParseJson, splitTodo3 } from './splitTodo3';
+import { safeParseJson, splitTodo3 } from '../utils/splitTodo3';
 import { AgentType, PacketType } from '../types';
 import { getCurrentTraceId } from '../core/trace/TraceContext';
-import { generateUUID } from './uuid';
+import { generateUUID } from '../utils/uuid';
 import * as SomaSystem from '../core/systems/SomaSystem';
 import * as LimbicSystem from '../core/systems/LimbicSystem';
 import { VISUAL_BASE_COOLDOWN_MS, VISUAL_ENERGY_COST_BASE } from '../core/constants';

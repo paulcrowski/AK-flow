@@ -7,8 +7,9 @@
  * zawsze ma absolutny priorytet."
  */
 
-import { ExecutiveGate, SpeechCandidate, GateContext, GateDecision } from '../systems/ExecutiveGate';
-import { LimbicState } from '../../types';
+import { describe, test, expect } from 'vitest';
+import { ExecutiveGate, SpeechCandidate, GateContext, GateDecision } from '@core/systems/ExecutiveGate';
+import { LimbicState } from '@/types';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // TEST HELPERS

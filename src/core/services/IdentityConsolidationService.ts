@@ -7,7 +7,7 @@
  * @module core/services/IdentityConsolidationService
  */
 
-import { CortexService } from '@/services/gemini';
+import { CortexService } from '@/llm/gemini';
 import { eventBus } from '../EventBus';
 import { AgentType, PacketType } from '../../types';
 import { generateUUID } from '../../utils/uuid';

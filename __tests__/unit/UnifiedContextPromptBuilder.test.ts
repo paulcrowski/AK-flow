@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { UnifiedContextBuilder, type BasePersona, type ContextBuilderInput } from '@core/context';
-import { UnifiedContextPromptBuilder } from '@services/gemini/UnifiedContextPromptBuilder';
+import { UnifiedContextPromptBuilder } from '@llm/gemini/UnifiedContextPromptBuilder';
 
 describe('UnifiedContextPromptBuilder', () => {
   const basePersona: BasePersona = {
