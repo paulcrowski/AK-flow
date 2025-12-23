@@ -44,6 +44,9 @@ describe('Action-First integration', () => {
     expect(created).toBeDefined();
     expect(String(created.name)).toBe('test.md');
     expect(messages.some((m) => m.includes('test.md'))).toBe(true);
+    const storeState = useArtifactStore.getState();
+    expect(storeState.lastCreatedId).toBe(created.id);
+    expect(typeof storeState.lastCreatedAt).toBe('number');
 
     const intent = eventBus.getHistory().find((e) => e.type === PacketType.TOOL_INTENT && e.payload?.tool === 'CREATE');
     const result = eventBus.getHistory().find((e) => e.type === PacketType.TOOL_RESULT && e.payload?.tool === 'CREATE');
