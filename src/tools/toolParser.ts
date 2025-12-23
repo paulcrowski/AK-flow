@@ -208,6 +208,7 @@ export const createProcessOutputForTools = (deps: ToolParserDeps) => {
             const hash = hashArtifactContent(created.content);
             store.addEvidence({ kind: 'artifact', ts: Date.now(), artifactId: created.id, name: created.name, hash });
             addMessage('assistant', `READ_ARTIFACT ${created.id} (${created.name}) hash=${hash}\n\n${created.content}`, 'tool_result');
+            addMessage('assistant', `Artifact created: ${created.name} (${created.id}). Open Artifacts panel to view.`, 'action');
           }
           return;
         }
@@ -467,6 +468,7 @@ export const createProcessOutputForTools = (deps: ToolParserDeps) => {
           `SNAPSHOT_OK: ${artifactId} (${artifactName})${snapshotId ? ` db=${snapshotId}` : ''}`,
           'tool_result'
         );
+        addMessage('assistant', `Artifact created: ${artifactName} (${artifactId}). Open Artifacts panel to view.`, 'action');
       } catch (e: any) {
         emitToolError({ tool: 'SNAPSHOT', intentId, payload: {}, error: e?.message || String(e) });
       }
