@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { eventBus } from '../core/EventBus';
 import { AgentType, PacketType } from '../types';
 import { NeuroMonitor } from './NeuroMonitor';
@@ -7,12 +7,13 @@ import { useSession } from '../contexts/SessionContext';
 import { AgentSelector } from './AgentSelector';
 import { initLimbicConfessionListener } from '../core/listeners/LimbicConfessionListener';
 import { useTraceAnalytics } from '../hooks/useTraceAnalytics';
-import { Loader2, Zap, Power, Moon, EyeOff } from 'lucide-react';
+import { Loader2, Zap, Power, Moon, EyeOff, FileText, Copy, X } from 'lucide-react';
 import { LeftSidebar } from './layout/LeftSidebar';
 import { ChatContainer } from './chat/ChatContainer';
 import { ChatInput } from './chat/ChatInput';
 import { TraceHudControls } from './trace/TraceHudControls';
 import { useLoadedAgentIdentity } from '../hooks/useLoadedAgentIdentity';
+import { useArtifactStore } from '../stores/artifactStore';
 
 export function CognitiveInterface() {
     // --- SESSION (Multi-Agent) ---
@@ -66,6 +67,36 @@ export function CognitiveInterface() {
     const chatScrollRef = useRef<HTMLDivElement>(null);
     const shouldAutoScrollRef = useRef(true);
     const lastResetSessionRef = useRef<string | null>(null); // Guard against StrictMode double-reset
+    const [artifactsOpen, setArtifactsOpen] = useState(false);
+    const lastArtifactSeenRef = useRef<string | null>(null);
+
+    const artifactOrder = useArtifactStore((s) => s.order);
+    const artifactsById = useArtifactStore((s) => s.artifactsById);
+    const lastCreatedId = useArtifactStore((s) => s.lastCreatedId);
+    const artifacts = useMemo(
+        () => artifactOrder.map((id) => artifactsById[id]).filter(Boolean),
+        [artifactOrder, artifactsById]
+    );
+
+    const copyText = async (text: string) => {
+        const payload = String(text || '');
+        try {
+            if (typeof navigator !== 'undefined' && navigator.clipboard) {
+                await navigator.clipboard.writeText(payload);
+                return;
+            }
+            const el = document.createElement('textarea');
+            el.value = payload;
+            el.style.position = 'fixed';
+            el.style.opacity = '0';
+            document.body.appendChild(el);
+            el.select();
+            document.execCommand('copy');
+            document.body.removeChild(el);
+        } catch {
+            // keep UI silent
+        }
+    };
 
     // --- KERNEL RESET ON SESSION CHANGE ---
     useEffect(() => {
@@ -130,6 +161,12 @@ export function CognitiveInterface() {
             chatEndRef.current.scrollIntoView({ behavior: 'auto' });
         }
     }, [conversation]);
+
+    useEffect(() => {
+        if (!lastCreatedId || lastArtifactSeenRef.current === lastCreatedId) return;
+        lastArtifactSeenRef.current = lastCreatedId;
+        setArtifactsOpen(true);
+    }, [lastCreatedId]);
 
     // FAZA 5: Show loading screen while identity is being fetched
     // All hooks are above this point, so React rules are satisfied
@@ -222,6 +259,62 @@ export function CognitiveInterface() {
                         isCritical={isCritical}
                         onToggleAutonomy={toggleAutonomy}
                     />
+                    <div className="relative xl:hidden">
+                        <button
+                            onClick={() => setArtifactsOpen((v) => !v)}
+                            className="ml-2 flex items-center gap-2 rounded-lg border border-gray-700 bg-gray-900/30 px-2.5 py-1.5 text-[10px] font-mono text-gray-300 hover:bg-gray-900/60 transition-colors"
+                            title="Artifacts"
+                        >
+                            <FileText size={12} />
+                            <span>ARTIFACTS</span>
+                            <span className="text-[9px] font-mono text-gray-600 bg-gray-900/50 px-1.5 py-0.5 rounded">{artifacts.length}</span>
+                        </button>
+                        {artifactsOpen && (
+                            <div className="absolute right-0 top-full mt-2 w-80 rounded-lg border border-gray-800 bg-[#07090d] shadow-xl z-30">
+                                <div className="flex items-center justify-between px-3 py-2 border-b border-gray-800">
+                                    <div className="text-[10px] font-mono tracking-widest text-gray-500">ARTIFACTS</div>
+                                    <button
+                                        onClick={() => setArtifactsOpen(false)}
+                                        className="text-gray-500 hover:text-gray-300 transition-colors"
+                                        title="Close"
+                                    >
+                                        <X size={12} />
+                                    </button>
+                                </div>
+                                <div className="max-h-72 overflow-y-auto p-3 space-y-2">
+                                    {artifacts.slice(0, 10).map((a) => (
+                                        <div key={a.id} className="rounded-lg border border-gray-800/60 bg-gray-900/10 px-3 py-2">
+                                            <div className="flex items-center justify-between gap-2">
+                                                <div className="min-w-0">
+                                                    <div className="text-[11px] text-gray-200 font-semibold truncate">{a.name}</div>
+                                                    <div className="text-[9px] font-mono text-gray-600 truncate">{a.id}</div>
+                                                </div>
+                                                <div className="flex items-center gap-1.5 shrink-0">
+                                                    <button
+                                                        onClick={() => void copyText(a.id)}
+                                                        className="p-1 rounded border border-gray-800/60 text-gray-500 hover:text-gray-200 hover:bg-gray-800/30 transition-colors"
+                                                        title="Copy id"
+                                                    >
+                                                        <Copy size={12} />
+                                                    </button>
+                                                    <button
+                                                        onClick={() => void copyText(a.content)}
+                                                        className="p-1 rounded border border-gray-800/60 text-gray-500 hover:text-gray-200 hover:bg-gray-800/30 transition-colors"
+                                                        title="Copy content"
+                                                    >
+                                                        <Copy size={12} />
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ))}
+                                    {artifacts.length === 0 && (
+                                        <div className="text-[10px] text-gray-600 italic text-center py-2">No artifacts yet.</div>
+                                    )}
+                                </div>
+                            </div>
+                        )}
+                    </div>
                 </header>
 
                 <div className={`min-h-14 py-3 border-b border-gray-700 flex items-start px-6 text-sm font-mono transition-colors duration-1000 ${systemError ? 'bg-red-900/20 text-red-400' :
