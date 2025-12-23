@@ -15,6 +15,22 @@ describe('SessionMemory', () => {
       const result = UnifiedContextBuilder.formatSessionMemory(undefined);
       expect(result).toBe('- No session data available');
     });
+
+    it('should return "No session data available" when dataStatus is no_data', () => {
+      const session: SessionMemory = {
+        sessionsToday: 0,
+        sessionsYesterday: 0,
+        sessionsThisWeek: 0,
+        messagesToday: 0,
+        lastInteractionAt: null,
+        recentTopics: [],
+        dataStatus: 'no_data'
+      };
+
+      const result = UnifiedContextBuilder.formatSessionMemory(session);
+
+      expect(result).toBe('- No session data available');
+    });
     
     it('should show "first conversation today" when sessionsToday is 0', () => {
       const session: SessionMemory = {

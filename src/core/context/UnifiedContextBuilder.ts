@@ -104,6 +104,7 @@ export interface SessionMemory {
   messagesToday: number;
   lastInteractionAt: string | null;
   recentTopics: string[];
+  dataStatus?: 'ok' | 'no_data';
 }
 
 /**
@@ -370,6 +371,10 @@ ACTIVE GOAL (${activeGoal.source.toUpperCase()}):
    */
   formatSessionMemory(session?: SessionMemory): string {
     if (!session) {
+      return '- No session data available';
+    }
+
+    if (session.dataStatus === 'no_data') {
       return '- No session data available';
     }
     

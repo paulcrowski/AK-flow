@@ -35,6 +35,8 @@ export interface SessionStats {
   lastSessionDurationMin: number;
   /** Główne tematy z ostatnich sesji */
   recentTopics: string[];
+  /** Whether data is from storage or fallback */
+  dataStatus?: 'ok' | 'no_data';
 }
 
 export interface SessionSummary {
@@ -157,7 +159,8 @@ export const SessionMemoryService = {
         messagesToday: (todayMessages || []).length,
         lastInteractionAt,
         lastSessionDurationMin,
-        recentTopics
+        recentTopics,
+        dataStatus: 'ok'
       };
       
       // Update cache
@@ -195,7 +198,8 @@ export const SessionMemoryService = {
       messagesToday: 0,
       lastInteractionAt: null,
       lastSessionDurationMin: 0,
-      recentTopics: []
+      recentTopics: [],
+      dataStatus: 'no_data'
     };
   },
   
@@ -204,6 +208,10 @@ export const SessionMemoryService = {
    */
   formatForContext(stats: SessionStats): string {
     const lines: string[] = [];
+
+    if (stats.dataStatus === 'no_data') {
+      return '- No session data available';
+    }
     
     if (stats.sessionsToday > 0) {
       lines.push(`- Sessions today: ${stats.sessionsToday}`);

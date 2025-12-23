@@ -3,6 +3,7 @@ import type { UnifiedContext } from '../../../core/context';
 export function formatSessionMemory(ctx: UnifiedContext): string {
   const session = ctx.sessionMemory;
   if (!session) return '- No session data available';
+  if (session.dataStatus === 'no_data') return '- No session data available';
 
   const lines: string[] = [];
   if (session.sessionsToday > 0) {
