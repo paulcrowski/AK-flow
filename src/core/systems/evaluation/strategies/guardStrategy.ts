@@ -1,4 +1,4 @@
-import type { EvaluationEvent, EvaluationTag } from '../../../types';
+import type { EvaluationEvent, EvaluationTag } from '@/types';
 import { createEvaluationEvent } from '../createEvaluationEvent';
 
 export function createGuardEvent(

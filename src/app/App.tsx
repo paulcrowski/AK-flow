@@ -83,7 +83,7 @@ function App() {
 
     // 4. COGNITIVE INTERFACE (MAIN APP)
     return (
-        // @ts-expect-error - Known React class component typing issue with moduleResolution: bundler
+        // @ts-ignore - Known React class component typing issue with moduleResolution: bundler
         <ComponentErrorBoundary componentName="CognitiveInterface">
             <CognitiveInterface />
         </ComponentErrorBoundary>

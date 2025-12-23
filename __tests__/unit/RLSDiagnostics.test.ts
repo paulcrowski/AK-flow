@@ -6,13 +6,13 @@ describe('RLSDiagnostics', () => {
 
     beforeAll(() => {
         // Mock supabase client for testing
-        vi.spyOn(supabase, 'from').mockImplementation(() => ({
+        type FromReturn = ReturnType<typeof supabase.from>;
+        const mockBuilder = {
             select: vi.fn().mockReturnThis(),
             eq: vi.fn().mockReturnThis(),
             order: vi.fn().mockReturnThis(),
             limit: vi.fn().mockReturnThis(),
             withRLSDiagnostics: vi.fn().mockImplementation(async (operationName: string) => {
-                // Simulate empty result (potential RLS issue)
                 return {
                     data: [],
                     error: null,
@@ -20,7 +20,9 @@ describe('RLSDiagnostics', () => {
                     rlsMessage: `Potential RLS Issue in ${operationName}: Empty result may indicate authorization problem`
                 };
             })
-        }));
+        } as unknown as FromReturn;
+
+        vi.spyOn(supabase, 'from').mockImplementation(() => mockBuilder);
     });
 
     afterAll(() => {
@@ -40,19 +42,22 @@ describe('RLSDiagnostics', () => {
     });
 
     test('should diagnose queries and detect RLS issues', async () => {
+        type DiagnosedResult = Awaited<ReturnType<typeof RLSDiagnostics.diagnoseQuery>>;
         const mockQuery = {
             then: vi.fn().mockResolvedValue({ data: [], error: null })
         };
 
         // Use Promise.race to prevent timeout
-        const result = await Promise.race([
-            RLSDiagnostics.diagnoseQuery(mockQuery, 'testQuery'),
-            new Promise((resolve) => setTimeout(() => resolve({
+        const fallback = new Promise<DiagnosedResult>((resolve) => setTimeout(() => resolve({
                 data: [],
                 error: null,
                 isRLSIssue: true,
                 rlsMessage: 'Potential RLS Issue in testQuery: Empty result may indicate authorization problem'
-            }), 100))
+            } as DiagnosedResult), 100));
+
+        const result: DiagnosedResult = await Promise.race([
+            RLSDiagnostics.diagnoseQuery(mockQuery as unknown, 'testQuery'),
+            fallback
         ]);
 
         expect(result.isRLSIssue).toBe(true);

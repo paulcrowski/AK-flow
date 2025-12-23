@@ -49,8 +49,8 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
   systemError,
   onRetry
 }) => {
-  const chatEndRef = useRef<HTMLDivElement>(null);
-  const chatScrollRef = useRef<HTMLDivElement>(null);
+  const chatEndRef = useRef<HTMLDivElement | null>(null);
+  const chatScrollRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });

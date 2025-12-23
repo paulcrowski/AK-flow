@@ -351,7 +351,10 @@ ${serializeEpisodeJson(episode)}`;
             const lesson = lessonMatch ? lessonMatch[1].trim() : '';
 
             // Extract tags from emotion string
-            const tags = emotionStr.split(',').map(t => t.trim().split(' ')[0]).filter(Boolean);
+            const tags = emotionStr
+              .split(',')
+              .map((t: string) => t.trim().split(' ')[0])
+              .filter(Boolean);
 
             // Extract delta from emotion string
             const deltaMatch = emotionStr.match(/delta:\s*([\d.]+)/);

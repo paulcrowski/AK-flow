@@ -82,7 +82,17 @@ type ArtifactStoreState = {
 
 const isTestEnv = typeof process !== 'undefined' && process.env.NODE_ENV === 'test';
 
-const createStore = (set: any, get: any): ArtifactStoreState => ({
+type StoreSet = (
+  partial:
+    | ArtifactStoreState
+    | Partial<ArtifactStoreState>
+    | ((state: ArtifactStoreState) => ArtifactStoreState | Partial<ArtifactStoreState>),
+  replace?: boolean
+) => void;
+
+type StoreGet = () => ArtifactStoreState;
+
+const createStore = (set: StoreSet, get: StoreGet): ArtifactStoreState => ({
   artifactsById: {},
   order: [],
   evidence: [],
@@ -102,7 +112,7 @@ const createStore = (set: any, get: any): ArtifactStoreState => ({
 
     set((prev) => ({
       artifactsById: { ...prev.artifactsById, [id]: artifact },
-      order: [id, ...prev.order.filter((x) => x !== id)]
+      order: [id, ...prev.order.filter((x: string) => x !== id)]
     }));
 
     return id;
@@ -120,7 +130,7 @@ const createStore = (set: any, get: any): ArtifactStoreState => ({
 
     set((prev) => ({
       artifactsById: { ...prev.artifactsById, [key]: updated },
-      order: [key, ...prev.order.filter((x) => x !== key)]
+      order: [key, ...prev.order.filter((x: string) => x !== key)]
     }));
   },
 
@@ -162,8 +172,8 @@ const createStore = (set: any, get: any): ArtifactStoreState => ({
       delete nextArtifacts[key];
       return {
         artifactsById: nextArtifacts,
-        order: prev.order.filter((x) => x !== key),
-        evidence: prev.evidence.filter((e) => (e as any).artifactId !== key)
+        order: prev.order.filter((x: string) => x !== key),
+        evidence: prev.evidence.filter((e: EvidenceEntry) => (e.kind === 'artifact' ? e.artifactId !== key : true))
       };
     });
   },
@@ -187,8 +197,7 @@ const createStore = (set: any, get: any): ArtifactStoreState => ({
   },
 
   addEvidence: (e: EvidenceEntry) => {
-    const ts = typeof (e as any)?.ts === 'number' ? (e as any).ts : Date.now();
-    const normalized: EvidenceEntry = { ...(e as any), ts };
+    const normalized: EvidenceEntry = e;
     set((prev) => ({
       evidence: [normalized, ...prev.evidence].slice(0, MAX_EVIDENCE)
     }));

@@ -7,9 +7,6 @@
 export * from './utils';
 export * from './setup';
 
-// Re-export common test types and interfaces
-export type { MockedFunction, MockedObject } from 'jest';
-
 // Test configuration
 export const TEST_CONFIG = {
     DEFAULT_TIMEOUT: 5000,

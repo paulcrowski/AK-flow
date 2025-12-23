@@ -311,7 +311,7 @@ export function createCortexTextService(ai: GoogleGenAI) {
             if (traceId) p0MetricAdd(traceId, { parseFailCount: 1 });
             eventBus.publish({
               id: generateUUID(),
-              traceId,
+              traceId: traceId || undefined,
               timestamp: Date.now(),
               source: AgentType.CORTEX_FLOW,
               type: PacketType.SYSTEM_ALERT,

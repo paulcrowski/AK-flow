@@ -1,4 +1,4 @@
-import type { EvaluationEvent, EvaluationTag, FailureSource } from '../../../types';
+import type { EvaluationEvent, EvaluationTag, FailureSource } from '@/types';
 import { createEvaluationEvent } from '../createEvaluationEvent';
 
 export function confessionToEvaluation(confession: {
