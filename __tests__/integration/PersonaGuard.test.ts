@@ -173,6 +173,24 @@ describe('PersonaGuard', () => {
 
       expect(result.action).toBe('PASS');
     });
+
+    it('detects assistant-speak patterns', () => {
+      const response = 'Jak moge pomoc?';
+
+      const result = guard.check(response, {}, 'Jesse');
+
+      expect(result.action).toBe('RETRY');
+      expect(result.issues.some((i: any) => i.type === 'persona_drift')).toBe(true);
+    });
+
+it('detects assistant-speak patterns', () => {
+      const response = 'Jak moge pomoc?';
+
+      const result = guard.check(response, {}, 'Jesse');
+
+      expect(result.action).toBe('RETRY');
+      expect(result.issues.some((i: any) => i.type === 'persona_drift')).toBe(true);
+    });
   });
 
   describe('Retry Logic', () => {

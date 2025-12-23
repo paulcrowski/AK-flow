@@ -14,5 +14,7 @@ How to use: mark PASS/FAIL and attach evidence links (logs, snapshots, test runs
 - [ ] hardcoded thresholds in config | Status: PASS/FAIL | Evidence:
 - [ ] snapshot tool works end-to-end | Status: PASS/FAIL | Evidence:
 - [ ] artifact visible after creation | Status: PASS/FAIL | Evidence:
+- [ ] personality: no-assistant-speak | Status: PASS/FAIL | Evidence:
+- [ ] silence: valid state | Status: PASS/FAIL | Evidence:
 - [ ] autonomy chooses CLARIFY with missing data | Status: PASS/FAIL | Evidence:
 - [ ] deterministic trigger maintained | Status: PASS/FAIL | Evidence:

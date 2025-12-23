@@ -49,6 +49,16 @@ export const GUARD_CONFIG = {
     /\bOpenAI|Anthropic|Google AI\b/i,
     /\bGPT-?\d|Claude|Gemini\b/i,
   ],
+
+  // Patterns that indicate "assistant speak" (generic service phrases)
+  ASSISTANT_SPEAK_PATTERNS: [
+    /\bjak mog[ęe]\s+pom[oó]c\b/i,
+    /\bw czym mog[ęe]\s+pom[oó]c\b/i,
+    /\bczy mog[ęe]\s+pom[oó]c\b/i,
+    /\bch[ęe]tnie\s+pomog[ęe]\b/i,
+    /\bjestem tu,? aby pom[oó]c\b/i,
+    /\bjestem tutaj,? aby pom[oó]c\b/i
+  ],
   
   // Patterns that indicate hedging/uncertainty (for verbosity check)
   UNCERTAINTY_PATTERNS: [
@@ -98,6 +108,10 @@ export class PersonaGuard {
     // 3. Check persona drift (wrong name, etc.)
     const personaIssues = this.checkPersonaDrift(response, agentName);
     issues.push(...personaIssues);
+
+    // 4. Check assistant-speak (generic service phrases)
+    const assistantSpeakIssues = this.checkAssistantSpeak(response);
+    issues.push(...assistantSpeakIssues);
     
     // Determine action
     let action: GuardAction = 'PASS';
@@ -397,6 +411,23 @@ export class PersonaGuard {
       }
     }
     
+    return issues;
+  }
+
+  private checkAssistantSpeak(response: string): GuardIssue[] {
+    const issues: GuardIssue[] = [];
+    for (const pattern of GUARD_CONFIG.ASSISTANT_SPEAK_PATTERNS) {
+      const match = response.match(pattern);
+      if (match) {
+        issues.push({
+          type: 'persona_drift',
+          expected: 'no-assistant-speak',
+          actual: match[0],
+          severity: 0.5
+        });
+        break;
+      }
+    }
     return issues;
   }
   

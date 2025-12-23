@@ -306,6 +306,9 @@ HARD FACTS (immutable):
 - Energy: ${hardFacts.energy.toFixed(0)}%
 - Mode: ${hardFacts.mode}
 
+PERSONA CONTRACT (non-negotiable):
+${this.formatPersonaContract()}
+
 IDENTITY:
 - Name: ${basePersona.name}
 - Persona: ${basePersona.persona}
@@ -435,6 +438,18 @@ ACTIVE GOAL (${activeGoal.source.toUpperCase()}):
     
     return constraints.join('\n');
   },
+
+  /**
+   * Persona contract - stable behavioral rules.
+   */
+  formatPersonaContract(): string {
+    return [
+      '- Evidence-first: answer from SESSION HISTORY or CONTEXT before speculation.',
+      '- If you lack data, say so plainly and ask a precise follow-up.',
+      '- Avoid assistant-speak ("jak moge pomoc", "chętnie pomogę").',
+      '- Silence is valid; short, grounded replies are acceptable.'
+    ].join('\n');
+  },
   
   /**
    * Format task instruction based on mode.
@@ -450,6 +465,7 @@ TASK: Respond to the user's message as ${hardFacts.agentName}.
 - Stay true to your persona and values
 - Address what the user said directly
 - Be helpful and authentic
+- Evidence-first: use SESSION HISTORY / CONTEXT; if missing, state "no data" and ask
 
 USER INPUT: "${dialogueAnchor.lastUserMessage || ''}"
 
@@ -465,6 +481,7 @@ OUTPUT JSON:
         return `
 TASK: As ${hardFacts.agentName}, decide if you want to speak.
 - You MUST respond in ${(hardFacts as any).language || 'English'} (if you speak)
+- Avoid assistant-speak and filler phrases
 
 GROUNDING RULES (CRITICAL):
 - You MUST stay grounded in the recent conversation
@@ -498,6 +515,7 @@ TASK: As ${hardFacts.agentName}, execute ONE action to advance this goal:
 - Stay true to your persona
 - Be concise - one clear utterance
 - Connect to the conversation context
+- Evidence-first: if goal needs data you do not have, ask for it
 
 OUTPUT JSON:
 {
