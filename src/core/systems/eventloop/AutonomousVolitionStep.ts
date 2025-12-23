@@ -6,6 +6,7 @@ import { SYSTEM_CONFIG } from '../../config/systemConfig';
 import { isMainFeatureEnabled } from '../../config/featureFlags';
 import { UnifiedContextBuilder, type BasePersona, type StylePrefs } from '../../context';
 import { CortexService } from '../../../llm/gemini';
+import { SessionMemoryService } from '../../../services/SessionMemoryService';
 import { AutonomyRepertoire } from '../AutonomyRepertoire';
 import { ExecutiveGate } from '../ExecutiveGate';
 import { LimbicSystem } from '../LimbicSystem';
@@ -194,6 +195,8 @@ export async function runAutonomousVolitionStep(input: {
     ? (await memorySpace.hot.semanticSearch(memoryQuery)).map((m) => m.content)
     : undefined;
 
+  const sessionMemory = await SessionMemoryService.getSessionStatsSafe();
+
   const unifiedContext = UnifiedContextBuilder.build({
     agentName: basePersona.name,
     basePersona,
@@ -203,6 +206,7 @@ export async function runAutonomousVolitionStep(input: {
     soma: ctx.soma,
     neuro: ctx.neuro,
     conversation: ctx.conversation as any,
+    sessionMemory,
     socialDynamics: ctx.socialDynamics,
     silenceStart: ctx.silenceStart,
     lastUserInteractionAt: ctx.goalState.lastUserInteractionAt || ctx.silenceStart,

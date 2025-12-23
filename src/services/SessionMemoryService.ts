@@ -171,6 +171,18 @@ export const SessionMemoryService = {
       return this.getEmptyStats();
     }
   },
+
+  /**
+   * Safe wrapper: never throws, always returns stats.
+   */
+  async getSessionStatsSafe(): Promise<SessionStats> {
+    try {
+      return await this.getSessionStats();
+    } catch (err) {
+      console.warn('[SessionMemory] Safe fallback triggered:', (err as Error)?.message || err);
+      return this.getEmptyStats();
+    }
+  },
   
   /**
    * Get empty stats (fallback).

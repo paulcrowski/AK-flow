@@ -1,6 +1,7 @@
 import { CortexService } from '../../../llm/gemini';
 import { MemoryService, getCurrentAgentId } from '../../../services/supabase';
 import { EpisodicMemoryService } from '../../../services/EpisodicMemoryService';
+import { SessionMemoryService } from '../../../services/SessionMemoryService';
 import { AgentType, PacketType } from '../../../types';
 import { generateUUID } from '../../../utils/uuid';
 import { EmotionEngine } from '../EmotionEngine';
@@ -100,6 +101,8 @@ export async function processUserMessage(params: ProcessInputParams): Promise<Pr
         formattedHistory.push(ragContext);
       }
 
+      const sessionMemory = await SessionMemoryService.getSessionStatsSafe();
+
       const state = buildMinimalCortexState({
         agentId,
         userInput: text,
@@ -108,7 +111,8 @@ export async function processUserMessage(params: ProcessInputParams): Promise<Pr
           energy: currentSoma.energy,
           confidence: currentLimbic.satisfaction * 100,
           stress: currentLimbic.fear * 100
-        }
+        },
+        sessionMemory
       });
 
       const rawOutput = await generateFromCortexState(state);

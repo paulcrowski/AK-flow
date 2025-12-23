@@ -7,7 +7,7 @@
  * @module core/builders/MinimalCortexStateBuilder
  */
 
-import type { CortexState } from '../types/CortexState';
+import type { CortexState, SessionMemorySnapshot } from '../types/CortexState';
 import type { MetaStates } from '../types/MetaStates';
 import { DEFAULT_INTERACTION_MODE } from '../types/InteractionMode';
 import { DEFAULT_RELATIONSHIP } from '../types/Relationship';
@@ -116,6 +116,8 @@ export interface MinimalBuilderInput {
   recentContext?: string[];
   /** Ostatnia odpowiedź agenta */
   lastAgentOutput?: string;
+  /** Session-level memory (from SessionMemoryService) */
+  sessionMemory?: SessionMemorySnapshot;
 }
 
 /**
@@ -197,7 +199,8 @@ export function buildMinimalCortexState(
         epistemic_mode: isMainFeatureEnabled('GROUNDED_MODE') ? 'grounded_strict' : 'hybrid'
       }
       // Note: soma/neuro not available here, will be added by caller if needed
-    })
+    }),
+    session_memory: input.sessionMemory
   };
 }
 

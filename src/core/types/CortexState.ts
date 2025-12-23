@@ -17,6 +17,15 @@ import type { InteractionMode } from './InteractionMode';
 import type { Relationship } from './Relationship';
 import type { HardFacts } from '../../types';
 
+export interface SessionMemorySnapshot {
+  sessionsToday: number;
+  sessionsYesterday: number;
+  sessionsThisWeek: number;
+  messagesToday: number;
+  lastInteractionAt: string | null;
+  recentTopics: string[];
+}
+
 /**
  * Główny kontrakt - to idzie do LLM jako JSON
  */
@@ -63,6 +72,9 @@ export interface CortexState {
    * This is THE single source of truth for identity and temporal facts.
    */
   hard_facts?: HardFacts;
+
+  /** Session-level memory facts (yesterday/today counts, topics, last interaction) */
+  session_memory?: SessionMemorySnapshot;
 }
 
 /** Maksymalny rozmiar payload w znakach (safety limit) */
