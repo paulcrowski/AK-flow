@@ -5,7 +5,7 @@
 
 ## Archive policy
 
-`docs/archive/` to kwarantanna na historyczne pliki (LEGACY) – **nie używać w produkcji**.
+`docs/_archive/` to kwarantanna na historyczne pliki (LEGACY) – **nie używać w produkcji**.
 Ten katalog jest wykluczony z kompilacji TypeScript i służy wyłącznie jako referencja do poprzednich iteracji.
 
 ---

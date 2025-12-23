@@ -17,8 +17,8 @@ Fields:
 
 | Candidate | Purpose | Callsite | Flags | Decision | Notes |
 | --- | --- | --- | --- | --- | --- |
-| `VolitionSystem.shouldSpeak` | Legacy speech gate (pre-ExecutiveGate) | `__tests__/unit/VolitionSystem.test.ts` only | None | TBD | No runtime callsites; candidate to quarantine or delete. |
-| `VolitionSystem.evaluateVolition` | Legacy autonomy decision helper | `src/core/systems/VolitionSystem.ts` export only | None | TBD | No runtime callsites; consider removing after audit. |
+| `VolitionSystem.shouldSpeak` | Legacy speech gate: checks content, repetition, refractory window, limbic fear, silence bonus, pressure threshold | `__tests__/unit/VolitionSystem.test.ts` only | None | TBD | No runtime callsites; candidate to quarantine or delete. |
+| `VolitionSystem.evaluateVolition` | Legacy simple gate: content present + voicePressure > 0.75 | `src/core/systems/VolitionSystem.ts` export only | None | TBD | No runtime callsites; consider removing after audit. |
 | `SessionMemoryService` | Session stats for "yesterday/today" questions | `src/core/systems/cortex/processUserMessage.ts`, `src/core/systems/eventloop/AutonomousVolitionStep.ts` | None | KEEP | Active runtime usage. |
 | `SnapshotService` | Snapshot export + DB save | `src/tools/toolParser.ts` (lazy import) | None | KEEP | Active tool path. |
 | `GoalSystem` | Goal formation + journal | `src/core/systems/EventLoop.ts` | None | KEEP | Used in runtime loop. |

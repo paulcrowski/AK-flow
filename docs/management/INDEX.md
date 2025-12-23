@@ -38,7 +38,7 @@ docs/
 ├── 📅 daily logs/           ← Historia sesji
 │   └── YYYY-MM-DD.md
 │
-└── 🗄️ archive/              ← Stare dokumenty
+└── 🗄️ _archive/             ← Stare dokumenty
     └── (legacy docs)
 ```
 
@@ -95,8 +95,8 @@ Pełny roadmap: [ROADMAP_AGI_PHASES.md](./architecture/ROADMAP_AGI_PHASES.md)
 
 Jeśli szukasz czegoś starego:
 - Stare sesje: `docs/daily logs/`
-- Stare pomysły: `docs/archive/`
-- Stare audyty: `docs/archive/`
+- Stare pomysły: `docs/_archive/`
+- Stare audyty: `docs/_archive/`
 
 ---
 
