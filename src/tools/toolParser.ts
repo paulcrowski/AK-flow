@@ -1,21 +1,18 @@
 import { eventBus } from '../core/EventBus';
-import { CortexService } from '../llm/gemini';
-import { MemoryService, getCurrentAgentId, getCurrentOwnerId, getCurrentUserEmail } from '../services/supabase';
-import { persistSearchKnowledgeChunk } from '../services/SearchKnowledgeChunker';
+import { getCurrentAgentId, getCurrentOwnerId, getCurrentUserEmail } from '../services/supabase';
 import { downloadLibraryDocumentText, uploadLibraryFile } from '../services/LibraryService';
 import { safeParseJson, splitTodo3 } from '../utils/splitTodo3';
 import { AgentType, PacketType } from '../types';
 import { getCurrentTraceId } from '../core/trace/TraceContext';
 import { generateUUID } from '../utils/uuid';
-import * as SomaSystem from '../core/systems/SomaSystem';
-import * as LimbicSystem from '../core/systems/LimbicSystem';
-import { VISUAL_BASE_COOLDOWN_MS, VISUAL_ENERGY_COST_BASE } from '../core/constants';
 import { useArtifactStore, hashArtifactContent, normalizeArtifactRef as normalizeArtifactRefCore } from '../stores/artifactStore';
 import { getCognitiveState } from '../stores/cognitiveStore';
 import { SYSTEM_CONFIG } from '../core/config/systemConfig';
 import { p0MetricAdd } from '../core/systems/TickLifecycleTelemetry';
 import { consumeWorkspaceTags } from './workspaceTools';
-import { scheduleSoftTimeout, searchInFlight, visualInFlight, withTimeout } from './toolRuntime';
+import { withTimeout } from './toolRuntime';
+import { consumeSearchTag } from './searchTag';
+import { consumeVisualizeTag } from './visualizeTag';
 
 // P0 13/10: Tool execution timeout (ms)
 const TOOL_TIMEOUT_MS = (() => {
@@ -476,353 +473,22 @@ export const createProcessOutputForTools = (deps: ToolParserDeps) => {
     }
 
     // 1. SEARCH TAG
-    let searchMatch = cleanText.match(/\[SEARCH:\s*(.*?)\]/i);
-    if (!searchMatch) {
-      const legacySearch = cleanText.match(/\[SEARCH\]\s*(?:for\s*)?:?\s*(.+)$/i);
-      if (legacySearch) {
-        searchMatch = [legacySearch[0], legacySearch[1]] as any;
-      }
-    }
-
-    if (searchMatch) {
-      const query = searchMatch[1].trim();
-      cleanText = cleanText.replace(searchMatch[0], '').trim();
-      const intentId = generateUUID();
-
-      // P0: TOOL_INTENT event
-      eventBus.publish({
-        id: intentId,
-        timestamp: Date.now(),
-        source: AgentType.CORTEX_FLOW,
-        type: PacketType.TOOL_INTENT,
-        payload: { tool: 'SEARCH', query },
-        priority: 0.8
-      });
-
-      const key = query.toLowerCase();
-      let op = searchInFlight.get(key);
-
-      if (!op) {
-        addMessage('assistant', `Invoking SEARCH for: "${query}"`, 'action');
-        setCurrentThought(`Researching: ${query}...`);
-
-        const startedTraceId = getCurrentTraceId() ?? undefined;
-        const startedSessionId = deps.getActiveSessionId?.() ?? undefined;
-
-        const promise = CortexService.performDeepResearch(query, 'User requested data.');
-        op = {
-          promise,
-          startedAt: Date.now(),
-          intentIds: new Set<string>([intentId]),
-          timeoutEmitted: new Set<string>(),
-          settled: false,
-          primaryIntentId: intentId,
-          startedTraceId,
-          startedSessionId
-        };
-        searchInFlight.set(key, op);
-
-        void promise
-          .then((research) => {
-            op!.settled = true;
-
-            if (!research || !research.synthesis) {
-              for (const id of op!.intentIds) {
-                eventBus.publish({
-                  id: generateUUID(),
-                  timestamp: Date.now(),
-                  source: AgentType.CORTEX_FLOW,
-                  type: PacketType.TOOL_ERROR,
-                  payload: { tool: 'SEARCH', query, intentId: id, error: 'Empty result' },
-                  priority: 0.9
-                });
-              }
-              addMessage('assistant', 'Mój moduł SEARCH jest teraz wyłączony.', 'thought');
-              return;
-            }
-
-            for (const id of op!.intentIds) {
-              eventBus.publish({
-                id: generateUUID(),
-                timestamp: Date.now(),
-                source: AgentType.CORTEX_FLOW,
-                type: PacketType.TOOL_RESULT,
-                payload: {
-                  tool: 'SEARCH',
-                  query,
-                  intentId: id,
-                  sourcesCount: research.sources?.length || 0,
-                  synthesisLength: research.synthesis.length,
-                  late: op!.timeoutEmitted.has(id)
-                },
-                priority: 0.8
-              });
-            }
-
-            if (op!.timeoutEmitted.size > 0) {
-              addMessage(
-                'assistant',
-                `SEARCH wynik dotarł po TIMEOUT (dołączony). query="${query}"`,
-                'thought'
-              );
-            }
-
-            addMessage('assistant', research.synthesis, 'intel', undefined, research.sources);
-
-            // P0 v1.2: Persist SEARCH results as consolidated knowledge chunks (feature-flagged)
-            void persistSearchKnowledgeChunk({
-              query,
-              synthesis: research.synthesis,
-              sources: research.sources,
-              traceId: op!.startedTraceId,
-              sessionId: op!.startedSessionId,
-              toolIntentId: op!.primaryIntentId
-            });
-          })
-          .catch((error: any) => {
-            op!.settled = true;
-            console.warn('[ToolParser] Research failed:', error);
-
-            for (const id of op!.intentIds) {
-              eventBus.publish({
-                id: generateUUID(),
-                timestamp: Date.now(),
-                source: AgentType.CORTEX_FLOW,
-                type: PacketType.TOOL_ERROR,
-                payload: {
-                  tool: 'SEARCH',
-                  query,
-                  intentId: id,
-                  error: error?.message || 'Unknown error'
-                },
-                priority: 0.9
-              });
-            }
-
-            addMessage('assistant', 'Mój moduł SEARCH jest teraz wyłączony.', 'thought');
-          })
-          .finally(() => {
-            searchInFlight.delete(key);
-          });
-      } else {
-        op.intentIds.add(intentId);
-      }
-      scheduleSoftTimeout({
-        op,
-        intentId,
-        tool: 'SEARCH',
-        payload: { query },
-        timeoutMs: TOOL_TIMEOUT_MS,
-        makeId: generateUUID,
-        publish: (packet) => eventBus.publish(packet)
-      });
-    }
+    cleanText = await consumeSearchTag({
+      cleanText,
+      deps: { setCurrentThought, addMessage, getActiveSessionId: deps.getActiveSessionId },
+      timeoutMs: TOOL_TIMEOUT_MS,
+      makeId: generateUUID,
+      publish: (packet) => eventBus.publish(packet)
+    });
 
     // 2. VISUAL TAG
-    let visualMatch = cleanText.match(/\[VISUALIZE:\s*([\s\S]*?)\]/i);
-    if (!visualMatch) {
-      const legacyVisual = cleanText.match(/\[VISUALIZE\]\s*(.+)$/is);
-      if (legacyVisual) {
-        visualMatch = [legacyVisual[0], legacyVisual[1]] as any;
-      }
-    }
-    if (!visualMatch) {
-      const progressiveVisual = cleanText.match(/\[(Visualize|visualize|Visualizing|visualizing)\s+(.+?)\]/is);
-      if (progressiveVisual) {
-        visualMatch = [progressiveVisual[0], progressiveVisual[2]] as any;
-      }
-    }
-
-    if (visualMatch) {
-      let prompt = visualMatch[1].trim();
-      if (prompt.endsWith(']')) prompt = prompt.slice(0, -1);
-
-      console.log('Visual Tag Detected:', prompt);
-
-      // TAGGED COGNITION: Log MY_ACTION before tool invocation
-      addMessage('assistant', `Invoking VISUALIZE for: "${prompt.substring(0, 50)}..."`, 'action');
-      cleanText = cleanText.replace(visualMatch[0], '').trim();
-
-      const now = Date.now();
-      if (now - lastVisualTimestampRef.current > VISUAL_BASE_COOLDOWN_MS * 10) {
-        visualBingeCountRef.current = 0;
-      }
-
-      const currentBinge = visualBingeCountRef.current;
-      const dynamicCooldown = VISUAL_BASE_COOLDOWN_MS * (currentBinge + 1);
-      const timeSinceLast = now - lastVisualTimestampRef.current;
-
-      if (timeSinceLast < dynamicCooldown) {
-        const remainingSec = Math.ceil((dynamicCooldown - timeSinceLast) / 1000);
-        const distractions = [
-          'System Alert: Sudden spike in entropy detected. Analyze logic structure instead.',
-          'Data Stream Update: Reviewing recent memory coherence.',
-          'Focus Shift: Analyzing linguistic patterns in user input.'
-        ];
-        const randomDistraction = distractions[Math.floor(Math.random() * distractions.length)];
-
-        addMessage(
-          'assistant',
-          `[VISUAL CORTEX REFRACTORY PERIOD ACTIVE - ${remainingSec}s REMAINING] ${randomDistraction}`,
-          'thought'
-        );
-
-        eventBus.publish({
-          id: generateUUID(),
-          timestamp: Date.now(),
-          source: AgentType.CORTEX_FLOW,
-          type: PacketType.SYSTEM_ALERT,
-          payload: { msg: 'Visual Cortex Overload. Redirecting focus.' },
-          priority: 0.2
-        });
-
-        return cleanText;
-      } else {
-        const intentId = generateUUID();
-        
-        // P0: TOOL_INTENT event
-        eventBus.publish({
-          id: intentId,
-          timestamp: Date.now(),
-          source: AgentType.VISUAL_CORTEX,
-          type: PacketType.TOOL_INTENT,
-          payload: { tool: 'VISUALIZE', prompt: prompt.substring(0, 100) },
-          priority: 0.8
-        });
-
-        const key = prompt.toLowerCase();
-        let op = visualInFlight.get(key);
-
-        if (!op) {
-          setCurrentThought(`Visualizing: ${prompt.substring(0, 30)}...`);
-          lastVisualTimestampRef.current = now;
-          visualBingeCountRef.current += 1;
-
-          const energyCost = VISUAL_ENERGY_COST_BASE * (currentBinge + 1);
-
-          setSomaState(prev => {
-            let updated = SomaSystem.applyEnergyCost(prev, energyCost);
-            updated = SomaSystem.applyCognitiveLoad(updated, 15);
-            return updated;
-          });
-
-          setLimbicState(prev => LimbicSystem.applyVisualEmotionalCost(prev, currentBinge));
-
-          eventBus.publish({
-            id: generateUUID(),
-            timestamp: Date.now(),
-            source: AgentType.VISUAL_CORTEX,
-            type: PacketType.VISUAL_THOUGHT,
-            payload: { status: 'RENDERING', prompt },
-            priority: 0.5
-          });
-
-          const promise = CortexService.generateVisualThought(prompt);
-          op = {
-            promise,
-            startedAt: Date.now(),
-            intentIds: new Set<string>([intentId]),
-            timeoutEmitted: new Set<string>(),
-            settled: false
-          };
-          visualInFlight.set(key, op);
-
-          void promise
-            .then(async (img) => {
-              op!.settled = true;
-
-              if (!img) {
-                for (const id of op!.intentIds) {
-                  eventBus.publish({
-                    id: generateUUID(),
-                    timestamp: Date.now(),
-                    source: AgentType.VISUAL_CORTEX,
-                    type: PacketType.TOOL_ERROR,
-                    payload: { tool: 'VISUALIZE', intentId: id, error: 'Null image result' },
-                    priority: 0.9
-                  });
-                }
-                return;
-              }
-
-              const perception = await CortexService.analyzeVisualInput(img);
-
-              for (const id of op!.intentIds) {
-                eventBus.publish({
-                  id: generateUUID(),
-                  timestamp: Date.now(),
-                  source: AgentType.VISUAL_CORTEX,
-                  type: PacketType.TOOL_RESULT,
-                  payload: {
-                    tool: 'VISUALIZE',
-                    intentId: id,
-                    hasImage: true,
-                    perceptionLength: perception?.length || 0,
-                    late: op!.timeoutEmitted.has(id)
-                  },
-                  priority: 0.8
-                });
-              }
-
-              eventBus.publish({
-                id: generateUUID(),
-                timestamp: Date.now(),
-                source: AgentType.VISUAL_CORTEX,
-                type: PacketType.VISUAL_PERCEPTION,
-                payload: {
-                  status: 'PERCEPTION_COMPLETE',
-                  prompt: prompt,
-                  perception_text: perception
-                },
-                priority: 0.9
-              });
-
-              addMessage('assistant', perception, 'visual', img);
-
-              MemoryService.storeMemory({
-                content: `ACTION: Generated Image of "${prompt}". PERCEPTION: ${perception}`,
-                emotionalContext: stateRef.current.limbicState,
-                timestamp: new Date().toISOString(),
-                imageData: img,
-                isVisualDream: true
-              });
-            })
-            .catch((e: any) => {
-              op!.settled = true;
-              console.warn('Visual gen failed', e);
-
-              for (const id of op!.intentIds) {
-                eventBus.publish({
-                  id: generateUUID(),
-                  timestamp: Date.now(),
-                  source: AgentType.VISUAL_CORTEX,
-                  type: PacketType.TOOL_ERROR,
-                  payload: {
-                    tool: 'VISUALIZE',
-                    intentId: id,
-                    error: e?.message || 'Unknown error'
-                  },
-                  priority: 0.9
-                });
-              }
-            })
-            .finally(() => {
-              visualInFlight.delete(key);
-            });
-        } else {
-          op.intentIds.add(intentId);
-        }
-        scheduleSoftTimeout({
-          op,
-          intentId,
-          tool: 'VISUALIZE',
-          payload: { prompt: prompt.substring(0, 100) },
-          timeoutMs: TOOL_TIMEOUT_MS,
-          makeId: generateUUID,
-          publish: (packet) => eventBus.publish(packet)
-        });
-      }
-    }
+    cleanText = await consumeVisualizeTag({
+      cleanText,
+      deps: { setCurrentThought, addMessage, setSomaState, setLimbicState, lastVisualTimestampRef, visualBingeCountRef, stateRef },
+      timeoutMs: TOOL_TIMEOUT_MS,
+      makeId: generateUUID,
+      publish: (packet) => eventBus.publish(packet)
+    });
 
     return cleanText;
   };
