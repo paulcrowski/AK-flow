@@ -43,13 +43,16 @@ export function createCortexTextService(ai: GoogleGenAI) {
     async generateEmbedding(text: string): Promise<number[] | null> {
       try {
         if (!text || typeof text !== 'string') return null;
-        const response = await ai.models.embedContent({
-          model: 'text-embedding-004',
-          contents: text
-        });
+        const response = await withRetry(async () => {
+          return ai.models.embedContent({
+            model: 'text-embedding-004',
+            contents: text
+          });
+        }, 2, 1000);
         return response.embeddings?.[0]?.values || null;
       } catch (e: any) {
-        console.error('Embedding Error:', e);
+        const err = e?.message || String(e);
+        console.warn('Embedding Error (handled):', err);
         return null;
       }
     },

@@ -110,7 +110,20 @@ export const MemoryService = {
         ? await CortexService.generateEmbedding(memory.content)
         : null;
 
-      if (wantsEmbedding && !embedding) throw new Error("Embedding generation failed");
+      if (wantsEmbedding && !embedding) {
+        console.warn('[MemoryService] Embedding unavailable, storing without embedding');
+        eventBus.publish({
+          id: generateUUID(),
+          timestamp: Date.now(),
+          source: AgentType.CORTEX_FLOW,
+          type: PacketType.SYSTEM_ALERT,
+          payload: {
+            event: 'EMBEDDING_FAILED',
+            reason: 'embedding_unavailable'
+          },
+          priority: 0.2
+        });
+      }
 
       // Compression
       let optimizedImage: string | null = null;
