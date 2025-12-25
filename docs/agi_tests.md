@@ -5,8 +5,8 @@ How to use: mark PASS/FAIL and attach evidence links (logs, snapshots, test runs
 
 Smoke checklist (manual UI):
 - [x] `npm run smoke` passes (test + build) | Evidence: `npm run smoke` 2025-12-25 16:26:22
-- [ ] runtime init log is visible | Status: FAIL | Evidence: manual UI check pending
-- [ ] `[SNAPSHOT]` creates an artifact and it is visible in the panel | Status: FAIL | Evidence: manual UI check pending
+- [x] runtime init log is visible | Evidence: SYSTEM_ALERT `IDENTITY_LOADED` traceId `boot-1766676835535-1` timestamp `1766676835535`
+- [x] `[SNAPSHOT]` creates an artifact and it is visible in the panel | Evidence: TOOL_RESULT artifactId `art-90811036-7ed1-4905-b187-dd8b287a4425` snapshotId `snap-1766676874568-h6i6qsx0d` timestamp `1766676874691` + UI artifacts list shows `snapshot_1766676874567.json`
 - [ ] "yesterday" questions return numbers + topics | Status: FAIL | Evidence: manual UI check pending
 
 - [ ] evidence-first | Status: PASS | Evidence: Persona Contract in `src/core/context/UnifiedContextBuilder.ts` + FactEcho pipeline `src/core/systems/FactEchoPipeline.ts` (not re-verified today)
