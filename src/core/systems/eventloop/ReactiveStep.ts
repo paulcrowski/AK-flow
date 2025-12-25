@@ -134,6 +134,15 @@ function detectActionableIntent(input: string): ActionFirstResult {
   };
 
   const contentKeyword = '(?:trescia|tre(?:s|\\u015b)ci(?:a|\\u0105)|tekstem|zawartoscia|zawarto(?:s|\\u015b)ci(?:a|\\u0105))';
+  const contentColonKeyword = '(?:tresc|tre(?:s|\\u015b)(?:c|\\u0107))';
+  const createNoNameColonRegex = new RegExp(
+    `(?:stworz|utworz|zapisz)\\s+(?:plik\\s+)?${contentColonKeyword}\\s*:\\s*([\\s\\S]+)`,
+    'i'
+  );
+  const createWithNameColonRegex = new RegExp(
+    `(?:stworz|utworz|zapisz)\\s+(?:plik\\s+)?(?:o\\s+nazwie\\s+)?(.+?)\\s+${contentColonKeyword}\\s*:\\s*([\\s\\S]+)`,
+    'i'
+  );
   const createNoNameRegex = new RegExp(
     `(?:stworz|utworz|zapisz)\\s+(?:plik\\s+)?z\\s+${contentKeyword}\\s+([\\s\\S]+)`,
     'i'
@@ -142,6 +151,25 @@ function detectActionableIntent(input: string): ActionFirstResult {
     `(?:stworz|utworz|zapisz)\\s+(?:plik\\s+)?(?:o\\s+nazwie\\s+)?(.+?)\\s+z\\s+${contentKeyword}\\s+([\\s\\S]+)`,
     'i'
   );
+
+  const createNoNameColonMatch = raw.match(createNoNameColonRegex);
+  if (createNoNameColonMatch) {
+    const payload = String(createNoNameColonMatch[1] || '').trim();
+    if (payload) {
+      const target = deriveCreateTarget(payload, { preferPhrase: true });
+      return { handled: true, action: 'CREATE', target, payload };
+    }
+  }
+
+  const createWithNameColonMatch = raw.match(createWithNameColonRegex);
+  if (createWithNameColonMatch) {
+    const name = String(createWithNameColonMatch[1] || '').trim();
+    const payload = String(createWithNameColonMatch[2] || '').trim();
+    if (payload) {
+      const target = deriveCreateTarget(name || payload, { preferPhrase: !name });
+      return { handled: true, action: 'CREATE', target, payload };
+    }
+  }
 
   const createNoNameMatch = raw.match(createNoNameRegex);
   if (createNoNameMatch) {

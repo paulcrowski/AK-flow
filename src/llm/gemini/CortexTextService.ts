@@ -42,14 +42,49 @@ const EMBEDDING_BASE_COOLDOWN_MS = 30_000;
 const EMBEDDING_MAX_COOLDOWN_MS = 5 * 60_000;
 let embeddingCooldownUntil = 0;
 let embeddingFailureCount = 0;
+let embeddingSuccessCount = 0;
+let embeddingFailCount = 0;
+let embeddingLastErrorCode: string | null = null;
+const EMBEDDINGS_STATUS_EVENT = 'EMBEDDINGS_STATUS';
 
 export function createCortexTextService(ai: GoogleGenAI) {
+  const embeddingsEnabled = Boolean((ai as any)?.models?.embedContent);
+  const emitEmbeddingsStatus = () => {
+    const now = Date.now();
+    eventBus.publish({
+      id: generateUUID(),
+      traceId: getCurrentTraceId() ?? undefined,
+      timestamp: now,
+      source: AgentType.CORTEX_FLOW,
+      type: PacketType.SYSTEM_ALERT,
+      payload: {
+        event: EMBEDDINGS_STATUS_EVENT,
+        enabled: embeddingsEnabled,
+        cooldownActive: now < embeddingCooldownUntil,
+        cooldownUntil: embeddingCooldownUntil,
+        lastErrorCode: embeddingLastErrorCode,
+        successCount: embeddingSuccessCount,
+        failCount: embeddingFailCount
+      },
+      priority: 0.2
+    });
+  };
+
+  const formatEmbeddingErrorCode = (err: any) => {
+    if (!err) return 'unknown';
+    const code = err.code || err.status || err.name || err.message || 'unknown';
+    return String(code).slice(0, 120);
+  };
+
   return {
     async generateEmbedding(text: string): Promise<number[] | null> {
       try {
         if (!text || typeof text !== 'string') return null;
         const now = Date.now();
-        if (now < embeddingCooldownUntil) return null;
+        if (now < embeddingCooldownUntil) {
+          emitEmbeddingsStatus();
+          return null;
+        }
         const response = await withRetry(async () => {
           return ai.models.embedContent({
             model: 'text-embedding-004',
@@ -58,15 +93,21 @@ export function createCortexTextService(ai: GoogleGenAI) {
         }, 2, 1000);
         embeddingFailureCount = 0;
         embeddingCooldownUntil = 0;
+        embeddingSuccessCount += 1;
+        embeddingLastErrorCode = null;
+        emitEmbeddingsStatus();
         return response.embeddings?.[0]?.values || null;
       } catch (e: any) {
         const err = e?.message || String(e);
         embeddingFailureCount = Math.min(embeddingFailureCount + 1, 10);
+        embeddingFailCount += 1;
+        embeddingLastErrorCode = formatEmbeddingErrorCode(e);
         const backoffMs = Math.min(
           EMBEDDING_MAX_COOLDOWN_MS,
           EMBEDDING_BASE_COOLDOWN_MS * Math.pow(2, embeddingFailureCount - 1)
         );
         embeddingCooldownUntil = Date.now() + backoffMs;
+        emitEmbeddingsStatus();
         console.warn('Embedding Error (handled):', err);
         return null;
       }
@@ -186,21 +227,23 @@ export function createCortexTextService(ai: GoogleGenAI) {
             moodShift: { fear_delta: 0, curiosity_delta: 0 }
           };
 
+          let guardedResponse = legacyResponse;
+
           if (isFactEchoPipelineEnabled()) {
-            const guarded = guardLegacyWithFactEcho(legacyResponse, output.fact_echo, {
+            const guarded = guardLegacyWithFactEcho(guardedResponse, output.fact_echo, {
               agentName: state.core_identity?.name || 'Jesse'
             });
-            return guarded.output;
+            guardedResponse = guarded.output;
           }
 
           if (isPrismEnabled()) {
-            const guarded = guardLegacyResponse(legacyResponse, {
+            const guarded = guardLegacyResponse(guardedResponse, {
               agentName: state.core_identity?.name || 'Jesse'
             });
-            return guarded.output;
+            guardedResponse = guarded.output;
           }
 
-          return legacyResponse;
+          return guardedResponse;
         });
       }
 

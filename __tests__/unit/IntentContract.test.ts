@@ -85,6 +85,14 @@ describe('P0.1.1 Action-First intent detection', () => {
         expect(r.payload).toBe('hello');
     });
 
+    it('CREATE: should parse explicit filename with "tresc:" payload', () => {
+        const r = detectActionableIntentForTesting('stworz plik paul.txt tresc: testuje cos');
+        expect(r.handled).toBe(true);
+        expect(r.action).toBe('CREATE');
+        expect(r.target).toBe('paul.txt');
+        expect(r.payload).toBe('testuje cos');
+    });
+
     it('APPEND: verb + target + payload required', () => {
         const r = detectActionableIntentForTesting('dopisz do note.md: hello');
         expect(r.handled).toBe(true);

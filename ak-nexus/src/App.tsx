@@ -3,7 +3,7 @@
 // Version 13.0 | Production Ready
 // ═══════════════════════════════════════════════════════════════
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useNexusStore } from './stores/nexusStore';
 import { fileService } from './services/fileService';
 import { TaskBoard } from './components/TaskBoard';
@@ -128,12 +128,15 @@ function App() {
   const [isSyncOpen, setIsSyncOpen] = useState(false);
   const [autoLoadAttempted, setAutoLoadAttempted] = useState(false);
   const { activeTab, loadState } = useNexusStore();
+  const lastRemoteContentRef = useRef<string | null>(null);
 
   // AUTO-LOAD & POLLING: Keep state in sync with JSON file
   useEffect(() => {
     let intervalId: number;
 
     const loadData = async () => {
+      if (fileService.hasFileAccess()) return;
+
       try {
         // Vite serves files from `publicDir` at the root (publicDir='data' => /ak-flow-state.json)
         const cacheBuster = Date.now();
@@ -142,10 +145,15 @@ function App() {
         for (const url of urls) {
           const response = await fetch(url);
           if (response.ok) {
-            const state = await response.json();
-            // Only update if actually changed to prevent jitter (store should handle diffing ideally,
-            // but for now we just load it. Zustand might trigger re-renders, but it's fine for this scale)
-            loadState(state);
+            const content = await response.text();
+            if (content === lastRemoteContentRef.current) return;
+            try {
+              const state = JSON.parse(content);
+              loadState(state);
+              lastRemoteContentRef.current = content;
+            } catch (parseError) {
+              console.warn('[App] Auto-load failed: invalid JSON', parseError);
+            }
             return;
           }
         }

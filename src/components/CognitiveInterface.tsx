@@ -63,6 +63,15 @@ export function CognitiveInterface() {
 
     const [input, setInput] = useState('');
     const [sessionTokens, setSessionTokens] = useState(0);
+    const [embeddingStatus, setEmbeddingStatus] = useState<{
+        enabled: boolean;
+        cooldownActive: boolean;
+        cooldownUntil: number;
+        lastErrorCode: string | null;
+        successCount: number;
+        failCount: number;
+    } | null>(null);
+    const [cooldownCountdown, setCooldownCountdown] = useState(0);
     const chatEndRef = useRef<HTMLDivElement>(null);
     const chatScrollRef = useRef<HTMLDivElement>(null);
     const shouldAutoScrollRef = useRef(true);
@@ -119,6 +128,37 @@ export function CognitiveInterface() {
         });
         return () => unsubscribe();
     }, []);
+
+    useEffect(() => {
+        const unsubscribe = eventBus.subscribe(PacketType.SYSTEM_ALERT, (packet) => {
+            if (packet.payload?.event !== 'EMBEDDINGS_STATUS') return;
+            setEmbeddingStatus({
+                enabled: Boolean(packet.payload?.enabled),
+                cooldownActive: Boolean(packet.payload?.cooldownActive),
+                cooldownUntil: Number(packet.payload?.cooldownUntil || 0),
+                lastErrorCode: packet.payload?.lastErrorCode ?? null,
+                successCount: Number(packet.payload?.successCount || 0),
+                failCount: Number(packet.payload?.failCount || 0)
+            });
+        });
+        return () => unsubscribe();
+    }, []);
+
+    useEffect(() => {
+        if (!embeddingStatus?.cooldownActive) {
+            setCooldownCountdown(0);
+            return;
+        }
+
+        const updateCountdown = () => {
+            const remaining = Math.max(0, embeddingStatus.cooldownUntil - Date.now());
+            setCooldownCountdown(Math.ceil(remaining / 1000));
+        };
+
+        updateCountdown();
+        const interval = setInterval(updateCountdown, 1000);
+        return () => clearInterval(interval);
+    }, [embeddingStatus?.cooldownActive, embeddingStatus?.cooldownUntil]);
 
     // --- CONFESSION V2 LISTENER INIT ---
     const limbicRef = useRef(limbicState);
@@ -192,6 +232,7 @@ export function CognitiveInterface() {
     const isFatigued = somaState.energy < 20;
     const isCritical = somaState.energy < 5;
     const isSleeping = somaState.isSleeping;
+    const cooldownRemainingSec = embeddingStatus?.cooldownActive ? cooldownCountdown : 0;
 
     return (
         <div className={`flex h-[100dvh] text-gray-100 font-sans transition-all duration-100 overflow-hidden 
@@ -335,6 +376,16 @@ export function CognitiveInterface() {
                         {currentThought}
                     </span>
                 </div>
+
+                {embeddingStatus?.cooldownActive && (
+                    <div className="border-b border-amber-900/40 bg-amber-900/20 px-6 py-2 text-[11px] font-mono text-amber-200 flex flex-wrap items-center gap-2">
+                        <span className="font-bold">Embeddings offline</span>
+                        <span className="opacity-80">cooldown {cooldownRemainingSec}s</span>
+                        {embeddingStatus.lastErrorCode && (
+                            <span className="opacity-60">({embeddingStatus.lastErrorCode})</span>
+                        )}
+                    </div>
+                )}
 
                 {/* Chat Area */}
                 <ChatContainer

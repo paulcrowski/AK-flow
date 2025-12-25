@@ -138,10 +138,14 @@ export function analyzeGrounding(ctx: UnifiedContext): GroundingAnalysis {
   const conversationDepth = Math.floor(turns.filter(t => t.role === 'user').length);
   
   // Check if last user message needs clarification
-  const lastUserMsg = dialogueAnchor.lastUserMessage?.toLowerCase() || '';
-  const needsClarification = CONFIG.CLARIFY_TRIGGERS.some(trigger => 
+  const lastUserMsg = String(dialogueAnchor.lastUserMessage || '').toLowerCase();
+  const normalizedMsg = lastUserMsg
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
+  const lacksAlphaNum = normalizedMsg.length > 0 && !/[a-z0-9]/i.test(normalizedMsg);
+  const needsClarification = CONFIG.CLARIFY_TRIGGERS.some(trigger =>
     lastUserMsg.includes(trigger.toLowerCase())
-  );
+  ) || lacksAlphaNum;
   
   // Check if conversation is stale
   const isConversationStale = socialFrame.silenceDurationSec > CONFIG.STALE_CONVERSATION_SEC;

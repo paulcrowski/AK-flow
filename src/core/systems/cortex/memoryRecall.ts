@@ -93,15 +93,8 @@ export async function recallMemories(input: {
 
   const [baseMemories, globalRecent] = await Promise.all([semanticPromise, globalRecentPromise]);
 
-  console.log('[MEMORY_RECALL]', {
-    query: queryText?.slice(0, 100),
-    semanticCount: baseMemories.length,
-    globalRecentCount: globalRecent.length,
-    semanticSamples: baseMemories.slice(0, 2).map((m: any) => m?.content?.slice(0, 80)),
-    recentSamples: globalRecent.slice(0, 2).map((m: any) => m?.content?.slice(0, 80))
-  });
-
   let memories: MemoryTrace[] = baseMemories;
+  let dbFallbackCount = globalRecent.length;
 
   if (wantGlobalBaseline && globalRecent.length > 0) {
     const merged = [...globalRecent, ...baseMemories];
@@ -150,6 +143,7 @@ export async function recallMemories(input: {
     if (looksLikeRecallQuestion) {
       try {
         const recent = await MemoryService.recallRecent(8);
+        dbFallbackCount += recent.length;
         const merged = [...recent, ...memories];
         const deduped: typeof merged = [];
         const seen = new Set<string>();
@@ -166,6 +160,30 @@ export async function recallMemories(input: {
       }
     }
   }
+
+  console.log('[MEMORY_RECALL]', {
+    query: queryText?.slice(0, 100),
+    semanticCount: baseMemories.length,
+    dbFallbackCount,
+    mergedCount: memories.length,
+    semanticSamples: baseMemories.slice(0, 2).map((m: any) => m?.content?.slice(0, 80)),
+    recentSamples: globalRecent.slice(0, 2).map((m: any) => m?.content?.slice(0, 80))
+  });
+
+  eventBus.publish({
+    id: generateUUID(),
+    traceId: getCurrentTraceId() ?? undefined,
+    timestamp: Date.now(),
+    source: AgentType.CORTEX_FLOW,
+    type: PacketType.SYSTEM_ALERT,
+    payload: {
+      event: 'MEMORY_RECALL_COUNTS',
+      dbFallbackCount,
+      semanticCount: baseMemories.length,
+      mergedCount: memories.length
+    },
+    priority: 0.2
+  });
 
   return memories;
 }
