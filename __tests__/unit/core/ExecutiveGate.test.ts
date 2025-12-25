@@ -121,7 +121,8 @@ describe('ExecutiveGate - Reactive VETO', () => {
 
       await mod.runReactiveStep({
         ctx,
-        userInput: 'hello',
+        // Use Action-First READ path to trigger reactive publish without LLM calls.
+        userInput: 'pokaz missing-artifact',
         callbacks,
         memorySpace: { hot: { semanticSearch: async () => [] } },
         trace: { traceId: 'trace_single_gate', tickNumber: 1, agentId: 'agent-1' }
