@@ -4,10 +4,10 @@ Purpose: a lightweight contract for core AGI invariants.
 How to use: mark PASS/FAIL and attach evidence links (logs, snapshots, test runs).
 
 Smoke checklist (manual UI):
-- [ ] `npm run smoke` passes (test + build)
-- [ ] runtime init log is visible
-- [ ] `[SNAPSHOT]` creates an artifact and it is visible in the panel
-- [ ] "yesterday" questions return numbers + topics
+- [x] `npm run smoke` passes (test + build) | Evidence: `npm run smoke` 2025-12-25 16:26:22
+- [ ] runtime init log is visible | Status: FAIL | Evidence: manual UI check pending
+- [ ] `[SNAPSHOT]` creates an artifact and it is visible in the panel | Status: FAIL | Evidence: manual UI check pending
+- [ ] "yesterday" questions return numbers + topics | Status: FAIL | Evidence: manual UI check pending
 
 - [ ] evidence-first | Status: PASS | Evidence: Persona Contract in `src/core/context/UnifiedContextBuilder.ts` + FactEcho pipeline `src/core/systems/FactEchoPipeline.ts` (not re-verified today)
 - [ ] bootstrap present | Status: PASS | Evidence: runtime init logs in `src/runtime/initRuntime.ts` (not re-verified today)
