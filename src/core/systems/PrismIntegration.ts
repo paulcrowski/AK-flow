@@ -253,27 +253,16 @@ function logGuardCheck(
  * Use this to skip expensive guard checks when obviously OK.
  */
 export function needsGuardCheck(response: string, hardFacts: HardFacts): boolean {
-  // No hard facts = no check needed
-  const hasHardFacts = Object.values(hardFacts).some(v => v !== undefined);
-  if (!hasHardFacts) return false;
-  
-  // Quick identity leak check
-  const identityPatterns = [
-    /\bas an? AI\b/i,
-    /\bI'?m a language model\b/i,
-    /\bGPT|Claude|Gemini\b/i
-  ];
-  
-  for (const pattern of identityPatterns) {
+  if (!response || response.trim().length === 0) return false;
+
+  for (const pattern of GUARD_CONFIG.IDENTITY_LEAK_PATTERNS) {
     if (pattern.test(response)) return true;
   }
-  
-  // Check if any hard fact value is missing
-  for (const [_, value] of Object.entries(hardFacts)) {
-    if (value === undefined) continue;
-    if (!response.includes(String(value))) return true;
+
+  for (const pattern of GUARD_CONFIG.ASSISTANT_SPEAK_PATTERNS) {
+    if (pattern.test(response)) return true;
   }
-  
+
   return false;
 }
 

@@ -1,19 +1,15 @@
 /**
- * PersonaGuard v1.0 - Fact & Persona Integrity System
+ * PersonaGuard v1.1 - Persona Integrity System
  * 
  * PRISM ARCHITECTURE (13/10)
  * 
  * This guard sits between LLM output and user-facing response.
  * It ensures:
- * 1. HARD_FACTS are preserved (not mutated)
- * 2. Persona stays in character (no "as an AI" leaks)
- * 3. Facts are literal, not approximated without the original value
+ * 1. Persona stays in character (no "as an AI" leaks)
+ * 2. No "assistant-speak" phrases
+ * 3. Identity stays consistent with agentName
  * 
- * RULES:
- * - Fact is IMMUTABLE: "energy: 23" must appear as "23" in response
- * - APPROX is allowed ONLY alongside literal: "23% - that's low"
- * - Persona drift triggers RETRY, not immediate failure
- * - Max 2 retries, then SOFT_FAIL
+ * NOTE: Fact validation is handled by FactEchoGuard.
  */
 
 import { 
@@ -97,19 +93,15 @@ export class PersonaGuard {
   ): GuardResult {
     const issues: GuardIssue[] = [];
     
-    // 1. Check fact mutations
-    const factIssues = this.checkFactMutations(response, hardFacts);
-    issues.push(...factIssues);
-    
-    // 2. Check identity leaks
+    // 1. Check identity leaks
     const identityIssues = this.checkIdentityLeaks(response);
     issues.push(...identityIssues);
     
-    // 3. Check persona drift (wrong name, etc.)
+    // 2. Check persona drift (wrong name, etc.)
     const personaIssues = this.checkPersonaDrift(response, agentName);
     issues.push(...personaIssues);
 
-    // 4. Check assistant-speak (generic service phrases)
+    // 3. Check assistant-speak (generic service phrases)
     const assistantSpeakIssues = this.checkAssistantSpeak(response);
     issues.push(...assistantSpeakIssues);
     
@@ -117,10 +109,7 @@ export class PersonaGuard {
     let action: GuardAction = 'PASS';
     
     if (issues.length > 0) {
-      // Check if any issue is critical (fact mutation)
-      const hasCritical = issues.some(i => 
-        i.type === 'fact_mutation' && i.severity > 0.7
-      );
+      const hasCritical = issues.some(i => i.severity >= 0.8);
       
       if (this.retryCount >= GUARD_CONFIG.MAX_RETRIES) {
         action = hasCritical ? 'HARD_FAIL' : 'SOFT_FAIL';
@@ -176,6 +165,7 @@ export class PersonaGuard {
   // Fact Checking
   // ═══════════════════════════════════════════════════════════════════════════
   
+  // Deprecated: Fact validation moved to FactEchoGuard.
   private checkFactMutations(response: string, hardFacts: HardFacts): GuardIssue[] {
     const issues: GuardIssue[] = [];
     
@@ -518,20 +508,15 @@ Odpowiedz ponownie, zachowując wszystkie fakty:`;
  * Quick check if response needs guard (optimization)
  */
 export function needsGuardCheck(response: string, hardFacts: HardFacts): boolean {
-  // Always check if we have hard facts
-  const hasHardFacts = Object.values(hardFacts).some(v => v !== undefined);
-  if (!hasHardFacts) return false;
-  
-  // Quick identity leak check
+  if (!response || response.trim().length === 0) return false;
+
   for (const pattern of GUARD_CONFIG.IDENTITY_LEAK_PATTERNS) {
     if (pattern.test(response)) return true;
   }
-  
-  // Check if any hard fact value is missing
-  for (const [_, value] of Object.entries(hardFacts)) {
-    if (value === undefined) continue;
-    if (!response.includes(String(value))) return true;
+
+  for (const pattern of GUARD_CONFIG.ASSISTANT_SPEAK_PATTERNS) {
+    if (pattern.test(response)) return true;
   }
-  
+
   return false;
 }

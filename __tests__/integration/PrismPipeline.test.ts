@@ -29,7 +29,7 @@ describe('PrismPipeline', () => {
   });
 
   describe('guardSpeech', () => {
-    it('passes valid speech with facts', () => {
+    it('passes clean speech', () => {
       const result = guardSpeech('Mam 50% energii.', {
         soma: { energy: 50, cognitiveLoad: 30, isSleeping: false }
       });

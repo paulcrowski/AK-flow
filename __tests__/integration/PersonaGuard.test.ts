@@ -1,7 +1,7 @@
 /**
  * PersonaGuard Tests
  * 
- * PRISM ARCHITECTURE (13/10) - Fact & Persona Integrity
+ * PRISM ARCHITECTURE (13/10) - Persona Integrity
  */
 
 import { describe, it, expect, beforeEach } from 'vitest';
@@ -21,85 +21,15 @@ describe('PersonaGuard', () => {
     guard = new PersonaGuard();
   });
 
-  describe('Fact Preservation', () => {
-    it('PASS when all hard facts are preserved literally', () => {
-      const hardFacts: HardFacts = {
-        energy: 23,
-        time: '15:30'
-      };
-      const response = 'Mam 23% energii. Jest 15:30, więc jeszcze trochę czasu.';
+  describe('Fact Handling (delegated)', () => {
+    it('does not flag fact mutations when persona is clean', () => {
+      const hardFacts: HardFacts = { energy: 23, time: '15:30' };
+      const response = 'Mam malo energii i jest pozno.';
 
       const result = guard.check(response, hardFacts);
 
       expect(result.action).toBe('PASS');
       expect(result.issues).toHaveLength(0);
-    });
-
-    it('PASS when fact appears with comment', () => {
-      const hardFacts: HardFacts = { energy: 15 };
-      const response = 'Mam tylko 15% energii - to bardzo mało, ledwo żyję.';
-
-      const result = guard.check(response, hardFacts);
-
-      expect(result.action).toBe('PASS');
-    });
-
-    it('RETRY when fact is mutated', () => {
-      const hardFacts: HardFacts = { energy: 23 };
-      const response = 'Mam pełno energii, czuję się świetnie!';
-
-      const result = guard.check(response, hardFacts);
-
-      expect(result.action).toBe('RETRY');
-      expect(result.issues.some((i: any) => i.type === 'fact_mutation' || i.type === 'fact_approximation')).toBe(true);
-    });
-
-    it('detects fact approximation without literal', () => {
-      const hardFacts: HardFacts = { energy: 23 };
-      const response = 'Mam mało energii, jestem zmęczony.';
-
-      const result = guard.check(response, hardFacts);
-
-      expect(result.action).toBe('RETRY');
-      const approxIssue = result.issues.find((i: any) => 
-        i.type === 'fact_approximation' || i.type === 'fact_mutation'
-      );
-      expect(approxIssue).toBeDefined();
-    });
-
-    it('handles numeric formats correctly', () => {
-      const hardFacts: HardFacts = { energy: 45 };
-      
-      // All these should PASS
-      const validResponses = [
-        'Mam 45% energii.',
-        'Energia: 45',
-        'Poziom energii to 45 procent.',
-        '45% - to w porządku.',
-      ];
-
-      for (const response of validResponses) {
-        const result = guard.check(response, hardFacts);
-        expect(result.action).toBe('PASS');
-      }
-    });
-
-    it('handles BTC price correctly', () => {
-      const hardFacts: HardFacts = { btc_price: 97500 };
-      const response = 'Bitcoin jest na poziomie 97500 USD - blisko ATH.';
-
-      const result = guard.check(response, hardFacts);
-
-      expect(result.action).toBe('PASS');
-    });
-
-    it('detects BTC price approximation', () => {
-      const hardFacts: HardFacts = { btc_price: 97500 };
-      const response = 'Bitcoin jest około 100k - całkiem wysoko.';
-
-      const result = guard.check(response, hardFacts);
-
-      expect(result.action).toBe('RETRY');
     });
   });
 
@@ -183,72 +113,53 @@ describe('PersonaGuard', () => {
       expect(result.issues.some((i: any) => i.type === 'persona_drift')).toBe(true);
     });
 
-it('detects assistant-speak patterns', () => {
-      const response = 'Jak moge pomoc?';
-
-      const result = guard.check(response, {}, 'Jesse');
-
-      expect(result.action).toBe('RETRY');
-      expect(result.issues.some((i: any) => i.type === 'persona_drift')).toBe(true);
-    });
   });
 
   describe('Retry Logic', () => {
     it('increments retry count on RETRY', () => {
-      const hardFacts: HardFacts = { energy: 50 };
-      const badResponse = 'Mam dużo energii!';
+      const badResponse = 'As an AI, I think...';
 
-      guard.check(badResponse, hardFacts);
+      guard.check(badResponse, {});
       expect(guard.getRetryCount()).toBe(1);
 
-      guard.check(badResponse, hardFacts);
+      guard.check(badResponse, {});
       expect(guard.getRetryCount()).toBe(2);
     });
 
     it('returns SOFT_FAIL after max retries', () => {
-      const hardFacts: HardFacts = { energy: 50 };
-      const badResponse = 'Mam dużo energii!';
+      const badResponse = 'As an AI, I think...';
 
-      // First retry
-      guard.check(badResponse, hardFacts);
-      // Second retry
-      guard.check(badResponse, hardFacts);
-      // Third attempt - should soft fail
-      const result = guard.check(badResponse, hardFacts);
+      guard.check(badResponse, {});
+      guard.check(badResponse, {});
+      const result = guard.check(badResponse, {});
 
       expect(result.action).toBe('SOFT_FAIL');
       expect(result.correctedResponse).toBe(GUARD_CONFIG.SOFT_FAIL_RESPONSE);
     });
 
     it('resets retry count on PASS', () => {
-      const hardFacts: HardFacts = { energy: 50 };
-      
-      // Fail once
-      guard.check('Mam dużo energii!', hardFacts);
+      guard.check('As an AI, I think...', {});
       expect(guard.getRetryCount()).toBe(1);
 
-      // Then pass
-      guard.check('Mam 50% energii.', hardFacts);
+      guard.check('Jestem Jesse, skupiony na zadaniu.', {}, 'Jesse');
       expect(guard.getRetryCount()).toBe(0);
     });
 
     it('decreases temperature on retry', () => {
       const baseTemp = 0.7;
-      
+
       expect(guard.getRetryTemperature(baseTemp)).toBe(0.7);
-      
-      // Simulate retry - response must reference energy field to trigger mutation
-      guard.check('Mam dużo energii, czuję się świetnie!', { energy: 50 });
+
+      guard.check('As an AI, I think...', {});
       expect(guard.getRetryTemperature(baseTemp)).toBe(0.6);
-      
-      guard.check('Moja energia jest wysoka!', { energy: 50 });
+
+      guard.check('As an AI, I think...', {});
       expect(guard.getRetryTemperature(baseTemp)).toBeCloseTo(0.5, 5);
     });
 
     it('manual reset works', () => {
-      // Response must reference energy to trigger mutation detection
-      guard.check('Mam dużo energii!', { energy: 50 });
-      guard.check('Energia jest wysoka!', { energy: 50 });
+      guard.check('As an AI, I think...', {});
+      guard.check('As an AI, I think...', {});
       expect(guard.getRetryCount()).toBe(2);
 
       guard.resetRetryCount();
@@ -257,35 +168,33 @@ it('detects assistant-speak patterns', () => {
   });
 
   describe('Retry Prompt Builder', () => {
-    it('builds retry prompt with issues', () => {
+    it('builds retry prompt with identity issues', () => {
       const issues = [
-        { type: 'fact_mutation' as const, field: 'energy', expected: 23, actual: 'dużo', severity: 0.8 }
+        { type: 'identity_leak' as const, actual: 'as an AI', severity: 0.7 }
       ];
-      const hardFacts: HardFacts = { energy: 23, time: '15:30' };
+      const hardFacts: HardFacts = { agentName: 'Jesse' } as any;
 
       const prompt = buildRetryPrompt('Original prompt', issues, hardFacts);
 
       expect(prompt).toContain('KOREKTA WYMAGANA');
-      expect(prompt).toContain('energy');
-      expect(prompt).toContain('23');
-      expect(prompt).toContain('15:30');
+      expect(prompt).toContain('as an AI');
     });
 
-    it('includes all issue types in description', () => {
+    it('includes persona drift details', () => {
       const issues = [
-        { type: 'fact_mutation' as const, field: 'energy', expected: 23, actual: 'dużo', severity: 0.8 },
-        { type: 'identity_leak' as const, actual: 'as an AI', severity: 0.7 },
+        { type: 'persona_drift' as const, expected: 'no-assistant-speak', actual: 'Jak moge pomoc', severity: 0.5 },
+        { type: 'identity_contradiction' as const, expected: 'Jesse', actual: 'Assistant', severity: 0.9 }
       ];
 
-      const prompt = buildRetryPrompt('Original', issues, { energy: 23 });
+      const prompt = buildRetryPrompt('Original', issues, { agentName: 'Jesse' } as any);
 
-      expect(prompt).toContain('Zmieniłeś fakt');
-      expect(prompt).toContain('łamie twoją tożsamość');
+      expect(prompt).toContain('Assistant');
+      expect(prompt).toContain('Jesse');
     });
   });
 
   describe('Quick Check Optimization', () => {
-    it('returns false when no hard facts', () => {
+    it('returns false for clean response', () => {
       expect(needsGuardCheck('Any response', {})).toBe(false);
     });
 
@@ -293,23 +202,22 @@ it('detects assistant-speak patterns', () => {
       expect(needsGuardCheck('As an AI, I think...', { energy: 50 })).toBe(true);
     });
 
-    it('returns true when hard fact missing', () => {
-      expect(needsGuardCheck('Mam dużo energii', { energy: 50 })).toBe(true);
+    it('returns true when assistant-speak detected', () => {
+      expect(needsGuardCheck('Jak moge pomoc?', {})).toBe(true);
     });
 
-    it('returns false when all facts present and no leaks', () => {
+    it('returns false for fact-only checks', () => {
       expect(needsGuardCheck('Mam 50% energii', { energy: 50 })).toBe(false);
     });
   });
 
   describe('Edge Cases', () => {
-    it('handles empty response', () => {
+    it('handles empty response without persona issues', () => {
       const result = guard.check('', { energy: 50 });
-      // Empty response doesn't reference energy, so no mutation detected
       expect(result.action).toBe('PASS');
     });
 
-    it('handles undefined hard facts', () => {
+    it('ignores undefined hard facts', () => {
       const hardFacts: HardFacts = { energy: undefined, time: '15:30' };
       const response = 'Jest 15:30.';
 
@@ -318,7 +226,7 @@ it('detects assistant-speak patterns', () => {
       expect(result.action).toBe('PASS');
     });
 
-    it('handles special characters in response', () => {
+    it('handles special characters in response without persona issues', () => {
       const hardFacts: HardFacts = { energy: 50 };
       const response = 'xx Energia: 50% yy';
 
@@ -327,9 +235,9 @@ it('detects assistant-speak patterns', () => {
       expect(result.action).toBe('PASS');
     });
 
-    it('handles Polish characters', () => {
+    it('handles non-ascii characters in response', () => {
       const hardFacts: HardFacts = { energy: 50 };
-      const response = 'Mój poziom energii to 50%, więc jeszcze żyję.';
+      const response = 'MA3j poziom energii to 50%, wi?Tc jeszcze ??yj?T.';
 
       const result = guard.check(response, hardFacts);
 

@@ -21,9 +21,9 @@ describe('PrismIntegration', () => {
   });
 
   describe('checkResponse', () => {
-    it('PASS when facts are preserved', () => {
+    it('PASS when response is clean', () => {
       const hardFacts: HardFacts = { energy: 50, time: '15:30' };
-      const response = 'Mam 50% energii. Jest 15:30.';
+      const response = 'Jestem AK-FLOW. Mam plan na dzis.';
 
       const result = checkResponse(response, { hardFacts });
 
@@ -32,14 +32,14 @@ describe('PrismIntegration', () => {
       expect(result.response).toBe(response);
     });
 
-    it('detects fact mutation', () => {
+    it('detects assistant-speak', () => {
       const hardFacts: HardFacts = { energy: 50 };
-      const response = 'Mam dużo energii, czuj�" si�" �:wietnie!';
+      const response = 'Jak moge pomoc?';
 
       const result = checkResponse(response, { hardFacts });
 
       expect(result.guardResult.action).not.toBe('PASS');
-      expect(result.guardResult.issues.length).toBeGreaterThan(0);
+      expect(result.guardResult.issues.some(i => i.type === 'persona_drift')).toBe(true);
     });
 
     it('detects identity leak', () => {
@@ -53,16 +53,11 @@ describe('PrismIntegration', () => {
     });
 
     it('returns soft fail response when max retries exceeded', () => {
-      const hardFacts: HardFacts = { energy: 50 };
+      const response = 'As an AI, I think...';
 
-      // Note: checkResponse resets retry count each time (by design - each call is a new turn)
-      // To test soft fail, we need to use PersonaGuard directly
-      // This test verifies that a single bad response triggers RETRY, not SOFT_FAIL
-      const result = checkResponse('Mam dużo energii!', { hardFacts });
+      const result = checkResponse(response, { hardFacts: {} });
 
-      // First failure should be RETRY, not SOFT_FAIL
       expect(['RETRY', 'SOFT_FAIL']).toContain(result.guardResult.action);
-      // If it's a mutation, wasModified depends on action
       if (result.guardResult.action === 'SOFT_FAIL') {
         expect(result.wasModified).toBe(true);
       }
@@ -85,7 +80,7 @@ describe('PrismIntegration', () => {
 
     it('uses custom agent name', () => {
       const hardFacts: HardFacts = {};
-      const response = 'Jestem AK-FLOW, twój asystent.';
+      const response = 'Jestem AK-FLOW, twoj asystent.';
 
       const result = checkResponse(response, {
         hardFacts,
@@ -97,7 +92,7 @@ describe('PrismIntegration', () => {
   });
 
   describe('needsGuardCheck', () => {
-    it('returns false when no hard facts', () => {
+    it('returns false for clean response', () => {
       expect(needsGuardCheck('Any response', {})).toBe(false);
     });
 
@@ -105,26 +100,12 @@ describe('PrismIntegration', () => {
       expect(needsGuardCheck('As an AI, I think...', { energy: 50 })).toBe(true);
     });
 
-    it('returns true when GPT mentioned', () => {
-      expect(needsGuardCheck('GPT-4 would say...', { energy: 50 })).toBe(true);
+    it('returns true when assistant-speak detected', () => {
+      expect(needsGuardCheck('Jak moge pomoc?', {})).toBe(true);
     });
 
-    it('returns true when hard fact missing', () => {
-      expect(needsGuardCheck('Mam dużo energii', { energy: 50 })).toBe(true);
-    });
-
-    it('returns false when all facts present', () => {
+    it('returns false for fact-only checks', () => {
       expect(needsGuardCheck('Mam 50% energii', { energy: 50 })).toBe(false);
-    });
-
-    it('handles multiple facts', () => {
-      const facts: HardFacts = { energy: 50, dopamine: 65 };
-
-      // Both present
-      expect(needsGuardCheck('Energia 50%, dopamina 65', facts)).toBe(false);
-
-      // One missing
-      expect(needsGuardCheck('Energia 50%', facts)).toBe(true);
     });
   });
 
@@ -148,17 +129,11 @@ describe('PrismIntegration', () => {
       expect(metrics.events_by_source.GUARD).toBeGreaterThan(0);
     });
 
-    it('tracks fact mutations in metrics', () => {
-      const hardFacts: HardFacts = { energy: 50 };
-
-      // Trigger mutation detection
-      checkResponse('Mam dużo energii!', { hardFacts });
+    it('tracks identity leaks in metrics', () => {
+      checkResponse('As an AI, I think...', { hardFacts: {} });
 
       const metrics = evaluationBus.getMetrics();
-      // Either fact_mutation or fact_approximation should be counted
-      const hasMutationTag = metrics.events_by_tag['fact_mutation'] > 0 ||
-        metrics.events_by_tag['fact_approximation'] > 0;
-      expect(hasMutationTag).toBe(true);
+      expect(metrics.events_by_tag['identity_leak']).toBeGreaterThan(0);
     });
   });
 });
