@@ -31,9 +31,22 @@ export const VolitionSystem = {
      */
     shouldPublishHeartbeat(silenceDuration: number): boolean {
         return silenceDuration > 10 && (silenceDuration % 30) < 3;
+    },
+
+    /**
+     * Lightweight poetic keyword scoring (used by autonomy filtering).
+     */
+    calculatePoeticScore(text: string): number {
+        const keywords = [
+            'void', 'silence', 'quantum', 'cosmic', 'loom', 'crucible',
+            'firmware', 'aether', 'nebula', 'fractal', 'resonance', 'shimmer'
+        ];
+        const lower = text.toLowerCase();
+        return keywords.reduce((score, word) => score + (lower.includes(word) ? 1 : 0), 0);
     }
 };
 
 export const calculateSilenceDuration = VolitionSystem.calculateSilenceDuration;
 export const shouldInitiateThought = VolitionSystem.shouldInitiateThought;
 export const shouldPublishHeartbeat = VolitionSystem.shouldPublishHeartbeat;
+export const calculatePoeticScore = VolitionSystem.calculatePoeticScore;
