@@ -13,6 +13,7 @@ import { eventBus } from '../../EventBus';
 import { getCurrentTraceId } from '../../trace/TraceContext';
 import { processDecisionGate, resetTurnStateForAgent } from '../DecisionGate';
 import { guardCortexOutput, isPrismEnabled } from '../PrismPipeline';
+import { guardCortexOutputWithFactEcho, isFactEchoPipelineEnabled } from '../FactEchoPipeline';
 import * as LimbicSystem from '../LimbicSystem';
 import type { MemorySpace } from '../MemorySpace';
 import { DEFAULT_IDENTITY, buildIdentityBlock } from './identity';
@@ -118,13 +119,26 @@ export async function processUserMessage(params: ProcessInputParams): Promise<Pr
       const rawOutput = await generateFromCortexState(state);
 
       let guardedOutput = rawOutput;
-      if (isPrismEnabled()) {
-        const agentName =
-          state.core_identity?.name ||
-          ((state.hard_facts?.agentName as string | undefined) ?? undefined) ||
-          'UNINITIALIZED_AGENT';
+      const agentName =
+        state.core_identity?.name ||
+        ((state.hard_facts?.agentName as string | undefined) ?? undefined) ||
+        'UNINITIALIZED_AGENT';
 
-        const guardResult = guardCortexOutput(rawOutput, {
+      if (isFactEchoPipelineEnabled()) {
+        const factResult = guardCortexOutputWithFactEcho(guardedOutput, {
+          soma: currentSoma,
+          agentName,
+          language: identity?.language
+        });
+        guardedOutput = factResult.output;
+
+        if (!factResult.guardPassed) {
+          console.warn(`[CortexSystem] FactEcho check FAILED - response was modified`);
+        }
+      }
+
+      if (isPrismEnabled()) {
+        const guardResult = guardCortexOutput(guardedOutput, {
           soma: currentSoma,
           agentName
         });
