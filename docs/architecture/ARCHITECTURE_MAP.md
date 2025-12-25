@@ -1,6 +1,6 @@
 # 🧠 AK-FLOW Architecture Map
 
-> **Wersja:** 6.9 (2025-12-23)
+> **Wersja:** 6.10 (2025-12-25)
 > **Cel:** Prosta mapa jak działa agent i jaki ma flow
 
 ## Archive policy
@@ -9,6 +9,17 @@
 Ten katalog jest wykluczony z kompilacji TypeScript i służy wyłącznie jako referencja do poprzednich iteracji.
 
 ---
+
+## FAZA 6.10: MemoryUnited v1 (Retrieval + Compression) (2025-12-25)
+
+**Cel:** odblokowanie dynamicznego retrieval i uporzadkowanie pamieci przez thalamus, dedup i kompresje sesji.
+
+**Mechanika:**
+- IntentDetector + dynamiczne limity retrieval (NOW/HISTORY/RECALL/WORK) dla semanticSearch/MemorySpace.
+- ThalamusFilter + content_hash dedup + salience metadata dla memories.
+- Session chunks z conversation_archive; retrieval order: chunks -> shards -> memories.
+- Identity shards: contradiction_count z progiem oporu (RPC increment) przed erozja.
+- DreamConsolidation: decay/prune dla nie-core memories.
 
 ## FAZA 6.9: Stabilization + Persona Contract (2025-12-23)
 

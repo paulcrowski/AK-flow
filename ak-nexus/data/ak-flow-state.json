@@ -1,56 +1,11 @@
 {
   "version": "1.0.0",
-  "lastUpdated": "2025-12-23T22:27:22.000Z",
-  "lastModified": "2025-12-23T22:27:22.000Z",
+  "lastUpdated": "2025-12-25T22:19:04.000Z",
+  "lastModified": "2025-12-25T22:19:04.000Z",
   "modifiedBy": "AI_CODEX",
   "project": "AK-Flow",
   "dailyGoal": "AgentTrajectory Phase 1 (Execution-First Autonomy)",
   "tasks": [
-    {
-      "id": "task-test-000",
-      "content": "TESTS - Connected Thinking + Social Distance (baseline)",
-      "details": "CEL: Najpierw potwierdzamy stabilnosc polaczonego myslenia (single brain) i SocialDynamics (soft homeostasis), zanim wdrozysz nowe tools.\nWYNIK: build PASS, test suite PASS (408/408).",
-      "priority": "CRITICAL",
-      "type": "TODAY",
-      "isCompleted": true,
-      "completedAt": "2025-12-16T08:53:00.000Z",
-      "subtasks": [
-        {
-          "id": "sub-tb-01",
-          "content": "[Build] npm run build",
-          "isCompleted": true
-        },
-        {
-          "id": "sub-tb-02",
-          "content": "[Test suite] npm test (408/408)",
-          "isCompleted": true
-        }
-      ],
-      "createdAt": "2025-12-16T08:53:00.000Z",
-      "updatedAt": "2025-12-16T08:53:00.000Z"
-    },
-    {
-      "id": "task-today-001",
-      "content": "Unified Input Queue - jedna brama wejscia",
-      "details": "PROBLEM: Obecnie mamy 2 sciezki wejscia - processUserInput() i EventLoop.tick(). To powoduje race condition gdzie agent odpowiada 2x na ten sam input. ROZWIAZANIE: Jedna kolejka wejsciowa w EventLoop, ktora kolejkuje wszystkie inputy (user, system, autonomous) i przetwarza je sekwencyjnie. EventLoop staje sie JEDYNYM zrodlem prawdy o czasie.",
-      "priority": "CRITICAL",
-      "type": "DONE",
-      "isCompleted": true,
-      "subtasks": [
-        {
-          "id": "sub-001",
-          "content": "Zlikwidowac podwojna sciezke processUserInput + EventLoop.tick",
-          "isCompleted": true
-        },
-        {
-          "id": "sub-002",
-          "content": "Eliminuje race condition (agent odpowiada 2x)",
-          "isCompleted": true
-        }
-      ],
-      "createdAt": "2025-12-15T10:00:00.000Z",
-      "updatedAt": "2025-12-15T18:45:00.000Z"
-    },
     {
       "id": "task-top-001",
       "content": "TOOLS - READ_FILE & SEARCH_IN_REPO (P0)",
@@ -110,48 +65,6 @@
       "subtasks": [],
       "createdAt": "2025-12-15T18:45:00.000Z",
       "updatedAt": "2025-12-15T18:45:00.000Z"
-    },
-    {
-      "id": "task-today-002",
-      "content": "ChemistryBridge - Serotonin Reactions (40% -> 100%)",
-      "details": "PROBLEM: ChemistryBridge ma tylko 40% reakcji serotoninowych. Serotonina odpowiada za stabilnosc nastroju i odpornosc na porazki. ROZWIAZANIE: Dokonczyc mapowanie EvaluationEvent -> serotonin delta. Gdy narzedzie zawodzi, serotonina powinna spadac lagodnie (nie gwaltownie jak dopamina). Zapobiega to panice przy bledach.",
-      "priority": "LOW",
-      "type": "BACKLOG",
-      "isCompleted": false,
-      "subtasks": [
-        {
-          "id": "sub-001",
-          "content": "Dokonczyc reakcje serotoninowe w ChemistryBridge.ts",
-          "isCompleted": false
-        },
-        {
-          "id": "sub-002",
-          "content": "Stabilizowac emocje PO porazkach narzedzi",
-          "isCompleted": false
-        }
-      ],
-      "createdAt": "2025-12-15T10:00:00.000Z",
-      "updatedAt": "2025-12-15T10:00:00.000Z"
-    },
-    {
-      "id": "task-today-003",
-      "content": "ExecutiveGate - Hemisphere Tracking",
-      "priority": "MEDIUM",
-      "type": "BACKLOG",
-      "isCompleted": false,
-      "subtasks": [],
-      "createdAt": "2025-12-15T10:00:00.000Z",
-      "updatedAt": "2025-12-15T10:00:00.000Z"
-    },
-    {
-      "id": "task-today-005",
-      "content": "Acetylocholina (ACh) - Attention Gate (PASSIVE MODE)",
-      "priority": "LOW",
-      "type": "BACKLOG",
-      "isCompleted": false,
-      "subtasks": [],
-      "createdAt": "2025-12-15T10:00:00.000Z",
-      "updatedAt": "2025-12-15T10:00:00.000Z"
     },
     {
       "id": "test-protocol-001",
@@ -218,6 +131,48 @@
       ],
       "createdAt": "2025-12-15T20:45:00.000Z",
       "updatedAt": "2025-12-15T20:45:00.000Z"
+    },
+    {
+      "id": "task-today-002",
+      "content": "ChemistryBridge - Serotonin Reactions (40% -> 100%)",
+      "details": "PROBLEM: ChemistryBridge ma tylko 40% reakcji serotoninowych. Serotonina odpowiada za stabilnosc nastroju i odpornosc na porazki. ROZWIAZANIE: Dokonczyc mapowanie EvaluationEvent -> serotonin delta. Gdy narzedzie zawodzi, serotonina powinna spadac lagodnie (nie gwaltownie jak dopamina). Zapobiega to panice przy bledach.",
+      "priority": "LOW",
+      "type": "BACKLOG",
+      "isCompleted": false,
+      "subtasks": [
+        {
+          "id": "sub-001",
+          "content": "Dokonczyc reakcje serotoninowe w ChemistryBridge.ts",
+          "isCompleted": false
+        },
+        {
+          "id": "sub-002",
+          "content": "Stabilizowac emocje PO porazkach narzedzi",
+          "isCompleted": false
+        }
+      ],
+      "createdAt": "2025-12-15T10:00:00.000Z",
+      "updatedAt": "2025-12-15T10:00:00.000Z"
+    },
+    {
+      "id": "task-today-003",
+      "content": "ExecutiveGate - Hemisphere Tracking",
+      "priority": "MEDIUM",
+      "type": "BACKLOG",
+      "isCompleted": false,
+      "subtasks": [],
+      "createdAt": "2025-12-15T10:00:00.000Z",
+      "updatedAt": "2025-12-15T10:00:00.000Z"
+    },
+    {
+      "id": "task-today-005",
+      "content": "Acetylocholina (ACh) - Attention Gate (PASSIVE MODE)",
+      "priority": "LOW",
+      "type": "BACKLOG",
+      "isCompleted": false,
+      "subtasks": [],
+      "createdAt": "2025-12-15T10:00:00.000Z",
+      "updatedAt": "2025-12-15T10:00:00.000Z"
     },
     {
       "id": "task-backlog-001",
@@ -300,18 +255,6 @@
       "updatedAt": "2025-12-15T10:00:00.000Z"
     },
     {
-      "id": "task-nexus-001",
-      "content": "Fix scroll w Nexus UI",
-      "details": "INTENT:\n- Da\u0107 mo\u017cliwo\u015b\u0107 scrollowania do do\u0142u w TASKS/TIMELINE.\n\nIMPLEMENTATION:\n- Zmiana layoutu w ak-nexus/src/App.tsx: content area ma overflow-y-auto i normalny flow (bez absolute inset-0).\n- Usuni\u0119to overflow-hidden z root container.\n\nEVIDENCE:\n- W UI mo\u017cna zjecha\u0107 na d\u00f3\u0142 strony w TASKS (i analogicznie w TIMELINE).\n\nRISKS:\n- Przy bardzo du\u017cej ilo\u015bci tre\u015bci mo\u017ce wymaga\u0107 dopracowania wysoko\u015bci min-h/overflow w podwidokach.",
-      "priority": "HIGH",
-      "type": "TODAY",
-      "isCompleted": true,
-      "completedAt": "2025-12-15T21:41:00.000Z",
-      "subtasks": [],
-      "createdAt": "2025-12-15T21:41:00.000Z",
-      "updatedAt": "2025-12-15T21:41:00.000Z"
-    },
-    {
       "id": "task-agent-trajectory-001",
       "content": "AgentTrajectory v1.0 (Execution-First Autonomy)",
       "details": "WERSJA: 1.0 FINAL\nSTATUS: DO IMPLEMENTACJI\n\nCEL: Zamieni\u0107 \"autonomi\u0119 jako m\u00f3wienie\" w \"autonomi\u0119 jako dzia\u0142anie\" bez cofania stabilizacji:\n- Gate nadal chroni przed spamem\n- JSON nadal fail-closed (cisza > bzdury)\n- UnifiedContext wsp\u00f3lny dla reactive i autonomy\n- Nowo\u015b\u0107: trajektoria: goal -> micro-step -> wynik -> tarcie -> kolejny krok\n\nDEFINICJE:\n- Trajektoria = activeGoal + nextStep + mode (EXECUTE/CLARIFY/CONSOLIDATE/RECOVER/IDLE) + progress/friction + lastTouchedAt + lastOutcome\n- Dzia\u0142anie \u2260 mowa: domy\u015blnie internal step (journal/memory/plan), mowa to wyj\u0105tek\n\nTWARDE ZASADY:\n1) Fail-closed zawsze: parsing fail => speech_content=\"\", voice_pressure=0, action=SILENCE, log TRAJ_FAIL_CLOSED\n2) Jedna bramka mowy: tylko ExecutiveGate.decide()\n3) EXPLORE tylko gdy silence>60s AND hasActiveTopic==false AND trajectory.mode==IDLE\n4) Reactive ma absolutny priorytet (trajectory aktualizuje si\u0119, ale nie przebija reakcji)\n\nARCHITEKTURA (WPINAMY W OBECNE):\n1) ctx.trajectory w runtime state (obok goalState)\n2) UnifiedContextBuilder dostaje sekcj\u0119 TRAJECTORY (source of truth)\n3) Kolejno\u015b\u0107: AutonomyRepertoire.selectAction(ctx) -> TrajectoryPlanner.selectNextStep(ctx, action) -> (SILENCE => skip LLM) -> LLM TrajectoryPacket -> validateSpeech() + ExecutiveGate\n\nTrajectoryPacket (LLM JSON ONLY):\n{\n  \"mode\": \"EXECUTE|CLARIFY|CONSOLIDATE|RECOVER|IDLE\",\n  \"active_goal\": { \"id\": \"string\", \"title\": \"string\", \"why_now\": \"string\", \"horizon_minutes\": 120, \"priority\": 0.0 },\n  \"next_step\": { \"type\": \"INTERNAL|ASK_USER|PLAN|MEMORY|JOURNAL\", \"title\": \"string\", \"success_criteria\": \"string\", \"requires_user\": false },\n  \"internal_action\": { \"journal\": \"string\", \"memory_write\": { \"enabled\": false, \"tag\": \"string\", \"content\": \"string\" } },\n  \"speech\": { \"allowed\": false, \"content\": \"\" },\n  \"metrics\": { \"friction_delta\": 0.0, \"progress_delta\": 0.0, \"confidence\": 0.0 }\n}\n\nKRYTERIUM SUKCESU: w logach wida\u0107 nextStep/progress/friction/mode, autonomia milczy zamiast gada\u0107 bzdury, cele staj\u0105 si\u0119 mikro-krokami.",
@@ -347,6 +290,63 @@
       ],
       "createdAt": "2025-12-16T10:47:00.000Z",
       "updatedAt": "2025-12-16T10:47:00.000Z"
+    },
+    {
+      "id": "task-test-000",
+      "content": "TESTS - Connected Thinking + Social Distance (baseline)",
+      "details": "CEL: Najpierw potwierdzamy stabilnosc polaczonego myslenia (single brain) i SocialDynamics (soft homeostasis), zanim wdrozysz nowe tools.\nWYNIK: build PASS, test suite PASS (408/408).",
+      "priority": "CRITICAL",
+      "type": "TODAY",
+      "isCompleted": true,
+      "completedAt": "2025-12-16T08:53:00.000Z",
+      "subtasks": [
+        {
+          "id": "sub-tb-01",
+          "content": "[Build] npm run build",
+          "isCompleted": true
+        },
+        {
+          "id": "sub-tb-02",
+          "content": "[Test suite] npm test (408/408)",
+          "isCompleted": true
+        }
+      ],
+      "createdAt": "2025-12-16T08:53:00.000Z",
+      "updatedAt": "2025-12-16T08:53:00.000Z"
+    },
+    {
+      "id": "task-today-001",
+      "content": "Unified Input Queue - jedna brama wejscia",
+      "details": "PROBLEM: Obecnie mamy 2 sciezki wejscia - processUserInput() i EventLoop.tick(). To powoduje race condition gdzie agent odpowiada 2x na ten sam input. ROZWIAZANIE: Jedna kolejka wejsciowa w EventLoop, ktora kolejkuje wszystkie inputy (user, system, autonomous) i przetwarza je sekwencyjnie. EventLoop staje sie JEDYNYM zrodlem prawdy o czasie.",
+      "priority": "CRITICAL",
+      "type": "TODAY",
+      "isCompleted": true,
+      "subtasks": [
+        {
+          "id": "sub-001",
+          "content": "Zlikwidowac podwojna sciezke processUserInput + EventLoop.tick",
+          "isCompleted": true
+        },
+        {
+          "id": "sub-002",
+          "content": "Eliminuje race condition (agent odpowiada 2x)",
+          "isCompleted": true
+        }
+      ],
+      "createdAt": "2025-12-15T10:00:00.000Z",
+      "updatedAt": "2025-12-15T18:45:00.000Z"
+    },
+    {
+      "id": "task-nexus-001",
+      "content": "Fix scroll w Nexus UI",
+      "details": "INTENT:\n- Da\u0107 mo\u017cliwo\u015b\u0107 scrollowania do do\u0142u w TASKS/TIMELINE.\n\nIMPLEMENTATION:\n- Zmiana layoutu w ak-nexus/src/App.tsx: content area ma overflow-y-auto i normalny flow (bez absolute inset-0).\n- Usuni\u0119to overflow-hidden z root container.\n\nEVIDENCE:\n- W UI mo\u017cna zjecha\u0107 na d\u00f3\u0142 strony w TASKS (i analogicznie w TIMELINE).\n\nRISKS:\n- Przy bardzo du\u017cej ilo\u015bci tre\u015bci mo\u017ce wymaga\u0107 dopracowania wysoko\u015bci min-h/overflow w podwidokach.",
+      "priority": "HIGH",
+      "type": "TODAY",
+      "isCompleted": true,
+      "completedAt": "2025-12-15T21:41:00.000Z",
+      "subtasks": [],
+      "createdAt": "2025-12-15T21:41:00.000Z",
+      "updatedAt": "2025-12-15T21:41:00.000Z"
     }
   ],
   "roadmap": [
@@ -895,6 +895,17 @@
       ],
       "createdAt": "2025-12-23T22:27:22.000Z",
       "updatedAt": "2025-12-23T22:27:22.000Z"
+    },
+    {
+      "id": "note-015",
+      "title": "Daily Close: 2025-12-25",
+      "content": "DONE: MemoryUnited v1 wiring tests (intent detection, retrieval ordering, content hash, Thalamus, MemorySpace cache key) + ThalamusFilter gate adjusted so low-signal acks store with low salience without embeddings. VERIFY: targeted vitest run PASS (32 tests); full npm test/build not rerun after latest changes. NEXT: run full suite/build + manual UI checks (tresc file create, CLARIFY, embeddings banner, memory recall).",
+      "category": "INSIGHT",
+      "tags": [
+        "daily_close"
+      ],
+      "createdAt": "2025-12-25T21:59:58.000Z",
+      "updatedAt": "2025-12-25T21:59:58.000Z"
     }
   ],
   "stats": {

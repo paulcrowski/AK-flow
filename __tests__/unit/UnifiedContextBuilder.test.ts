@@ -225,6 +225,20 @@ describe('UnifiedContextBuilder', () => {
       expect(prompt).toContain('TASK');
       expect(prompt).toContain('Respond to the user');
     });
+
+    it('should include session chunks and identity shards in context', () => {
+      const ctx = UnifiedContextBuilder.build({
+        ...baseInput,
+        sessionChunks: ['Chunk summary'],
+        identityShards: ['belief: I value clarity'],
+        semanticMatches: ['Memory detail']
+      });
+      const prompt = UnifiedContextBuilder.formatAsPrompt(ctx, 'reactive');
+
+      expect(prompt).toContain('[SESSION_CHUNK]: Chunk summary');
+      expect(prompt).toContain('[IDENTITY_SHARD]: belief: I value clarity');
+      expect(prompt).toContain('[MEMORY]: Memory detail');
+    });
     
     it('should format context as prompt string for autonomous mode', () => {
       const ctx = UnifiedContextBuilder.build(baseInput);

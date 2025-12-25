@@ -44,8 +44,11 @@ describe('MemorySpace', () => {
         await memorySpace.hot.semanticSearch('Hello', { limit: 4 });
         expect(provider.semanticSearch).toHaveBeenCalledTimes(1);
 
+        await memorySpace.hot.semanticSearch('Hello', { limit: 8 });
+        expect(provider.semanticSearch).toHaveBeenCalledTimes(2);
+
         const memorySpace2 = createMemorySpace('test-agent', { semanticSearchProvider: provider });
         await memorySpace2.hot.semanticSearch('Hello', { limit: 4 });
-        expect(provider.semanticSearch).toHaveBeenCalledTimes(2);
+        expect(provider.semanticSearch).toHaveBeenCalledTimes(3);
     });
 });

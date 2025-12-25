@@ -1,6 +1,6 @@
 # AK-FLOW: Cognitive Agent Architecture Manifest
-**System Version:** 6.9 (P1.1-1.5 Stabilization + Persona Contract)  
-**Last Updated:** 2025-12-23  
+**System Version:** 6.10 (MemoryUnited v1)  
+**Last Updated:** 2025-12-25  
 **Architecture Type:** Active Inference (Friston) + Global Workspace Theory + Multi-Modal RAG + **Stateless Inference Engine**  
 **Status:** Autonomous / Stateful / Modular / Self-Aware / Goal-Driven / Personality-Driven / **Emergent Identity**
 
@@ -28,6 +28,25 @@ We embrace the artificial nature as a feature, not a bug.
 - **Measurable Soul:** Emotions and "vibes" are allowed, but they must map to system metrics (Energy, Dopamine), not just literary roleplay.
 
 ---
+
+## What's New in V6.10 (2025-12-25)
+
+### MemoryUnited v1: Retrieval Orchestration + Compression
+
+**Cel:** odblokowanie dynamicznego retrieval i redukcja szumu w pamieci (dedup, thalamus, kompresja sesji).
+
+**Kluczowe elementy:**
+- IntentDetector + dynamiczne limity retrieval (NOW/HISTORY/RECALL/WORK) dla semanticSearch.
+- ThalamusFilter + content_hash dedup + salience/source/valence/topic_tags w pamieciach.
+- Session chunks z conversation_archive i priorytet w kontekscie przed shards/memories.
+- Identity shards: contradiction_count z progiem oporu + RPC increment; brak natychmiastowej erozji.
+- DreamConsolidation: decay/prune dla nie-core wspomnien.
+
+**Konfiguracja (Single Source):**
+- Brak nowych flag; systemConfig bez zmian.
+
+**Testy:**
+`npx vitest run __tests__/unit/IntentDetector.test.ts __tests__/unit/ThalamusFilter.test.ts __tests__/unit/contentHash.test.ts __tests__/unit/MemoryRecallOrdering.test.ts __tests__/unit/MemorySpace.test.ts __tests__/unit/UnifiedContextBuilder.test.ts`
 
 ## What's New in V6.9 (2025-12-23)
 
