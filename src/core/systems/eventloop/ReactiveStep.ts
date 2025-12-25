@@ -108,6 +108,8 @@ function detectActionableIntent(input: string): ActionFirstResult {
 
   const slugify = (s: string) => {
     const raw = String(s || '')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
       .toLowerCase()
       .trim()
       .replace(/^o\s+/, '')
@@ -116,11 +118,12 @@ function detectActionableIntent(input: string): ActionFirstResult {
     return collapsed.slice(0, 48);
   };
 
-  const deriveCreateTarget = (rawTarget: string) => {
+  const deriveCreateTarget = (rawTarget: string, opts?: { preferPhrase?: boolean }) => {
     const t = String(rawTarget || '').trim();
     if (!t) return 'artifact.md';
+    const preferPhrase = Boolean(opts?.preferPhrase);
     const first = t.split(/\s+/)[0];
-    const looksLikeFilename = first.includes('.') || first.length >= 3;
+    const looksLikeFilename = !preferPhrase && (first.includes('.') || first.length >= 3);
     if (looksLikeFilename && !first.includes('/') && !first.includes('\\')) {
       if (first.toLowerCase().endsWith('.md')) return first;
       if (first.includes('.')) return first;
@@ -129,11 +132,49 @@ function detectActionableIntent(input: string): ActionFirstResult {
     const slug = slugify(t);
     return `${slug || 'artifact'}.md`;
   };
+
+  const contentKeyword = '(?:trescia|tre(?:s|\\u015b)ci(?:a|\\u0105)|tekstem|zawartoscia|zawarto(?:s|\\u015b)ci(?:a|\\u0105))';
+  const createNoNameRegex = new RegExp(
+    `(?:stworz|utworz|zapisz)\\s+(?:plik\\s+)?z\\s+${contentKeyword}\\s+([\\s\\S]+)`,
+    'i'
+  );
+  const createWithNameRegex = new RegExp(
+    `(?:stworz|utworz|zapisz)\\s+(?:plik\\s+)?(?:o\\s+nazwie\\s+)?(.+?)\\s+z\\s+${contentKeyword}\\s+([\\s\\S]+)`,
+    'i'
+  );
+
+  const createNoNameMatch = raw.match(createNoNameRegex);
+  if (createNoNameMatch) {
+    const payload = String(createNoNameMatch[1] || '').trim();
+    if (payload) {
+      const target = deriveCreateTarget(payload, { preferPhrase: true });
+      return { handled: true, action: 'CREATE', target, payload };
+    }
+  }
+
+  const createWithNameMatch = raw.match(createWithNameRegex);
+  if (createWithNameMatch) {
+    const name = String(createWithNameMatch[1] || '').trim();
+    const payload = String(createWithNameMatch[2] || '').trim();
+    if (payload) {
+      const target = deriveCreateTarget(name || payload, { preferPhrase: !name });
+      return { handled: true, action: 'CREATE', target, payload };
+    }
+  }
   
   // CREATE patterns: "stworz/utworz/zapisz plik X"
   const createMatch = normalized.match(/(?:stworz|utworz|zapisz)\s+(?:plik\s+)?(.+)/i);
   if (createMatch) {
     return { handled: true, action: 'CREATE', target: deriveCreateTarget(createMatch[1]) };
+  }
+
+  const editAppendMatch = raw.match(
+    /(?:edytuj|eydtuj|modyfikuj)\s+(?:plik\s+)?([^\s:]+)\s+(?:dodaj|dopisz)\s+(?:tresc|tekst)?\s*:?\s*([\s\S]+)/i
+  );
+  if (editAppendMatch) {
+    const target = String(editAppendMatch[1] || '').trim();
+    const payload = String(editAppendMatch[2] || '').trim();
+    if (target && payload) return { handled: true, action: 'APPEND', target, payload };
   }
   
   // APPEND patterns: require verb + target + payload (after ':')
@@ -142,6 +183,22 @@ function detectActionableIntent(input: string): ActionFirstResult {
   if (appendMatch) {
     const { target, payload } = splitTargetAndPayload(String(appendMatch[1] || ''));
     if (target && payload) return { handled: true, action: 'APPEND', target, payload };
+  }
+
+  const appendInlineMatch = raw.match(/(?:dopisz|dodaj)\s+(?:tresc|tekst)?\s*do\s+([^\s:]+)\s+([\s\S]+)/i);
+  if (appendInlineMatch) {
+    const target = String(appendInlineMatch[1] || '').trim();
+    const payload = String(appendInlineMatch[2] || '').trim();
+    if (payload && (target.startsWith('art-') || target.includes('.'))) {
+      return { handled: true, action: 'APPEND', target, payload };
+    }
+  }
+
+  const editReplaceMatch = raw.match(/(?:edytuj|eydtuj|modyfikuj)\s+(?:plik\s+)?([^\s:]+)\s*:\s*([\s\S]+)/i);
+  if (editReplaceMatch) {
+    const target = String(editReplaceMatch[1] || '').trim();
+    const payload = String(editReplaceMatch[2] || '').trim();
+    if (target && payload) return { handled: true, action: 'REPLACE', target, payload };
   }
 
   // REPLACE patterns: require verb + target; payload optional.
@@ -246,10 +303,11 @@ export async function runReactiveStep(input: {
           const traceId = getCurrentTraceId();
           if (traceId) p0MetricAdd(traceId, { actionFirstTriggered: 1, actionType: 'CREATE' });
           try {
-            const id = store.create(target, '');
+            const content = String(actionIntent.payload || '').trim();
+            const id = store.create(target, content);
             if (traceId) p0MetricAdd(traceId, { actionFirstExecuted: 1 });
             emitToolResult('CREATE', intentId, { id, name: target });
-            callbacks.onMessage('assistant', `Utworzy?,em ${target} (${id}). Poprawi?? co?>?`, 'speech');
+            callbacks.onMessage('assistant', `Utworzylem ${target} (${id}). Poprawic cos?`, 'speech');
             updateContextAfterAction(ctx);
             return;
           } catch (e) {

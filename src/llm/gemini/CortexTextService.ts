@@ -38,20 +38,35 @@ import {
   STRUCTURED_DIALOGUE_RESPONSE_SCHEMA
 } from './responseSchemas';
 
+const EMBEDDING_BASE_COOLDOWN_MS = 30_000;
+const EMBEDDING_MAX_COOLDOWN_MS = 5 * 60_000;
+let embeddingCooldownUntil = 0;
+let embeddingFailureCount = 0;
+
 export function createCortexTextService(ai: GoogleGenAI) {
   return {
     async generateEmbedding(text: string): Promise<number[] | null> {
       try {
         if (!text || typeof text !== 'string') return null;
+        const now = Date.now();
+        if (now < embeddingCooldownUntil) return null;
         const response = await withRetry(async () => {
           return ai.models.embedContent({
             model: 'text-embedding-004',
             contents: text
           });
         }, 2, 1000);
+        embeddingFailureCount = 0;
+        embeddingCooldownUntil = 0;
         return response.embeddings?.[0]?.values || null;
       } catch (e: any) {
         const err = e?.message || String(e);
+        embeddingFailureCount = Math.min(embeddingFailureCount + 1, 10);
+        const backoffMs = Math.min(
+          EMBEDDING_MAX_COOLDOWN_MS,
+          EMBEDDING_BASE_COOLDOWN_MS * Math.pow(2, embeddingFailureCount - 1)
+        );
+        embeddingCooldownUntil = Date.now() + backoffMs;
         console.warn('Embedding Error (handled):', err);
         return null;
       }

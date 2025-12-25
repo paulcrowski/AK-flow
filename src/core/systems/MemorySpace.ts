@@ -74,6 +74,9 @@ export function createMemorySpace(
 
         const p = provider
             .semanticSearch(query)
+            .catch(() => {
+                return [] as MemoryTrace[];
+            })
             .then((results) => {
                 resolved.set(key, results);
                 return results;

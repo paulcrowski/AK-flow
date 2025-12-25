@@ -68,6 +68,23 @@ describe('P0.1.1 Action-First intent detection', () => {
         expect(String(r.target || '')).toContain('kotkach');
     });
 
+    it('CREATE: should capture content after "z trescia" and derive filename from content', () => {
+        const r = detectActionableIntentForTesting('utworz plik z trescia lubie jesc lody');
+        expect(r.handled).toBe(true);
+        expect(r.action).toBe('CREATE');
+        expect(r.payload).toBe('lubie jesc lody');
+        expect(String(r.target || '')).toMatch(/lubie-jesc-lody/);
+        expect(String(r.target || '')).toMatch(/\.md$/);
+    });
+
+    it('CREATE: should keep explicit filename when provided with content', () => {
+        const r = detectActionableIntentForTesting('utworz plik notatka.md z trescia hello');
+        expect(r.handled).toBe(true);
+        expect(r.action).toBe('CREATE');
+        expect(r.target).toBe('notatka.md');
+        expect(r.payload).toBe('hello');
+    });
+
     it('APPEND: verb + target + payload required', () => {
         const r = detectActionableIntentForTesting('dopisz do note.md: hello');
         expect(r.handled).toBe(true);
@@ -82,6 +99,14 @@ describe('P0.1.1 Action-First intent detection', () => {
         expect(r.action).toBe('REPLACE');
         expect(r.target).toBe('note.md');
         expect(r.payload).toBe('nowa tresc');
+    });
+
+    it('APPEND: should accept edit + add content phrasing', () => {
+        const r = detectActionableIntentForTesting('edytuj plik art-123 dodaj tresc hello');
+        expect(r.handled).toBe(true);
+        expect(r.action).toBe('APPEND');
+        expect(r.target).toBe('art-123');
+        expect(r.payload).toBe('hello');
     });
 
     it('READ: verb + target detected', () => {
