@@ -22,5 +22,5 @@ Smoke checklist (manual UI):
 - [ ] artifact visible after creation | Status: PASS | Evidence: `src/components/layout/LeftSidebar.tsx` + `__tests__/integration/ActionFirst.test.ts` (not re-verified today)
 - [ ] personality: no-assistant-speak | Status: PASS | Evidence: `src/core/systems/PersonaGuard.ts` + `__tests__/integration/PersonaGuard.test.ts` (not re-verified today)
 - [ ] silence: valid state | Status: FAIL | Evidence: not verified in current code
-- [ ] autonomy chooses CLARIFY with missing data | Status: FAIL | Evidence: not verified in current code
+- [ ] autonomy chooses CLARIFY with missing data | Status: PASS | Evidence: `__tests__/unit/AutonomyRepertoire.test.ts`
 - [ ] deterministic trigger maintained | Status: FAIL | Evidence: not verified in current code
