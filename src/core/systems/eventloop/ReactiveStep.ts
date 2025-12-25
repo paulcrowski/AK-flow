@@ -11,6 +11,7 @@ import { p0MetricAdd } from '../TickLifecycleTelemetry';
 import { eventBus } from '../../EventBus';
 import { AgentType, PacketType } from '../../../types';
 import { generateUUID } from '../../../utils/uuid';
+import { detectIntent, getRetrievalLimit } from '../IntentDetector';
 
 // P0.1 COMMIT 3: Action-First Policy
 // Feature flag - can be disabled if causing issues
@@ -437,7 +438,9 @@ export async function runReactiveStep(input: {
   }
 
   const prefetchedMemories = isMainFeatureEnabled('ONE_MIND_ENABLED')
-    ? ((await memorySpace.hot.semanticSearch(userInput)) as any)
+    ? ((await memorySpace.hot.semanticSearch(userInput, {
+        limit: getRetrievalLimit(detectIntent(userInput))
+      })) as any)
     : undefined;
 
   const result = await CortexSystem.processUserMessage({

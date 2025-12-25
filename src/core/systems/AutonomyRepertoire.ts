@@ -177,6 +177,8 @@ export function calculateGroundingScore(
   const proposedLower = proposedSpeech.toLowerCase();
 
   const memoryText = [
+    ...(memoryAnchor?.sessionChunks || []),
+    ...(memoryAnchor?.identityShards || []),
     ...(memoryAnchor?.episodes || []),
     ...(memoryAnchor?.semanticMatches || []),
     ...(sessionMemory?.recentTopics || [])

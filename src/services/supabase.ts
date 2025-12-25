@@ -5,6 +5,8 @@ import { RLSDiagnostics } from './RLSDiagnostics';
 import { eventBus } from '../core/EventBus';
 import { AgentType, PacketType } from '../types';
 import { generateUUID } from '../utils/uuid';
+import { thalamus } from '../core/systems/ThalamusFilter';
+import { contentHash } from '../utils/contentHash';
 
 const getEnv = (key: string) => typeof process !== 'undefined' ? process.env[key] : undefined;
 const SUPABASE_URL = getEnv('SUPABASE_URL') || 'https://qgnpsfoauhvddbxsoikj.supabase.co';
@@ -87,6 +89,33 @@ export const MemoryService = {
         return false;
       }
 
+      const gate = thalamus(memory.content);
+      if (!gate.store) return false;
+
+      let cHash: string | null = null;
+      try {
+        cHash = await contentHash(currentAgentId, memory.content);
+      } catch {
+        cHash = null;
+      }
+
+      if (cHash) {
+        try {
+          const existingByHash = await supabase
+            .from('memories')
+            .select('id')
+            .eq('agent_id', currentAgentId)
+            .eq('content_hash', cHash)
+            .limit(1);
+
+          if (!existingByHash.error && (existingByHash.data || []).length > 0) {
+            return true;
+          }
+        } catch {
+          // ignore dedupe errors (schema mismatch / missing column)
+        }
+      }
+
       if (memory.id) {
         try {
           const existing = await supabase
@@ -104,7 +133,7 @@ export const MemoryService = {
         }
       }
 
-      const wantsEmbedding = !memory.skipEmbedding;
+      const wantsEmbedding = !memory.skipEmbedding && !gate.skipEmbedding;
 
       const embedding = wantsEmbedding
         ? await CortexService.generateEmbedding(memory.content)
@@ -139,7 +168,25 @@ export const MemoryService = {
         neural_strength: memory.neuralStrength ?? 1,
         is_core_memory: memory.isCoreMemory ?? false,
         last_accessed_at: new Date().toISOString(),
-        event_id: memory.id
+        event_id: memory.id,
+        content_hash: cHash,
+        salience: gate.salience,
+        valence_real: Number((memory.metadata as any)?.valence_real ?? 0),
+        source: String((memory.metadata as any)?.source ?? 'USER'),
+        topic_tags: Array.isArray((memory.metadata as any)?.topic_tags)
+          ? (memory.metadata as any).topic_tags
+          : []
+      };
+
+      const legacyPayload = {
+        agent_id: basePayload.agent_id,
+        raw_text: basePayload.raw_text,
+        created_at: basePayload.created_at,
+        embedding: basePayload.embedding,
+        neural_strength: basePayload.neural_strength,
+        is_core_memory: basePayload.is_core_memory,
+        last_accessed_at: basePayload.last_accessed_at,
+        event_id: basePayload.event_id
       };
 
       const wantsMetadata = Boolean(memory.metadata && typeof memory.metadata === 'object' && Object.keys(memory.metadata as any).length > 0);
@@ -208,7 +255,7 @@ export const MemoryService = {
           );
 
           // ATTEMPT 3: Fallback to Base Payload (V3.0 Compatibility Mode)
-          const fallbackResult = await supabase.from('memories').insert([basePayload]);
+          const fallbackResult = await supabase.from('memories').insert([legacyPayload]);
 
           if (fallbackResult.error) {
             console.error('Critical: Fallback Memory Insert also failed:', fallbackResult.error.message);
@@ -314,7 +361,7 @@ export const MemoryService = {
     }
   },
 
-  async semanticSearch(query: string) {
+  async semanticSearch(query: string, opts?: { limit?: number }) {
     try {
       if (!currentAgentId) {
         console.warn('[MemoryService] No agent selected, returning empty');
@@ -324,12 +371,14 @@ export const MemoryService = {
       const embedding = await CortexService.generateEmbedding(query);
       if (!embedding) return [];
 
+      const matchCount = Math.max(4, Math.min(opts?.limit ?? 4, 60));
+
       // Use RLS diagnostics for RPC calls
       const result = await supabase.rpc('match_memories_for_agent', {
         query_embedding: embedding,
         p_agent_id: currentAgentId,
         match_threshold: 0.4,
-        match_count: 4
+        match_count: matchCount
       });
       
       // Apply RLS diagnostics to RPC result

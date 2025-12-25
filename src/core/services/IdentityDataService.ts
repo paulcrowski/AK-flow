@@ -115,7 +115,7 @@ export async function fetchIdentityShards(
 ): Promise<IdentityShardWithId[]> {
   const { data, error } = await supabase
     .from('identity_shards')
-    .select('id, kind, content, strength, is_core, last_reinforced_at, created_at')
+    .select('id, kind, content, strength, is_core, last_reinforced_at, created_at, contradiction_count, evidence_refs, last_updated')
     .eq('agent_id', agentId)
     .order('strength', { ascending: false })
     .limit(limit);
@@ -132,7 +132,10 @@ export async function fetchIdentityShards(
     strength: s.strength,
     is_core: s.is_core,
     last_reinforced_at: s.last_reinforced_at,
-    created_at: s.created_at
+    created_at: s.created_at,
+    contradiction_count: (s as any).contradiction_count ?? 0,
+    evidence_refs: (s as any).evidence_refs ?? [],
+    last_updated: (s as any).last_updated ?? null
   }));
 }
 
@@ -176,6 +179,22 @@ export async function updateShardStrength(
     return false;
   }
   return true;
+}
+
+export async function incrementShardContradiction(
+  shardId: string
+): Promise<number | null> {
+  const { data, error } = await supabase.rpc(
+    'increment_contradiction_count',
+    { p_shard_id: shardId }
+  );
+
+  if (error) {
+    console.warn('[Identity] increment_contradiction failed', error);
+    return null;
+  }
+
+  return typeof data === 'number' ? data : null;
 }
 
 export async function deleteIdentityShard(shardId: string): Promise<boolean> {

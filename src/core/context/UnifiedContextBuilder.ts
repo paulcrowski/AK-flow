@@ -67,6 +67,8 @@ export interface DialogueAnchor {
  * Memory anchor - episodic/semantic retrieval.
  */
 export interface MemoryAnchor {
+  sessionChunks?: string[];
+  identityShards?: string[];
   episodes: string[];
   semanticMatches: string[];
 }
@@ -154,6 +156,8 @@ export interface ContextBuilderInput {
   // Memory
   episodes?: string[];
   semanticMatches?: string[];
+  sessionChunks?: string[];
+  identityShards?: string[];
   
   // Session memory (optional, fetched async)
   sessionMemory?: SessionMemory;
@@ -173,6 +177,9 @@ export interface ContextBuilderInput {
 
 const MAX_RECENT_TURNS = 5;
 const MAX_EPISODES = 3;
+const MAX_SESSION_CHUNKS = 8;
+const MAX_IDENTITY_SHARDS = 20;
+const MAX_SEMANTIC_MATCHES = 12;
 
 // ═══════════════════════════════════════════════════════════════════════════
 // BUILDER
@@ -213,8 +220,10 @@ export const UnifiedContextBuilder = {
     
     // Memory anchor
     const memoryAnchor: MemoryAnchor = {
+      sessionChunks: (input.sessionChunks || []).slice(0, MAX_SESSION_CHUNKS),
+      identityShards: (input.identityShards || []).slice(0, MAX_IDENTITY_SHARDS),
       episodes: (input.episodes || []).slice(0, MAX_EPISODES),
-      semanticMatches: (input.semanticMatches || []).slice(0, MAX_EPISODES)
+      semanticMatches: (input.semanticMatches || []).slice(0, MAX_SEMANTIC_MATCHES)
     };
     
     // Social frame
@@ -292,6 +301,8 @@ export const UnifiedContextBuilder = {
     
     // Format memories
     const memories = [
+      ...(memoryAnchor.sessionChunks || []).map(c => `[SESSION_CHUNK]: ${c}`),
+      ...(memoryAnchor.identityShards || []).map(s => `[IDENTITY_SHARD]: ${s}`),
       ...memoryAnchor.episodes.map(e => `[EPISODE]: ${e}`),
       ...memoryAnchor.semanticMatches.map(m => `[MEMORY]: ${m}`)
     ].join('\n') || 'No relevant memories';

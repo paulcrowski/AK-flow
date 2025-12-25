@@ -27,6 +27,7 @@ import { generateLessonsFromEpisodes, generateSelfSummaryFromDream } from './dre
 import { storeSelfSummary } from './dreamConsolidation/storage';
 import { storeTopicShardsFromRecent } from './dreamConsolidation/topicShards';
 import { proposeTraitChanges } from './dreamConsolidation/traitProposal';
+import { SessionChunkService } from './SessionChunkService';
 
 // --- TYPES ---
 
@@ -151,6 +152,12 @@ export const DreamConsolidationService = {
                 }
             }
 
+            try {
+                await SessionChunkService.buildAndStoreLatestSessionChunk(agentName);
+            } catch (e) {
+                console.warn('[DreamConsolidation] SessionChunk failed:', e);
+            }
+
             // Step 5: Generate trait proposal (LOG ONLY, no application)
             const traitProposal = await proposeTraitChanges({
                 episodes,
@@ -192,6 +199,15 @@ export const DreamConsolidationService = {
                 },
                 priority: 0.9
             });
+
+            try {
+                if (agentId) {
+                    await supabase.rpc('decay_memories_v1', { p_agent_id: agentId });
+                    await supabase.rpc('prune_memories_v1', { p_agent_id: agentId });
+                }
+            } catch (e) {
+                console.warn('[DreamConsolidation] decay/prune failed:', e);
+            }
 
             return result;
 

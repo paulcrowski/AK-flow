@@ -19,6 +19,9 @@ import { computeNovelty } from '../ExpressionPolicy';
 import { getAutonomyConfig } from '../../config/systemConfig';
 import { getCurrentTraceId } from '../../trace/TraceContext';
 import { p0MetricAdd } from '../TickLifecycleTelemetry';
+import { detectIntent, getRetrievalLimit, type IntentType } from '../IntentDetector';
+import { SessionChunkService } from '../../../services/SessionChunkService';
+import { fetchIdentityShards } from '../../services/IdentityDataService';
 
 export type BudgetTracker = {
   checkBudget: (limit: number) => boolean;
@@ -33,7 +36,7 @@ export type TraceLike = {
 
 export type MemorySpaceLike = {
   hot: {
-    semanticSearch: (query: string) => Promise<Array<{ content: string }>>;
+    semanticSearch: (query: string, opts?: { limit?: number }) => Promise<Array<{ content: string }>>;
   };
 };
 
@@ -126,6 +129,32 @@ export function getAutonomyBackoffState() {
   return { ...autonomyFailureState };
 }
 
+function getSessionChunkLimit(intent: IntentType): number {
+  switch (intent) {
+    case 'RECALL':
+      return 6;
+    case 'HISTORY':
+      return 4;
+    case 'WORK':
+      return 3;
+    default:
+      return 0;
+  }
+}
+
+function getIdentityShardLimit(intent: IntentType): number {
+  switch (intent) {
+    case 'RECALL':
+      return 15;
+    case 'HISTORY':
+      return 12;
+    case 'WORK':
+      return 10;
+    default:
+      return 0;
+  }
+}
+
 export async function runAutonomousVolitionStep(input: {
   ctx: AutonomousVolitionLoopContext;
   callbacks: LoopCallbacksLike;
@@ -191,9 +220,48 @@ export async function runAutonomousVolitionStep(input: {
     ? [...ctx.conversation].reverse().find((t) => t.role === 'user')?.text
     : null;
 
+  const memoryIntent = memoryQuery ? detectIntent(memoryQuery) : 'NOW';
+
   const semanticMatches = memoryQuery
-    ? (await memorySpace.hot.semanticSearch(memoryQuery)).map((m) => m.content)
+    ? (await memorySpace.hot.semanticSearch(memoryQuery, {
+        limit: getRetrievalLimit(memoryIntent)
+      })).map((m) => m.content)
     : undefined;
+
+  let sessionChunks: string[] | undefined;
+  let identityShards: string[] | undefined;
+
+  if (memoryQuery && trace.agentId) {
+    const wantsStructuredRecall =
+      memoryIntent === 'RECALL' || memoryIntent === 'HISTORY' || memoryIntent === 'WORK';
+
+    if (wantsStructuredRecall) {
+      const chunkLimit = getSessionChunkLimit(memoryIntent);
+      const shardLimit = getIdentityShardLimit(memoryIntent);
+
+      const [chunks, shards] = await Promise.all([
+        chunkLimit > 0 ? SessionChunkService.fetchRecentSessionChunks(trace.agentId, chunkLimit) : Promise.resolve([]),
+        shardLimit > 0 ? fetchIdentityShards(trace.agentId, shardLimit) : Promise.resolve([])
+      ]);
+
+      sessionChunks = chunks.map((chunk) => {
+        const summary = String(chunk.summary_text || '').trim() || 'session summary';
+        const topics = Array.isArray(chunk.topics) && chunk.topics.length > 0
+          ? `Topics: ${chunk.topics.slice(0, 8).join(', ')}`
+          : '';
+        return [summary, topics].filter(Boolean).join(' | ');
+      });
+
+      identityShards = shards.map((shard: any) => {
+        const kind = String(shard.kind || 'shard');
+        const strength = typeof shard.strength === 'number' ? `strength ${shard.strength}` : '';
+        const core = shard.is_core ? 'core' : 'non-core';
+        const header = [kind, core, strength].filter(Boolean).join(' ');
+        const content = String(shard.content || '').trim();
+        return content ? `${header}: ${content}` : header;
+      });
+    }
+  }
 
   const sessionMemory = await SessionMemoryService.getSessionStatsSafe();
 
@@ -210,6 +278,8 @@ export async function runAutonomousVolitionStep(input: {
     socialDynamics: ctx.socialDynamics,
     silenceStart: ctx.silenceStart,
     lastUserInteractionAt: ctx.goalState.lastUserInteractionAt || ctx.silenceStart,
+    sessionChunks,
+    identityShards,
     semanticMatches,
     activeGoal: ctx.goalState.activeGoal
       ? {

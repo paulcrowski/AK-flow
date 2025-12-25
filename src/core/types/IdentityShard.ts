@@ -29,6 +29,9 @@ export interface IdentityShardWithId extends IdentityShard {
   id: string;
   last_reinforced_at?: string;
   created_at?: string;
+  contradiction_count?: number;
+  evidence_refs?: string[];
+  last_updated?: string | null;
 }
 
 /** Minimalny próg siły dla core shardów */

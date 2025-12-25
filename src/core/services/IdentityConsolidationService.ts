@@ -22,7 +22,8 @@ import {
   upsertNarrativeSelf,
   fetchIdentityShards,
   insertIdentityShard,
-  updateShardStrength
+  updateShardStrength,
+  incrementShardContradiction
 } from './IdentityDataService';
 
 import {
@@ -54,6 +55,8 @@ export interface IdentityConsolidationResult {
   shardsReinforced: number;
   shardsWeakened: number;
 }
+
+const CONTRADICTION_THRESHOLD = 3;
 
 // ═══════════════════════════════════════════════════════════════
 // MAIN SERVICE
@@ -206,6 +209,34 @@ async function processLessonsIntoShards(
 
   const existingShards = await fetchIdentityShards(input.agentId, 50);
 
+  const handleContradiction = async (
+    oldShard: IdentityShardWithId,
+    shardCandidate: Omit<IdentityShard, 'strength' | 'is_core'>
+  ): Promise<boolean> => {
+    const newCount = await incrementShardContradiction(oldShard.id);
+
+    if (newCount !== null && newCount < CONTRADICTION_THRESHOLD) {
+      await insertIdentityShard(input.agentId, {
+        ...shardCandidate,
+        strength: 15,
+        is_core: false
+      });
+      return true;
+    }
+
+    const erosion = oldShard.is_core ? 1 : 5;
+    const minStrength = oldShard.is_core ? CORE_SHARD_MIN_STRENGTH : 1;
+    await updateShardStrength(oldShard.id, Math.max(minStrength, oldShard.strength - erosion));
+    console.log(`[IdentityConsolidation] Eroded shard "${oldShard.content.slice(0, 30)}..." by ${erosion} (core: ${oldShard.is_core})`);
+
+    await insertIdentityShard(input.agentId, {
+      ...shardCandidate,
+      strength: 50,
+      is_core: false
+    });
+    return true;
+  };
+
   for (const lesson of input.lessons) {
     // Extract potential shard from lesson
     const shardCandidate = await extractShardFromLesson(lesson, input.agentName);
@@ -239,23 +270,18 @@ async function processLessonsIntoShards(
             });
             created++;
           } else if (fullResult.action === 'weaken_old' && fullResult.conflicting_shard_id) {
-            // SOFT PLASTICITY: Weaken old (even core shards, but slower)
             const oldShard = existingShards.find(s => s.id === fullResult.conflicting_shard_id);
             if (oldShard) {
-              // Core shards erode slower (1 point), non-core faster (5 points)
-              const erosion = oldShard.is_core ? 1 : 5;
-              const minStrength = oldShard.is_core ? CORE_SHARD_MIN_STRENGTH : 1;
-              await updateShardStrength(oldShard.id, Math.max(minStrength, oldShard.strength - erosion));
-              console.log(`[IdentityConsolidation] Eroded shard "${oldShard.content.slice(0, 30)}..." by ${erosion} (core: ${oldShard.is_core})`);
+              const handled = await handleContradiction(oldShard, shardCandidate);
+              if (handled) created++;
+            } else {
+              await insertIdentityShard(input.agentId, {
+                ...shardCandidate,
+                strength: 50,
+                is_core: false
+              });
+              created++;
             }
-            // Add new shard as "pending" with low strength
-            const newStrength = oldShard?.is_core ? 10 : 30; // Weaker if challenging core
-            await insertIdentityShard(input.agentId, {
-              ...shardCandidate,
-              strength: newStrength,
-              is_core: false
-            });
-            created++;
           }
           // If 'reject', do nothing
         } catch (error) {
@@ -269,21 +295,18 @@ async function processLessonsIntoShards(
         });
         created++;
       } else if (coherenceResult.action === 'weaken_old' && coherenceResult.conflicting_shard_id) {
-        // SOFT PLASTICITY from quick check
         const oldShard = existingShards.find(s => s.id === coherenceResult.conflicting_shard_id);
         if (oldShard) {
-          const erosion = oldShard.is_core ? 1 : 5;
-          const minStrength = oldShard.is_core ? CORE_SHARD_MIN_STRENGTH : 1;
-          await updateShardStrength(oldShard.id, Math.max(minStrength, oldShard.strength - erosion));
-          console.log(`[IdentityConsolidation] Quick eroded shard "${oldShard.content.slice(0, 30)}..." by ${erosion}`);
+          const handled = await handleContradiction(oldShard, shardCandidate);
+          if (handled) created++;
+        } else {
+          await insertIdentityShard(input.agentId, {
+            ...shardCandidate,
+            strength: 50,
+            is_core: false
+          });
+          created++;
         }
-        const newStrength = oldShard?.is_core ? 10 : 30;
-        await insertIdentityShard(input.agentId, {
-          ...shardCandidate,
-          strength: newStrength,
-          is_core: false
-        });
-        created++;
       }
       // If 'reject' (only for exact duplicates), do nothing
     }
