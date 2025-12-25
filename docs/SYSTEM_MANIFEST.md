@@ -39,6 +39,7 @@ We embrace the artificial nature as a feature, not a bug.
 - SessionMemoryService: dane 'wczoraj/dzisiaj/tematy' w kontekscie (safe fallback + testy).
 - Single speech gate: reactive/goal/autonomy przez ExecutiveGate + legacy gate w kwarantannie.
 - Persona Contract: reguly zachowania (evidence-first, no-assistant-speak) + guard retry.
+- Fakty waliduje FactEcho (JSON). PersonaGuard nie waliduje faktów.
 - Artifact visibility: auto-open panel + explicit confirmations + small-screen dropdown.
 - Legacy isolation: docs/_archive/ + src/_legacy/VolitionSpeechGate.ts.
 
