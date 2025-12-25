@@ -144,7 +144,7 @@ describe('AutonomyRepertoire', () => {
       expect(decision.allowed).toBe(true);
     });
     
-    it('should select SILENCE even when user needs clarification (P0.1.2 WORK/SILENCE only)', () => {
+    it('should select CLARIFY when user needs clarification', () => {
       const store = useArtifactStore.getState();
       store.resetForTesting();
       const ctx = buildContext({
@@ -157,7 +157,26 @@ describe('AutonomyRepertoire', () => {
       
       const decision = selectAction(ctx);
       
-      expect(decision.action).toBe('SILENCE');
+      expect(decision.action).toBe('CLARIFY');
+      expect(decision.allowed).toBe(true);
+    });
+
+    it('should prefer WORK over CLARIFY when pending artifact exists', () => {
+      const store = useArtifactStore.getState();
+      store.resetForTesting();
+      store.create('draft.md', 'hello');
+
+      const ctx = buildContext({
+        conversation: [
+          { role: 'user', text: 'What do you mean by that?' }
+        ],
+        silenceStart: Date.now() - 10000,
+        lastUserInteractionAt: Date.now() - 10000
+      });
+
+      const decision = selectAction(ctx);
+
+      expect(decision.action).toBe('WORK');
       expect(decision.allowed).toBe(true);
     });
     

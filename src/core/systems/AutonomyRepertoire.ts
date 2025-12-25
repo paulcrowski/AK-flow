@@ -230,6 +230,16 @@ export function selectAction(ctx: UnifiedContext): ActionDecision {
     };
   }
 
+  if (grounding.needsClarification) {
+    return {
+      action: 'CLARIFY',
+      allowed: true,
+      reason: 'Last user message needs clarification',
+      groundingScore: 0.4,
+      suggestedPrompt: buildActionPrompt('CLARIFY', ctx, grounding)
+    };
+  }
+
   const store = useArtifactStore.getState();
   const artifacts = store.list();
   const isStale = grounding.silenceDurationSec > 300;
