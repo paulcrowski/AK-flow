@@ -266,6 +266,21 @@ export const createProcessOutputForTools = (deps: ToolParserDeps) => {
     };
 
     while (true) {
+      const workspaceWriteMatch = cleanText.match(/\[WORKSPACE_WRITE_FILE:\s*([^,\]]+),\s*([\s\S]*?)\]/i);
+      if (workspaceWriteMatch) {
+        const fileName = normalizeArg(workspaceWriteMatch[1]);
+        const body = String(workspaceWriteMatch[2] || '').trim();
+        cleanText = cleanText.replace(workspaceWriteMatch[0], '').trim();
+        const store = useArtifactStore.getState();
+        const existing = store.list().find((a: any) => a.name === fileName);
+        if (existing) {
+          await handleArtifactBlock({ kind: 'REPLACE', header: existing.id, body, raw: workspaceWriteMatch[0] });
+        } else {
+          await handleArtifactBlock({ kind: 'CREATE', header: fileName, body, raw: workspaceWriteMatch[0] });
+        }
+        continue;
+      }
+
       const publishMatch = cleanText.match(/\[PUBLISH:\s*([^\]]+?)\](?:\s*\[\/PUBLISH\])?/i);
       if (publishMatch) {
         cleanText = cleanText.replace(publishMatch[0], '').trim();
