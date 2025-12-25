@@ -16,6 +16,7 @@
     "test:e2e": "node scripts/test-runner.js run e2e",
     "test:list": "node scripts/test-runner.js list",
     "test:analyze": "node scripts/test-runner.js analyze",
+    "smoke": "npm test && npm run build",
     "godfile:check": "node scripts/godfile-check.js",
     "nexus": "npm run dev --prefix ak-nexus",
     "nexus:build": "npm run build --prefix ak-nexus",
