@@ -16,11 +16,11 @@ Smoke checklist (manual UI):
 - [ ] single speech gate path | Status: PASS | Evidence: ExecutiveGate used in `src/core/systems/eventloop/ReactiveStep.ts` + `src/core/systems/eventloop/AutonomousVolitionStep.ts`
 - [ ] memory-yesterday | Status: PASS | Evidence: tests in `__tests__/unit/SessionMemory.test.ts` (not re-verified today)
 - [ ] memory-topics | Status: PASS | Evidence: tests in `__tests__/unit/SessionMemory.test.ts` (not re-verified today)
-- [ ] synaptic memory in state | Status: FAIL | Evidence: not verified in current code
-- [ ] hardcoded thresholds in config | Status: FAIL | Evidence: not verified in current code
+- [ ] synaptic memory in state | Status: PASS | Evidence: `src/core/kernel/initialState.ts` + `src/types.ts`
+- [ ] hardcoded thresholds in config | Status: PASS | Evidence: `src/core/config/systemConfig.ts`
 - [ ] snapshot tool works end-to-end | Status: PASS | Evidence: `src/tools/toolParser.ts` + `__tests__/integration/P0ToolLifecycle.test.ts` (not re-verified today)
 - [ ] artifact visible after creation | Status: PASS | Evidence: `src/components/layout/LeftSidebar.tsx` + `__tests__/integration/ActionFirst.test.ts` (not re-verified today)
 - [ ] personality: no-assistant-speak | Status: PASS | Evidence: `src/core/systems/PersonaGuard.ts` + `__tests__/integration/PersonaGuard.test.ts` (not re-verified today)
-- [ ] silence: valid state | Status: FAIL | Evidence: not verified in current code
+- [ ] silence: valid state | Status: PASS | Evidence: `src/core/systems/AutonomyRepertoire.ts` + `__tests__/unit/AutonomyRepertoire.test.ts`
 - [ ] autonomy chooses CLARIFY with missing data | Status: PASS | Evidence: `__tests__/unit/AutonomyRepertoire.test.ts`
-- [ ] deterministic trigger maintained | Status: FAIL | Evidence: not verified in current code
+- [ ] deterministic trigger maintained | Status: PASS | Evidence: `src/core/trace/TraceContext.ts` + `__tests__/unit/TraceContext.test.ts`
