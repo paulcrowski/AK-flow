@@ -193,14 +193,14 @@ export async function persistSearchKnowledgeChunk(input: {
       uri: s?.uri ? String(s.uri).trim() : undefined
     }));
 
-  try {
-    const ok = await MemoryService.storeMemory({
-      id: generateUUID(),
-      content,
-      emotionalContext: { fear: 0, curiosity: 0, frustration: 0, satisfaction: 0 },
-      timestamp: new Date().toISOString(),
-      neuralStrength,
-      isCoreMemory: false,
+    try {
+      const storeResult = await MemoryService.storeMemory({
+        id: generateUUID(),
+        content,
+        emotionalContext: { fear: 0, curiosity: 0, frustration: 0, satisfaction: 0 },
+        timestamp: new Date().toISOString(),
+        neuralStrength,
+        isCoreMemory: false,
       metadata: {
         origin: 'search',
         kind: 'KNOWLEDGE_CHUNK',
@@ -213,11 +213,12 @@ export async function persistSearchKnowledgeChunk(input: {
       }
     });
 
-    eventBus.publish({
-      id: generateUUID(),
-      timestamp: Date.now(),
-      source: AgentType.CORTEX_FLOW,
-      type: PacketType.SYSTEM_ALERT,
+      const ok = Boolean(storeResult.memoryId) || storeResult.skipped;
+      eventBus.publish({
+        id: generateUUID(),
+        timestamp: Date.now(),
+        source: AgentType.CORTEX_FLOW,
+        type: PacketType.SYSTEM_ALERT,
       payload: ok
         ? { event: 'SEARCH_KNOWLEDGE_CHUNK_STORED', query, sourcesCount: sources.length }
         : { event: 'SEARCH_KNOWLEDGE_CHUNK_FAIL', query, error: 'STORE_MEMORY_FALSE' },

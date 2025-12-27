@@ -20,6 +20,7 @@ import { DEFAULT_IDENTITY, buildIdentityBlock } from './identity';
 import { formatHistoryForCortex } from './history';
 import type { AgentIdentityContext, ConversationTurn, ProcessInputParams, ProcessResult, SessionOverlay } from './types';
 import { recallMemories } from './memoryRecall';
+import { computeNeuralStrength } from '../../../utils/memoryStrength';
 
 function buildStructuredPrompt(params: {
   text: string;
@@ -80,6 +81,7 @@ export async function processUserMessage(params: ProcessInputParams): Promise<Pr
   } = params;
 
   const recentHistory = conversationHistory.slice(-12);
+  const neuralStrength = computeNeuralStrength(currentLimbic);
 
   const memories = await recallMemories({
     queryText: text,
@@ -223,12 +225,14 @@ export async function processUserMessage(params: ProcessInputParams): Promise<Pr
         console.log('[CortexSystem] Tool intent:', gateResult.telemetry.intentExecuted ? 'EXECUTED' : 'BLOCKED');
       }
 
-      await MemoryService.storeMemory({
+      const memoryStore = await MemoryService.storeMemory({
         content: `User: ${text} | Agent: ${finalSpeech}`,
         emotionalContext: currentLimbic,
         timestamp: new Date().toISOString(),
-        id: generateUUID()
+        id: generateUUID(),
+        neuralStrength
       });
+      const agentMemoryId = memoryStore.memoryId ?? null;
 
       const stimulusWeights = mapStimulusResponseToWeights((output as any).stimulus_response);
 
@@ -265,7 +269,8 @@ export async function processUserMessage(params: ProcessInputParams): Promise<Pr
         knowledgeSource: shouldForceSearch ? 'tool' : derivedKnowledgeSource,
         evidenceSource: shouldForceSearch ? 'system' : derivedEvidenceSource,
         evidenceDetail: shouldForceSearch ? 'forced_search' : derivedEvidenceDetail,
-        generator: shouldForceSearch ? 'system' : modelGenerator
+        generator: shouldForceSearch ? 'system' : modelGenerator,
+        agentMemoryId
       };
     }
   }
@@ -282,12 +287,14 @@ export async function processUserMessage(params: ProcessInputParams): Promise<Pr
 
   const cortexResult = await CortexService.structuredDialogue(prompt);
 
-  await MemoryService.storeMemory({
+  const memoryStore = await MemoryService.storeMemory({
     content: `User: ${text} | Agent: ${cortexResult.responseText}`,
     emotionalContext: currentLimbic,
     timestamp: new Date().toISOString(),
-    id: generateUUID()
+    id: generateUUID(),
+    neuralStrength
   });
+  const agentMemoryId = memoryStore.memoryId ?? null;
 
   const stimulusWeights = mapStimulusResponseToWeights((cortexResult as any).stimulus_response);
 
@@ -353,6 +360,7 @@ export async function processUserMessage(params: ProcessInputParams): Promise<Pr
     moodShift: emotionDeltas,
     knowledgeSource: legacyShouldForceSearch ? 'tool' : legacyKnowledgeSource,
     evidenceSource: legacyShouldForceSearch ? 'system' : legacyEvidenceSource,
-    generator: legacyShouldForceSearch ? 'system' : 'llm'
+    generator: legacyShouldForceSearch ? 'system' : 'llm',
+    agentMemoryId
   };
 }

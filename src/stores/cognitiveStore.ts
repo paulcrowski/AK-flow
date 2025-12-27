@@ -40,6 +40,7 @@ export interface UiMessage {
   evidenceSource?: 'memory' | 'tool' | 'system';
   evidenceDetail?: string;
   generator?: 'llm' | 'system';
+  agentMemoryId?: string;
   imageData?: string;
   sources?: any[];
 }

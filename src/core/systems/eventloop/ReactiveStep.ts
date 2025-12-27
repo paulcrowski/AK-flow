@@ -26,14 +26,15 @@ type ActionFirstResult = {
 };
 
 function publishReactiveSpeech(params: {
-  ctx: any;
-  trace: TraceLike;
-  callbacks: ReactiveCallbacksLike;
-  speechText: string;
-  internalThought: string;
-  meta?: { knowledgeSource?: any; evidenceSource?: any; evidenceDetail?: any; generator?: any };
-}): void {
-  const { ctx, trace, callbacks, speechText, internalThought, meta } = params;
+    ctx: any;
+    trace: TraceLike;
+    callbacks: ReactiveCallbacksLike;
+    speechText: string;
+    internalThought: string;
+    meta?: { knowledgeSource?: any; evidenceSource?: any; evidenceDetail?: any; generator?: any };
+    agentMemoryId?: string | null;
+  }): void {
+    const { ctx, trace, callbacks, speechText, internalThought, meta, agentMemoryId } = params;
   const candidate = ExecutiveGate.createReactiveCandidate(speechText, internalThought, `reactive-${trace.traceId}-${trace.tickNumber}`);
   const gateContext = {
     ...ExecutiveGate.getDefaultContext(ctx.limbic, 0),
@@ -57,7 +58,10 @@ function publishReactiveSpeech(params: {
       });
 
       if (commit.committed) {
-        callbacks.onMessage('assistant', gateDecision.winner.speech_content, 'speech', meta);
+    callbacks.onMessage('assistant', gateDecision.winner.speech_content, 'speech', {
+      ...(meta || {}),
+      ...(agentMemoryId ? { agentMemoryId } : {})
+    });
       } else {
         callbacks.onThought(`[REACTIVE_SUPPRESSED] ${commit.blockReason || 'UNKNOWN'}`);
       }
@@ -486,7 +490,8 @@ export async function runReactiveStep(input: {
       evidenceSource: result.evidenceSource,
       evidenceDetail: result.evidenceDetail,
       generator: result.generator
-    }
+    },
+    agentMemoryId: result.agentMemoryId
   });
 
   const now = Date.now();

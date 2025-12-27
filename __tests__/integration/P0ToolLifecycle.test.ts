@@ -58,13 +58,13 @@ vi.mock('@llm/gemini', () => ({
 }));
 
 // Mock MemoryService
-vi.mock('@services/supabase', () => ({
-  MemoryService: {
-    storeMemory: vi.fn()
-  },
-  getCurrentOwnerId: vi.fn(() => 'U1'),
-  getCurrentUserEmail: vi.fn(() => 'u1@test.local'),
-  getCurrentAgentId: vi.fn(() => 'agent_1')
+  vi.mock('@services/supabase', () => ({
+    MemoryService: {
+      storeMemory: vi.fn().mockResolvedValue({ memoryId: null, skipped: true })
+    },
+    getCurrentOwnerId: vi.fn(() => 'U1'),
+    getCurrentUserEmail: vi.fn(() => 'u1@test.local'),
+    getCurrentAgentId: vi.fn(() => 'agent_1')
 }));
 
 // Mock LibraryService (Workspace tools)

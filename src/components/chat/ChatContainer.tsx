@@ -6,10 +6,11 @@
  * @module components/chat/ChatContainer
  */
 
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, useState } from 'react';
 import { Brain, Sparkles, Globe, FileText, ImageIcon, AlertTriangle, RefreshCw } from 'lucide-react';
 import type { UiMessage } from '../../stores/cognitiveStore';
 import type { CognitiveError } from '../../types';
+import { MemoryService } from '../../services/supabase';
 
 interface ChatContainerProps {
   conversation: UiMessage[];
@@ -51,10 +52,54 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
 }) => {
   const chatEndRef = useRef<HTMLDivElement | null>(null);
   const chatScrollRef = useRef<HTMLDivElement | null>(null);
+  const [feedbackState, setFeedbackState] = useState<Record<string, { status: 'idle' | 'saving' | 'saved' | 'error'; message?: string }>>({});
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [conversation]);
+
+  const handleFeedback = async (memoryId: string, delta: number, setCore: boolean) => {
+    if (!memoryId) return;
+    setFeedbackState((prev) => ({
+      ...prev,
+      [memoryId]: { status: 'saving' }
+    }));
+
+    const result = await MemoryService.boostMemoryStrength(memoryId, delta, setCore);
+    if (!result.ok) {
+      const msg = String(result.error || 'save_failed').toLowerCase();
+      const isAuthError =
+        result.status === 401 ||
+        result.status === 403 ||
+        msg.includes('jwt') ||
+        msg.includes('auth');
+      const isAccessError =
+        msg.includes('not found') ||
+        msg.includes('not allowed') ||
+        msg.includes('permission');
+
+      setFeedbackState((prev) => ({
+        ...prev,
+        [memoryId]: {
+          status: 'error',
+          message: isAuthError ? 'zaloguj sie' : isAccessError ? 'brak dostepu' : 'blad zapisu'
+        }
+      }));
+      return;
+    }
+
+    setFeedbackState((prev) => ({
+      ...prev,
+      [memoryId]: { status: 'saved', message: 'zapisano' }
+    }));
+    setTimeout(() => {
+      setFeedbackState((prev) => {
+        const next = { ...prev };
+        delete next[memoryId];
+        return next;
+      });
+    }, 1500);
+  };
 
   return (
     <div 
@@ -154,6 +199,44 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
                 <p className={`leading-relaxed ${msg.type === 'thought' ? 'text-sm font-mono opacity-80' : 'text-base font-medium'}`}>
                   {msg.text}
                 </p>
+                {msg.role !== 'user' && msg.type !== 'thought' && msg.agentMemoryId && (
+                  <div className="mt-3 flex items-center gap-2 text-xs text-gray-400">
+                    <button
+                      type="button"
+                      className="px-2 py-1 rounded bg-gray-900/40 border border-gray-700/50 hover:border-cyan-500/50 hover:text-cyan-200 transition-colors disabled:opacity-40"
+                      onClick={() => void handleFeedback(msg.agentMemoryId as string, 20, false)}
+                      disabled={feedbackState[msg.agentMemoryId]?.status === 'saving' || feedbackState[msg.agentMemoryId]?.status === 'saved'}
+                      title="wzmocnij pamiec"
+                    >
+                      👍
+                    </button>
+                    <button
+                      type="button"
+                      className="px-2 py-1 rounded bg-gray-900/40 border border-gray-700/50 hover:border-rose-500/50 hover:text-rose-200 transition-colors disabled:opacity-40"
+                      onClick={() => void handleFeedback(msg.agentMemoryId as string, -10, false)}
+                      disabled={feedbackState[msg.agentMemoryId]?.status === 'saving' || feedbackState[msg.agentMemoryId]?.status === 'saved'}
+                      title="oslab pamiec"
+                    >
+                      👎
+                    </button>
+                    <button
+                      type="button"
+                      className="px-2 py-1 rounded bg-gray-900/40 border border-gray-700/50 hover:border-amber-400/70 hover:text-amber-200 transition-colors disabled:opacity-40"
+                      onClick={() => void handleFeedback(msg.agentMemoryId as string, 30, true)}
+                      disabled={feedbackState[msg.agentMemoryId]?.status === 'saving' || feedbackState[msg.agentMemoryId]?.status === 'saved'}
+                      title="oznacz jako core"
+                    >
+                      ⭐
+                    </button>
+                    {feedbackState[msg.agentMemoryId]?.message && (
+                      <span className={`ml-2 text-[10px] ${
+                        feedbackState[msg.agentMemoryId]?.status === 'error' ? 'text-rose-300' : 'text-emerald-300'
+                      }`}>
+                        {feedbackState[msg.agentMemoryId]?.message}
+                      </span>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
           )}

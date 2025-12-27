@@ -7,6 +7,7 @@ import { AgentType, PacketType } from '../types';
 import { generateUUID } from '../utils/uuid';
 import { thalamus } from '../core/systems/ThalamusFilter';
 import { contentHash } from '../utils/contentHash';
+import { computeNeuralStrength } from '../utils/memoryStrength';
 
 const getEnv = (key: string) => typeof process !== 'undefined' ? process.env[key] : undefined;
 const SUPABASE_URL = getEnv('SUPABASE_URL') || 'https://qgnpsfoauhvddbxsoikj.supabase.co';
@@ -81,16 +82,29 @@ export const setCurrentUserEmail = (email: string | null) => {
 
 export const getCurrentUserEmail = () => currentUserEmail;
 
+export type MemoryStoreSkipReason = 'DEDUP' | 'THALAMUS_SKIP' | 'ERROR';
+export type MemoryStoreResult = {
+  memoryId: string | null;
+  skipped: boolean;
+  reason?: MemoryStoreSkipReason;
+};
+
+const isDedupError = (error: any): boolean => {
+  const code = String(error?.code || '').trim();
+  const msg = String(error?.message || '').toLowerCase();
+  return code === '23505' || msg.includes('duplicate key');
+};
+
 export const MemoryService = {
-  async storeMemory(memory: MemoryTrace): Promise<boolean> {
+  async storeMemory(memory: MemoryTrace): Promise<MemoryStoreResult> {
     try {
       if (!currentAgentId) {
         console.warn('[MemoryService] No agent selected, skipping memory store');
-        return false;
+        return { memoryId: null, skipped: false, reason: 'ERROR' };
       }
 
       const gate = thalamus(memory.content);
-      if (!gate.store) return false;
+      if (!gate.store) return { memoryId: null, skipped: true, reason: 'THALAMUS_SKIP' };
 
       let cHash: string | null = null;
       try {
@@ -109,7 +123,7 @@ export const MemoryService = {
             .limit(1);
 
           if (!existingByHash.error && (existingByHash.data || []).length > 0) {
-            return true;
+            return { memoryId: null, skipped: true, reason: 'DEDUP' };
           }
         } catch {
           // ignore dedupe errors (schema mismatch / missing column)
@@ -126,7 +140,7 @@ export const MemoryService = {
             .limit(1);
 
           if (!existing.error && Array.isArray(existing.data) && existing.data.length > 0) {
-            return true;
+            return { memoryId: null, skipped: true, reason: 'DEDUP' };
           }
         } catch {
           // ignore dedupe errors (schema mismatch / missing column)
@@ -160,12 +174,17 @@ export const MemoryService = {
           optimizedImage = await compressNeuralImage(memory.imageData);
       }
 
+      const derivedNeuralStrength =
+        typeof memory.neuralStrength === 'number'
+          ? memory.neuralStrength
+          : computeNeuralStrength(memory.emotionalContext);
+
       const basePayload = {
         agent_id: currentAgentId,
         raw_text: `${memory.content} [Emotion: ${JSON.stringify(memory.emotionalContext)}]`,
         created_at: new Date().toISOString(),
         embedding: embedding,
-        neural_strength: memory.neuralStrength ?? 1,
+        neural_strength: derivedNeuralStrength,
         is_core_memory: memory.isCoreMemory ?? false,
         last_accessed_at: new Date().toISOString(),
         event_id: memory.id,
@@ -202,9 +221,16 @@ export const MemoryService = {
       };
 
       // ATTEMPT 1: Try Extended Insert (V3.2)
-      const resultV32 = await supabase.from('memories').insert([extendedPayloadV32]);
+      const resultV32 = await supabase
+        .from('memories')
+        .insert([extendedPayloadV32])
+        .select('id')
+        .single();
 
       if (resultV32.error) {
+        if (isDedupError(resultV32.error)) {
+          return { memoryId: null, skipped: true, reason: 'DEDUP' };
+        }
         if (wantsMetadata) {
           eventBus.publish({
             id: generateUUID(),
@@ -232,9 +258,16 @@ export const MemoryService = {
           is_visual_dream: Boolean(memory.isVisualDream)
         };
 
-        const resultV31 = await supabase.from('memories').insert([extendedPayloadV31]);
+        const resultV31 = await supabase
+          .from('memories')
+          .insert([extendedPayloadV31])
+          .select('id')
+          .single();
 
         if (resultV31.error) {
+          if (isDedupError(resultV31.error)) {
+            return { memoryId: null, skipped: true, reason: 'DEDUP' };
+          }
           if (wantsMetadata) {
             eventBus.publish({
               id: generateUUID(),
@@ -255,11 +288,15 @@ export const MemoryService = {
           );
 
           // ATTEMPT 3: Fallback to Base Payload (V3.0 Compatibility Mode)
-          const fallbackResult = await supabase.from('memories').insert([legacyPayload]);
+          const fallbackResult = await supabase
+            .from('memories')
+            .insert([legacyPayload])
+            .select('id')
+            .single();
 
           if (fallbackResult.error) {
             console.error('Critical: Fallback Memory Insert also failed:', fallbackResult.error.message);
-            return false;
+            return { memoryId: null, skipped: false, reason: 'ERROR' };
           }
 
           console.log('Fallback Insert Successful (Legacy Mode)');
@@ -276,7 +313,11 @@ export const MemoryService = {
               priority: 0.2
             });
           }
-          return true;
+          return {
+            memoryId: fallbackResult.data?.id ?? null,
+            skipped: false,
+            ...(fallbackResult.data?.id ? {} : { reason: 'ERROR' })
+          };
         }
 
         console.log('Fallback Insert Successful (V3.1 Mode)');
@@ -293,7 +334,11 @@ export const MemoryService = {
             priority: 0.2
           });
         }
-        return true;
+        return {
+          memoryId: resultV31.data?.id ?? null,
+          skipped: false,
+          ...(resultV31.data?.id ? {} : { reason: 'ERROR' })
+        };
       }
 
       if (wantsMetadata) {
@@ -309,7 +354,11 @@ export const MemoryService = {
           priority: 0.2
         });
       }
-      return true;
+      return {
+        memoryId: resultV32.data?.id ?? null,
+        skipped: false,
+        ...(resultV32.data?.id ? {} : { reason: 'ERROR' })
+      };
       
     } catch (error: any) {
       // FIX: Robust error serialization and swallowing so app doesn't crash
@@ -319,7 +368,30 @@ export const MemoryService = {
       } catch { errorMsg = "Unserializable DB Error"; }
       
       console.error(`Memory Store Error (Handled): ${errorMsg}`);
-      return false;
+      return { memoryId: null, skipped: false, reason: 'ERROR' };
+    }
+  },
+
+  async boostMemoryStrength(
+    memoryId: string,
+    delta: number,
+    setCore: boolean = false
+  ): Promise<{ ok: boolean; error?: string; status?: number }> {
+    try {
+      if (!memoryId) return { ok: false, error: 'missing_memory_id' };
+      const { error } = await supabase.rpc('boost_memory_strength', {
+        p_memory_id: memoryId,
+        p_delta: delta,
+        p_set_core: setCore
+      });
+      if (error) {
+        console.warn('[MemoryService] boostMemoryStrength failed:', error.message);
+        return { ok: false, error: error.message, status: (error as any)?.status };
+      }
+      return { ok: true };
+    } catch (err) {
+      console.warn('[MemoryService] boostMemoryStrength error:', err);
+      return { ok: false, error: String((err as any)?.message ?? err) };
     }
   },
 

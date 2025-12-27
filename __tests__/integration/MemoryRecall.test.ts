@@ -73,9 +73,9 @@ vi.mock('@services/supabase', () => ({
             }
             return [];
         }),
-        storeMemory: vi.fn(async () => true)
-    }
-}));
+        storeMemory: vi.fn(async () => ({ memoryId: null, skipped: true }))
+      }
+  }));
 
 // Mock gemini service
 vi.mock('@llm/gemini', () => ({

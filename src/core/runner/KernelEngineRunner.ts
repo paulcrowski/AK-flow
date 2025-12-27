@@ -348,14 +348,17 @@ export class KernelEngineRunner<TIdentity> {
   private async handleAssistantSpeechReactive(text: string, type: any, meta?: any) {
     try {
       const cleaned = await this.deps.processOutputForTools(text);
+      const messageId = this.deps.generateUUID();
       const speechMsg = {
+        id: messageId,
         role: 'assistant',
         text: cleaned,
         type,
         ...(meta?.knowledgeSource ? { knowledgeSource: meta.knowledgeSource } : {}),
         ...(meta?.evidenceSource ? { evidenceSource: meta.evidenceSource } : {}),
         ...(meta?.evidenceDetail ? { evidenceDetail: meta.evidenceDetail } : {}),
-        ...(meta?.generator ? { generator: meta.generator } : {})
+        ...(meta?.generator ? { generator: meta.generator } : {}),
+        ...(meta?.agentMemoryId ? { agentMemoryId: meta.agentMemoryId } : {})
       };
 
       this.deps.actions.addUiMessage(speechMsg as any);
@@ -373,7 +376,7 @@ export class KernelEngineRunner<TIdentity> {
         const tickTraceId = this.deps.getCurrentTraceId() ?? undefined;
         this.deps.archiveMessage(
           {
-            id: this.deps.generateUUID(),
+            id: messageId,
             role: 'assistant',
             content: cleaned,
             timestamp: nowTs,

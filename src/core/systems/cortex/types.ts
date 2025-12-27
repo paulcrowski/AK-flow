@@ -48,6 +48,7 @@ export interface ProcessResult {
   evidenceSource?: 'memory' | 'tool' | 'system';
   evidenceDetail?: string;
   generator?: 'llm' | 'system';
+  agentMemoryId?: string | null;
 }
 
 export interface GoalPursuitState {

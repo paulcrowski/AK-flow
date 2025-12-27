@@ -54,7 +54,10 @@ function getTopicCooldownKey(agentId: string, topic: string): string {
 export async function storeTopicShardsFromRecent(deps: {
   agentId: string;
   limbic: LimbicState;
-  memoryService: { recallRecent: (limit: number) => Promise<any[]>; storeMemory: (payload: any) => Promise<boolean> };
+  memoryService: {
+    recallRecent: (limit: number) => Promise<any[]>;
+    storeMemory: (payload: any) => Promise<{ memoryId: string | null; skipped: boolean }>;
+  };
   eventBus: { publish: (packet: any) => void };
   generateUUID: () => string;
   agentTypeMemoryEpisodic: any;
@@ -89,7 +92,7 @@ export async function storeTopicShardsFromRecent(deps: {
       const strengthRaw = TOPIC_STRENGTH_FLOOR + Math.min(10, Math.max(0, t.count - 3));
       const neuralStrength = Math.max(TOPIC_STRENGTH_FLOOR, Math.min(TOPIC_STRENGTH_CEILING, strengthRaw));
 
-      const ok = await memoryService.storeMemory({
+      const storeResult = await memoryService.storeMemory({
         id: generateUUID(),
         content: `TOPIC_SHARD: ${t.topic}\nCOUNT_24H: ${t.count}`,
         emotionalContext: limbic,
@@ -104,6 +107,7 @@ export async function storeTopicShardsFromRecent(deps: {
         }
       } as any);
 
+      const ok = Boolean(storeResult.memoryId) || storeResult.skipped;
       if (ok) {
         stored++;
         eventBus.publish({

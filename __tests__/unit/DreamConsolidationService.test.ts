@@ -13,7 +13,7 @@ vi.mock('@services/supabase', () => ({
     },
     getCurrentAgentId: vi.fn(() => 'agent-1'),
     MemoryService: {
-        storeMemory: vi.fn().mockResolvedValue(undefined)
+        storeMemory: vi.fn().mockResolvedValue({ memoryId: null, skipped: true })
     }
 }));
 
