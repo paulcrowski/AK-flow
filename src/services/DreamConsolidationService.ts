@@ -36,8 +36,8 @@ export type { ConsolidationEpisode, DreamConsolidationResult, TraitVectorProposa
 // --- CONSTANTS ---
 
 const MAX_EPISODES_TO_PROCESS = 5;
-// FIXED: Align with EpisodicMemoryService.EPISODE_THRESHOLD (0.25 * 100 = 25)
-const MIN_NEURAL_STRENGTH_FOR_CONSOLIDATION = 25; // Integer 0-100 (percentage)
+// Lowered threshold to reduce empty consolidations
+const MIN_NEURAL_STRENGTH_FOR_CONSOLIDATION = 5; // Integer 0-100 (percentage)
 
 // --- SERVICE ---
 
@@ -71,7 +71,29 @@ export const DreamConsolidationService = {
             priority: 0.8
         });
 
+        let sessionChunkCreated = false;
+        let decayPrune = { decayed: 0, pruned: 0 };
+
         try {
+            try {
+                sessionChunkCreated = await SessionChunkService.buildAndStoreLatestSessionChunk(agentName);
+            } catch (e) {
+                console.warn('[DreamConsolidation] SessionChunk failed:', e);
+            }
+
+            try {
+                if (agentId) {
+                    const d = await supabase.rpc('decay_memories_v1', { p_agent_id: agentId });
+                    const p = await supabase.rpc('prune_memories_v1', { p_agent_id: agentId });
+                    decayPrune = {
+                        decayed: Number(d.data ?? 0),
+                        pruned: Number(p.data ?? 0)
+                    };
+                }
+            } catch (e) {
+                console.warn('[DreamConsolidation] decay/prune failed:', e);
+            }
+
             // Step 1: Recall most impactful episodes
             const episodes = await recallMostImpactfulEpisodes({
                 agentId,
@@ -82,7 +104,26 @@ export const DreamConsolidationService = {
             console.log(`💤 [DreamConsolidation] Found ${episodes.length} impactful episodes`);
 
             if (episodes.length === 0) {
-                return this.createEmptyResult();
+                const result = {
+                    ...this.createEmptyResult(),
+                    sessionChunkCreated,
+                    decayPrune
+                };
+
+                eventBus.publish({
+                    id: generateUUID(),
+                    timestamp: Date.now(),
+                    source: AgentType.MEMORY_EPISODIC,
+                    type: PacketType.SYSTEM_ALERT,
+                    payload: {
+                        event: 'DREAM_CONSOLIDATION_COMPLETE',
+                        result,
+                        message: `No episodes, maintenance done (chunk=${sessionChunkCreated}, decayed=${decayPrune.decayed}, pruned=${decayPrune.pruned})`
+                    },
+                    priority: 0.9
+                });
+
+                return result;
             }
 
             // Step 2: Generate lessons from episodes
@@ -152,12 +193,6 @@ export const DreamConsolidationService = {
                 }
             }
 
-            try {
-                await SessionChunkService.buildAndStoreLatestSessionChunk(agentName);
-            } catch (e) {
-                console.warn('[DreamConsolidation] SessionChunk failed:', e);
-            }
-
             // Step 5: Generate trait proposal (LOG ONLY, no application)
             const traitProposal = await proposeTraitChanges({
                 episodes,
@@ -184,7 +219,9 @@ export const DreamConsolidationService = {
                 traitProposal,
                 goalsCreated,
                 // IDENTITY-LITE: Include identity consolidation results
-                identityConsolidation: identityResult
+                identityConsolidation: identityResult,
+                sessionChunkCreated,
+                decayPrune
             };
 
             eventBus.publish({
@@ -199,15 +236,6 @@ export const DreamConsolidationService = {
                 },
                 priority: 0.9
             });
-
-            try {
-                if (agentId) {
-                    await supabase.rpc('decay_memories_v1', { p_agent_id: agentId });
-                    await supabase.rpc('prune_memories_v1', { p_agent_id: agentId });
-                }
-            } catch (e) {
-                console.warn('[DreamConsolidation] decay/prune failed:', e);
-            }
 
             return result;
 

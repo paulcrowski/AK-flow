@@ -31,4 +31,9 @@ export interface DreamConsolidationResult {
     shardsReinforced: number;
     shardsWeakened: number;
   };
+  sessionChunkCreated?: boolean;
+  decayPrune?: {
+    decayed: number;
+    pruned: number;
+  };
 }
