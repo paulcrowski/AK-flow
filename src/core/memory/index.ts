@@ -22,7 +22,8 @@ export {
 // Memory Space (semantic search + cache) - re-export from systems
 export {
   createMemorySpace,
-  TTLCache,
+  createTTLCache,
+  type TTLCache,
   type MemorySpace,
   type SemanticSearchProvider
 } from '../systems/MemorySpace';

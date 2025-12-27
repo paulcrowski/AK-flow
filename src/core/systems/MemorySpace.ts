@@ -5,34 +5,43 @@ export interface SemanticSearchProvider {
   semanticSearch: (query: string, opts?: { limit?: number }) => Promise<MemoryTrace[]>;
 }
 
-export class TTLCache<V> {
-  private store = new Map<string, { value: V; expiresAt: number }>();
+export type TTLCache<V> = {
+  get: (key: string) => V | undefined;
+  set: (key: string, value: V, ttlMs: number) => void;
+  clear: () => void;
+  getOrLoad: (key: string, ttlMs: number, loader: () => Promise<V>) => Promise<V>;
+};
 
-  get(key: string): V | undefined {
-    const entry = this.store.get(key);
+export function createTTLCache<V>(): TTLCache<V> {
+  const store = new Map<string, { value: V; expiresAt: number }>();
+
+  const get = (key: string): V | undefined => {
+    const entry = store.get(key);
     if (!entry) return undefined;
     if (Date.now() >= entry.expiresAt) {
-      this.store.delete(key);
+      store.delete(key);
       return undefined;
     }
     return entry.value;
-  }
+  };
 
-  set(key: string, value: V, ttlMs: number): void {
-    this.store.set(key, { value, expiresAt: Date.now() + ttlMs });
-  }
+  const set = (key: string, value: V, ttlMs: number): void => {
+    store.set(key, { value, expiresAt: Date.now() + ttlMs });
+  };
 
-  clear(): void {
-    this.store.clear();
-  }
+  const clear = (): void => {
+    store.clear();
+  };
 
-  async getOrLoad(key: string, ttlMs: number, loader: () => Promise<V>): Promise<V> {
-    const cached = this.get(key);
+  const getOrLoad = async (key: string, ttlMs: number, loader: () => Promise<V>): Promise<V> => {
+    const cached = get(key);
     if (cached !== undefined) return cached;
     const loaded = await loader();
-    this.set(key, loaded, ttlMs);
+    set(key, loaded, ttlMs);
     return loaded;
-  }
+  };
+
+  return { get, set, clear, getOrLoad };
 }
 
 export interface MemorySpace {
@@ -51,7 +60,7 @@ export function createMemorySpace(
 ): MemorySpace {
   let coldCache = coldCacheByAgentId.get(agentId);
   if (!coldCache) {
-    coldCache = new TTLCache<unknown>();
+    coldCache = createTTLCache<unknown>();
     coldCacheByAgentId.set(agentId, coldCache);
   }
 
