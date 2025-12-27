@@ -122,6 +122,7 @@ export interface GoalState {
   backlog: Goal[];
   lastUserInteractionAt: number; // ms
   goalsFormedTimestamps: number[]; // for rate limiting
+  lastGoalFormedAt?: number | null; // hard cooldown for goal formation
   lastGoals: { description: string; timestamp: number; source: string }[]; // NEW: For refrain mechanism
 }
 

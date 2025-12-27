@@ -4,6 +4,9 @@ import { eventBus } from '@core/EventBus';
 import { getCurrentAgentId } from '@services/supabase';
 import { ThinkModeSelector } from '@core/systems/eventloop/ThinkModeSelector';
 import { resetAutonomyBackoff } from '@core/systems/eventloop/AutonomousVolitionStep';
+import * as GoalSystem from '@core/systems/GoalSystem';
+import { SYSTEM_CONFIG } from '@core/config/systemConfig';
+import { CortexService } from '@llm/gemini';
 
 // Mock dependencies
 vi.mock('@core/systems/LimbicSystem', () => ({
@@ -30,6 +33,27 @@ vi.mock('@core/systems/GoalSystem', async (importOriginal) => {
     return {
         ...actual,
         formGoal: vi.fn().mockResolvedValue(null)
+    };
+});
+
+const budgetState = vi.hoisted(() => ({ count: 0 }));
+const mockCreateAutonomyBudgetTracker = vi.hoisted(() => vi.fn(() => ({
+    checkBudget: (limit: number) => budgetState.count < limit,
+    consume: () => { budgetState.count += 1; },
+    peekCount: () => budgetState.count
+})));
+
+const mockRunGoalDrivenStep = vi.hoisted(() => vi.fn().mockImplementation(async () => ({
+    executedAt: Date.now(),
+    shouldSkipAutonomy: true
+})));
+
+vi.mock('@core/systems/eventloop/index', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('@core/systems/eventloop/index')>();
+    return {
+        ...actual,
+        createAutonomyBudgetTracker: mockCreateAutonomyBudgetTracker,
+        runGoalDrivenStep: mockRunGoalDrivenStep
     };
 });
 
@@ -79,6 +103,7 @@ describe('EventLoop', () => {
 
         resetAutonomyBackoff();
         eventBus.clear();
+        budgetState.count = 0;
         vi.mocked(getCurrentAgentId).mockReturnValue('test-agent');
 
         const longAgo = Date.now() - 1_000_000;
@@ -100,6 +125,7 @@ describe('EventLoop', () => {
                 backlog: [],
                 lastUserInteractionAt: longAgo,
                 goalsFormedTimestamps: [],
+                lastGoalFormedAt: null,
                 lastGoals: []
             },
             traitVector: {
@@ -169,6 +195,45 @@ describe('EventLoop', () => {
         expect(ThinkModeSelector.select(null, ctx.autonomousMode, Boolean(ctx.goalState?.activeGoal))).toBe('autonomous');
     });
 
+    it('skips goal formation during cooldown window', async () => {
+        const now = Date.now();
+        mockCtx.goalState.lastGoalFormedAt = now - 2 * 60 * 1000;
+
+        await EventLoop.runSingleStep(mockCtx, null, mockCallbacks);
+
+        expect(vi.mocked(GoalSystem.formGoal)).not.toHaveBeenCalled();
+    });
+
+    it('publishes goal telemetry when a goal is formed', async () => {
+        const now = Date.now();
+        const formedGoal = {
+            id: 'goal-1',
+            description: 'Ask about roadmap',
+            priority: 0.6,
+            progress: 0,
+            source: 'curiosity',
+            createdAt: now
+        } as const;
+
+        mockCtx.goalState.lastGoalFormedAt = null;
+        mockCtx.goalState.lastUserInteractionAt = now - SYSTEM_CONFIG.goals.minSilenceMs - 1000;
+        mockCtx.silenceStart = mockCtx.goalState.lastUserInteractionAt;
+
+        vi.mocked(GoalSystem.formGoal).mockResolvedValueOnce(formedGoal);
+
+        await EventLoop.runSingleStep(mockCtx, null, mockCallbacks);
+
+        const history = eventBus.getHistory();
+        const goalEvent = history.find(p => (p as any)?.payload?.event === 'GOAL_FORMED');
+
+        expect(goalEvent).toBeTruthy();
+        expect((goalEvent as any)?.payload?.silenceMs).toBe(now - mockCtx.goalState.lastUserInteractionAt);
+        expect((goalEvent as any)?.payload?.minSilenceMs).toBe(SYSTEM_CONFIG.goals.minSilenceMs);
+        expect((goalEvent as any)?.payload?.activeGoalId).toBe(formedGoal.id);
+        expect((goalEvent as any)?.payload?.lastGoalFormedAt).toBe(now);
+        expect(mockCtx.goalState.lastGoalFormedAt).toBe(now);
+    });
+
     it('should skip tick when no agentId is selected', async () => {
         vi.mocked(getCurrentAgentId).mockReturnValue(null);
 
@@ -189,22 +254,26 @@ describe('EventLoop', () => {
     });
 
     it('should respect autonomous budget limit', async () => {
+        mockCtx.conversation = [{ role: 'user', text: "I don't understand this step" }];
+        const volition = vi.mocked(CortexService.autonomousVolitionV2);
+
         // 1st run - should pass
         await EventLoop.runSingleStep(mockCtx, null, mockCallbacks);
-        expect(mockCallbacks.onThought).toHaveBeenCalledWith('Autonomous processing...');
-        const t1 = (mockCallbacks.onThought as any).mock.calls.length;
+        const t1 = volition.mock.calls.length;
+        expect(t1).toBeGreaterThan(0);
 
         // 2nd run - should pass
         vi.advanceTimersByTime(30_000);
         await EventLoop.runSingleStep(mockCtx, null, mockCallbacks);
-        const t2 = (mockCallbacks.onThought as any).mock.calls.length;
+        const t2 = volition.mock.calls.length;
         expect(t2).toBeGreaterThanOrEqual(t1);
 
         // 3rd run - should be blocked by limit (2)
-        const beforeThird = (mockCallbacks.onThought as any).mock.calls.length;
+        budgetState.count = mockCtx.autonomousLimitPerMinute;
+        const beforeThird = volition.mock.calls.length;
         vi.advanceTimersByTime(30_000);
         await EventLoop.runSingleStep(mockCtx, null, mockCallbacks);
-        const afterThird = (mockCallbacks.onThought as any).mock.calls.length;
+        const afterThird = volition.mock.calls.length;
         expect(afterThird).toBe(beforeThird);
     });
 

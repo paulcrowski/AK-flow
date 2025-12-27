@@ -22,6 +22,7 @@ import { createMemorySpace } from './MemorySpace';
 import { TickCommitter } from './TickCommitter';
 import { publishTickStart, publishTickSkipped, publishThinkModeSelected, publishTickEnd, p0MetricStartTick, publishP0Metric } from './TickLifecycleTelemetry';
 import { isMainFeatureEnabled } from '../config/featureFlags';
+import { SYSTEM_CONFIG } from '../config/systemConfig';
 import { ThinkModeSelector, createAutonomyBudgetTracker, createTickTraceScope, runAutonomousVolitionStep, runReactiveStep, runGoalDrivenStep } from './eventloop/index';
 
 export namespace EventLoop {
@@ -160,44 +161,62 @@ export namespace EventLoop {
             // 3A. GOAL FORMATION HOOK (FAZA 3)
             if (!ctx.goalState.activeGoal) {
                 const now = Date.now();
-                const goalCtx: GoalContext = {
-                    now,
-                    lastUserInteractionAt: ctx.goalState.lastUserInteractionAt || ctx.silenceStart,
-                    soma: ctx.soma,
-                    neuro: ctx.neuro,
-                    limbic: ctx.limbic
-                };
+                const GOAL_COOLDOWN_MS = 5 * 60 * 1000;
 
-                const newGoal = await GoalSystem.formGoal(goalCtx, ctx.goalState);
+                if (
+                    ctx.goalState.lastGoalFormedAt &&
+                    now - ctx.goalState.lastGoalFormedAt < GOAL_COOLDOWN_MS
+                ) {
+                    // hard cooldown: skip goal formation
+                } else {
+                    const goalCtx: GoalContext = {
+                        now,
+                        lastUserInteractionAt: ctx.goalState.lastUserInteractionAt || ctx.silenceStart,
+                        soma: ctx.soma,
+                        neuro: ctx.neuro,
+                        limbic: ctx.limbic,
+                        conversation: ctx.conversation
+                    };
 
-                if (newGoal) {
-                    ctx.goalState.activeGoal = newGoal;
-                    ctx.goalState.goalsFormedTimestamps = [
-                        ...(ctx.goalState.goalsFormedTimestamps || []).filter(t => now - t < 60 * 60 * 1000),
-                        now
-                    ];
-                    // FAZA 4.2: Update lastGoals history (Refractory Period)
-                    ctx.goalState.lastGoals = [
-                        { description: newGoal.description, timestamp: now, source: newGoal.source },
-                        ...(ctx.goalState.lastGoals || [])
-                    ].slice(0, 3);
+                    const newGoal = await GoalSystem.formGoal(goalCtx, ctx.goalState);
 
-                    eventBus.publish({
-                        id: `goal-formed-${now}`,
-                        timestamp: now,
-                        source: AgentType.CORTEX_FLOW,
-                        type: PacketType.SYSTEM_ALERT,
-                        payload: {
-                            event: 'GOAL_FORMED',
-                            goal: {
-                                id: newGoal.id,
-                                source: newGoal.source,
-                                description: newGoal.description,
-                                priority: newGoal.priority
-                            }
-                        },
-                        priority: 0.7
-                    });
+                    if (newGoal) {
+                        ctx.goalState.lastGoalFormedAt = now;
+                        ctx.goalState.activeGoal = newGoal;
+                        ctx.goalState.goalsFormedTimestamps = [
+                            ...(ctx.goalState.goalsFormedTimestamps || []).filter(t => now - t < 60 * 60 * 1000),
+                            now
+                        ];
+                        // FAZA 4.2: Update lastGoals history (Refractory Period)
+                        ctx.goalState.lastGoals = [
+                            { description: newGoal.description, timestamp: now, source: newGoal.source },
+                            ...(ctx.goalState.lastGoals || [])
+                        ].slice(0, 3);
+
+                        const silenceMs = now - goalCtx.lastUserInteractionAt;
+                        const minSilenceMs = SYSTEM_CONFIG.goals.minSilenceMs;
+
+                        eventBus.publish({
+                            id: `goal-formed-${now}`,
+                            timestamp: now,
+                            source: AgentType.CORTEX_FLOW,
+                            type: PacketType.SYSTEM_ALERT,
+                            payload: {
+                                event: 'GOAL_FORMED',
+                                goal: {
+                                    id: newGoal.id,
+                                    source: newGoal.source,
+                                    description: newGoal.description,
+                                    priority: newGoal.priority
+                                },
+                                silenceMs,
+                                minSilenceMs,
+                                activeGoalId: ctx.goalState.activeGoal?.id ?? null,
+                                lastGoalFormedAt: ctx.goalState.lastGoalFormedAt ?? null
+                            },
+                            priority: 0.7
+                        });
+                    }
                 }
             }
 

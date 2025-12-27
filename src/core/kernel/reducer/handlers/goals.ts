@@ -21,6 +21,7 @@ export function handleGoalFormed(state: KernelState, event: KernelEvent, outputs
       ...state.goalState,
       activeGoal: newGoal as any,
       goalsFormedTimestamps: [...state.goalState.goalsFormedTimestamps.slice(-9), event.timestamp],
+      lastGoalFormedAt: event.timestamp,
       lastGoals: [...state.goalState.lastGoals.slice(-4), { description: payload.goal, timestamp: event.timestamp, source: 'kernel' }]
     }
   };

@@ -4,6 +4,7 @@
 
 import { LimbicState, SomaState, NeurotransmitterState, Goal, GoalState } from '../../types';
 import { GoalJournalService, JournalGoal } from '../../services/GoalJournalService';
+import { SessionChunkService } from '../../services/SessionChunkService';
 import { getCurrentAgentId } from '../../services/supabase';
 import { SYSTEM_CONFIG } from '../config/systemConfig';
 
@@ -18,12 +19,56 @@ function textSimilarity(a: string, b: string): number {
     return intersection / union;
 }
 
+function extractTopicFromText(text: string): string | null {
+  const normalized = text
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (!normalized) return null;
+  const words = normalized.split(' ').filter(Boolean);
+  return words.slice(0, 6).join(' ') || null;
+}
+
+function getLastTopicFromConversation(ctx: GoalContext): string | null {
+  const turns = ctx.conversation || [];
+  for (let i = turns.length - 1; i >= 0; i -= 1) {
+    const turn = turns[i];
+    if (!turn || turn.role !== 'user' || !turn.text) continue;
+    const topic = extractTopicFromText(turn.text);
+    if (topic) return topic;
+  }
+  return null;
+}
+
+async function getLastTopicFromChunks(): Promise<string | null> {
+  const agentId = getCurrentAgentId();
+  if (!agentId) return null;
+
+  try {
+    const chunks = await SessionChunkService.fetchRecentSessionChunks(agentId, 1);
+    if (!chunks.length) return null;
+    const chunk = chunks[0];
+    const topics = Array.isArray(chunk.topics) ? chunk.topics : [];
+    if (typeof topics[0] === 'string' && topics[0].length > 0) return topics[0];
+    const summaryTopics = Array.isArray(chunk.summary_json?.topics) ? chunk.summary_json.topics : [];
+    if (typeof summaryTopics[0] === 'string' && summaryTopics[0].length > 0) return summaryTopics[0];
+  } catch (err) {
+    console.warn('[GoalSystem] Failed to load session chunk topics:', err);
+  }
+
+  return null;
+}
+
+
 export interface GoalContext {
   now: number;
   lastUserInteractionAt: number;
   soma: SomaState;
   neuro: NeurotransmitterState;
   limbic: LimbicState;
+  conversation?: { role: string; text: string }[];
 }
 
 export function shouldConsiderGoal(ctx: GoalContext, goalState: GoalState): boolean {
@@ -55,11 +100,15 @@ export async function formGoal(ctx: GoalContext, goalState: GoalState): Promise<
   if (source === 'empathy') {
     description = 'Sprawdź, jak czuje się użytkownik i odnieś się do wcześniejszej rozmowy.';
   } else {
+    const lastTopicFromConversation = getLastTopicFromConversation(ctx);
+    const lastTopicFromChunks = lastTopicFromConversation ? null : await getLastTopicFromChunks();
+    const lastTopic = lastTopicFromConversation || lastTopicFromChunks || 'ostatni temat rozmowy';
+
     // High dopamine => Action/Search bias
     if (ctx.neuro.dopamine > 70) {
-         description = 'Wykonaj głęboką analizę (Deep Research) lub wyszukaj nowe informacje na temat ostatniego wątku.';
+         description = `Wykonaj gleboka analize (Deep Research) lub wyszukaj nowe informacje na temat ${lastTopic}.`;
     } else {
-         description = 'Zaproponuj nowy wątek do eksploracji, powiązany z ostatnimi tematami.';
+         description = `Dopytaj uzytkownika o ${lastTopic}`;
     }
   }
 

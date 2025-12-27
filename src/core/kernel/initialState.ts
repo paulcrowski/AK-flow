@@ -68,6 +68,7 @@ export const INITIAL_GOAL_STATE: GoalState = {
   backlog: [],
   lastUserInteractionAt: Date.now(),
   goalsFormedTimestamps: [],
+  lastGoalFormedAt: null,
   lastGoals: []
 };
 
