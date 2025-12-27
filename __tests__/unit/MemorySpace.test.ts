@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { TTLCache, createMemorySpace } from '@core/systems/MemorySpace';
+import { createTTLCache, createMemorySpace } from '@core/systems/MemorySpace';
 
 describe('MemorySpace', () => {
     beforeEach(() => {
@@ -12,7 +12,7 @@ describe('MemorySpace', () => {
     });
 
     it('TTLCache should expire entries after ttlMs', async () => {
-        const cache = new TTLCache<number>();
+        const cache = createTTLCache<number>();
 
         cache.set('a', 123, 1000);
         expect(cache.get('a')).toBe(123);
