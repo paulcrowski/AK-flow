@@ -47,6 +47,26 @@ let embeddingFailCount = 0;
 let embeddingLastErrorCode: string | null = null;
 const EMBEDDINGS_STATUS_EVENT = 'EMBEDDINGS_STATUS';
 
+type GenerateResponseDefaults = {
+  response_text: string;
+  internal_monologue: string;
+  predicted_user_reaction: string;
+  mood_shift: { fear_delta: number; curiosity_delta: number };
+};
+
+type GenerateResponseOutput = {
+  text: string;
+  thought: string;
+  prediction: string;
+  moodShift: { fear_delta: number; curiosity_delta: number };
+};
+
+type AutonomyV2Output = {
+  internal_monologue: string;
+  voice_pressure: number;
+  speech_content: string;
+};
+
 export function createCortexTextService(ai: GoogleGenAI) {
   const embeddingsEnabled = Boolean((ai as any)?.models?.embedContent);
   const emitEmbeddingsStatus = () => {
@@ -74,6 +94,209 @@ export function createCortexTextService(ai: GoogleGenAI) {
     if (!err) return 'unknown';
     const code = err.code || err.status || err.name || err.message || 'unknown';
     return String(code).slice(0, 120);
+  };
+
+  const buildGenerateResponsePromptPayload = (params: {
+    input: string;
+    context: string;
+    currentState: string;
+    analysis: any;
+  }): string => {
+    return buildGenerateResponsePrompt({
+      context: params.context,
+      currentState: params.currentState,
+      analysis: params.analysis,
+      userInput: params.input
+    });
+  };
+
+  const parseGenerateResponsePayload = (
+    response: any,
+    safeDefault: GenerateResponseDefaults
+  ): GenerateResponseOutput => {
+    const json = cleanJSON(getGeminiText(response), safeDefault, undefined, 'generateResponse');
+    return {
+      text: json.response_text || safeDefault.response_text,
+      thought: json.internal_monologue || safeDefault.internal_monologue,
+      prediction: json.predicted_user_reaction || safeDefault.predicted_user_reaction,
+      moodShift: json.mood_shift || safeDefault.mood_shift
+    };
+  };
+
+  const runGenerateResponseStandard = async (params: {
+    input: string;
+    context: string;
+    currentState: string;
+    analysis: any;
+    safeDefault: GenerateResponseDefaults;
+  }): Promise<GenerateResponseOutput> => {
+    return withRetry(async () => {
+      const prompt = buildGenerateResponsePromptPayload(params);
+      const response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: prompt,
+        config: {
+          maxOutputTokens: 8192,
+          temperature: 0.7,
+          responseMimeType: 'application/json',
+          responseSchema: GENERATE_RESPONSE_RESPONSE_SCHEMA
+        }
+      });
+
+      logUsage('generateResponse', response);
+      return parseGenerateResponsePayload(response, params.safeDefault);
+    });
+  };
+
+  const runGenerateResponseMinimal = async (params: {
+    input: string;
+    context: string;
+    analysis: any;
+  }): Promise<GenerateResponseOutput> => {
+    return withRetry(async () => {
+      const agentId = getCurrentAgentId();
+      if (!agentId) throw new Error('Agent ID missing for Cortex flow');
+
+      const contextMock = params.context.split('\n').slice(-3);
+
+      const limbicState = params.analysis && typeof params.analysis === 'object' ? params.analysis : {
+        satisfaction: 0.5,
+        frustration: 0.1
+      };
+
+      const state = await buildMinimalCortexState({
+        agentId: agentId,
+        userInput: params.input,
+        recentContext: contextMock,
+        metaStates: {
+          energy: 70,
+          confidence: (limbicState.satisfaction || 0.5) * 100,
+          stress: (limbicState.frustration || 0.1) * 100
+        }
+      });
+
+      const output = await generateFromCortexState(state);
+
+      const legacyResponse = {
+        text: output.speech_content,
+        thought: output.internal_thought,
+        prediction: 'User is observing.',
+        moodShift: { fear_delta: 0, curiosity_delta: 0 }
+      };
+
+      let guardedResponse = legacyResponse;
+
+      if (isFactEchoPipelineEnabled()) {
+        const guarded = guardLegacyWithFactEcho(guardedResponse, output.fact_echo, {
+          agentName: state.core_identity?.name || 'Jesse'
+        });
+        guardedResponse = guarded.output;
+      }
+
+      if (isPrismEnabled()) {
+        const guarded = guardLegacyResponse(guardedResponse, {
+          agentName: state.core_identity?.name || 'Jesse'
+        });
+        guardedResponse = guarded.output;
+      }
+
+      return guardedResponse;
+    });
+  };
+
+  const buildAutonomyV2Prompt = (ctx: UnifiedContext): string => {
+    return isCortexSubEnabled('unifiedContextPrompt')
+      ? UnifiedContextBuilder.formatAsPrompt(ctx, 'autonomous')
+      : UnifiedContextBuilder.formatAsPrompt(ctx, 'autonomous');
+  };
+
+  const parseAutonomyV2Response = (rawText: string | undefined): AutonomyV2Output => {
+    if (isMainFeatureEnabled('ONE_MIND_ENABLED')) {
+      const contracted = applyAutonomyV2RawContract(rawText, {
+        maxRawLen: 20000,
+        maxInternalMonologueLen: 1200,
+        maxSpeechLen: 1200
+      });
+
+      if (!contracted.ok) {
+        const traceId = getCurrentTraceId();
+        if (traceId) p0MetricAdd(traceId, { parseFailCount: 1 });
+        eventBus.publish({
+          id: generateUUID(),
+          traceId: traceId || undefined,
+          timestamp: Date.now(),
+          source: AgentType.CORTEX_FLOW,
+          type: PacketType.SYSTEM_ALERT,
+          payload: {
+            event: 'P0_PARSE_FAIL',
+            stage: 'AUTONOMY_V2',
+            reason: contracted.reason,
+            details: contracted.details,
+            raw_len: String(rawText || '').length,
+            raw_preview: String(rawText || '').slice(0, 120),
+            model: 'gemini-2.5-flash'
+          },
+          priority: 0.7
+        });
+        return {
+          internal_monologue: `[RAW_CONTRACT_FAIL] ${contracted.reason || 'UNKNOWN'}`,
+          voice_pressure: 0,
+          speech_content: ''
+        };
+      }
+
+      const v = contracted.value;
+      return {
+        internal_monologue: v.internal_monologue || 'Thinking... ',
+        voice_pressure: clamp01(v.voice_pressure ?? 0),
+        speech_content: (v.speech_content || '').slice(0, 1200)
+      };
+    }
+
+    const parseResult = parseJSONStrict<{
+      internal_monologue: string;
+      voice_pressure: number;
+      speech_content?: string;
+    }>(rawText);
+
+    if (!parseResult.success || !parseResult.data) {
+      return {
+        internal_monologue: `[PARSE_FAIL] ${parseResult.error}`,
+        voice_pressure: 0,
+        speech_content: ''
+      };
+    }
+
+    const result = parseResult.data;
+    console.log('AV_V2 PARSED:', result);
+
+    return {
+      internal_monologue: result.internal_monologue || 'Thinking...',
+      voice_pressure: result.voice_pressure ?? 0.0,
+      speech_content: (result.speech_content || '').slice(0, 1200)
+    };
+  };
+
+  const runAutonomyV2WithRetry = async (prompt: string): Promise<AutonomyV2Output> => {
+    return withRetry(async () => {
+      const response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: prompt,
+        config: {
+          temperature: 0.7,
+          maxOutputTokens: 1536,
+          responseMimeType: 'application/json',
+          responseSchema: AUTONOMOUS_VOLITION_V2_RESPONSE_SCHEMA
+        }
+      });
+      logUsage('autonomousVolitionV2', response);
+
+      const rawText = getGeminiText(response) ?? undefined;
+      const rawForLog = (rawText || '').slice(0, 2000);
+      console.log('AV_V2 RAW:', rawForLog);
+
+      return parseAutonomyV2Response(rawText);
+    }, 1, 3000);
   };
 
   return {
@@ -187,7 +410,7 @@ export function createCortexTextService(ai: GoogleGenAI) {
       context: string,
       currentState: string,
       analysis: any
-    ): Promise<{ text: string; thought: string; prediction: string; moodShift: { fear_delta: number; curiosity_delta: number } }> {
+    ): Promise<GenerateResponseOutput> {
       const safeDefault = {
         response_text: 'I am recalibrating...',
         internal_monologue: 'Cognitive dissonance detected...',
@@ -196,84 +419,15 @@ export function createCortexTextService(ai: GoogleGenAI) {
       };
 
       if (isCortexSubEnabled('minimalPrompt')) {
-        return withRetry(async () => {
-          const agentId = getCurrentAgentId();
-          if (!agentId) throw new Error('Agent ID missing for Cortex flow');
-
-          const contextMock = context.split('\n').slice(-3);
-
-          const limbicState = analysis && typeof analysis === 'object' ? analysis : {
-            satisfaction: 0.5,
-            frustration: 0.1
-          };
-
-          const state = await buildMinimalCortexState({
-            agentId: agentId,
-            userInput: input,
-            recentContext: contextMock,
-            metaStates: {
-              energy: 70,
-              confidence: (limbicState.satisfaction || 0.5) * 100,
-              stress: (limbicState.frustration || 0.1) * 100
-            }
-          });
-
-          const output = await generateFromCortexState(state);
-
-          const legacyResponse = {
-            text: output.speech_content,
-            thought: output.internal_thought,
-            prediction: 'User is observing.',
-            moodShift: { fear_delta: 0, curiosity_delta: 0 }
-          };
-
-          let guardedResponse = legacyResponse;
-
-          if (isFactEchoPipelineEnabled()) {
-            const guarded = guardLegacyWithFactEcho(guardedResponse, output.fact_echo, {
-              agentName: state.core_identity?.name || 'Jesse'
-            });
-            guardedResponse = guarded.output;
-          }
-
-          if (isPrismEnabled()) {
-            const guarded = guardLegacyResponse(guardedResponse, {
-              agentName: state.core_identity?.name || 'Jesse'
-            });
-            guardedResponse = guarded.output;
-          }
-
-          return guardedResponse;
-        });
+        return runGenerateResponseMinimal({ input, context, analysis });
       }
 
-      return withRetry(async () => {
-        const prompt = buildGenerateResponsePrompt({
-          context,
-          currentState,
-          analysis,
-          userInput: input
-        });
-        const response = await ai.models.generateContent({
-          model: 'gemini-2.5-flash',
-          contents: prompt,
-          config: {
-            maxOutputTokens: 8192,
-            temperature: 0.7,
-            responseMimeType: 'application/json',
-            responseSchema: GENERATE_RESPONSE_RESPONSE_SCHEMA
-          }
-        });
-
-        logUsage('generateResponse', response);
-        const json = cleanJSON(getGeminiText(response), safeDefault, undefined, 'generateResponse');
-
-        return {
-          text: json.response_text || safeDefault.response_text,
-          thought: json.internal_monologue || safeDefault.internal_monologue,
-          prediction: json.predicted_user_reaction || safeDefault.predicted_user_reaction,
-          moodShift: json.mood_shift || safeDefault.mood_shift
-        };
+      return runGenerateResponseStandard({
+        input,
+        context,
+        currentState,
+        analysis,
+        safeDefault
       });
     },
 
@@ -338,93 +492,9 @@ export function createCortexTextService(ai: GoogleGenAI) {
       }, 1, 3000);
     },
 
-    async autonomousVolitionV2(ctx: UnifiedContext): Promise<{ internal_monologue: string; voice_pressure: number; speech_content: string }> {
-      const prompt = isCortexSubEnabled('unifiedContextPrompt')
-        ? UnifiedContextBuilder.formatAsPrompt(ctx, 'autonomous')
-        : UnifiedContextBuilder.formatAsPrompt(ctx, 'autonomous');
-
-      return withRetry(async () => {
-        const response = await ai.models.generateContent({
-          model: 'gemini-2.5-flash',
-          contents: prompt,
-          config: {
-            temperature: 0.7,
-            maxOutputTokens: 1536,
-            responseMimeType: 'application/json',
-            responseSchema: AUTONOMOUS_VOLITION_V2_RESPONSE_SCHEMA
-          }
-        });
-        logUsage('autonomousVolitionV2', response);
-
-        const rawText = getGeminiText(response);
-        const rawForLog = (rawText || '').slice(0, 2000);
-        console.log('AV_V2 RAW:', rawForLog);
-
-        if (isMainFeatureEnabled('ONE_MIND_ENABLED')) {
-          const contracted = applyAutonomyV2RawContract(rawText, {
-            maxRawLen: 20000,
-            maxInternalMonologueLen: 1200,
-            maxSpeechLen: 1200
-          });
-
-          if (!contracted.ok) {
-            const traceId = getCurrentTraceId();
-            if (traceId) p0MetricAdd(traceId, { parseFailCount: 1 });
-            eventBus.publish({
-              id: generateUUID(),
-              traceId: traceId || undefined,
-              timestamp: Date.now(),
-              source: AgentType.CORTEX_FLOW,
-              type: PacketType.SYSTEM_ALERT,
-              payload: {
-                event: 'P0_PARSE_FAIL',
-                stage: 'AUTONOMY_V2',
-                reason: contracted.reason,
-                details: contracted.details,
-                raw_len: String(rawText || '').length,
-                raw_preview: String(rawText || '').slice(0, 120),
-                model: 'gemini-2.5-flash'
-              },
-              priority: 0.7
-            });
-            return {
-              internal_monologue: `[RAW_CONTRACT_FAIL] ${contracted.reason || 'UNKNOWN'}`,
-              voice_pressure: 0,
-              speech_content: ''
-            };
-          }
-
-          const v = contracted.value;
-          return {
-            internal_monologue: v.internal_monologue || 'Thinking... ',
-            voice_pressure: clamp01(v.voice_pressure ?? 0),
-            speech_content: (v.speech_content || '').slice(0, 1200)
-          };
-        }
-
-        const parseResult = parseJSONStrict<{
-          internal_monologue: string;
-          voice_pressure: number;
-          speech_content?: string;
-        }>(rawText);
-
-        if (!parseResult.success || !parseResult.data) {
-          return {
-            internal_monologue: `[PARSE_FAIL] ${parseResult.error}`,
-            voice_pressure: 0,
-            speech_content: ''
-          };
-        }
-
-        const result = parseResult.data;
-        console.log('AV_V2 PARSED:', result);
-
-        return {
-          internal_monologue: result.internal_monologue || 'Thinking...',
-          voice_pressure: result.voice_pressure ?? 0.0,
-          speech_content: (result.speech_content || '').slice(0, 1200)
-        };
-      }, 1, 3000);
+    async autonomousVolitionV2(ctx: UnifiedContext): Promise<AutonomyV2Output> {
+      const prompt = buildAutonomyV2Prompt(ctx);
+      return runAutonomyV2WithRetry(prompt);
     },
 
     async structuredDialogue(prompt: string): Promise<{
