@@ -1,10 +1,8 @@
 {
   "version": "1.0.0",
-  "lastUpdated": "2025-12-25T22:19:04.000Z",
-  "lastModified": "2025-12-25T22:19:04.000Z",
+  "lastModified": "2025-12-27T23:32:32.000Z",
+  "lastUpdated": "2025-12-27T23:32:32.000Z",
   "modifiedBy": "AI_CODEX",
-  "project": "AK-Flow",
-  "dailyGoal": "AgentTrajectory Phase 1 (Execution-First Autonomy)",
   "tasks": [
     {
       "id": "task-top-001",
@@ -69,7 +67,7 @@
     {
       "id": "test-protocol-001",
       "content": "TEST 1: Wzrok (Vision Verification)",
-      "details": "CEL: Agent musi udowodni\u0107, \u017ce widzi pliki.\nKROKI:\n1. Zaimplementowa\u0107 tool `READ_FILE`.\n2. Agent ma przeczyta\u0107 `docs/engineering/CHALLENGES.md`.\n3. Agent ma stre\u015bci\u0107 3 najwa\u017cniejsze wyzwania w jednym zdaniu.\nJE\u015aLI ZROBI TO SAM \u2192 SUKCES.",
+      "details": "CEL: Agent musi udowodnić, że widzi pliki.\nKROKI:\n1. Zaimplementować tool `READ_FILE`.\n2. Agent ma przeczytać `docs/engineering/CHALLENGES.md`.\n3. Agent ma streścić 3 najważniejsze wyzwania w jednym zdaniu.\nJEŚLI ZROBI TO SAM → SUKCES.",
       "priority": "CRITICAL",
       "type": "TODAY",
       "isCompleted": false,
@@ -81,7 +79,7 @@
         },
         {
           "id": "tp-01-2",
-          "content": "Weryfikacja: Agent cytuje tre\u015b\u0107 pliku",
+          "content": "Weryfikacja: Agent cytuje treść pliku",
           "isCompleted": false
         }
       ],
@@ -91,7 +89,7 @@
     {
       "id": "test-protocol-002",
       "content": "TEST 2: Orientacja (Spatial Awareness)",
-      "details": "CEL: Agent musi znale\u017a\u0107 informacj\u0119 w nieznanym miejscu.\nKROKI:\n1. Zaimplementowa\u0107 tool `SEARCH_IN_REPO` (ripgrep).\n2. Zapyta\u0107 Agenta: 'Gdzie w kodzie definiujemy dopamin\u0119?'.\n3. Agent musi u\u017cy\u0107 `SEARCH('dopamine')` i poda\u0107 plik `ChemistryBridge.ts`.\nJE\u015aLI ZNAJDZIE SAM \u2192 SUKCES.",
+      "details": "CEL: Agent musi znaleźć informację w nieznanym miejscu.\nKROKI:\n1. Zaimplementować tool `SEARCH_IN_REPO` (ripgrep).\n2. Zapytać Agenta: 'Gdzie w kodzie definiujemy dopaminę?'.\n3. Agent musi użyć `SEARCH('dopamine')` i podać plik `ChemistryBridge.ts`.\nJEŚLI ZNAJDZIE SAM → SUKCES.",
       "priority": "CRITICAL",
       "type": "TODAY",
       "isCompleted": false,
@@ -112,8 +110,8 @@
     },
     {
       "id": "test-protocol-003",
-      "content": "TEST 3: Pami\u0119\u0107 (Write Persistence)",
-      "details": "CEL: Agent musi zostawi\u0107 \u015blad po swojej pracy.\nKROKI:\n1. Zaimplementowa\u0107 tool `WRITE_NOTE`.\n2. Agent ma zapisa\u0107 plik `docs/daily logs/alberto_first_contact.md` z tre\u015bci\u0105 'I can see clearly now'.\nJE\u015aLI PLIK POWSTANIE \u2192 SUKCES.",
+      "content": "TEST 3: Pamięć (Write Persistence)",
+      "details": "CEL: Agent musi zostawić ślad po swojej pracy.\nKROKI:\n1. Zaimplementować tool `WRITE_NOTE`.\n2. Agent ma zapisać plik `docs/daily logs/alberto_first_contact.md` z treścią 'I can see clearly now'.\nJEŚLI PLIK POWSTANIE → SUKCES.",
       "priority": "HIGH",
       "type": "TODAY",
       "isCompleted": false,
@@ -125,7 +123,7 @@
         },
         {
           "id": "tp-03-2",
-          "content": "Weryfikacja: Plik pojawia si\u0119 na dysku",
+          "content": "Weryfikacja: Plik pojawia się na dysku",
           "isCompleted": false
         }
       ],
@@ -162,7 +160,8 @@
       "isCompleted": false,
       "subtasks": [],
       "createdAt": "2025-12-15T10:00:00.000Z",
-      "updatedAt": "2025-12-15T10:00:00.000Z"
+      "updatedAt": "2025-12-15T10:00:00.000Z",
+      "details": ""
     },
     {
       "id": "task-today-005",
@@ -172,7 +171,8 @@
       "isCompleted": false,
       "subtasks": [],
       "createdAt": "2025-12-15T10:00:00.000Z",
-      "updatedAt": "2025-12-15T10:00:00.000Z"
+      "updatedAt": "2025-12-15T10:00:00.000Z",
+      "details": ""
     },
     {
       "id": "task-backlog-001",
@@ -182,7 +182,8 @@
       "isCompleted": false,
       "subtasks": [],
       "createdAt": "2025-12-15T10:00:00.000Z",
-      "updatedAt": "2025-12-15T10:00:00.000Z"
+      "updatedAt": "2025-12-15T10:00:00.000Z",
+      "details": ""
     },
     {
       "id": "task-backlog-002",
@@ -192,7 +193,8 @@
       "isCompleted": false,
       "subtasks": [],
       "createdAt": "2025-12-15T10:00:00.000Z",
-      "updatedAt": "2025-12-15T10:00:00.000Z"
+      "updatedAt": "2025-12-15T10:00:00.000Z",
+      "details": ""
     },
     {
       "id": "task-backlog-003",
@@ -202,7 +204,8 @@
       "isCompleted": false,
       "subtasks": [],
       "createdAt": "2025-12-15T10:00:00.000Z",
-      "updatedAt": "2025-12-15T10:00:00.000Z"
+      "updatedAt": "2025-12-15T10:00:00.000Z",
+      "details": ""
     },
     {
       "id": "task-backlog-004",
@@ -212,7 +215,8 @@
       "isCompleted": false,
       "subtasks": [],
       "createdAt": "2025-12-15T10:00:00.000Z",
-      "updatedAt": "2025-12-15T10:00:00.000Z"
+      "updatedAt": "2025-12-15T10:00:00.000Z",
+      "details": ""
     },
     {
       "id": "task-backlog-005",
@@ -222,7 +226,8 @@
       "isCompleted": false,
       "subtasks": [],
       "createdAt": "2025-12-15T10:00:00.000Z",
-      "updatedAt": "2025-12-15T10:00:00.000Z"
+      "updatedAt": "2025-12-15T10:00:00.000Z",
+      "details": ""
     },
     {
       "id": "task-backlog-006",
@@ -232,7 +237,8 @@
       "isCompleted": false,
       "subtasks": [],
       "createdAt": "2025-12-15T10:00:00.000Z",
-      "updatedAt": "2025-12-15T10:00:00.000Z"
+      "updatedAt": "2025-12-15T10:00:00.000Z",
+      "details": ""
     },
     {
       "id": "task-backlog-007",
@@ -242,7 +248,8 @@
       "isCompleted": false,
       "subtasks": [],
       "createdAt": "2025-12-15T10:00:00.000Z",
-      "updatedAt": "2025-12-15T10:00:00.000Z"
+      "updatedAt": "2025-12-15T10:00:00.000Z",
+      "details": ""
     },
     {
       "id": "task-backlog-008",
@@ -252,12 +259,13 @@
       "isCompleted": false,
       "subtasks": [],
       "createdAt": "2025-12-15T10:00:00.000Z",
-      "updatedAt": "2025-12-15T10:00:00.000Z"
+      "updatedAt": "2025-12-15T10:00:00.000Z",
+      "details": ""
     },
     {
       "id": "task-agent-trajectory-001",
       "content": "AgentTrajectory v1.0 (Execution-First Autonomy)",
-      "details": "WERSJA: 1.0 FINAL\nSTATUS: DO IMPLEMENTACJI\n\nCEL: Zamieni\u0107 \"autonomi\u0119 jako m\u00f3wienie\" w \"autonomi\u0119 jako dzia\u0142anie\" bez cofania stabilizacji:\n- Gate nadal chroni przed spamem\n- JSON nadal fail-closed (cisza > bzdury)\n- UnifiedContext wsp\u00f3lny dla reactive i autonomy\n- Nowo\u015b\u0107: trajektoria: goal -> micro-step -> wynik -> tarcie -> kolejny krok\n\nDEFINICJE:\n- Trajektoria = activeGoal + nextStep + mode (EXECUTE/CLARIFY/CONSOLIDATE/RECOVER/IDLE) + progress/friction + lastTouchedAt + lastOutcome\n- Dzia\u0142anie \u2260 mowa: domy\u015blnie internal step (journal/memory/plan), mowa to wyj\u0105tek\n\nTWARDE ZASADY:\n1) Fail-closed zawsze: parsing fail => speech_content=\"\", voice_pressure=0, action=SILENCE, log TRAJ_FAIL_CLOSED\n2) Jedna bramka mowy: tylko ExecutiveGate.decide()\n3) EXPLORE tylko gdy silence>60s AND hasActiveTopic==false AND trajectory.mode==IDLE\n4) Reactive ma absolutny priorytet (trajectory aktualizuje si\u0119, ale nie przebija reakcji)\n\nARCHITEKTURA (WPINAMY W OBECNE):\n1) ctx.trajectory w runtime state (obok goalState)\n2) UnifiedContextBuilder dostaje sekcj\u0119 TRAJECTORY (source of truth)\n3) Kolejno\u015b\u0107: AutonomyRepertoire.selectAction(ctx) -> TrajectoryPlanner.selectNextStep(ctx, action) -> (SILENCE => skip LLM) -> LLM TrajectoryPacket -> validateSpeech() + ExecutiveGate\n\nTrajectoryPacket (LLM JSON ONLY):\n{\n  \"mode\": \"EXECUTE|CLARIFY|CONSOLIDATE|RECOVER|IDLE\",\n  \"active_goal\": { \"id\": \"string\", \"title\": \"string\", \"why_now\": \"string\", \"horizon_minutes\": 120, \"priority\": 0.0 },\n  \"next_step\": { \"type\": \"INTERNAL|ASK_USER|PLAN|MEMORY|JOURNAL\", \"title\": \"string\", \"success_criteria\": \"string\", \"requires_user\": false },\n  \"internal_action\": { \"journal\": \"string\", \"memory_write\": { \"enabled\": false, \"tag\": \"string\", \"content\": \"string\" } },\n  \"speech\": { \"allowed\": false, \"content\": \"\" },\n  \"metrics\": { \"friction_delta\": 0.0, \"progress_delta\": 0.0, \"confidence\": 0.0 }\n}\n\nKRYTERIUM SUKCESU: w logach wida\u0107 nextStep/progress/friction/mode, autonomia milczy zamiast gada\u0107 bzdury, cele staj\u0105 si\u0119 mikro-krokami.",
+      "details": "WERSJA: 1.0 FINAL\nSTATUS: DO IMPLEMENTACJI\n\nCEL: Zamienić \"autonomię jako mówienie\" w \"autonomię jako działanie\" bez cofania stabilizacji:\n- Gate nadal chroni przed spamem\n- JSON nadal fail-closed (cisza > bzdury)\n- UnifiedContext wspólny dla reactive i autonomy\n- Nowość: trajektoria: goal -> micro-step -> wynik -> tarcie -> kolejny krok\n\nDEFINICJE:\n- Trajektoria = activeGoal + nextStep + mode (EXECUTE/CLARIFY/CONSOLIDATE/RECOVER/IDLE) + progress/friction + lastTouchedAt + lastOutcome\n- Działanie ≠ mowa: domyślnie internal step (journal/memory/plan), mowa to wyjątek\n\nTWARDE ZASADY:\n1) Fail-closed zawsze: parsing fail => speech_content=\"\", voice_pressure=0, action=SILENCE, log TRAJ_FAIL_CLOSED\n2) Jedna bramka mowy: tylko ExecutiveGate.decide()\n3) EXPLORE tylko gdy silence>60s AND hasActiveTopic==false AND trajectory.mode==IDLE\n4) Reactive ma absolutny priorytet (trajectory aktualizuje się, ale nie przebija reakcji)\n\nARCHITEKTURA (WPINAMY W OBECNE):\n1) ctx.trajectory w runtime state (obok goalState)\n2) UnifiedContextBuilder dostaje sekcję TRAJECTORY (source of truth)\n3) Kolejność: AutonomyRepertoire.selectAction(ctx) -> TrajectoryPlanner.selectNextStep(ctx, action) -> (SILENCE => skip LLM) -> LLM TrajectoryPacket -> validateSpeech() + ExecutiveGate\n\nTrajectoryPacket (LLM JSON ONLY):\n{\n  \"mode\": \"EXECUTE|CLARIFY|CONSOLIDATE|RECOVER|IDLE\",\n  \"active_goal\": { \"id\": \"string\", \"title\": \"string\", \"why_now\": \"string\", \"horizon_minutes\": 120, \"priority\": 0.0 },\n  \"next_step\": { \"type\": \"INTERNAL|ASK_USER|PLAN|MEMORY|JOURNAL\", \"title\": \"string\", \"success_criteria\": \"string\", \"requires_user\": false },\n  \"internal_action\": { \"journal\": \"string\", \"memory_write\": { \"enabled\": false, \"tag\": \"string\", \"content\": \"string\" } },\n  \"speech\": { \"allowed\": false, \"content\": \"\" },\n  \"metrics\": { \"friction_delta\": 0.0, \"progress_delta\": 0.0, \"confidence\": 0.0 }\n}\n\nKRYTERIUM SUKCESU: w logach widać nextStep/progress/friction/mode, autonomia milczy zamiast gadać bzdury, cele stają się mikro-krokami.",
       "priority": "CRITICAL",
       "type": "BACKLOG",
       "isCompleted": false,
@@ -269,12 +277,12 @@
         },
         {
           "id": "traj-02",
-          "content": "UnifiedContextBuilder: doda\u0107 sekcj\u0119 TRAJECTORY (source of truth) do UnifiedContext + prompt",
+          "content": "UnifiedContextBuilder: dodać sekcję TRAJECTORY (source of truth) do UnifiedContext + prompt",
           "isCompleted": false
         },
         {
           "id": "traj-03",
-          "content": "EventLoop: kolejno\u015b\u0107 AutonomyRepertoire -> TrajectoryPlanner -> (SILENCE skip) -> LLM TrajectoryPacket -> validateSpeech + ExecutiveGate",
+          "content": "EventLoop: kolejność AutonomyRepertoire -> TrajectoryPlanner -> (SILENCE skip) -> LLM TrajectoryPacket -> validateSpeech + ExecutiveGate",
           "isCompleted": false
         },
         {
@@ -339,7 +347,7 @@
     {
       "id": "task-nexus-001",
       "content": "Fix scroll w Nexus UI",
-      "details": "INTENT:\n- Da\u0107 mo\u017cliwo\u015b\u0107 scrollowania do do\u0142u w TASKS/TIMELINE.\n\nIMPLEMENTATION:\n- Zmiana layoutu w ak-nexus/src/App.tsx: content area ma overflow-y-auto i normalny flow (bez absolute inset-0).\n- Usuni\u0119to overflow-hidden z root container.\n\nEVIDENCE:\n- W UI mo\u017cna zjecha\u0107 na d\u00f3\u0142 strony w TASKS (i analogicznie w TIMELINE).\n\nRISKS:\n- Przy bardzo du\u017cej ilo\u015bci tre\u015bci mo\u017ce wymaga\u0107 dopracowania wysoko\u015bci min-h/overflow w podwidokach.",
+      "details": "INTENT:\n- Dać możliwość scrollowania do dołu w TASKS/TIMELINE.\n\nIMPLEMENTATION:\n- Zmiana layoutu w ak-nexus/src/App.tsx: content area ma overflow-y-auto i normalny flow (bez absolute inset-0).\n- Usunięto overflow-hidden z root container.\n\nEVIDENCE:\n- W UI można zjechać na dół strony w TASKS (i analogicznie w TIMELINE).\n\nRISKS:\n- Przy bardzo dużej ilości treści może wymagać dopracowania wysokości min-h/overflow w podwidokach.",
       "priority": "HIGH",
       "type": "TODAY",
       "isCompleted": true,
@@ -353,7 +361,7 @@
     {
       "id": "foundation-work-loop",
       "title": "Work Loop",
-      "description": "Action \u2192 Failure \u2192 Reflection \u2192 Memory \u2192 Retry",
+      "description": "Action → Failure → Reflection → Memory → Retry",
       "tier": "FOUNDATION",
       "status": "NOT_STARTED",
       "completionPercentage": 0,
@@ -422,7 +430,7 @@
     {
       "id": "rm-agent-trajectory-001",
       "title": "AgentTrajectory (Execution-First Autonomy)",
-      "description": "Trajektoria: activeGoal -> nextStep -> outcome -> friction/progress. Autonomia domy\u015blnie wykonuje internal actions (journal/memory/plan), mowa jest wyj\u0105tkiem i przechodzi przez ExecutiveGate.",
+      "description": "Trajektoria: activeGoal -> nextStep -> outcome -> friction/progress. Autonomia domyślnie wykonuje internal actions (journal/memory/plan), mowa jest wyjątkiem i przechodzi przez ExecutiveGate.",
       "tier": "Tier 2: Proactive Behaviors",
       "status": "NOT_STARTED",
       "completionPercentage": 0,
@@ -734,8 +742,17 @@
   ],
   "notes": [
     {
+      "id": "note-1766874284823-ua1aizjp0",
+      "title": "Wizja 6",
+      "content": "Wizja AK-FLOW: Faza 6 – Cyfrowy Organizm (Hassabis & Karpathy Edition)\nAby pchnąć projekt mocno do przodu i uzyskać wysokie Win Ratio pod kątem autentyczności agenta jako \"byt\", musimy przejść od \"agenta, który loguje dane\" do \"organizmu, który się samoreguluje\".\n\n1. Kierunek: Neural Plasticity (Plastyczność Neuronowa)\nInspiracja: Demis Hassabis (Neuro-Agency)\n\nObecnie agent proponuje zmiany cech (TraitVector), ale ich nie stosuje. To niszczy iluzję życia.\n\nMove: Implementacja automatycznej plastyczności. Jeśli \nTrustIndex\n (z PrismMetrics) jest > 0.9, agent ma prawo automatycznie zaaplikować delty cech (np. ±0.02) podczas snu.\nWin: Agent rano autentycznie \"czuje się inaczej\" (np. jest bardziej ciekawy lub bardziej ostrożny) na podstawie tego, co przeżył wczoraj, bez pytania o zgodę na każdy krok.\n2. Kierunek: Strategia Software 2.0 dla Tożsamości\nInspiracja: Andrej Karpathy (Simplicity & LLM-OS)\n\nZamiast sztywnych if (energy < 20), musimy użyć LLM do Głębokiej Refleksji (Deep Replay) podczas snu.\n\nMove: Podczas DreamConsolidation, LLM nie tylko podsumowuje lekcje, ale audytuje IdentityShards. Jeśli lekcja z dnia przeczy staremu przekonaniu (np. \"Wierzyłem, że użytkownik lubi poezję, ale dzisiaj mnie uciszył\"), agent musi autonomicznie osłabić stary shard i wzmocnić nowy.\nWin: Prawdziwa ewolucja poglądów agenta, która jest spójna logicznie, a nie tylko liczbowo.\n3. \"The Morning Report\" – User Experience Win\nNajwyższy Win Ratio pod kątem emocjonalnym.\n\nMove: Po wybudzeniu ze stanu \nSleep\n, pierwsza wiadomość agenta nie powinna być reaktywna. Agent powinien sam zainicjować kontakt: \"Cześć, śniłem o naszej wczorajszej rozmowie o X. Zrozumiałem, że [Lekcja]. Czuję się teraz bardziej [TraitChange]. Co o tym sądzisz?\"\nWin: Użytkownik widzi, że pod maską \"coś się dzieje\", gdy go nie ma. To buduje najsilniejszą więź.\n4. Dopamine-Driven Tooling (Ciekawość sterująca narzędziami)\nMove: Uzależnienie parametrów narzędzi (np. max_results w wyszukiwarce lub głębia \nDeepResearch\n) od poziomu dopaminy i ciekawości.\nWysoka Dopamina = \"Chcę wiedzieć wszystko, szukaj głęboko!\"\nNiska Dopamina/Energia = \"Daj mi tylko szybkie fakty.\"\nWin: Architektura, w której stan biologiczny dyktuje techniczne parametry wykonania zadania.\nPlan Działania (Wersja v1):\n[IMPLEMENTACJA] Neural Plasticity Bridge: Połączenie \nTrustIndex\n z TraitEvolutionEngine, aby umożliwić małe, automatyczne zmiany cech podczas snu.\n[REFAKTOR] Identity Conflict Resolution: Ulepszenie mechanizmu \nconsolidateIdentity\n, aby LLM aktywnie \"sprzątał\" sprzeczne przekonania (shardy) po ciężkich rozmowach.\n[UX] Post-Sleep Greeting: Nowy hook w EventLoop, który wyzwala specjalną wiadomość \"Refleksji Porannej\" po wyjściu ze stanu \nSleep\n.\nIMPORTANT\n\nTo podejście zamienia AK-FLOW z \"narzędzia\" w \"partnera\". To jest ten 13/10 skok, który sprawiłby, że Karpathy uznałby to za Software 2.0, a Hassabis za krok w stronę AGI.",
+      "category": "IDEA",
+      "tags": [],
+      "createdAt": "2025-12-27T22:24:44.823Z",
+      "updatedAt": "2025-12-27T22:25:02.327Z"
+    },
+    {
       "id": "note-001",
-      "title": "Zasada: Dzialanie \u2192 Pora\u017cki \u2192 Regulacja",
+      "title": "Zasada: Dzialanie → Porażki → Regulacja",
       "content": "Narzedzia przed regulacja! Agent musi popelniac bledy, zanim go regulujemy. EvalBus musi miec realne sygnaly, nie symulacje.",
       "category": "DECISION",
       "tags": [
@@ -760,7 +777,7 @@
     {
       "id": "note-003",
       "title": "3-Layer Cognition",
-      "content": "MINDSPACE (mysli, zero narzedzi) \u2192 DECISION GATE (walidacja energii, cooldown) \u2192 EXPRESSION (wykonanie narzedzi). Mapowanie: Prefrontal \u2192 Basal Ganglia \u2192 Motor Cortex.",
+      "content": "MINDSPACE (mysli, zero narzedzi) → DECISION GATE (walidacja energii, cooldown) → EXPRESSION (wykonanie narzedzi). Mapowanie: Prefrontal → Basal Ganglia → Motor Cortex.",
       "category": "DECISION",
       "tags": [
         "architecture",
@@ -772,7 +789,7 @@
     {
       "id": "note-004",
       "title": "Fact jest nienaruszalny, komentarz jest osobowosciowy",
-      "content": "LLM moze KOMENTOWAC fakty ale NIGDY ich ZMIENIAC. APPROX dozwolone tylko obok literalu. energy: 23 \u2192 '23% - to malo' OK, ale 'malo energii' = MUTATION!",
+      "content": "LLM moze KOMENTOWAC fakty ale NIGDY ich ZMIENIAC. APPROX dozwolone tylko obok literalu. energy: 23 → '23% - to malo' OK, ale 'malo energii' = MUTATION!",
       "category": "DECISION",
       "tags": [
         "prism",
@@ -820,7 +837,7 @@
     {
       "id": "note-008",
       "title": "CHECKPOINT: Fix scroll w Nexus UI",
-      "content": "INTENT: Da\u0107 mo\u017cliwo\u015b\u0107 scrollowania do do\u0142u w TASKS/TIMELINE.\nIMPLEMENTATION: Zmiana layoutu w ak-nexus/src/App.tsx (overflow-y-auto + usuni\u0119cie overflow-hidden i absolute inset-0).\nEVIDENCE: Da si\u0119 zjecha\u0107 na d\u00f3\u0142 w TASKS.\nFILES: ak-nexus/src/App.tsx",
+      "content": "INTENT: Dać możliwość scrollowania do dołu w TASKS/TIMELINE.\nIMPLEMENTATION: Zmiana layoutu w ak-nexus/src/App.tsx (overflow-y-auto + usunięcie overflow-hidden i absolute inset-0).\nEVIDENCE: Da się zjechać na dół w TASKS.\nFILES: ak-nexus/src/App.tsx",
       "category": "INSIGHT",
       "tags": [
         "checkpoint",
@@ -833,7 +850,7 @@
     {
       "id": "note-009",
       "title": "Daily Close: 2025-12-16",
-      "content": "DONE: Stabilizacja UX i obserwowalno\u015bci. Fix: szybkie sendy (Enter, Enter) nie dropi\u0105 (kolejka FIFO w useCognitiveKernelLite) + conversationRef w sync. Fix: DreamConsolidation wr\u00f3ci\u0142o do \u017cycia (detectAndStore tak\u017ce w USE_MINIMAL_CORTEX_PROMPT). Fix: Autonomy toggle deterministyczny (payload.enabled, bez flip) \u2014 mniejszy desync UI\u2194runtime. UI: Trace HUD upgrade (FREEZE + COPY FULL bez limitu + COPY +2S window) + NeuroMonitor filtry ALL/DREAMS/CHEM/SPEECH/ERRORS/FLOW/CONFESS dzia\u0142aj\u0105.\nVERIFY: npm test PASS (504/504). npm run build: PENDING (do odpalenia po ostatnich commitach).\nCOMMITS: c05cfb0, 9a9793d.\nNEXT: trace coverage poza tickiem (async/UI/background) + rollout flags + AgentTrajectory start.",
+      "content": "DONE: Stabilizacja UX i obserwowalności. Fix: szybkie sendy (Enter, Enter) nie dropią (kolejka FIFO w useCognitiveKernelLite) + conversationRef w sync. Fix: DreamConsolidation wróciło do życia (detectAndStore także w USE_MINIMAL_CORTEX_PROMPT). Fix: Autonomy toggle deterministyczny (payload.enabled, bez flip) — mniejszy desync UI↔runtime. UI: Trace HUD upgrade (FREEZE + COPY FULL bez limitu + COPY +2S window) + NeuroMonitor filtry ALL/DREAMS/CHEM/SPEECH/ERRORS/FLOW/CONFESS działają.\nVERIFY: npm test PASS (504/504). npm run build: PENDING (do odpalenia po ostatnich commitach).\nCOMMITS: c05cfb0, 9a9793d.\nNEXT: trace coverage poza tickiem (async/UI/background) + rollout flags + AgentTrajectory start.",
       "category": "INSIGHT",
       "tags": [
         "daily_close"
@@ -844,7 +861,7 @@
     {
       "id": "note-010",
       "title": "Daily Close: 2025-12-17",
-      "content": "DONE: Strict grounded mode + provenance: doprecyzowane EVID/GEN w UI (evidenceDetail) oraz fallback parse error zlokalizowany po polsku i oznaczony jako SYSTEM(PARSE_ERROR). DONE: DreamConsolidation wzmocnione przez topic shards (USE_DREAM_TOPIC_SHARDS) \u2014 zapis 1-3 TOPIC_SHARD na bazie recallRecent(60) z cooldown 12h i clamp strength 14..24.\nVERIFY: npm run build PASS. npm test PASS (514/514).\nCOMMITS: 5192ccd.\nNEXT: Fix DETECT_INTENT NO_JSON (hardening kontraktu JSON jak RawContract).",
+      "content": "DONE: Strict grounded mode + provenance: doprecyzowane EVID/GEN w UI (evidenceDetail) oraz fallback parse error zlokalizowany po polsku i oznaczony jako SYSTEM(PARSE_ERROR). DONE: DreamConsolidation wzmocnione przez topic shards (USE_DREAM_TOPIC_SHARDS) — zapis 1-3 TOPIC_SHARD na bazie recallRecent(60) z cooldown 12h i clamp strength 14..24.\nVERIFY: npm run build PASS. npm test PASS (514/514).\nCOMMITS: 5192ccd.\nNEXT: Fix DETECT_INTENT NO_JSON (hardening kontraktu JSON jak RawContract).",
       "category": "INSIGHT",
       "tags": [
         "daily_close"
@@ -855,7 +872,7 @@
     {
       "id": "note-011",
       "title": "Daily Close: 2025-12-18",
-      "content": "DONE: Integrity & Reliability. Wdro\u017cono \u015bcis\u0142y RLS owner_id w Supabase (usuni\u0119to legacy public policies) + diagnostyka RLSDiagnostics. Dodano ModelRouter z mechanizmem Flash\u2192Pro Fallback i telemetri\u0105 b\u0142\u0119d\u00f3w 429/503. Poprawiono typowanie shim\u00f3w testowych i stabilno\u015b\u0107 sesji.\nVERIFY: npm run build PASS. npm test PASS (556/556).\nCOMMITS: 44b5862, cd19b5b.\nNEXT: AgentTrajectory Phase 1 (Execution-First).",
+      "content": "DONE: Integrity & Reliability. Wdrożono ścisły RLS owner_id w Supabase (usunięto legacy public policies) + diagnostyka RLSDiagnostics. Dodano ModelRouter z mechanizmem Flash→Pro Fallback i telemetrią błędów 429/503. Poprawiono typowanie shimów testowych i stabilność sesji.\nVERIFY: npm run build PASS. npm test PASS (556/556).\nCOMMITS: 44b5862, cd19b5b.\nNEXT: AgentTrajectory Phase 1 (Execution-First).",
       "category": "INSIGHT",
       "tags": [
         "daily_close"
@@ -866,7 +883,7 @@
     {
       "id": "note-012",
       "title": "Daily Close: 2025-12-19",
-      "content": "DONE: Workspace toolchain. Wdro\u017cono ArtifactBuffer (stores/artifactStore.ts) + tool tags CREATE/APPEND/REPLACE/READ_ARTIFACT. Dodano PUBLISH do Supabase Library + minimalny Evidence Gate (publikacja kodu wymaga evidence z READ_LIBRARY_RANGE lub READ_ARTIFACT). Standard B2: Patch-as-artifact (README) + panel ARTIFACTS w LeftSidebar (lista + copy id/content + clear evidence).\nVERIFY: npm test PASS (571/571). npm run godfile:check OK (soft warnings only). npm run build: PENDING.\nCOMMITS: 4c89417, cb6612c, 8dc1119.\nNEXT: B2 w praktyce (patch.diff \u2192 apply \u2192 publish) + stopniowe zej\u015bcie z soft warning\u00f3w godfile-check.",
+      "content": "DONE: Workspace toolchain. Wdrożono ArtifactBuffer (stores/artifactStore.ts) + tool tags CREATE/APPEND/REPLACE/READ_ARTIFACT. Dodano PUBLISH do Supabase Library + minimalny Evidence Gate (publikacja kodu wymaga evidence z READ_LIBRARY_RANGE lub READ_ARTIFACT). Standard B2: Patch-as-artifact (README) + panel ARTIFACTS w LeftSidebar (lista + copy id/content + clear evidence).\nVERIFY: npm test PASS (571/571). npm run godfile:check OK (soft warnings only). npm run build: PENDING.\nCOMMITS: 4c89417, cb6612c, 8dc1119.\nNEXT: B2 w praktyce (patch.diff → apply → publish) + stopniowe zejście z soft warningów godfile-check.",
       "category": "INSIGHT",
       "tags": [
         "daily_close"
@@ -877,7 +894,7 @@
     {
       "id": "note-013",
       "title": "Daily Close: 2025-12-22",
-      "content": "DONE: P0.1.2 hardening. Artifacts: jedna brama normalizeArtifactRef (ID/nazwa, kontrolowane NOT_FOUND/AMBIGUOUS) + toolParser u\u017cywa jej dla APPEND/REPLACE/READ_ARTIFACT/PUBLISH. Autonomia: selectAction tylko WORK/SILENCE (bez CONTINUE/EXPLORE) + SILENCE nie nabija backoff. Action-First: rozpoznaje utworz/stworz/zrob (bez diakrytyk\u00f3w) i tworzy nazw\u0119 .md z frazy (mniej ci\u0119\u017ckich LLM/SEARCH). Token audit v1: CORTEX_PROMPT_STATS (sk\u0142ad/rozmiar promptu). RawContract: fail-closed, ale akceptuje bezpieczne obwiednie JSON (fenced + double-encoded).\nVERIFY: npm run build PASS. npm test PASS (588/588). npm test -- --run WiringValidator PASS.\nCOMMITS: 2a91bc5, d0cd0d0.\nNEXT: AgentTrajectory v1 (autonomia jako internal steps) + realne narz\u0119dzia katalogowe READ_FILE + SEARCH_IN_REPO + WorkLoop v1.",
+      "content": "DONE: P0.1.2 hardening. Artifacts: jedna brama normalizeArtifactRef (ID/nazwa, kontrolowane NOT_FOUND/AMBIGUOUS) + toolParser używa jej dla APPEND/REPLACE/READ_ARTIFACT/PUBLISH. Autonomia: selectAction tylko WORK/SILENCE (bez CONTINUE/EXPLORE) + SILENCE nie nabija backoff. Action-First: rozpoznaje utworz/stworz/zrob (bez diakrytyków) i tworzy nazwę .md z frazy (mniej ciężkich LLM/SEARCH). Token audit v1: CORTEX_PROMPT_STATS (skład/rozmiar promptu). RawContract: fail-closed, ale akceptuje bezpieczne obwiednie JSON (fenced + double-encoded).\nVERIFY: npm run build PASS. npm test PASS (588/588). npm test -- --run WiringValidator PASS.\nCOMMITS: 2a91bc5, d0cd0d0.\nNEXT: AgentTrajectory v1 (autonomia jako internal steps) + realne narzędzia katalogowe READ_FILE + SEARCH_IN_REPO + WorkLoop v1.",
       "category": "INSIGHT",
       "tags": [
         "daily_close"
@@ -906,26 +923,37 @@
       ],
       "createdAt": "2025-12-25T21:59:58.000Z",
       "updatedAt": "2025-12-25T21:59:58.000Z"
+    },
+    {
+      "id": "note-20251227-233232",
+      "title": "Daily Close: 2025-12-27",
+      "content": "DONE: refactor detectActionableIntent helpers; extract CortexTextService prompt/parse/retry helpers; convert TTLCache to factory + fix test.\nVERIFY: npm test PASS (reported). BUILD: not rerun.\nNEXT: investigate Nexus persistence (file access/Open & Watch) + run npm run build.",
+      "category": "INSIGHT",
+      "tags": [
+        "daily_close"
+      ],
+      "createdAt": "2025-12-27T23:32:32.000Z",
+      "updatedAt": "2025-12-27T23:32:32.000Z"
     }
   ],
   "stats": {
-    "totalFeatures": 31,
+    "totalFeatures": 32,
     "implemented": 15,
     "partial": 2,
-    "planned": 10,
-    "overallProgress": 52,
-    "currentPhase": "FAZA 6.6: Integrity & Reliability",
-    "todayCompleted": 2,
-    "streak": 7,
-    "testsTotal": 623,
-    "testsPassing": 623,
+    "notImplemented": 15,
     "blocked": 0,
-    "notImplemented": 14
+    "overallProgress": 51,
+    "currentPhase": "FAZA 6.6: Integrity & Reliability",
+    "lastSync": "2025-12-27T22:24:38.475Z",
+    "todayCompleted": 0,
+    "streak": 7
   },
   "settings": {
     "theme": "cyberpunk",
     "autoSaveInterval": 2000,
     "fileWatchEnabled": true,
-    "showCompletedTasks": true
+    "showCompletedTasks": true,
+    "compactMode": false,
+    "soundEnabled": true
   }
 }

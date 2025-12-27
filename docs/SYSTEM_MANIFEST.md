@@ -1,6 +1,6 @@
 # AK-FLOW: Cognitive Agent Architecture Manifest
-**System Version:** 6.10 (MemoryUnited v1)  
-**Last Updated:** 2025-12-25  
+**System Version:** 6.10.1 (MemoryUnited v1)  
+**Last Updated:** 2025-12-27  
 **Architecture Type:** Active Inference (Friston) + Global Workspace Theory + Multi-Modal RAG + **Stateless Inference Engine**  
 **Status:** Autonomous / Stateful / Modular / Self-Aware / Goal-Driven / Personality-Driven / **Emergent Identity**
 
@@ -28,6 +28,20 @@ We embrace the artificial nature as a feature, not a bug.
 - **Measurable Soul:** Emotions and "vibes" are allowed, but they must map to system metrics (Energy, Dopamine), not just literary roleplay.
 
 ---
+
+## What's New in V6.10.1 (2025-12-27)
+
+### Maintenance: Intent Helpers + CortexTextService helpers + TTLCache factory
+
+**Goal:** improve maintainability without changing behavior.
+
+**Key changes:**
+- ReactiveStep Action-First intent detection split into focused helpers (file intent orchestration).
+- CortexTextService prompt/parse/retry helpers extracted for generateResponse and autonomy v2.
+- TTLCache converted to a factory, unit test updated.
+
+**Tests:**
+`npm test` PASS (reported); `npm run build` not rerun.
 
 ## What's New in V6.10 (2025-12-25)
 

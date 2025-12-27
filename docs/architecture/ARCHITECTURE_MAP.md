@@ -1,6 +1,6 @@
 # 🧠 AK-FLOW Architecture Map
 
-> **Wersja:** 6.10 (2025-12-25)
+> **Wersja:** 6.10.1 (2025-12-27)
 > **Cel:** Prosta mapa jak działa agent i jaki ma flow
 
 ## Archive policy
@@ -9,6 +9,15 @@
 Ten katalog jest wykluczony z kompilacji TypeScript i służy wyłącznie jako referencja do poprzednich iteracji.
 
 ---
+
+## FAZA 6.10.1: Maintenance Refactors (2025-12-27)
+
+**Cel:** poprawa utrzymania bez zmiany zachowania.
+
+**Mechanika:**
+- Action-First intent detection rozbite na helpery (ReactiveStep file intents).
+- CortexTextService: wydzielone helpery prompt/parse/retry.
+- TTLCache jako factory; dostosowanie testow.
 
 ## FAZA 6.10: MemoryUnited v1 (Retrieval + Compression) (2025-12-25)
 
