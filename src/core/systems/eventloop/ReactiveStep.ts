@@ -93,132 +93,125 @@ function splitTargetAndPayload(input: string): { target: string; payload: string
   };
 }
 
-function detectActionableIntent(input: string): ActionFirstResult {
+type IntentInput = {
+  raw: string;
+  trimmed: string;
+  normalized: string;
+};
+
+const CONTENT_KEYWORD =
+  '(?:trescia|tre(?:s|\\u015b)ci(?:a|\\u0105)|tekstem|zawartoscia|zawarto(?:s|\\u015b)ci(?:a|\\u0105))';
+const CONTENT_COLON_KEYWORD = '(?:tresc|tre(?:s|\\u015b)(?:c|\\u0107))';
+const CREATE_NO_NAME_COLON_REGEX = new RegExp(
+  `(?:stworz|utworz|zapisz)\\s+(?:plik\\s+)?${CONTENT_COLON_KEYWORD}\\s*:\\s*([\\s\\S]+)`,
+  'i'
+);
+const CREATE_WITH_NAME_COLON_REGEX = new RegExp(
+  `(?:stworz|utworz|zapisz)\\s+(?:plik\\s+)?(?:o\\s+nazwie\\s+)?(.+?)\\s+${CONTENT_COLON_KEYWORD}\\s*:\\s*([\\s\\S]+)`,
+  'i'
+);
+const CREATE_NO_NAME_REGEX = new RegExp(
+  `(?:stworz|utworz|zapisz)\\s+(?:plik\\s+)?z\\s+${CONTENT_KEYWORD}\\s+([\\s\\S]+)`,
+  'i'
+);
+const CREATE_WITH_NAME_REGEX = new RegExp(
+  `(?:stworz|utworz|zapisz)\\s+(?:plik\\s+)?(?:o\\s+nazwie\\s+)?(.+?)\\s+z\\s+${CONTENT_KEYWORD}\\s+([\\s\\S]+)`,
+  'i'
+);
+const CREATE_SIMPLE_REGEX = /(?:stworz|utworz|zapisz)\s+(?:plik\s+)?(.+)/i;
+const EDIT_APPEND_REGEX =
+  /(?:edytuj|eydtuj|modyfikuj)\s+(?:plik\s+)?([^\s:]+)\s+(?:dodaj|dopisz)\s+(?:tresc|tekst)?\s*:?\s*([\s\S]+)/i;
+const APPEND_REGEX = /(?:dopisz|dodaj)\s+(?:do)\s+(.+)/i;
+const APPEND_INLINE_REGEX = /(?:dopisz|dodaj)\s+(?:tresc|tekst)?\s*do\s+([^\s:]+)\s+([\s\S]+)/i;
+const EDIT_REPLACE_REGEX = /(?:edytuj|eydtuj|modyfikuj)\s+(?:plik\s+)?([^\s:]+)\s*:\s*([\s\S]+)/i;
+const REPLACE_REGEX = /(?:zamien|zastap)\s+(?:w|w\s+pliku)\s+(.+)/i;
+const READ_REGEX = /(?:pokaz|otworz)\s+([^\s,]+)/i;
+
+function normalizeIntentInput(input: string): IntentInput {
   const raw = String(input || '');
   const trimmed = raw.trim();
   const normalized = trimmed
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
     .toLowerCase();
+  return { raw, trimmed, normalized };
+}
 
-  if (
-    raw.includes('?') ||
-    normalized.startsWith('czy ') ||
-    normalized.includes('umiesz') ||
-    normalized.includes('mozesz') ||
-    normalized.includes('potrafisz')
-  ) {
-    return { handled: false };
-  }
-
-  const slugify = (s: string) => {
-    const raw = String(s || '')
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '')
-      .toLowerCase()
-      .trim()
-      .replace(/^o\s+/, '')
-      .replace(/[^a-z0-9]+/g, '-');
-    const collapsed = raw.replace(/-+/g, '-').replace(/^-|-$/g, '');
-    return collapsed.slice(0, 48);
-  };
-
-  const deriveCreateTarget = (rawTarget: string, opts?: { preferPhrase?: boolean }) => {
-    const t = String(rawTarget || '').trim();
-    if (!t) return 'artifact.md';
-    const preferPhrase = Boolean(opts?.preferPhrase);
-    const first = t.split(/\s+/)[0];
-    const looksLikeFilename = !preferPhrase && (first.includes('.') || first.length >= 3);
-    if (looksLikeFilename && !first.includes('/') && !first.includes('\\')) {
-      if (first.toLowerCase().endsWith('.md')) return first;
-      if (first.includes('.')) return first;
-      return `${first}.md`;
-    }
-    const slug = slugify(t);
-    return `${slug || 'artifact'}.md`;
-  };
-
-  const contentKeyword = '(?:trescia|tre(?:s|\\u015b)ci(?:a|\\u0105)|tekstem|zawartoscia|zawarto(?:s|\\u015b)ci(?:a|\\u0105))';
-  const contentColonKeyword = '(?:tresc|tre(?:s|\\u015b)(?:c|\\u0107))';
-  const createNoNameColonRegex = new RegExp(
-    `(?:stworz|utworz|zapisz)\\s+(?:plik\\s+)?${contentColonKeyword}\\s*:\\s*([\\s\\S]+)`,
-    'i'
+function shouldIgnoreActionIntent(input: IntentInput): boolean {
+  return (
+    input.raw.includes('?') ||
+    input.normalized.startsWith('czy ') ||
+    input.normalized.includes('umiesz') ||
+    input.normalized.includes('mozesz') ||
+    input.normalized.includes('potrafisz')
   );
-  const createWithNameColonRegex = new RegExp(
-    `(?:stworz|utworz|zapisz)\\s+(?:plik\\s+)?(?:o\\s+nazwie\\s+)?(.+?)\\s+${contentColonKeyword}\\s*:\\s*([\\s\\S]+)`,
-    'i'
-  );
-  const createNoNameRegex = new RegExp(
-    `(?:stworz|utworz|zapisz)\\s+(?:plik\\s+)?z\\s+${contentKeyword}\\s+([\\s\\S]+)`,
-    'i'
-  );
-  const createWithNameRegex = new RegExp(
-    `(?:stworz|utworz|zapisz)\\s+(?:plik\\s+)?(?:o\\s+nazwie\\s+)?(.+?)\\s+z\\s+${contentKeyword}\\s+([\\s\\S]+)`,
-    'i'
-  );
+}
 
-  const createNoNameColonMatch = raw.match(createNoNameColonRegex);
-  if (createNoNameColonMatch) {
-    const payload = String(createNoNameColonMatch[1] || '').trim();
-    if (payload) {
-      const target = deriveCreateTarget(payload, { preferPhrase: true });
-      return { handled: true, action: 'CREATE', target, payload };
-    }
+function slugifyTarget(input: string): string {
+  const raw = String(input || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim()
+    .replace(/^o\s+/, '')
+    .replace(/[^a-z0-9]+/g, '-');
+  const collapsed = raw.replace(/-+/g, '-').replace(/^-|-$/g, '');
+  return collapsed.slice(0, 48);
+}
+
+function deriveCreateTarget(rawTarget: string, opts?: { preferPhrase?: boolean }): string {
+  const t = String(rawTarget || '').trim();
+  if (!t) return 'artifact.md';
+  const preferPhrase = Boolean(opts?.preferPhrase);
+  const first = t.split(/\s+/)[0];
+  const looksLikeFilename = !preferPhrase && (first.includes('.') || first.length >= 3);
+  if (looksLikeFilename && !first.includes('/') && !first.includes('\\')) {
+    if (first.toLowerCase().endsWith('.md')) return first;
+    if (first.includes('.')) return first;
+    return `${first}.md`;
+  }
+  const slug = slugifyTarget(t);
+  return `${slug || 'artifact'}.md`;
+}
+
+function detectCreateIntent(ctx: IntentInput): ActionFirstResult | null {
+  const candidates = [
+    { match: ctx.raw.match(CREATE_NO_NAME_COLON_REGEX), payloadIndex: 1, preferPhrase: true },
+    { match: ctx.raw.match(CREATE_WITH_NAME_COLON_REGEX), nameIndex: 1, payloadIndex: 2 },
+    { match: ctx.raw.match(CREATE_NO_NAME_REGEX), payloadIndex: 1, preferPhrase: true },
+    { match: ctx.raw.match(CREATE_WITH_NAME_REGEX), nameIndex: 1, payloadIndex: 2 }
+  ];
+
+  for (const candidate of candidates) {
+    if (!candidate.match) continue;
+    const payload = String(candidate.match[candidate.payloadIndex] || '').trim();
+    if (!payload) continue;
+    const name = candidate.nameIndex ? String(candidate.match[candidate.nameIndex] || '').trim() : '';
+    const preferPhrase = candidate.preferPhrase ?? !name;
+    const target = deriveCreateTarget(name || payload, { preferPhrase });
+    return { handled: true, action: 'CREATE', target, payload };
   }
 
-  const createWithNameColonMatch = raw.match(createWithNameColonRegex);
-  if (createWithNameColonMatch) {
-    const name = String(createWithNameColonMatch[1] || '').trim();
-    const payload = String(createWithNameColonMatch[2] || '').trim();
-    if (payload) {
-      const target = deriveCreateTarget(name || payload, { preferPhrase: !name });
-      return { handled: true, action: 'CREATE', target, payload };
-    }
-  }
+  const createMatch = ctx.normalized.match(CREATE_SIMPLE_REGEX);
+  if (createMatch) return { handled: true, action: 'CREATE', target: deriveCreateTarget(createMatch[1]) };
+  return null;
+}
 
-  const createNoNameMatch = raw.match(createNoNameRegex);
-  if (createNoNameMatch) {
-    const payload = String(createNoNameMatch[1] || '').trim();
-    if (payload) {
-      const target = deriveCreateTarget(payload, { preferPhrase: true });
-      return { handled: true, action: 'CREATE', target, payload };
-    }
-  }
-
-  const createWithNameMatch = raw.match(createWithNameRegex);
-  if (createWithNameMatch) {
-    const name = String(createWithNameMatch[1] || '').trim();
-    const payload = String(createWithNameMatch[2] || '').trim();
-    if (payload) {
-      const target = deriveCreateTarget(name || payload, { preferPhrase: !name });
-      return { handled: true, action: 'CREATE', target, payload };
-    }
-  }
-  
-  // CREATE patterns: "stworz/utworz/zapisz plik X"
-  const createMatch = normalized.match(/(?:stworz|utworz|zapisz)\s+(?:plik\s+)?(.+)/i);
-  if (createMatch) {
-    return { handled: true, action: 'CREATE', target: deriveCreateTarget(createMatch[1]) };
-  }
-
-  const editAppendMatch = raw.match(
-    /(?:edytuj|eydtuj|modyfikuj)\s+(?:plik\s+)?([^\s:]+)\s+(?:dodaj|dopisz)\s+(?:tresc|tekst)?\s*:?\s*([\s\S]+)/i
-  );
+function detectAppendIntent(ctx: IntentInput): ActionFirstResult | null {
+  const editAppendMatch = ctx.raw.match(EDIT_APPEND_REGEX);
   if (editAppendMatch) {
     const target = String(editAppendMatch[1] || '').trim();
     const payload = String(editAppendMatch[2] || '').trim();
     if (target && payload) return { handled: true, action: 'APPEND', target, payload };
   }
-  
-  // APPEND patterns: require verb + target + payload (after ':')
-  // Examples: "dopisz do note.md: ...", "dodaj do note: ..."
-  const appendMatch = normalized.match(/(?:dopisz|dodaj)\s+(?:do)\s+(.+)/i);
+
+  const appendMatch = ctx.normalized.match(APPEND_REGEX);
   if (appendMatch) {
     const { target, payload } = splitTargetAndPayload(String(appendMatch[1] || ''));
     if (target && payload) return { handled: true, action: 'APPEND', target, payload };
   }
 
-  const appendInlineMatch = raw.match(/(?:dopisz|dodaj)\s+(?:tresc|tekst)?\s*do\s+([^\s:]+)\s+([\s\S]+)/i);
+  const appendInlineMatch = ctx.raw.match(APPEND_INLINE_REGEX);
   if (appendInlineMatch) {
     const target = String(appendInlineMatch[1] || '').trim();
     const payload = String(appendInlineMatch[2] || '').trim();
@@ -227,28 +220,58 @@ function detectActionableIntent(input: string): ActionFirstResult {
     }
   }
 
-  const editReplaceMatch = raw.match(/(?:edytuj|eydtuj|modyfikuj)\s+(?:plik\s+)?([^\s:]+)\s*:\s*([\s\S]+)/i);
+  return null;
+}
+
+function detectReplaceIntent(ctx: IntentInput): ActionFirstResult | null {
+  const editReplaceMatch = ctx.raw.match(EDIT_REPLACE_REGEX);
   if (editReplaceMatch) {
     const target = String(editReplaceMatch[1] || '').trim();
     const payload = String(editReplaceMatch[2] || '').trim();
     if (target && payload) return { handled: true, action: 'REPLACE', target, payload };
   }
 
-  // REPLACE patterns: require verb + target; payload optional.
-  // If payload is present after ':', we'll use it as new full content.
-  const replaceMatch = normalized.match(/(?:zamien|zastap)\s+(?:w|w\s+pliku)\s+(.+)/i);
+  const replaceMatch = ctx.normalized.match(REPLACE_REGEX);
   if (replaceMatch) {
     const { target, payload } = splitTargetAndPayload(String(replaceMatch[1] || ''));
     if (target) return { handled: true, action: 'REPLACE', target, payload };
   }
-  
-  // READ patterns: "pokaz X", "otworz X"
-  const readMatch = normalized.match(/(?:pokaz|otworz)\s+([^\s,]+)/i);
-  if (readMatch) {
-    return { handled: true, action: 'READ', target: readMatch[1] };
-  }
-  
-  return { handled: false };
+
+  return null;
+}
+
+function detectReadIntent(ctx: IntentInput): ActionFirstResult | null {
+  const readMatch = ctx.normalized.match(READ_REGEX);
+  if (readMatch) return { handled: true, action: 'READ', target: readMatch[1] };
+  return null;
+}
+
+function detectFileIntent(text: string): ActionFirstResult | null {
+  const ctx = normalizeIntentInput(text);
+  if (shouldIgnoreActionIntent(ctx)) return { handled: false };
+  return detectCreateIntent(ctx) ?? detectAppendIntent(ctx) ?? detectReplaceIntent(ctx) ?? detectReadIntent(ctx);
+}
+
+function detectSearchIntent(_text: string): ActionFirstResult | null {
+  return null;
+}
+
+function detectVisualizeIntent(_text: string): ActionFirstResult | null {
+  return null;
+}
+
+function detectResearchIntent(_text: string): ActionFirstResult | null {
+  return null;
+}
+
+function detectActionableIntent(input: string): ActionFirstResult {
+  return (
+    detectFileIntent(input) ??
+    detectSearchIntent(input) ??
+    detectVisualizeIntent(input) ??
+    detectResearchIntent(input) ??
+    { handled: false }
+  );
 }
 
 export function detectActionableIntentForTesting(input: string): ActionFirstResult {
