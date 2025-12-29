@@ -272,6 +272,7 @@ export const createProcessOutputForTools = (deps: ToolParserDeps) => {
             beforeContent: before,
             afterContent: after
           });
+          store.markComplete(id, true);
           return;
         }
 
@@ -291,6 +292,7 @@ export const createProcessOutputForTools = (deps: ToolParserDeps) => {
           beforeContent: before,
           afterContent: after
         });
+        store.markComplete(id, true);
       } catch (e: any) {
         emitToolError({ tool, intentId, payload: { arg: params.header }, error: e?.message || String(e) });
       }

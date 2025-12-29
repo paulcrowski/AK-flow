@@ -466,6 +466,7 @@ export async function runReactiveStep(input: {
                 beforeContent: before,
                 afterContent: updated?.content ?? ''
               });
+              store.markComplete(resolved.id, true);
               publishReactiveSpeech({
                 ctx,
                 trace,
@@ -513,6 +514,7 @@ export async function runReactiveStep(input: {
               beforeContent: before,
               afterContent: updated?.content ?? ''
             });
+            store.markComplete(resolved.id, true);
             publishReactiveSpeech({
               ctx,
               trace,
