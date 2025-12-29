@@ -34,6 +34,7 @@ import {
   ASSESS_INPUT_RESPONSE_SCHEMA,
   AUTONOMOUS_VOLITION_RESPONSE_SCHEMA,
   AUTONOMOUS_VOLITION_V2_RESPONSE_SCHEMA,
+  AUTONOMOUS_VOLITION_V2_MICRO_RESPONSE_SCHEMA,
   GENERATE_RESPONSE_RESPONSE_SCHEMA,
   STRUCTURED_DIALOGUE_RESPONSE_SCHEMA
 } from './responseSchemas';
@@ -65,6 +66,17 @@ type AutonomyV2Output = {
   internal_monologue: string;
   voice_pressure: number;
   speech_content: string;
+};
+
+type AutonomyV2ParseFailure = {
+  reason?: string;
+  details?: string;
+};
+
+type AutonomyV2ParseResult = {
+  ok: boolean;
+  output: AutonomyV2Output;
+  failure?: AutonomyV2ParseFailure;
 };
 
 export function createCortexTextService(ai: GoogleGenAI) {
@@ -210,7 +222,18 @@ export function createCortexTextService(ai: GoogleGenAI) {
       : UnifiedContextBuilder.formatAsPrompt(ctx, 'autonomous');
   };
 
-  const parseAutonomyV2Response = (rawText: string | undefined): AutonomyV2Output => {
+  const buildAutonomyV2MicroPrompt = (basePrompt: string): string => {
+    return [
+      basePrompt,
+      '',
+      'Return ONLY minimal JSON.',
+      'Keys: speech_content (string), voice_pressure (number), internal_monologue (optional).',
+      'Keep speech_content under 280 chars and internal_monologue under 120 chars.',
+      'No markdown, no extra text.'
+    ].join('\n');
+  };
+
+  const parseAutonomyV2Response = (rawText: string | undefined): AutonomyV2ParseResult => {
     if (isMainFeatureEnabled('ONE_MIND_ENABLED')) {
       const contracted = applyAutonomyV2RawContract(rawText, {
         maxRawLen: 20000,
@@ -219,37 +242,28 @@ export function createCortexTextService(ai: GoogleGenAI) {
       });
 
       if (!contracted.ok) {
-        const traceId = getCurrentTraceId();
-        if (traceId) p0MetricAdd(traceId, { parseFailCount: 1 });
-        eventBus.publish({
-          id: generateUUID(),
-          traceId: traceId || undefined,
-          timestamp: Date.now(),
-          source: AgentType.CORTEX_FLOW,
-          type: PacketType.SYSTEM_ALERT,
-          payload: {
-            event: 'P0_PARSE_FAIL',
-            stage: 'AUTONOMY_V2',
-            reason: contracted.reason,
-            details: contracted.details,
-            raw_len: String(rawText || '').length,
-            raw_preview: String(rawText || '').slice(0, 120),
-            model: 'gemini-2.5-flash'
-          },
-          priority: 0.7
-        });
         return {
-          internal_monologue: `[RAW_CONTRACT_FAIL] ${contracted.reason || 'UNKNOWN'}`,
-          voice_pressure: 0,
-          speech_content: ''
+          ok: false,
+          output: {
+            internal_monologue: `[RAW_CONTRACT_FAIL] ${contracted.reason || 'UNKNOWN'}`,
+            voice_pressure: 0,
+            speech_content: ''
+          },
+          failure: {
+            reason: contracted.reason,
+            details: contracted.details
+          }
         };
       }
 
       const v = contracted.value;
       return {
-        internal_monologue: v.internal_monologue || 'Thinking... ',
-        voice_pressure: clamp01(v.voice_pressure ?? 0),
-        speech_content: (v.speech_content || '').slice(0, 1200)
+        ok: true,
+        output: {
+          internal_monologue: v.internal_monologue || 'Thinking... ',
+          voice_pressure: clamp01(v.voice_pressure ?? 0),
+          speech_content: (v.speech_content || '').slice(0, 1200)
+        }
       };
     }
 
@@ -261,9 +275,16 @@ export function createCortexTextService(ai: GoogleGenAI) {
 
     if (!parseResult.success || !parseResult.data) {
       return {
-        internal_monologue: `[PARSE_FAIL] ${parseResult.error}`,
-        voice_pressure: 0,
-        speech_content: ''
+        ok: false,
+        output: {
+          internal_monologue: `[PARSE_FAIL] ${parseResult.error}`,
+          voice_pressure: 0,
+          speech_content: ''
+        },
+        failure: {
+          reason: 'JSON_PARSE_ERROR',
+          details: parseResult.error
+        }
       };
     }
 
@@ -271,31 +292,111 @@ export function createCortexTextService(ai: GoogleGenAI) {
     console.log('AV_V2 PARSED:', result);
 
     return {
-      internal_monologue: result.internal_monologue || 'Thinking...',
-      voice_pressure: result.voice_pressure ?? 0.0,
-      speech_content: (result.speech_content || '').slice(0, 1200)
+      ok: true,
+      output: {
+        internal_monologue: result.internal_monologue || 'Thinking...',
+        voice_pressure: result.voice_pressure ?? 0.0,
+        speech_content: (result.speech_content || '').slice(0, 1200)
+      }
     };
+  };
+
+  const shouldRetryAutonomyV2 = (failure?: AutonomyV2ParseFailure) => {
+    if (!failure) return false;
+    if (failure.reason !== 'JSON_PARSE_ERROR') return false;
+    return String(failure.details || '').includes('NO_BALANCED_JSON_BLOCK');
+  };
+
+  const publishAutonomyV2ParseFail = (params: {
+    failure?: AutonomyV2ParseFailure;
+    rawText?: string;
+    attempt?: 'primary' | 'micro';
+  }) => {
+    const traceId = getCurrentTraceId();
+    if (traceId) p0MetricAdd(traceId, { parseFailCount: 1 });
+    eventBus.publish({
+      id: generateUUID(),
+      traceId: traceId || undefined,
+      timestamp: Date.now(),
+      source: AgentType.CORTEX_FLOW,
+      type: PacketType.SYSTEM_ALERT,
+      payload: {
+        event: 'P0_PARSE_FAIL',
+        stage: params.attempt === 'micro' ? 'AUTONOMY_V2_MICRO' : 'AUTONOMY_V2',
+        reason: params.failure?.reason,
+        details: params.failure?.details,
+        raw_len: String(params.rawText || '').length,
+        raw_preview: String(params.rawText || '').slice(0, 120),
+        model: 'gemini-2.5-flash'
+      },
+      priority: 0.7
+    });
+  };
+
+  const callAutonomyV2 = async (params: {
+    prompt: string;
+    schema: Record<string, unknown>;
+    maxOutputTokens: number;
+    usageTag: string;
+    logLabel: string;
+  }): Promise<{ rawText?: string; parsed: AutonomyV2ParseResult }> => {
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.5-flash',
+      contents: params.prompt,
+      config: {
+        temperature: 0.7,
+        maxOutputTokens: params.maxOutputTokens,
+        responseMimeType: 'application/json',
+        responseSchema: params.schema
+      }
+    });
+    logUsage(params.usageTag, response);
+
+    const rawText = getGeminiText(response) ?? undefined;
+    const rawForLog = (rawText || '').slice(0, 2000);
+    console.log(`${params.logLabel}:`, rawForLog);
+
+    return { rawText, parsed: parseAutonomyV2Response(rawText) };
   };
 
   const runAutonomyV2WithRetry = async (prompt: string): Promise<AutonomyV2Output> => {
     return withRetry(async () => {
-      const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
-        contents: prompt,
-        config: {
-          temperature: 0.7,
-          maxOutputTokens: 1536,
-          responseMimeType: 'application/json',
-          responseSchema: AUTONOMOUS_VOLITION_V2_RESPONSE_SCHEMA
-        }
+      const primary = await callAutonomyV2({
+        prompt,
+        schema: AUTONOMOUS_VOLITION_V2_RESPONSE_SCHEMA,
+        maxOutputTokens: 1536,
+        usageTag: 'autonomousVolitionV2',
+        logLabel: 'AV_V2 RAW'
       });
-      logUsage('autonomousVolitionV2', response);
 
-      const rawText = getGeminiText(response) ?? undefined;
-      const rawForLog = (rawText || '').slice(0, 2000);
-      console.log('AV_V2 RAW:', rawForLog);
+      if (primary.parsed.ok) return primary.parsed.output;
 
-      return parseAutonomyV2Response(rawText);
+      if (shouldRetryAutonomyV2(primary.parsed.failure)) {
+        const microPrompt = buildAutonomyV2MicroPrompt(prompt);
+        const micro = await callAutonomyV2({
+          prompt: microPrompt,
+          schema: AUTONOMOUS_VOLITION_V2_MICRO_RESPONSE_SCHEMA,
+          maxOutputTokens: 512,
+          usageTag: 'autonomousVolitionV2Micro',
+          logLabel: 'AV_V2 MICRO RAW'
+        });
+
+        if (micro.parsed.ok) return micro.parsed.output;
+
+        publishAutonomyV2ParseFail({
+          failure: micro.parsed.failure,
+          rawText: micro.rawText,
+          attempt: 'micro'
+        });
+        return micro.parsed.output;
+      }
+
+      publishAutonomyV2ParseFail({
+        failure: primary.parsed.failure,
+        rawText: primary.rawText,
+        attempt: 'primary'
+      });
+      return primary.parsed.output;
     }, 1, 3000);
   };
 

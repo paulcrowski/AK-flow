@@ -50,6 +50,16 @@ export const AUTONOMOUS_VOLITION_V2_RESPONSE_SCHEMA = {
   required: ['internal_monologue', 'voice_pressure', 'speech_content']
 };
 
+export const AUTONOMOUS_VOLITION_V2_MICRO_RESPONSE_SCHEMA = {
+  type: Type.OBJECT,
+  properties: {
+    internal_monologue: { type: Type.STRING },
+    voice_pressure: { type: Type.NUMBER },
+    speech_content: { type: Type.STRING }
+  },
+  required: ['speech_content']
+};
+
 export const STRUCTURED_DIALOGUE_RESPONSE_SCHEMA = {
   type: Type.OBJECT,
   properties: {
