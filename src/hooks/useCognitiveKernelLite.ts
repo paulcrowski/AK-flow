@@ -471,6 +471,49 @@ export const useCognitiveKernelLite = (loadedIdentity?: AgentIdentity | null) =>
     return () => unsubscribe();
   }, []);
 
+  useEffect(() => {
+    const normalize = (input: string) => String(input || '').replace(/\s+/g, ' ').trim();
+    const toSingleSentence = (input: string) => {
+      const cleaned = normalize(input);
+      if (!cleaned) return '';
+      const match = cleaned.match(/^(.+?[.!?])(?:\s|$)/);
+      return match ? match[1] : cleaned;
+    };
+
+    const unsubscribe = eventBus.subscribe(PacketType.SYSTEM_ALERT, (packet: any) => {
+      if (packet?.payload?.event !== 'DREAM_CONSOLIDATION_COMPLETE') return;
+      const result = packet.payload?.result || {};
+      const summary = toSingleSentence(String(result?.selfSummary || ''));
+      const lessonsRaw = Array.isArray(result?.lessonsGenerated) ? result.lessonsGenerated : [];
+      const lessons = lessonsRaw
+        .map((l: any) => normalize(String(l || '')))
+        .filter(Boolean)
+        .slice(0, 3);
+      const episodesProcessed = Number(result?.episodesProcessed || 0);
+
+      const parts: string[] = [];
+      if (summary) parts.push(`Sleep summary: ${summary}`);
+      if (lessons.length > 0) {
+        const lessonText = lessons.map((l, idx) => `${idx + 1}. ${l}`).join(' ');
+        parts.push(`Lessons: ${lessonText}`);
+      } else if (summary) {
+        parts.push(`Episodes processed: ${episodesProcessed}`);
+      } else if (episodesProcessed > 0) {
+        parts.push(`Sleep summary: processed ${episodesProcessed} episodes.`);
+      }
+
+      const message = parts.join(' ').trim();
+      if (!message) return;
+      actionsRef.current.addUiMessage({
+        role: 'assistant',
+        text: message,
+        type: 'speech',
+        generator: 'system'
+      } as any);
+    });
+    return () => unsubscribe();
+  }, []);
+
   const toggleAutonomy = useCallback(() => {
     actions.toggleAutonomousMode(!getCognitiveState().autonomousMode);
   }, [actions]);
@@ -512,17 +555,27 @@ export const useCognitiveKernelLite = (loadedIdentity?: AgentIdentity | null) =>
   useEffect(() => {
     if (pendingOutputs.length === 0) return;
 
+    let consolidationTriggered = false;
+    const triggerDreamConsolidation = () => {
+      const state = getCognitiveState();
+      if (consolidationTriggered) return;
+      if (!state.soma?.isSleeping) return;
+      if (state.hasConsolidatedThisSleep) return;
+      consolidationTriggered = true;
+      actions.hydrate({ hasConsolidatedThisSleep: true });
+      DreamConsolidationService.consolidate(
+        state.limbic,
+        state.traitVector,
+        loadedIdentityRef.current?.name || 'AK-FLOW'
+      ).catch(console.error);
+    };
+
     for (const output of pendingOutputs) {
       try {
         switch (output.type) {
           case 'DREAM_CONSOLIDATION':
             {
-              const state = getCognitiveState();
-              DreamConsolidationService.consolidate(
-                state.limbic,
-                state.traitVector,
-                loadedIdentityRef.current?.name || 'AK-FLOW'
-              ).catch(console.error);
+              triggerDreamConsolidation();
             }
             break;
             
@@ -568,12 +621,7 @@ export const useCognitiveKernelLite = (loadedIdentity?: AgentIdentity | null) =>
           case 'MAYBE_DREAM_CONSOLIDATION':
             // Runtime handles randomness - reducer stays pure
             if (rng() < (output.payload?.probability || 0.5)) {
-              const state = getCognitiveState();
-              DreamConsolidationService.consolidate(
-                state.limbic,
-                state.traitVector,
-                loadedIdentityRef.current?.name || 'AK-FLOW'
-              ).catch(console.error);
+              triggerDreamConsolidation();
             }
             break;
         }

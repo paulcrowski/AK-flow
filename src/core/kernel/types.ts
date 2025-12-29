@@ -69,6 +69,7 @@ export interface KernelState {
   autonomousMode: boolean;
   poeticMode: boolean;
   chemistryEnabled: boolean;
+  hasConsolidatedThisSleep: boolean;
 
   // Temporal tracking
   lastSpeakTimestamp: number;

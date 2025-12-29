@@ -7,7 +7,8 @@ export function handleSleepStart(state: KernelState, event: KernelEvent, outputs
   const nextState: KernelState = {
     ...state,
     soma: SomaSystem.forceSleep(state.soma),
-    neuro: BASELINE_NEURO
+    neuro: BASELINE_NEURO,
+    hasConsolidatedThisSleep: false
   };
 
   outputs.push({
@@ -34,7 +35,8 @@ export function handleSleepStart(state: KernelState, event: KernelEvent, outputs
 export function handleSleepEnd(state: KernelState, event: KernelEvent, outputs: KernelOutput[]): KernelReducerResult {
   const nextState: KernelState = {
     ...state,
-    soma: SomaSystem.forceWake(state.soma)
+    soma: SomaSystem.forceWake(state.soma),
+    hasConsolidatedThisSleep: false
   };
 
   outputs.push({

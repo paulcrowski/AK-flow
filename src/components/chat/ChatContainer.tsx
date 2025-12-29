@@ -11,6 +11,9 @@ import { Brain, Sparkles, Globe, FileText, ImageIcon, AlertTriangle, RefreshCw }
 import type { UiMessage } from '../../stores/cognitiveStore';
 import type { CognitiveError } from '../../types';
 import { MemoryService } from '../../services/supabase';
+import { eventBus } from '../../core/EventBus';
+import { AgentType, PacketType } from '../../types';
+import { generateUUID } from '../../utils/uuid';
 
 interface ChatContainerProps {
   conversation: UiMessage[];
@@ -58,7 +61,13 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [conversation]);
 
-  const handleFeedback = async (memoryId: string, delta: number, setCore: boolean) => {
+  const handleFeedback = async (
+    messageId: string | undefined,
+    memoryId: string,
+    delta: number,
+    setCore: boolean,
+    eventName: 'USER_FEEDBACK_UPVOTE' | 'USER_FEEDBACK_DOWNVOTE' | 'USER_FEEDBACK_STAR'
+  ) => {
     if (!memoryId) return;
     setFeedbackState((prev) => ({
       ...prev,
@@ -87,6 +96,20 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
       }));
       return;
     }
+
+    eventBus.publish({
+      id: generateUUID(),
+      timestamp: Date.now(),
+      source: AgentType.CORTEX_FLOW,
+      type: PacketType.SYSTEM_ALERT,
+      payload: {
+        event: eventName,
+        messageId: messageId || null,
+        memoryId,
+        delta
+      },
+      priority: 0.6
+    });
 
     setFeedbackState((prev) => ({
       ...prev,
@@ -204,7 +227,7 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
                     <button
                       type="button"
                       className="px-2 py-1 rounded bg-gray-900/40 border border-gray-700/50 hover:border-cyan-500/50 hover:text-cyan-200 transition-colors disabled:opacity-40"
-                      onClick={() => void handleFeedback(msg.agentMemoryId as string, 20, false)}
+                      onClick={() => void handleFeedback(msg.id, msg.agentMemoryId as string, 20, false, 'USER_FEEDBACK_UPVOTE')}
                       disabled={feedbackState[msg.agentMemoryId]?.status === 'saving' || feedbackState[msg.agentMemoryId]?.status === 'saved'}
                       title="wzmocnij pamiec"
                     >
@@ -213,7 +236,7 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
                     <button
                       type="button"
                       className="px-2 py-1 rounded bg-gray-900/40 border border-gray-700/50 hover:border-rose-500/50 hover:text-rose-200 transition-colors disabled:opacity-40"
-                      onClick={() => void handleFeedback(msg.agentMemoryId as string, -10, false)}
+                      onClick={() => void handleFeedback(msg.id, msg.agentMemoryId as string, -10, false, 'USER_FEEDBACK_DOWNVOTE')}
                       disabled={feedbackState[msg.agentMemoryId]?.status === 'saving' || feedbackState[msg.agentMemoryId]?.status === 'saved'}
                       title="oslab pamiec"
                     >
@@ -222,7 +245,7 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
                     <button
                       type="button"
                       className="px-2 py-1 rounded bg-gray-900/40 border border-gray-700/50 hover:border-amber-400/70 hover:text-amber-200 transition-colors disabled:opacity-40"
-                      onClick={() => void handleFeedback(msg.agentMemoryId as string, 30, true)}
+                      onClick={() => void handleFeedback(msg.id, msg.agentMemoryId as string, 30, true, 'USER_FEEDBACK_STAR')}
                       disabled={feedbackState[msg.agentMemoryId]?.status === 'saving' || feedbackState[msg.agentMemoryId]?.status === 'saved'}
                       title="oznacz jako core"
                     >

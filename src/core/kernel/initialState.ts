@@ -99,6 +99,7 @@ export const createInitialKernelState = (overrides?: Partial<KernelState>): Kern
     autonomousMode: false,      // SECURITY: Default OFF
     poeticMode: false,
     chemistryEnabled: true,
+    hasConsolidatedThisSleep: false,
     
     // Temporal tracking
     lastSpeakTimestamp: 0,

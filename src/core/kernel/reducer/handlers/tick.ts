@@ -83,10 +83,12 @@ export function handleTick(state: KernelState, event: KernelEvent, outputs: Kern
           energy: Math.round(metabolicResult.newState.energy)
         }
       });
-      outputs.push({
-        type: 'MAYBE_DREAM_CONSOLIDATION',
-        payload: { probability: 0.5 }
-      });
+      if (!state.hasConsolidatedThisSleep) {
+        outputs.push({
+          type: 'MAYBE_DREAM_CONSOLIDATION',
+          payload: { probability: 0.5 }
+        });
+      }
     }
   }
 
