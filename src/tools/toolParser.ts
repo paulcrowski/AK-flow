@@ -141,7 +141,7 @@ export const createProcessOutputForTools = (deps: ToolParserDeps) => {
 
     type ArtifactRefResult =
       | { ok: true; id: string; nameHint?: string }
-      | { ok: false; code: 'NOT_FOUND' | 'AMBIGUOUS'; userMessage: string };
+      | { ok: false; code: 'NOT_FOUND' | 'AMBIGUOUS' | 'NO_ACTIVE_ARTIFACT'; userMessage: string };
 
     const isArtifactRefError = (r: ArtifactRefResult): r is Extract<ArtifactRefResult, { ok: false }> => !r.ok;
 

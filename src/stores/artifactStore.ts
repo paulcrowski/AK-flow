@@ -1,6 +1,8 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { generateUUID } from '../utils/uuid';
+import { eventBus } from '../core/EventBus';
+import { AgentType, PacketType } from '../types';
 
 export type ArtifactStatus = 'draft' | 'complete';
 
@@ -33,7 +35,7 @@ export type EvidenceEntry =
 
 export type ArtifactRefResult =
   | { ok: true; id: string; nameHint?: string }
-  | { ok: false; code: 'NOT_FOUND' | 'AMBIGUOUS'; userMessage: string };
+  | { ok: false; code: 'NOT_FOUND' | 'AMBIGUOUS' | 'NO_ACTIVE_ARTIFACT'; userMessage: string };
 
 const MAX_ARTIFACT_CHARS_PER_OP = 50_000;
 const MAX_EVIDENCE = 5;
@@ -243,6 +245,37 @@ function normalizeArtifactRefInput(refRaw: string): string {
 export function normalizeArtifactRef(refRaw: string): ArtifactRefResult {
   const store = useArtifactStore.getState();
   const raw = normalizeArtifactRefInput(refRaw);
+  const normalized = raw
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
+
+  const isImplicit =
+    /\btego pliku\b/.test(normalized) ||
+    /\bdo tego\b/.test(normalized) ||
+    /\bten plik\b/.test(normalized) ||
+    /\bostatni\b/.test(normalized) ||
+    normalized === 'to';
+
+  if (isImplicit) {
+    if (store.lastCreatedId) {
+      const hint = store.artifactsById[store.lastCreatedId]?.name;
+      return hint ? { ok: true, id: store.lastCreatedId, nameHint: hint } : { ok: true, id: store.lastCreatedId };
+    }
+    eventBus.publish({
+      id: generateUUID(),
+      timestamp: Date.now(),
+      source: AgentType.CORTEX_FLOW,
+      type: PacketType.SYSTEM_ALERT,
+      payload: { event: 'EDIT_ARTIFACT_NO_TARGET', raw, reason: 'last_created_missing' },
+      priority: 0.6
+    });
+    return {
+      ok: false,
+      code: 'NO_ACTIVE_ARTIFACT',
+      userMessage: 'Brak aktywnego pliku. Podaj nazwe lub ID (art-123).'
+    };
+  }
 
   if (raw.startsWith('art-')) return { ok: true, id: raw };
   if (!raw) {
