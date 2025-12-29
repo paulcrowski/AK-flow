@@ -59,6 +59,31 @@ export class KernelEngineRunner<TIdentity> {
     this.deps = deps;
   }
 
+  private isUserFacingError(text: string): boolean {
+    const normalized = String(text || '')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase();
+    return normalized.includes('wystapil problem');
+  }
+
+  private maybeEmitUiErrorToast(messageId: string, text: string): void {
+    if (!this.isUserFacingError(text)) return;
+    this.deps.publishEvent({
+      id: this.deps.generateUUID(),
+      timestamp: Date.now(),
+      source: AgentType.CORTEX_FLOW,
+      type: PacketType.SYSTEM_ALERT,
+      payload: {
+        event: 'UI_ERROR_TOAST',
+        code: 'CORTEX_FALLBACK',
+        source: 'assistant',
+        messageId
+      },
+      priority: 0.6
+    });
+  }
+
   setDeps(deps: KernelEngineRunnerDeps<TIdentity>) {
     this.deps = deps;
   }
@@ -319,9 +344,17 @@ export class KernelEngineRunner<TIdentity> {
     try {
       const cleaned = await this.deps.processOutputForTools(text);
       if (!cleaned.trim()) return;
-      const msg = { role: 'assistant', text: cleaned, type, ...(meta?.knowledgeSource ? { knowledgeSource: meta.knowledgeSource } : {}) };
+      const messageId = this.deps.generateUUID();
+      const msg = {
+        id: messageId,
+        role: 'assistant',
+        text: cleaned,
+        type,
+        ...(meta?.knowledgeSource ? { knowledgeSource: meta.knowledgeSource } : {})
+      };
 
       this.deps.actions.addUiMessage(msg as any);
+      this.maybeEmitUiErrorToast(messageId, cleaned);
 
       this.deps.actions.dispatch({
         type: 'AGENT_SPOKE',
@@ -363,6 +396,7 @@ export class KernelEngineRunner<TIdentity> {
       };
 
       this.deps.actions.addUiMessage(speechMsg as any);
+      this.maybeEmitUiErrorToast(messageId, cleaned);
 
       this.deps.actions.dispatch({
         type: 'AGENT_SPOKE',

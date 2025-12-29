@@ -14,6 +14,7 @@ import { ChatInput } from './chat/ChatInput';
 import { TraceHudControls } from './trace/TraceHudControls';
 import { useLoadedAgentIdentity } from '../hooks/useLoadedAgentIdentity';
 import { useArtifactStore } from '../stores/artifactStore';
+import { generateUUID } from '../utils/uuid';
 
 export function CognitiveInterface() {
     // --- SESSION (Multi-Agent) ---
@@ -87,11 +88,13 @@ export function CognitiveInterface() {
         [artifactOrder, artifactsById]
     );
 
-    const copyText = async (text: string) => {
+    const copyText = async (text: string, meta?: { artifactId?: string }) => {
         const payload = String(text || '');
+        let ok = false;
         try {
             if (typeof navigator !== 'undefined' && navigator.clipboard) {
                 await navigator.clipboard.writeText(payload);
+                ok = true;
                 return;
             }
             const el = document.createElement('textarea');
@@ -102,8 +105,26 @@ export function CognitiveInterface() {
             el.select();
             document.execCommand('copy');
             document.body.removeChild(el);
+            ok = true;
         } catch {
             // keep UI silent
+            ok = false;
+        } finally {
+            if (meta?.artifactId) {
+                eventBus.publish({
+                    id: generateUUID(),
+                    timestamp: Date.now(),
+                    source: AgentType.CORTEX_FLOW,
+                    type: PacketType.SYSTEM_ALERT,
+                    payload: {
+                        event: 'COPY_ARTIFACT',
+                        artifactId: meta.artifactId,
+                        chars: payload.length,
+                        ok
+                    },
+                    priority: 0.4
+                });
+            }
         }
     };
 
@@ -332,14 +353,14 @@ export function CognitiveInterface() {
                                                 </div>
                                                 <div className="flex items-center gap-1.5 shrink-0">
                                                     <button
-                                                        onClick={() => void copyText(a.id)}
+                                                        onClick={() => void copyText(a.id, { artifactId: a.id })}
                                                         className="p-1 rounded border border-gray-800/60 text-gray-500 hover:text-gray-200 hover:bg-gray-800/30 transition-colors"
                                                         title="Copy id"
                                                     >
                                                         <Copy size={12} />
                                                     </button>
                                                     <button
-                                                        onClick={() => void copyText(a.content)}
+                                                        onClick={() => void copyText(a.content, { artifactId: a.id })}
                                                         className="p-1 rounded border border-gray-800/60 text-gray-500 hover:text-gray-200 hover:bg-gray-800/30 transition-colors"
                                                         title="Copy content"
                                                     >
