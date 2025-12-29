@@ -93,6 +93,23 @@ export const createProcessOutputForTools = (deps: ToolParserDeps) => {
       return `${slug || 'artifact'}.md`;
     };
 
+    const isExplicitEmptyCreate = (header: string) => {
+      const normalized = String(header || '')
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase();
+      return normalized.includes('pusty plik') || normalized.includes('empty file') || normalized === 'pusty' || normalized === 'empty';
+    };
+
+    const deriveCreateFallbackBody = (candidate: string) => {
+      const cleaned = String(candidate || '').trim();
+      if (!cleaned) return '';
+      if (/\[(CREATE|APPEND|REPLACE|READ_ARTIFACT|PUBLISH|SEARCH|VISUALIZE|SNAPSHOT|SPLIT_TODO3|READ_LIBRARY|READ_FILE|SEARCH_LIBRARY)/i.test(cleaned)) {
+        return '';
+      }
+      return cleaned.length > 8000 ? `${cleaned.slice(0, 8000)}...` : cleaned;
+    };
+
     const inferMimeTypeFromName = (name: string) => {
       const lower = String(name || '').toLowerCase();
       if (lower.endsWith('.md')) return 'text/markdown';
@@ -246,7 +263,7 @@ export const createProcessOutputForTools = (deps: ToolParserDeps) => {
       }
     };
 
-    const handleArtifactBlock = async (params: { kind: 'CREATE' | 'APPEND' | 'REPLACE'; header: string; body: string; raw: string }) => {
+    const handleArtifactBlock = async (params: { kind: 'CREATE' | 'APPEND' | 'REPLACE'; header: string; body: string; raw: string; fallbackBody?: string }) => {
       const tool = params.kind;
       const intentId = generateUUID();
       const isArtifactId = params.header.startsWith('art-');
@@ -254,6 +271,10 @@ export const createProcessOutputForTools = (deps: ToolParserDeps) => {
         ? getRememberedArtifactName(params.header) || ''
         : extractFilenameFromNL(params.header);
       const headerForCreate = params.kind === 'CREATE' && !isArtifactId ? headerNameHint : params.header;
+      const createBodyFallback =
+        params.kind === 'CREATE' && !params.body.trim() && !isExplicitEmptyCreate(params.header)
+          ? params.fallbackBody?.trim() || `TODO: add content for ${headerNameHint || headerForCreate}.`
+          : params.body;
       eventBus.publish({
         id: intentId,
         timestamp: Date.now(),
@@ -266,7 +287,7 @@ export const createProcessOutputForTools = (deps: ToolParserDeps) => {
       try {
         const store = useArtifactStore.getState();
         if (params.kind === 'CREATE') {
-          const id = store.create(headerForCreate, params.body);
+          const id = store.create(headerForCreate, createBodyFallback);
           const created = store.get(id);
           const artifactName = rememberArtifactName(id, created?.name || headerForCreate) || headerForCreate;
           emitToolResult({ tool, intentId, payload: { id, name: artifactName } });
@@ -274,7 +295,7 @@ export const createProcessOutputForTools = (deps: ToolParserDeps) => {
             action: 'CREATE',
             artifactId: id,
             artifactName,
-            afterContent: created?.content ?? params.body
+            afterContent: created?.content ?? createBodyFallback
           });
           if (created) {
             const hash = hashArtifactContent(created.content);
@@ -413,6 +434,7 @@ export const createProcessOutputForTools = (deps: ToolParserDeps) => {
       const header = String(blockMatch[2] || '').trim();
       const body = String(blockMatch[3] || '');
       cleanText = cleanText.replace(blockMatch[0], '').trim();
+      const fallbackBody = kind === 'CREATE' ? deriveCreateFallbackBody(cleanText) : '';
 
       if (String(blockMatch[1] || '').toUpperCase() !== String(blockMatch[4] || '').toUpperCase()) {
         const tool = 'ARTIFACT_BLOCK';
@@ -429,7 +451,7 @@ export const createProcessOutputForTools = (deps: ToolParserDeps) => {
         continue;
       }
 
-      await handleArtifactBlock({ kind, header, body, raw: blockMatch[0] });
+      await handleArtifactBlock({ kind, header, body, raw: blockMatch[0], fallbackBody });
     }
 
     // 0.5 DETerministic JSON ACTION: SPLIT_TODO3
