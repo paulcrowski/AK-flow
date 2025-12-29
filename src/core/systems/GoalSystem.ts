@@ -8,6 +8,8 @@ import { SessionChunkService } from '../../services/SessionChunkService';
 import { getCurrentAgentId } from '../../services/supabase';
 import { SYSTEM_CONFIG } from '../config/systemConfig';
 
+const VISUAL_FOLLOWUP_COOLDOWN_MS = 3 * 60 * 1000;
+
 // Simple text similarity (Jaccard on words)
 function textSimilarity(a: string, b: string): number {
     const wordsA = new Set(a.toLowerCase().split(/\s+/).filter(w => w.length > 3));
@@ -29,6 +31,37 @@ function extractTopicFromText(text: string): string | null {
   if (!normalized) return null;
   const words = normalized.split(' ').filter(Boolean);
   return words.slice(0, 6).join(' ') || null;
+}
+
+function normalizeGoalDescription(text: string): string {
+  return String(text || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function isVisualizationFollowupGoal(description: string): boolean {
+  const normalized = normalizeGoalDescription(description);
+  return (normalized.includes('dopytaj') || normalized.includes('zapytaj')) &&
+    (normalized.includes('wizualiz') || normalized.includes('visualiz'));
+}
+
+function shouldBlockVisualFollowup(description: string, ctx: GoalContext, goalState: GoalState): boolean {
+  if (!isVisualizationFollowupGoal(description)) return false;
+  const normalized = normalizeGoalDescription(description);
+  const lastSimilar = (goalState.lastGoals || []).find(
+    (g) => normalizeGoalDescription(g.description) === normalized
+  );
+  if (!lastSimilar) return false;
+  const noNewUserInfo = lastSimilar.timestamp >= ctx.lastUserInteractionAt;
+  const cooldownActive = ctx.now - lastSimilar.timestamp < VISUAL_FOLLOWUP_COOLDOWN_MS;
+  if (noNewUserInfo || cooldownActive) {
+    console.log('[GoalSystem] VISUAL_FOLLOWUP_COOLDOWN: suppressing repeated follow-up.');
+    return true;
+  }
+  return false;
 }
 
 function getLastTopicFromConversation(ctx: GoalContext): string | null {
@@ -113,6 +146,10 @@ export async function formGoal(ctx: GoalContext, goalState: GoalState): Promise<
   }
 
   // FAZA 4.3: Refractory Period (Biologiczny hamulec pętli ciekawości)
+  if (shouldBlockVisualFollowup(description, ctx, goalState)) {
+    return null;
+  }
+
   if (source === 'curiosity') {
     const recentCuriosity = (goalState.lastGoals || [])
         .filter(g => g.source === 'curiosity')
