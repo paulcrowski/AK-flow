@@ -7,7 +7,7 @@
  */
 
 import React, { useRef, useEffect, useState } from 'react';
-import { Brain, Sparkles, Globe, FileText, ImageIcon, AlertTriangle, RefreshCw } from 'lucide-react';
+import { Brain, Sparkles, Globe, FileText, ImageIcon, AlertTriangle, RefreshCw, ThumbsUp, ThumbsDown, Star } from 'lucide-react';
 import type { UiMessage } from '../../stores/cognitiveStore';
 import type { CognitiveError } from '../../types';
 import { MemoryService } from '../../services/supabase';
@@ -226,30 +226,30 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
                   <div className="mt-3 flex items-center gap-2 text-xs text-gray-400">
                     <button
                       type="button"
-                      className="px-2 py-1 rounded bg-gray-900/40 border border-gray-700/50 hover:border-cyan-500/50 hover:text-cyan-200 transition-colors disabled:opacity-40"
+                      className="p-1.5 rounded bg-transparent text-gray-500/80 hover:text-cyan-200 hover:bg-cyan-500/10 transition-colors disabled:opacity-40"
                       onClick={() => void handleFeedback(msg.id, msg.agentMemoryId as string, 20, false, 'USER_FEEDBACK_UPVOTE')}
                       disabled={feedbackState[msg.agentMemoryId]?.status === 'saving' || feedbackState[msg.agentMemoryId]?.status === 'saved'}
                       title="wzmocnij pamiec"
                     >
-                      👍
+                      <ThumbsUp size={13} strokeWidth={1.3} className="opacity-70" />
                     </button>
                     <button
                       type="button"
-                      className="px-2 py-1 rounded bg-gray-900/40 border border-gray-700/50 hover:border-rose-500/50 hover:text-rose-200 transition-colors disabled:opacity-40"
+                      className="p-1.5 rounded bg-transparent text-gray-500/80 hover:text-rose-200 hover:bg-rose-500/10 transition-colors disabled:opacity-40"
                       onClick={() => void handleFeedback(msg.id, msg.agentMemoryId as string, -10, false, 'USER_FEEDBACK_DOWNVOTE')}
                       disabled={feedbackState[msg.agentMemoryId]?.status === 'saving' || feedbackState[msg.agentMemoryId]?.status === 'saved'}
                       title="oslab pamiec"
                     >
-                      👎
+                      <ThumbsDown size={13} strokeWidth={1.3} className="opacity-70" />
                     </button>
                     <button
                       type="button"
-                      className="px-2 py-1 rounded bg-gray-900/40 border border-gray-700/50 hover:border-amber-400/70 hover:text-amber-200 transition-colors disabled:opacity-40"
+                      className="p-1.5 rounded bg-transparent text-gray-500/80 hover:text-amber-200 hover:bg-amber-500/10 transition-colors disabled:opacity-40"
                       onClick={() => void handleFeedback(msg.id, msg.agentMemoryId as string, 30, true, 'USER_FEEDBACK_STAR')}
                       disabled={feedbackState[msg.agentMemoryId]?.status === 'saving' || feedbackState[msg.agentMemoryId]?.status === 'saved'}
                       title="oznacz jako core"
                     >
-                      ⭐
+                      <Star size={13} strokeWidth={1.3} className="opacity-70" />
                     </button>
                     {feedbackState[msg.agentMemoryId]?.message && (
                       <span className={`ml-2 text-[10px] ${
