@@ -59,6 +59,40 @@ export const createProcessOutputForTools = (deps: ToolParserDeps) => {
       return s;
     };
 
+    const slugifyFilename = (input: string) => {
+      const raw = String(input || '')
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase()
+        .trim()
+        .replace(/[^a-z0-9]+/g, '-');
+      const collapsed = raw.replace(/-+/g, '-').replace(/^-|-$/g, '');
+      return collapsed.slice(0, 48);
+    };
+
+    const extractFilenameFromNL = (header: string) => {
+      const raw = String(header || '').trim();
+      if (!raw) return 'artifact.md';
+
+      const directMatch = raw.match(/^["'`]?([A-Za-z0-9][A-Za-z0-9._-]*\.[A-Za-z0-9]{1,8})["'`]?$/
+      );
+      if (directMatch?.[1]) return normalizeArg(directMatch[1]).replace(/[),.;:]+$/, '');
+
+      const patterns = [
+        /(?:o\s+nazwie)\s+["'`]?([^\s"'`<>]+?\.[A-Za-z0-9]{1,8})["'`]?/i,
+        /(?:plik)\s+["'`]?([^\s"'`<>]+?\.[A-Za-z0-9]{1,8})["'`]?/i,
+        /(?:utworz|utw\u00f3rz|stworz|stw\u00f3rz)\s+["'`]?([^\s"'`<>]+?\.[A-Za-z0-9]{1,8})["'`]?/i
+      ];
+
+      for (const pattern of patterns) {
+        const match = raw.match(pattern);
+        if (match?.[1]) return normalizeArg(match[1]).replace(/[),.;:]+$/, '');
+      }
+
+      const slug = slugifyFilename(raw);
+      return `${slug || 'artifact'}.md`;
+    };
+
     const inferMimeTypeFromName = (name: string) => {
       const lower = String(name || '').toLowerCase();
       if (lower.endsWith('.md')) return 'text/markdown';
@@ -215,24 +249,26 @@ export const createProcessOutputForTools = (deps: ToolParserDeps) => {
     const handleArtifactBlock = async (params: { kind: 'CREATE' | 'APPEND' | 'REPLACE'; header: string; body: string; raw: string }) => {
       const tool = params.kind;
       const intentId = generateUUID();
-      const headerNameHint = params.header.startsWith('art-')
+      const isArtifactId = params.header.startsWith('art-');
+      const headerNameHint = isArtifactId
         ? getRememberedArtifactName(params.header) || ''
-        : params.header;
+        : extractFilenameFromNL(params.header);
+      const headerForCreate = params.kind === 'CREATE' && !isArtifactId ? headerNameHint : params.header;
       eventBus.publish({
         id: intentId,
         timestamp: Date.now(),
         source: AgentType.CORTEX_FLOW,
         type: PacketType.TOOL_INTENT,
-        payload: { tool, arg: params.header, ...(headerNameHint ? { artifactName: headerNameHint } : {}) },
+        payload: { tool, arg: headerForCreate, ...(headerNameHint ? { artifactName: headerNameHint } : {}) },
         priority: 0.8
       });
 
       try {
         const store = useArtifactStore.getState();
         if (params.kind === 'CREATE') {
-          const id = store.create(params.header, params.body);
+          const id = store.create(headerForCreate, params.body);
           const created = store.get(id);
-          const artifactName = rememberArtifactName(id, created?.name || params.header) || params.header;
+          const artifactName = rememberArtifactName(id, created?.name || headerForCreate) || headerForCreate;
           emitToolResult({ tool, intentId, payload: { id, name: artifactName } });
           emitToolCommit({
             action: 'CREATE',
