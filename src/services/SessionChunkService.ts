@@ -131,5 +131,38 @@ ${transcript}
       topics: Array.isArray(row.topics) ? row.topics : [],
       strength: typeof row.strength === 'number' ? row.strength : undefined
     }));
+  },
+
+  async fetchSessionChunksInRange(
+    agentId: string,
+    rangeStartMs: number,
+    rangeEndMs: number,
+    limit: number = 12
+  ): Promise<SessionChunk[]> {
+    const startIso = new Date(rangeStartMs).toISOString();
+    const endIso = new Date(rangeEndMs).toISOString();
+
+    const { data, error } = await supabase
+      .from('session_chunks')
+      .select('id, session_id, start_time, end_time, summary_json, summary_text, topics, strength, created_at')
+      .eq('agent_id', agentId)
+      .gte('created_at', startIso)
+      .lte('created_at', endIso)
+      .order('created_at', { ascending: false })
+      .limit(limit);
+
+    if (error || !data) return [];
+
+    return data.map((row: any) => ({
+      id: row.id,
+      agentId,
+      sessionId: String(row.session_id || ''),
+      startTime: row.start_time || undefined,
+      endTime: row.end_time || undefined,
+      summary_json: row.summary_json || {},
+      summary_text: String(row.summary_text || ''),
+      topics: Array.isArray(row.topics) ? row.topics : [],
+      strength: typeof row.strength === 'number' ? row.strength : undefined
+    }));
   }
 };

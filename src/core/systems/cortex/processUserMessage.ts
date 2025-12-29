@@ -21,6 +21,7 @@ import { formatHistoryForCortex } from './history';
 import type { AgentIdentityContext, ConversationTurn, ProcessInputParams, ProcessResult, SessionOverlay } from './types';
 import { recallMemories } from './memoryRecall';
 import { computeNeuralStrength } from '../../../utils/memoryStrength';
+import { detectIntent, formatHistoryRange } from '../IntentDetector';
 
 function buildStructuredPrompt(params: {
   text: string;
@@ -88,6 +89,30 @@ export async function processUserMessage(params: ProcessInputParams): Promise<Pr
     memorySpace: memorySpace as MemorySpace | undefined,
     prefetchedMemories: prefetchedMemories as any
   });
+  const intent = detectIntent(text);
+  const rangeLabel = formatHistoryRange(intent.rangeStart, intent.rangeEnd);
+  const hasHistoryRange = intent.intent === 'HISTORY' && Boolean(rangeLabel);
+
+  if (hasHistoryRange && memories.length === 0) {
+    const responseText = `Brak danych w zakresie ${rangeLabel}.`;
+    const memoryStore = await MemoryService.storeMemory({
+      content: `User: ${text} | Agent: ${responseText}`,
+      emotionalContext: currentLimbic,
+      timestamp: new Date().toISOString(),
+      id: generateUUID(),
+      neuralStrength
+    });
+    return {
+      responseText,
+      internalThought: '[HISTORY_RANGE_EMPTY]',
+      moodShift: { fear_delta: 0, curiosity_delta: 0 },
+      knowledgeSource: 'system',
+      evidenceSource: 'system',
+      evidenceDetail: 'no_data_range',
+      generator: 'system',
+      agentMemoryId: memoryStore.memoryId ?? null
+    };
+  }
 
   if (isCortexSubEnabled('minimalPrompt')) {
     const agentId = getCurrentAgentId();

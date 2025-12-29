@@ -6,7 +6,7 @@ import { eventBus } from '../../EventBus';
 import { AgentType, PacketType } from '../../../types';
 import { generateUUID } from '../../../utils/uuid';
 import { getCurrentTraceId } from '../../trace/TraceContext';
-import { detectIntent, getRetrievalLimit, type IntentType } from '../IntentDetector';
+import { detectIntent, formatHistoryRange, getIntentType, getRetrievalLimit, type IntentResult, type IntentType } from '../IntentDetector';
 import { SessionChunkService } from '../../../services/SessionChunkService';
 import { fetchIdentityShards } from '../../services/IdentityDataService';
 
@@ -43,14 +43,33 @@ export async function recallMemories(input: {
   const { queryText, memorySpace, prefetchedMemories } = input;
 
   const intent = detectIntent(queryText);
+  const intentType = getIntentType(intent);
+  const rangeLabel = formatHistoryRange(intent.rangeStart, intent.rangeEnd);
+  const hasHistoryRange =
+    intentType === 'HISTORY' &&
+    Number.isFinite(intent.rangeStart) &&
+    Number.isFinite(intent.rangeEnd);
   const semanticLimit = getRetrievalLimit(intent);
   const structuredRecall = isStructuredRecall(intent);
 
+  const filterMemoriesByRange = (items: MemoryTrace[]) => {
+    if (!hasHistoryRange) return items;
+    const start = Number(intent.rangeStart);
+    const end = Number(intent.rangeEnd);
+    return items.filter((m) => {
+      const ts = typeof m.timestamp === 'string' ? Date.parse(m.timestamp) : NaN;
+      if (!Number.isFinite(ts)) return false;
+      return ts >= start && ts <= end;
+    });
+  };
+
   const semanticPromise: Promise<MemoryTrace[]> = prefetchedMemories
-    ? Promise.resolve(prefetchedMemories)
-    : memorySpace
-      ? memorySpace.hot.semanticSearch(queryText, { limit: semanticLimit })
-      : MemoryService.semanticSearch(queryText, { limit: semanticLimit });
+    ? Promise.resolve(filterMemoriesByRange(prefetchedMemories))
+    : hasHistoryRange
+      ? Promise.resolve([])
+      : memorySpace
+        ? memorySpace.hot.semanticSearch(queryText, { limit: semanticLimit })
+        : MemoryService.semanticSearch(queryText, { limit: semanticLimit });
 
   const agentIdForCache = memorySpace?.agentId ?? getCurrentAgentId();
   const wantGlobalBaseline = !structuredRecall && isMemorySubEnabled('globalRecallDefault');
@@ -58,7 +77,7 @@ export async function recallMemories(input: {
   const globalRecentCacheTtlMs = 60_000;
   const globalRecallTimeoutMs = 700;
   const sessionChunkLimit = structuredRecall ? getSessionChunkLimit(intent) : 0;
-  const identityShardLimit = structuredRecall ? getIdentityShardLimit(intent) : 0;
+  const identityShardLimit = structuredRecall && !hasHistoryRange ? getIdentityShardLimit(intent) : 0;
   const semanticPromptLimit = structuredRecall ? getSemanticPromptLimit(intent) : 12;
 
   const globalRecentPromise: Promise<MemoryTrace[]> = wantGlobalBaseline && agentIdForCache
@@ -102,7 +121,9 @@ export async function recallMemories(input: {
     : Promise.resolve([]);
 
   const sessionChunksPromise = structuredRecall && agentIdForCache && sessionChunkLimit > 0
-    ? SessionChunkService.fetchRecentSessionChunks(agentIdForCache, sessionChunkLimit)
+    ? hasHistoryRange
+      ? SessionChunkService.fetchSessionChunksInRange(agentIdForCache, Number(intent.rangeStart), Number(intent.rangeEnd), sessionChunkLimit)
+      : SessionChunkService.fetchRecentSessionChunks(agentIdForCache, sessionChunkLimit)
     : Promise.resolve([]);
 
   const identityShardsPromise = structuredRecall && agentIdForCache && identityShardLimit > 0
@@ -196,8 +217,10 @@ export async function recallMemories(input: {
 
   console.log('[MEMORY_RECALL]', {
     query: queryText?.slice(0, 100),
-    intent,
+    intent: intentType,
     structuredRecall,
+    rangeLabel: rangeLabel || undefined,
+    granularityHint: hasHistoryRange ? intent.granularityHint : undefined,
     semanticLimit,
     semanticPromptLimit: structuredRecall ? semanticPromptLimit : undefined,
     chunkCount,
@@ -217,8 +240,11 @@ export async function recallMemories(input: {
     type: PacketType.SYSTEM_ALERT,
     payload: {
       event: 'MEMORY_RECALL_COUNTS',
-      intent,
+      intent: intentType,
       structuredRecall,
+      rangeStart: hasHistoryRange ? intent.rangeStart : undefined,
+      rangeEnd: hasHistoryRange ? intent.rangeEnd : undefined,
+      granularityHint: hasHistoryRange ? intent.granularityHint : undefined,
       semanticLimit,
       chunkCount,
       shardCount,
@@ -241,12 +267,13 @@ function buildSyntheticMemory(content: string, id?: string, timestamp?: string):
   };
 }
 
-function isStructuredRecall(intent: IntentType): boolean {
-  return intent === 'RECALL' || intent === 'HISTORY' || intent === 'WORK';
+function isStructuredRecall(intent: IntentType | IntentResult): boolean {
+  const t = getIntentType(intent);
+  return t === 'RECALL' || t === 'HISTORY' || t === 'WORK';
 }
 
-function getSessionChunkLimit(intent: IntentType): number {
-  switch (intent) {
+function getSessionChunkLimit(intent: IntentType | IntentResult): number {
+  switch (getIntentType(intent)) {
     case 'RECALL':
       return 8;
     case 'HISTORY':
@@ -258,8 +285,8 @@ function getSessionChunkLimit(intent: IntentType): number {
   }
 }
 
-function getIdentityShardLimit(intent: IntentType): number {
-  switch (intent) {
+function getIdentityShardLimit(intent: IntentType | IntentResult): number {
+  switch (getIntentType(intent)) {
     case 'RECALL':
       return 20;
     case 'HISTORY':
@@ -271,8 +298,8 @@ function getIdentityShardLimit(intent: IntentType): number {
   }
 }
 
-function getSemanticPromptLimit(intent: IntentType): number {
-  switch (intent) {
+function getSemanticPromptLimit(intent: IntentType | IntentResult): number {
+  switch (getIntentType(intent)) {
     case 'RECALL':
       return 20;
     case 'HISTORY':

@@ -19,7 +19,7 @@ import { computeNovelty } from '../ExpressionPolicy';
 import { getAutonomyConfig } from '../../config/systemConfig';
 import { getCurrentTraceId } from '../../trace/TraceContext';
 import { p0MetricAdd } from '../TickLifecycleTelemetry';
-import { detectIntent, getRetrievalLimit, type IntentType } from '../IntentDetector';
+import { detectIntent, getIntentType, getRetrievalLimit, type IntentResult, type IntentType } from '../IntentDetector';
 import { SessionChunkService } from '../../../services/SessionChunkService';
 import { fetchIdentityShards } from '../../services/IdentityDataService';
 
@@ -129,8 +129,8 @@ export function getAutonomyBackoffState() {
   return { ...autonomyFailureState };
 }
 
-function getSessionChunkLimit(intent: IntentType): number {
-  switch (intent) {
+function getSessionChunkLimit(intent: IntentType | IntentResult): number {
+  switch (getIntentType(intent)) {
     case 'RECALL':
       return 6;
     case 'HISTORY':
@@ -142,8 +142,8 @@ function getSessionChunkLimit(intent: IntentType): number {
   }
 }
 
-function getIdentityShardLimit(intent: IntentType): number {
-  switch (intent) {
+function getIdentityShardLimit(intent: IntentType | IntentResult): number {
+  switch (getIntentType(intent)) {
     case 'RECALL':
       return 15;
     case 'HISTORY':
@@ -220,7 +220,8 @@ export async function runAutonomousVolitionStep(input: {
     ? [...ctx.conversation].reverse().find((t) => t.role === 'user')?.text
     : null;
 
-  const memoryIntent = memoryQuery ? detectIntent(memoryQuery) : 'NOW';
+  const memoryIntent = memoryQuery ? detectIntent(memoryQuery) : ({ intent: 'NOW' } as IntentResult);
+  const memoryIntentType = getIntentType(memoryIntent);
 
   const semanticMatches = memoryQuery
     ? (await memorySpace.hot.semanticSearch(memoryQuery, {
@@ -233,7 +234,7 @@ export async function runAutonomousVolitionStep(input: {
 
   if (memoryQuery && trace.agentId) {
     const wantsStructuredRecall =
-      memoryIntent === 'RECALL' || memoryIntent === 'HISTORY' || memoryIntent === 'WORK';
+      memoryIntentType === 'RECALL' || memoryIntentType === 'HISTORY' || memoryIntentType === 'WORK';
 
     if (wantsStructuredRecall) {
       const chunkLimit = getSessionChunkLimit(memoryIntent);
