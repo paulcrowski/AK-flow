@@ -6,6 +6,8 @@ import { AgentType, PacketType } from '../types';
 import { getCurrentTraceId } from '../core/trace/TraceContext';
 import { generateUUID } from '../utils/uuid';
 import { useArtifactStore, hashArtifactContent, normalizeArtifactRef as normalizeArtifactRefCore } from '../stores/artifactStore';
+import { getRememberedArtifactName, rememberArtifactName } from '../core/utils/artifactNameCache';
+import { buildToolCommitDetails, formatToolCommitMessage } from '../core/utils/toolCommit';
 import { getCognitiveState } from '../stores/cognitiveStore';
 import { SYSTEM_CONFIG } from '../core/config/systemConfig';
 import { p0MetricAdd } from '../core/systems/TickLifecycleTelemetry';
@@ -124,6 +126,31 @@ export const createProcessOutputForTools = (deps: ToolParserDeps) => {
       });
     };
 
+    const emitToolCommit = (params: {
+      action: 'CREATE' | 'APPEND' | 'REPLACE';
+      artifactId: string;
+      artifactName: string;
+      beforeContent?: string;
+      afterContent?: string;
+      deltaText?: string;
+    }) => {
+      const details = buildToolCommitDetails(params);
+      if (!details) return;
+      const message = formatToolCommitMessage(details);
+      eventBus.publish({
+        id: generateUUID(),
+        timestamp: Date.now(),
+        source: AgentType.CORTEX_FLOW,
+        type: PacketType.SYSTEM_ALERT,
+        payload: {
+          event: 'TOOL_COMMIT',
+          message,
+          ...details
+        },
+        priority: 0.7
+      });
+    };
+
     const handlePublishArtifact = async (artifactIdRaw: string) => {
       const tool = 'PUBLISH';
       const intentId = generateUUID();
@@ -188,12 +215,15 @@ export const createProcessOutputForTools = (deps: ToolParserDeps) => {
     const handleArtifactBlock = async (params: { kind: 'CREATE' | 'APPEND' | 'REPLACE'; header: string; body: string; raw: string }) => {
       const tool = params.kind;
       const intentId = generateUUID();
+      const headerNameHint = params.header.startsWith('art-')
+        ? getRememberedArtifactName(params.header) || ''
+        : params.header;
       eventBus.publish({
         id: intentId,
         timestamp: Date.now(),
         source: AgentType.CORTEX_FLOW,
         type: PacketType.TOOL_INTENT,
-        payload: { tool, arg: params.header },
+        payload: { tool, arg: params.header, ...(headerNameHint ? { artifactName: headerNameHint } : {}) },
         priority: 0.8
       });
 
@@ -201,9 +231,15 @@ export const createProcessOutputForTools = (deps: ToolParserDeps) => {
         const store = useArtifactStore.getState();
         if (params.kind === 'CREATE') {
           const id = store.create(params.header, params.body);
-          emitToolResult({ tool, intentId, payload: { id, name: params.header } });
-          addMessage('assistant', `CREATE_OK: ${id} (${params.header})`, 'tool_result');
           const created = store.get(id);
+          const artifactName = rememberArtifactName(id, created?.name || params.header) || params.header;
+          emitToolResult({ tool, intentId, payload: { id, name: artifactName } });
+          emitToolCommit({
+            action: 'CREATE',
+            artifactId: id,
+            artifactName,
+            afterContent: created?.content ?? params.body
+          });
           if (created) {
             const hash = hashArtifactContent(created.content);
             store.addEvidence({ kind: 'artifact', ts: Date.now(), artifactId: created.id, name: created.name, hash });
@@ -220,15 +256,41 @@ export const createProcessOutputForTools = (deps: ToolParserDeps) => {
         }
         const id = resolved.id;
         if (params.kind === 'APPEND') {
+          const before = store.get(id)?.content ?? '';
           store.append(id, params.body);
-          emitToolResult({ tool, intentId, payload: { id } });
-          addMessage('assistant', `APPEND_OK: ${id}`, 'tool_result');
+          const updated = store.get(id);
+          const after = updated?.content ?? '';
+          const artifactName = rememberArtifactName(
+            id,
+            updated?.name || resolved.nameHint || getRememberedArtifactName(id) || ''
+          ) || resolved.nameHint || id;
+          emitToolResult({ tool, intentId, payload: { id, name: artifactName } });
+          emitToolCommit({
+            action: 'APPEND',
+            artifactId: id,
+            artifactName,
+            beforeContent: before,
+            afterContent: after
+          });
           return;
         }
 
+        const before = store.get(id)?.content ?? '';
         store.replace(id, params.body);
-        emitToolResult({ tool, intentId, payload: { id } });
-        addMessage('assistant', `REPLACE_OK: ${id}`, 'tool_result');
+        const updated = store.get(id);
+        const after = updated?.content ?? '';
+        const artifactName = rememberArtifactName(
+          id,
+          updated?.name || resolved.nameHint || getRememberedArtifactName(id) || ''
+        ) || resolved.nameHint || id;
+        emitToolResult({ tool, intentId, payload: { id, name: artifactName } });
+        emitToolCommit({
+          action: 'REPLACE',
+          artifactId: id,
+          artifactName,
+          beforeContent: before,
+          afterContent: after
+        });
       } catch (e: any) {
         emitToolError({ tool, intentId, payload: { arg: params.header }, error: e?.message || String(e) });
       }

@@ -500,13 +500,9 @@ describe('P0 Tool Lifecycle', () => {
       const processOutput = createProcessOutputForTools(mockDeps);
       await processOutput('[CREATE: report.md]hello[/CREATE]');
 
-      const createCall = vi
-        .mocked(mockDeps.addMessage)
-        .mock.calls.find((c: any[]) => c?.[0] === 'assistant' && String(c?.[1] || '').includes('CREATE_OK:'));
-      expect(createCall).toBeDefined();
-      const createdIdMatch = String(createCall?.[1] || '').match(/CREATE_OK:\s*(art-[^\s]+)/);
-      expect(createdIdMatch).toBeDefined();
-      const artifactId = String(createdIdMatch?.[1] || '');
+      const created = useArtifactStore.getState().getByName('report.md')[0];
+      expect(created).toBeDefined();
+      const artifactId = String(created?.id || '');
       expect(artifactId.startsWith('art-')).toBe(true);
 
       await processOutput(`[PUBLISH: "${artifactId}"]`);

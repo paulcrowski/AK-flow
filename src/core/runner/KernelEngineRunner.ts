@@ -318,6 +318,7 @@ export class KernelEngineRunner<TIdentity> {
   private async handleAssistantSpeechAutonomous(text: string, type: any, meta?: any) {
     try {
       const cleaned = await this.deps.processOutputForTools(text);
+      if (!cleaned.trim()) return;
       const msg = { role: 'assistant', text: cleaned, type, ...(meta?.knowledgeSource ? { knowledgeSource: meta.knowledgeSource } : {}) };
 
       this.deps.actions.addUiMessage(msg as any);

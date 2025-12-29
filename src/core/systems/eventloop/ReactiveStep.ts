@@ -12,6 +12,8 @@ import { eventBus } from '../../EventBus';
 import { AgentType, PacketType } from '../../../types';
 import { generateUUID } from '../../../utils/uuid';
 import { detectIntent, getRetrievalLimit } from '../IntentDetector';
+import { getRememberedArtifactName, rememberArtifactName } from '../../utils/artifactNameCache';
+import { buildToolCommitDetails, formatToolCommitMessage } from '../../utils/toolCommit';
 
 // P0.1 COMMIT 3: Action-First Policy
 // Feature flag - can be disabled if causing issues
@@ -318,14 +320,14 @@ export async function runReactiveStep(input: {
         return resolved;
       };
 
-      const emitToolIntent = (tool: string, arg: string) => {
+      const emitToolIntent = (tool: string, arg: string, artifactName?: string) => {
         const intentId = generateUUID();
         eventBus.publish({
           id: intentId,
           timestamp: Date.now(),
           source: AgentType.CORTEX_FLOW,
           type: PacketType.TOOL_INTENT,
-          payload: { tool, arg },
+          payload: { tool, arg, ...(artifactName ? { artifactName } : {}) },
           priority: 0.8
         });
         return intentId;
@@ -342,6 +344,31 @@ export async function runReactiveStep(input: {
         });
       };
 
+      const emitToolCommit = (params: {
+        action: 'CREATE' | 'APPEND' | 'REPLACE';
+        artifactId: string;
+        artifactName: string;
+        beforeContent?: string;
+        afterContent?: string;
+        deltaText?: string;
+      }) => {
+        const details = buildToolCommitDetails(params);
+        if (!details) return;
+        const message = formatToolCommitMessage(details);
+        eventBus.publish({
+          id: generateUUID(),
+          timestamp: Date.now(),
+          source: AgentType.CORTEX_FLOW,
+          type: PacketType.SYSTEM_ALERT,
+          payload: {
+            event: 'TOOL_COMMIT',
+            message,
+            ...details
+          },
+          priority: 0.7
+        });
+      };
+
       const emitToolError = (tool: string, intentId: string, payload: Record<string, unknown>, error: string) => {
         eventBus.publish({
           id: generateUUID(),
@@ -355,14 +382,22 @@ export async function runReactiveStep(input: {
 
       try {
         if (actionIntent.action === 'CREATE') {
-          const intentId = emitToolIntent('CREATE', target);
+          const intentId = emitToolIntent('CREATE', target, target);
           const traceId = getCurrentTraceId();
           if (traceId) p0MetricAdd(traceId, { actionFirstTriggered: 1, actionType: 'CREATE' });
           try {
             const content = String(actionIntent.payload || '').trim();
             const id = store.create(target, content);
             if (traceId) p0MetricAdd(traceId, { actionFirstExecuted: 1 });
-            emitToolResult('CREATE', intentId, { id, name: target });
+            const created = store.get(id);
+            const artifactName = rememberArtifactName(id, created?.name || target) || target;
+            emitToolResult('CREATE', intentId, { id, name: artifactName });
+            emitToolCommit({
+              action: 'CREATE',
+              artifactId: id,
+              artifactName,
+              afterContent: created?.content ?? content
+            });
             callbacks.onMessage('assistant', `Utworzylem ${target} (${id}). Poprawic cos?`, 'speech');
             updateContextAfterAction(ctx);
             return;
@@ -374,7 +409,10 @@ export async function runReactiveStep(input: {
 
         if (actionIntent.action === 'READ') {
           const resolved = resolveRef(target);
-          const intentId = emitToolIntent('READ_ARTIFACT', resolved.ok ? resolved.id : target);
+          const nameHint = resolved.ok
+            ? rememberArtifactName(resolved.id, resolved.nameHint || getRememberedArtifactName(resolved.id) || '')
+            : '';
+          const intentId = emitToolIntent('READ_ARTIFACT', resolved.ok ? resolved.id : target, nameHint || undefined);
           const traceId = getCurrentTraceId();
           if (traceId) p0MetricAdd(traceId, { actionFirstTriggered: 1, actionType: 'READ' });
           if (!resolved.ok) {
@@ -400,7 +438,10 @@ export async function runReactiveStep(input: {
             // No payload - fall through to LLM
           } else {
             const resolved = resolveRef(target);
-            const intentId = emitToolIntent('APPEND', resolved.ok ? resolved.id : target);
+            const nameHint = resolved.ok
+              ? rememberArtifactName(resolved.id, resolved.nameHint || getRememberedArtifactName(resolved.id) || '')
+              : '';
+            const intentId = emitToolIntent('APPEND', resolved.ok ? resolved.id : target, nameHint || undefined);
             const traceId = getCurrentTraceId();
             if (traceId) p0MetricAdd(traceId, { actionFirstTriggered: 1, actionType: 'APPEND' });
             if (!resolved.ok) {
@@ -409,9 +450,22 @@ export async function runReactiveStep(input: {
               return;
             }
             try {
+              const before = store.get(resolved.id)?.content ?? '';
               store.append(resolved.id, `\n\n${payload}`);
               if (traceId) p0MetricAdd(traceId, { actionFirstExecuted: 1 });
-              emitToolResult('APPEND', intentId, { id: resolved.id });
+              const updated = store.get(resolved.id);
+              const artifactName = rememberArtifactName(
+                resolved.id,
+                updated?.name || resolved.nameHint || getRememberedArtifactName(resolved.id) || ''
+              ) || resolved.nameHint || resolved.id;
+              emitToolResult('APPEND', intentId, { id: resolved.id, name: artifactName });
+              emitToolCommit({
+                action: 'APPEND',
+                artifactId: resolved.id,
+                artifactName,
+                beforeContent: before,
+                afterContent: updated?.content ?? ''
+              });
               publishReactiveSpeech({
                 ctx,
                 trace,
@@ -431,7 +485,10 @@ export async function runReactiveStep(input: {
         if (actionIntent.action === 'REPLACE') {
           const resolved = resolveRef(target);
           const next = String(actionIntent.payload || '').trim() || `TODO: REPLACE requested\n\n${userInput}`;
-          const intentId = emitToolIntent('REPLACE', resolved.ok ? resolved.id : target);
+          const nameHint = resolved.ok
+            ? rememberArtifactName(resolved.id, resolved.nameHint || getRememberedArtifactName(resolved.id) || '')
+            : '';
+          const intentId = emitToolIntent('REPLACE', resolved.ok ? resolved.id : target, nameHint || undefined);
           const traceId = getCurrentTraceId();
           if (traceId) p0MetricAdd(traceId, { actionFirstTriggered: 1, actionType: 'REPLACE' });
           if (!resolved.ok) {
@@ -440,9 +497,22 @@ export async function runReactiveStep(input: {
             return;
           }
           try {
+            const before = store.get(resolved.id)?.content ?? '';
             store.replace(resolved.id, next);
             if (traceId) p0MetricAdd(traceId, { actionFirstExecuted: 1 });
-            emitToolResult('REPLACE', intentId, { id: resolved.id });
+            const updated = store.get(resolved.id);
+            const artifactName = rememberArtifactName(
+              resolved.id,
+              updated?.name || resolved.nameHint || getRememberedArtifactName(resolved.id) || ''
+            ) || resolved.nameHint || resolved.id;
+            emitToolResult('REPLACE', intentId, { id: resolved.id, name: artifactName });
+            emitToolCommit({
+              action: 'REPLACE',
+              artifactId: resolved.id,
+              artifactName,
+              beforeContent: before,
+              afterContent: updated?.content ?? ''
+            });
             publishReactiveSpeech({
               ctx,
               trace,

@@ -456,6 +456,21 @@ export const useCognitiveKernelLite = (loadedIdentity?: AgentIdentity | null) =>
     return () => unsubscribe();
   }, [actions]);
 
+  useEffect(() => {
+    const unsubscribe = eventBus.subscribe(PacketType.SYSTEM_ALERT, (packet: any) => {
+      if (packet?.payload?.event !== 'TOOL_COMMIT') return;
+      const message = String(packet.payload?.message || '').trim();
+      if (!message) return;
+      actionsRef.current.addUiMessage({
+        role: 'assistant',
+        text: message,
+        type: 'tool_result',
+        generator: 'system'
+      } as any);
+    });
+    return () => unsubscribe();
+  }, []);
+
   const toggleAutonomy = useCallback(() => {
     actions.toggleAutonomousMode(!getCognitiveState().autonomousMode);
   }, [actions]);
@@ -496,7 +511,7 @@ export const useCognitiveKernelLite = (loadedIdentity?: AgentIdentity | null) =>
   // ─────────────────────────────────────────────────────────────────────────
   useEffect(() => {
     if (pendingOutputs.length === 0) return;
-    
+
     for (const output of pendingOutputs) {
       try {
         switch (output.type) {
