@@ -64,7 +64,14 @@ export class KernelEngineRunner<TIdentity> {
       .normalize('NFD')
       .replace(/[\u0300-\u036f]/g, '')
       .toLowerCase();
-    return normalized.includes('wystapil problem');
+    // FIX-7: Extended error detection - Polish and English
+    return normalized.includes('wystapil problem')
+      || normalized.includes('blad')
+      || normalized.includes('error')
+      || normalized.includes('nie udalo sie')
+      || normalized.includes('nie mozna')
+      || normalized.includes('failed')
+      || normalized.includes('unable to');
   }
 
   private maybeEmitUiErrorToast(messageId: string, text: string): void {
@@ -287,10 +294,10 @@ export class KernelEngineRunner<TIdentity> {
     const baseConversation = opts.conversationOverride
       ? opts.conversationOverride
       : state.uiConversation.map((c: any) => ({
-          role: c.role as 'user' | 'assistant',
-          text: c.text,
-          type: c.type
-        }));
+        role: c.role as 'user' | 'assistant',
+        text: c.text,
+        type: c.type
+      }));
 
     return {
       soma: state.soma,
@@ -311,14 +318,14 @@ export class KernelEngineRunner<TIdentity> {
       hadExternalRewardThisTick: false,
       agentIdentity: identity
         ? {
-            name: (identity as any).name,
-            persona: (identity as any).persona || '',
-            coreValues: (identity as any).core_values || [],
-            traitVector: (identity as any).trait_vector,
-            voiceStyle: (identity as any).voice_style || 'balanced',
-            language: (identity as any).language || 'English',
-            stylePrefs: (identity as any).style_prefs
-          }
+          name: (identity as any).name,
+          persona: (identity as any).persona || '',
+          coreValues: (identity as any).core_values || [],
+          traitVector: (identity as any).trait_vector,
+          voiceStyle: (identity as any).voice_style || 'balanced',
+          language: (identity as any).language || 'English',
+          stylePrefs: (identity as any).style_prefs
+        }
         : undefined,
       socialDynamics: state.socialDynamics,
       userStylePrefs: (identity as any)?.style_prefs || {}
@@ -381,6 +388,12 @@ export class KernelEngineRunner<TIdentity> {
 
   private async handleAssistantSpeechReactive(text: string, type: any, meta?: any) {
     try {
+      // FIX-7: Check for error BEFORE processOutputForTools (original text)
+      const rawMessageId = this.deps.generateUUID();
+      if (this.isUserFacingError(text)) {
+        this.maybeEmitUiErrorToast(rawMessageId, text);
+      }
+
       const cleaned = await this.deps.processOutputForTools(text);
       const messageId = this.deps.generateUUID();
       const speechMsg = {
@@ -396,7 +409,10 @@ export class KernelEngineRunner<TIdentity> {
       };
 
       this.deps.actions.addUiMessage(speechMsg as any);
-      this.maybeEmitUiErrorToast(messageId, cleaned);
+      // FIX-7: Also check cleaned text in case error message survived processing
+      if (cleaned !== text && this.isUserFacingError(cleaned)) {
+        this.maybeEmitUiErrorToast(messageId, cleaned);
+      }
 
       this.deps.actions.dispatch({
         type: 'AGENT_SPOKE',
