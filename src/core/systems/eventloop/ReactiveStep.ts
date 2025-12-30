@@ -386,9 +386,14 @@ export async function runReactiveStep(input: {
           const traceId = getCurrentTraceId();
           if (traceId) p0MetricAdd(traceId, { actionFirstTriggered: 1, actionType: 'CREATE' });
           try {
-            const content = String(actionIntent.payload || '').trim();
+            let content = String(actionIntent.payload || '').trim();
+            // FIX-1: Fallback dla pustego payload — generuj placeholder zamiast pustego pliku
+            if (!content) {
+              content = `# ${target}\n\nTODO: Uzupełnić treść\n\nCreated: ${new Date().toISOString().split('T')[0]}`;
+              if (traceId) p0MetricAdd(traceId, { actionFirstPayloadFallback: 1 });
+            }
             const id = store.create(target, content);
-            if (traceId) p0MetricAdd(traceId, { actionFirstExecuted: 1 });
+            if (traceId) p0MetricAdd(traceId, { actionFirstExecuted: 1, actionFirstContentChars: content.length });
             const created = store.get(id);
             const artifactName = rememberArtifactName(id, created?.name || target) || target;
             emitToolResult('CREATE', intentId, { id, name: artifactName });
