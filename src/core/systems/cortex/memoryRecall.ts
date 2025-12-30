@@ -57,6 +57,8 @@ export async function recallMemories(input: {
     const start = Number(intent.rangeStart);
     const end = Number(intent.rangeEnd);
     return items.filter((m) => {
+      // FIX-3: Skip memories without valid timestamp (don't match fake/synthetic timestamps)
+      if (!m.timestamp) return false;
       const ts = typeof m.timestamp === 'string' ? Date.parse(m.timestamp) : NaN;
       if (!Number.isFinite(ts)) return false;
       return ts >= start && ts <= end;
@@ -82,42 +84,42 @@ export async function recallMemories(input: {
 
   const globalRecentPromise: Promise<MemoryTrace[]> = wantGlobalBaseline && agentIdForCache
     ? (async () => {
-        const cache = memorySpace?.cold?.cache;
-        const key = `global_recent:${agentIdForCache}:${globalRecentLimit}`;
+      const cache = memorySpace?.cold?.cache;
+      const key = `global_recent:${agentIdForCache}:${globalRecentLimit}`;
 
-        const load = async (): Promise<MemoryTrace[]> => {
-          const recent = await MemoryService.recallRecent(globalRecentLimit);
-          return recent as any as MemoryTrace[];
-        };
+      const load = async (): Promise<MemoryTrace[]> => {
+        const recent = await MemoryService.recallRecent(globalRecentLimit);
+        return recent as any as MemoryTrace[];
+      };
 
-        const typedCache = cache as unknown as
-          | { getOrLoad: (k: string, ttl: number, loader: () => Promise<MemoryTrace[]>) => Promise<MemoryTrace[]> }
-          | undefined;
+      const typedCache = cache as unknown as
+        | { getOrLoad: (k: string, ttl: number, loader: () => Promise<MemoryTrace[]>) => Promise<MemoryTrace[]> }
+        | undefined;
 
-        const p: Promise<MemoryTrace[]> = typedCache
-          ? typedCache.getOrLoad(key, globalRecentCacheTtlMs, load)
-          : load();
+      const p: Promise<MemoryTrace[]> = typedCache
+        ? typedCache.getOrLoad(key, globalRecentCacheTtlMs, load)
+        : load();
 
-        const startedAt = Date.now();
-        const res = await withTimeout(p, globalRecallTimeoutMs);
-        if (!res.ok) {
-          eventBus.publish({
-            id: generateUUID(),
-            traceId: getCurrentTraceId() ?? undefined,
-            timestamp: Date.now(),
-            source: AgentType.CORTEX_FLOW,
-            type: PacketType.SYSTEM_ALERT,
-            payload: {
-              event: 'GLOBAL_RECALL_TIMEOUT',
-              reason: res.reason,
-              tookMs: Date.now() - startedAt
-            },
-            priority: 0.2
-          });
-          return [];
-        }
-        return Array.isArray(res.value) ? res.value : [];
-      })()
+      const startedAt = Date.now();
+      const res = await withTimeout(p, globalRecallTimeoutMs);
+      if (!res.ok) {
+        eventBus.publish({
+          id: generateUUID(),
+          traceId: getCurrentTraceId() ?? undefined,
+          timestamp: Date.now(),
+          source: AgentType.CORTEX_FLOW,
+          type: PacketType.SYSTEM_ALERT,
+          payload: {
+            event: 'GLOBAL_RECALL_TIMEOUT',
+            reason: res.reason,
+            tookMs: Date.now() - startedAt
+          },
+          priority: 0.2
+        });
+        return [];
+      }
+      return Array.isArray(res.value) ? res.value : [];
+    })()
     : Promise.resolve([]);
 
   const sessionChunksPromise = structuredRecall && agentIdForCache && sessionChunkLimit > 0
@@ -258,13 +260,15 @@ export async function recallMemories(input: {
   return memories;
 }
 
-function buildSyntheticMemory(content: string, id?: string, timestamp?: string): MemoryTrace {
+function buildSyntheticMemory(content: string, id?: string, timestamp?: string | null): MemoryTrace {
   return {
     id,
     content: normalizeMemoryText(content),
-    timestamp: timestamp || new Date().toISOString(),
+    // FIX-3: Don't use fake current timestamp — null means "unknown time"
+    // This prevents synthetic memories from passing time-range filters
+    timestamp: timestamp || null,
     emotionalContext: { fear: 0, curiosity: 0, frustration: 0, satisfaction: 0 }
-  };
+  } as MemoryTrace;
 }
 
 function isStructuredRecall(intent: IntentType | IntentResult): boolean {
