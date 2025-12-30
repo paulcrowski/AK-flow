@@ -1,6 +1,6 @@
 # 🧠 AK-FLOW Architecture Map
 
-> **Wersja:** 6.10.1 (2025-12-27)
+> **Wersja:** 6.10.2 (2025-12-30)
 > **Cel:** Prosta mapa jak działa agent i jaki ma flow
 
 ## Archive policy
@@ -9,6 +9,15 @@
 Ten katalog jest wykluczony z kompilacji TypeScript i służy wyłącznie jako referencja do poprzednich iteracji.
 
 ---
+
+## FAZA 6.10.2: P0.2 Hardening (2025-12-30)
+
+**Cel:** poprawa niezawodnosci Action-First i stabilnosci parsowania.
+
+**Mechanika:**
+- Action-First: fallback payloads, placeholder APPEND prompt, PL/EN verb regex normalization.
+- Cortex: telemetry for empty/invalid parse, higher maxOutputTokens, UI error toast detection.
+- Memory/Dream: semantic recall uses real timestamps; DreamConsolidation logs episode details.
 
 ## FAZA 6.10.1: Maintenance Refactors (2025-12-27)
 

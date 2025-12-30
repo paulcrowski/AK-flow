@@ -1,7 +1,7 @@
 {
   "version": "1.0.0",
-  "lastModified": "2025-12-27T23:32:32.000Z",
-  "lastUpdated": "2025-12-27T23:32:32.000Z",
+  "lastModified": "2025-12-30T21:08:49.000Z",
+  "lastUpdated": "2025-12-30T21:08:49.000Z",
   "modifiedBy": "AI_CODEX",
   "tasks": [
     {
@@ -934,6 +934,17 @@
       ],
       "createdAt": "2025-12-27T23:32:32.000Z",
       "updatedAt": "2025-12-27T23:32:32.000Z"
+    },
+    {
+      "id": "note-20251230-210849",
+      "title": "Daily Close: 2025-12-30",
+      "content": "DONE: P0.2 hardening for Action-First and Cortex reliability (payload fallbacks, parse telemetry, maxOutputTokens, UI error toast), plus semantic recall timestamp fix and DreamConsolidation episode details.\nVERIFY: npm test PASS (reported); npm run build PASS (reported); manual UI ran once.\nNEXT: implement READ_FILE + SEARCH_IN_REPO tools; Work Loop v1; finish Serotonin Reactions mapping.",
+      "category": "INSIGHT",
+      "tags": [
+        "daily_close"
+      ],
+      "createdAt": "2025-12-30T21:08:49.000Z",
+      "updatedAt": "2025-12-30T21:08:49.000Z"
     }
   ],
   "stats": {

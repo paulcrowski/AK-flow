@@ -144,13 +144,13 @@ export const SYSTEM_CONFIG = {
   prism: {
     /** Enable PersonaGuard checking */
     guardEnabled: true,
-    
+
     /** Enable retry on guard failure */
     retryEnabled: true,
-    
+
     /** Log all guard checks */
     logAllChecks: true,
-    
+
     /** Max retries before giving up */
     maxRetries: 2,
   },
@@ -161,7 +161,7 @@ export const SYSTEM_CONFIG = {
   prismPipeline: {
     /** Enable pipeline */
     enabled: true,
-    
+
     /** Log pipeline activity */
     logEnabled: true,
   },
@@ -172,13 +172,13 @@ export const SYSTEM_CONFIG = {
   factEcho: {
     /** Enable FactEcho validation */
     enabled: true,
-    
+
     /** Require ALL facts to be echoed (strict mode) */
     strictMode: false,
-    
+
     /** Log all checks */
     logEnabled: true,
-    
+
     /** Soft fail response */
     softFailResponse: 'Przepraszam, muszę się zresetować.',
   },
@@ -189,18 +189,18 @@ export const SYSTEM_CONFIG = {
   chemistryBridge: {
     /** Enable chemistry reactions to EvaluationBus */
     enabled: false,  // Phase 4: Start disabled
-    
+
     /** Max delta per aggregation window */
     maxDopamineDelta: 10,
     maxSerotoninDelta: 5,
-    
+
     /** Aggregation window in ms */
     aggregationWindowMs: 5000,
-    
+
     /** Baselines */
     dopamineBaseline: 55,
     serotoninBaseline: 60,
-    
+
     /** Log chemistry changes */
     logEnabled: true,
   },
@@ -211,13 +211,13 @@ export const SYSTEM_CONFIG = {
   goals: {
     /** Enable goal formation */
     enabled: true,
-    
+
     /** Minimum silence before considering goal (ms) */
     minSilenceMs: 60_000,
 
     /** Cooldown after a curiosity goal when the user stayed silent (ms) */
     refractorySilenceMs: 2 * 60_000,
-    
+
     /** Max goals per hour */
     maxPerHour: 5,
   },
@@ -239,13 +239,13 @@ export const SYSTEM_CONFIG = {
   rpe: {
     /** Dopamine baseline */
     dopamineBaseline: 55,
-    
+
     /** Dopamine floor (never go below) */
     dopamineFloor: 45,
-    
+
     /** Ticks before decay starts */
     decayStartTicks: 2,
-    
+
     /** Max decay per tick */
     maxDecayPerTick: 4,
   },
@@ -256,16 +256,16 @@ export const SYSTEM_CONFIG = {
   expression: {
     /** Novelty threshold for shadow mode speech */
     shadowModeNoveltyThreshold: 0.1,
-    
+
     /** Consecutive speeches before narcissism breaker */
     narcissismBreakerThreshold: 4,
-    
+
     /** Base threshold for speaking (normal mode) */
     baseThreshold: 0.3,
-    
+
     /** Base threshold for speaking (shadow mode - higher = harder to speak) */
     shadowModeBaseThreshold: 0.9,
-    
+
     /** Narcissism penalty threshold (15% self-reference = boring) */
     narcissismPenaltyThreshold: 0.15,
   },
@@ -276,13 +276,13 @@ export const SYSTEM_CONFIG = {
   volition: {
     /** Base voice pressure threshold for speaking */
     baseVoicePressureThreshold: 0.5,
-    
+
     /** Additional threshold when fear is high (> 0.8) */
     fearInhibitionBonus: 0.2,
-    
+
     /** Fear level that triggers inhibition */
     fearInhibitionTrigger: 0.8,
-    
+
     /** Poetic penalty per score point (when not in poetic mode) */
     poeticPenaltyPerPoint: 0.1,
   },
@@ -293,31 +293,31 @@ export const SYSTEM_CONFIG = {
   limbic: {
     /** Max emotional delta per tick - fallback safety net */
     maxMoodShiftDelta: 0.3,
-    
+
     /** Homeostasis decay factor (0.995 = slow, 0.9 = fast) */
     homeostasisDecayFactor: 0.995,
-    
+
     /** EMA smoothing alpha (0.4 = 40% new signal, 60% previous) */
     emaSmoothingAlpha: 0.4,
-    
+
     /** Refractory period in ms (neurons need time to recharge) */
     refractoryPeriodMs: 2000,
-    
+
     /** Habituation decay per consecutive same-direction shift */
     habituationDecayRate: 0.2,
-    
+
     // ═══════════════════════════════════════════════════════════════════════
     // BASELINE ATTRACTORS (Tonic Activity - neurons are never "off")
     // ═══════════════════════════════════════════════════════════════════════
     /** Fear baseline - healthy vigilance, not paranoia */
     fearBaseline: 0.05,
-    
+
     /** Curiosity baseline - always some drive to explore */
     curiosityBaseline: 0.3,
-    
+
     /** Frustration baseline - zero tolerance is healthy */
     frustrationBaseline: 0.0,
-    
+
     /** Satisfaction baseline - neutral contentment */
     satisfactionBaseline: 0.5,
   },
@@ -328,10 +328,10 @@ export const SYSTEM_CONFIG = {
   telemetry: {
     /** Log PROMPT_HARDFACTS before LLM calls */
     logPromptHardFacts: true,
-    
+
     /** Log DOPAMINE_TICK every tick */
     logDopamineTick: true,
-    
+
     /** Log identity issues */
     logIdentityIssues: true,
   },
@@ -350,10 +350,10 @@ export const SYSTEM_CONFIG = {
   conversation: {
     /** Max messages in kernel memory (RAM) */
     maxLength: 50,
-    
+
     /** Archive to database for full history */
     archiveToDatabase: true,
-    
+
     /** Truncation strategy */
     truncateStrategy: 'keep-recent' as const,
   },
@@ -364,37 +364,37 @@ export const SYSTEM_CONFIG = {
   socialDynamics: {
     /** Enable social dynamics gating */
     enabled: true,
-    
+
     /** Cost increment per speech (multiplied by consecutive count) */
     costPerSpeech: 0.15,
-    
+
     /** Budget spent per speech */
     budgetPerSpeech: 0.2,
-    
+
     /** Cost reduction when user responds (multiply factor) */
     userResponseRelief: 0.5,
-    
+
     /** Budget boost when user responds */
     userResponseBudgetBoost: 0.3,
-    
+
     /** Decay rate when user present (> 0.5 presence) */
     decayRateUserPresent: 0.95,
-    
+
     /** Decay rate when user absent */
     decayRateUserAbsent: 0.99,
-    
+
     /** Budget regeneration per tick */
     budgetRegenPerTick: 0.01,
-    
+
     /** Time for presence to decay to 0 (ms) */
     presenceDecayTimeMs: 10 * 60 * 1000, // 10 minutes
-    
+
     /** Minimum budget to allow speech */
     minBudgetToSpeak: 0.2,
-    
+
     /** Base threshold for speech */
     baseThreshold: 0.6,
-    
+
     /** Log social dynamics checks */
     logEnabled: true,
   },
@@ -405,10 +405,10 @@ export const SYSTEM_CONFIG = {
   styleGuard: {
     /** Enable StyleGuard filtering - OFF by default to allow personality freedom */
     enabled: false,  // Let personality evolve naturally through conversation
-    
+
     /** Minimum text length after filtering (below = suppress) */
     minTextLength: 10,
-    
+
     /** Log when filtering is applied */
     logEnabled: true,
   },

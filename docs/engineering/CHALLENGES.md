@@ -17,11 +17,52 @@
 
 | Metryka | Wartość |
 |---------|---------|
-| Rozwiązanych problemów | 17 |
+| Rozwiązanych problemów | 18 |
 | Całkowity czas | ~48 godzin |
 | Średnia trudność | 3.9/5 |
 | Największy przełom | FactEcho Guard (FAZA 6.0) |
 | Najdłuższy problem | Monolityczny Kernel (8h) |
+
+---
+
+## Problem #26: P0.2 Action-First + Cortex reliability gaps
+
+**Data:** 2025-12-30
+**Trudnosc:** 3/5
+**Status:** ROZWIAZANY (P0.2 hardening)
+
+### Objawy
+- Action-First: brak payloadu powodowal puste CREATE/APPEND albo fallback do LLM.
+- LLM JSON bywal ucinany lub pusty; brak telemetry dla invalid structure.
+- Semantic recall dostawal sztuczne timestamps, psujac filtry zakresu.
+- UI error toast nie pojawial sie w logach mimo user-facing bledow.
+
+### Diagnoza
+- Brak fallbacku/promptu dla pustego payloadu.
+- Telemetria parse failure tylko w catch; limit output tokens zbyt niski.
+- MemoryService zwracal "now" zamiast created_at.
+- isUserFacingError nie zawsze wykrywal bledy.
+
+### Rozwiazanie
+- Payload fallback/placeholder + regexy PL/EN w Action-First.
+- Telemetria parse failure dla empty/invalid + wyzszy maxOutputTokens.
+- Semantic recall: uzycie realnych timestampow z DB.
+- Lepsza detekcja UI error toast.
+- DreamConsolidation: dodane szczegoly epizodow.
+
+### Pliki
+- src/core/systems/eventloop/ReactiveStep.ts
+- src/core/inference/CortexInference.ts
+- src/llm/gemini/CortexTextService.ts
+- src/services/supabase.ts
+- src/core/runner/KernelEngineRunner.ts
+- src/services/DreamConsolidationService.ts
+
+### Testy
+`npm test` (reported), `npm run build` (reported)
+
+### Lekcja
+- Telemetry early and safe fallbacks prevent silent failures.
 
 ---
 
