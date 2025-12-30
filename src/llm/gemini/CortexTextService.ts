@@ -364,7 +364,8 @@ export function createCortexTextService(ai: GoogleGenAI) {
       const primary = await callAutonomyV2({
         prompt,
         schema: AUTONOMOUS_VOLITION_V2_RESPONSE_SCHEMA,
-        maxOutputTokens: 1536,
+        // FIX-5: Increased from 1536 to prevent NO_BALANCED_JSON_BLOCK truncation errors
+        maxOutputTokens: 2048,
         usageTag: 'autonomousVolitionV2',
         logLabel: 'AV_V2 RAW'
       });
