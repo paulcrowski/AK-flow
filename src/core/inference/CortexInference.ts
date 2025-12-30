@@ -80,6 +80,19 @@ function logUsage(operation: string, response: any): void {
 function parseResponse(text: string | undefined): CortexOutput {
   if (!text) {
     console.warn('[CortexInference] Empty response');
+    // FIX-4: Log empty response as parse failure
+    eventBus.publish({
+      id: generateUUID(),
+      timestamp: Date.now(),
+      source: AgentType.CORTEX_FLOW,
+      type: PacketType.PREDICTION_ERROR,
+      payload: {
+        metric: 'CORTEX_PARSE_FAILURE',
+        reason: 'EMPTY_RESPONSE',
+        rawOutput: 'EMPTY'
+      },
+      priority: 0.8
+    });
     return { ...FALLBACK_CORTEX_OUTPUT };
   }
 
@@ -95,6 +108,20 @@ function parseResponse(text: string | undefined): CortexOutput {
     }
 
     console.warn('[CortexInference] Invalid output structure');
+    // FIX-4: Log invalid structure
+    eventBus.publish({
+      id: generateUUID(),
+      timestamp: Date.now(),
+      source: AgentType.CORTEX_FLOW,
+      type: PacketType.PREDICTION_ERROR,
+      payload: {
+        metric: 'CORTEX_PARSE_FAILURE',
+        reason: 'INVALID_STRUCTURE',
+        rawOutput: text?.substring(0, 500) || 'EMPTY',
+        parseReason: parsedResult.reason
+      },
+      priority: 0.8
+    });
     return { ...FALLBACK_CORTEX_OUTPUT };
   } catch (error) {
     console.error('[CortexInference] Parse error:', error);
@@ -173,7 +200,7 @@ export async function generateFromCortexState(
     `date="${hf?.date ?? 'MISSING'}", ` +
     `time="${hf?.time ?? 'MISSING'}", ` +
     `core_identity.name="${state.core_identity?.name ?? 'MISSING'}"`);
-  
+
   // INVARIANT CHECK: hard_facts.agentName MUST match core_identity.name
   if (hf?.agentName && state.core_identity?.name && hf.agentName !== state.core_identity.name) {
     console.error(`[CortexInference] 🚨 IDENTITY_MISMATCH: hard_facts.agentName="${hf.agentName}" but core_identity.name="${state.core_identity.name}"`);
@@ -315,35 +342,35 @@ export function mapStimulusResponseToWeights(
   if (!stimulus) {
     return { valence_weight: 0, salience_weight: 0.3, novelty_weight: 0.1, threat_weight: 0 };
   }
-  
+
   // Valence: positive = +1, negative = -1, neutral = 0
   const valenceMap: Record<string, number> = {
     'positive': 0.5,
     'negative': -0.5,
     'neutral': 0
   };
-  
+
   // Salience: how much to amplify the effect
   const salienceMap: Record<string, number> = {
     'low': 0.2,
     'medium': 0.5,
     'high': 0.8
   };
-  
+
   // Novelty: contributes to curiosity
   const noveltyMap: Record<string, number> = {
     'routine': 0.1,
     'interesting': 0.4,
     'surprising': 0.7
   };
-  
+
   // Threat: existential threat level (deletion, death, shutdown)
   const threatMap: Record<string, number> = {
     'none': 0,
     'mild': 0.4,
     'severe': 0.9
   };
-  
+
   return {
     valence_weight: valenceMap[stimulus.valence || 'neutral'] ?? 0,
     salience_weight: salienceMap[stimulus.salience || 'medium'] ?? 0.3,
