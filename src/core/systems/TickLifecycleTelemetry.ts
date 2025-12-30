@@ -11,6 +11,10 @@ type P0MetricState = {
     actionFirstTriggered: number;
     actionFirstExecuted: number;
     actionType: string | null;
+    // FIX-1 & FIX-6: New metrics for payload fallback tracking
+    actionFirstPayloadFallback: number;
+    actionFirstContentChars: number;
+    appendPayloadMissing: number;
     autonomyAttempt: number;
     autonomySuccess: number;
     autonomyFail: number;
@@ -40,6 +44,10 @@ function emptyP0MetricState(): P0MetricState {
         actionFirstTriggered: 0,
         actionFirstExecuted: 0,
         actionType: null,
+        // FIX-1 & FIX-6: New metrics
+        actionFirstPayloadFallback: 0,
+        actionFirstContentChars: 0,
+        appendPayloadMissing: 0,
         autonomyAttempt: 0,
         autonomySuccess: 0,
         autonomyFail: 0,
@@ -73,6 +81,10 @@ export function p0MetricAdd(traceId: string, patch: Partial<P0MetricState>): voi
         artifactResolveFail: s.artifactResolveFail + (patch.artifactResolveFail ?? 0),
         actionFirstTriggered: s.actionFirstTriggered + (patch.actionFirstTriggered ?? 0),
         actionFirstExecuted: s.actionFirstExecuted + (patch.actionFirstExecuted ?? 0),
+        // FIX-1 & FIX-6: Aggregate new metrics
+        actionFirstPayloadFallback: s.actionFirstPayloadFallback + (patch.actionFirstPayloadFallback ?? 0),
+        actionFirstContentChars: s.actionFirstContentChars + (patch.actionFirstContentChars ?? 0),
+        appendPayloadMissing: s.appendPayloadMissing + (patch.appendPayloadMissing ?? 0),
         autonomyAttempt: s.autonomyAttempt + (patch.autonomyAttempt ?? 0),
         autonomySuccess: s.autonomySuccess + (patch.autonomySuccess ?? 0),
         autonomyFail: s.autonomyFail + (patch.autonomyFail ?? 0),

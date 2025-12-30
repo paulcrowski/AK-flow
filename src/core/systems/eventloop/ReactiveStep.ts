@@ -475,31 +475,34 @@ export async function runReactiveStep(input: {
 
         if (actionIntent.action === 'APPEND') {
           const payload = String(actionIntent.payload || '').trim();
+          const resolved = resolveRef(target);
+          const nameHint = resolved.ok
+            ? rememberArtifactName(resolved.id, resolved.nameHint || getRememberedArtifactName(resolved.id) || '')
+            : '';
+          const traceId = getCurrentTraceId();
+
+          // FIX-6 Variant C: If no payload, add placeholder AND ask for content
           if (!payload) {
-            // No payload - fall through to LLM
-          } else {
-            const resolved = resolveRef(target);
-            const nameHint = resolved.ok
-              ? rememberArtifactName(resolved.id, resolved.nameHint || getRememberedArtifactName(resolved.id) || '')
-              : '';
-            const intentId = emitToolIntent('APPEND', resolved.ok ? resolved.id : target, nameHint || undefined);
-            const traceId = getCurrentTraceId();
-            if (traceId) p0MetricAdd(traceId, { actionFirstTriggered: 1, actionType: 'APPEND' });
             if (!resolved.ok) {
-              emitToolError('APPEND', intentId, { arg: target }, resolved.userMessage);
-              publishReactiveSpeech({ ctx, trace, callbacks, speechText: resolved.userMessage, internalThought: '' });
+              publishReactiveSpeech({ ctx, trace, callbacks, speechText: resolved.userMessage, internalThought: 'APPEND_TARGET_NOT_FOUND' });
               return;
             }
+
+            // Generate placeholder content
+            const placeholderContent = `\n\n<!-- TODO: Uzupełnić / TODO: Add content -->\n<!-- Added: ${new Date().toISOString().split('T')[0]} -->`;
+            const intentId = emitToolIntent('APPEND', resolved.id, nameHint || undefined);
+            if (traceId) p0MetricAdd(traceId, { actionFirstTriggered: 1, actionType: 'APPEND', appendPayloadMissing: 1 });
+
             try {
               const before = store.get(resolved.id)?.content ?? '';
-              store.append(resolved.id, `\n\n${payload}`);
+              store.append(resolved.id, placeholderContent);
               if (traceId) p0MetricAdd(traceId, { actionFirstExecuted: 1 });
               const updated = store.get(resolved.id);
               const artifactName = rememberArtifactName(
                 resolved.id,
                 updated?.name || resolved.nameHint || getRememberedArtifactName(resolved.id) || ''
               ) || resolved.nameHint || resolved.id;
-              emitToolResult('APPEND', intentId, { id: resolved.id, name: artifactName });
+              emitToolResult('APPEND', intentId, { id: resolved.id, name: artifactName, placeholder: true });
               emitToolCommit({
                 action: 'APPEND',
                 artifactId: resolved.id,
@@ -507,13 +510,20 @@ export async function runReactiveStep(input: {
                 beforeContent: before,
                 afterContent: updated?.content ?? ''
               });
-              store.markComplete(resolved.id, true);
+
+              // Ask user for actual content (multilingual)
+              const isPolish = ctx.agentIdentity?.language?.toLowerCase().includes('pol') ||
+                ctx.agentIdentity?.language?.toLowerCase() === 'pl';
+              const askMessage = isPolish
+                ? `Dodałem placeholder do ${artifactName}. Co chcesz tam wpisać?`
+                : `Added placeholder to ${artifactName}. What content should I add?`;
+
               publishReactiveSpeech({
                 ctx,
                 trace,
                 callbacks,
-                speechText: `Dopisa?,em do ${resolved.nameHint || resolved.id}. Poprawi?? co?>?`,
-                internalThought: ''
+                speechText: askMessage,
+                internalThought: 'APPEND_NEEDS_CONTENT'
               });
               updateContextAfterAction(ctx);
               return;
@@ -521,6 +531,46 @@ export async function runReactiveStep(input: {
               emitToolError('APPEND', intentId, { arg: resolved.id }, (e as Error)?.message || 'unknown');
               return;
             }
+          }
+
+          // Normal flow with payload
+          const intentId = emitToolIntent('APPEND', resolved.ok ? resolved.id : target, nameHint || undefined);
+          if (traceId) p0MetricAdd(traceId, { actionFirstTriggered: 1, actionType: 'APPEND' });
+          if (!resolved.ok) {
+            emitToolError('APPEND', intentId, { arg: target }, resolved.userMessage);
+            publishReactiveSpeech({ ctx, trace, callbacks, speechText: resolved.userMessage, internalThought: '' });
+            return;
+          }
+          try {
+            const before = store.get(resolved.id)?.content ?? '';
+            store.append(resolved.id, `\n\n${payload}`);
+            if (traceId) p0MetricAdd(traceId, { actionFirstExecuted: 1 });
+            const updated = store.get(resolved.id);
+            const artifactName = rememberArtifactName(
+              resolved.id,
+              updated?.name || resolved.nameHint || getRememberedArtifactName(resolved.id) || ''
+            ) || resolved.nameHint || resolved.id;
+            emitToolResult('APPEND', intentId, { id: resolved.id, name: artifactName });
+            emitToolCommit({
+              action: 'APPEND',
+              artifactId: resolved.id,
+              artifactName,
+              beforeContent: before,
+              afterContent: updated?.content ?? ''
+            });
+            store.markComplete(resolved.id, true);
+            publishReactiveSpeech({
+              ctx,
+              trace,
+              callbacks,
+              speechText: `Dopisałem do ${resolved.nameHint || resolved.id}. Poprawić coś?`,
+              internalThought: ''
+            });
+            updateContextAfterAction(ctx);
+            return;
+          } catch (e) {
+            emitToolError('APPEND', intentId, { arg: resolved.id }, (e as Error)?.message || 'unknown');
+            return;
           }
         }
 
