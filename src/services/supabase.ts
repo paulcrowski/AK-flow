@@ -474,7 +474,8 @@ export const MemoryService = {
       return (diagnosed.data || []).map((item: any) => ({
         id: item.id,
         content: item.raw_text,
-        timestamp: new Date().toISOString(),
+        // Unknown timestamp for semantic search results.
+        timestamp: '',
         emotionalContext: { fear: 0, curiosity: 0, frustration: 0, satisfaction: 0 },
         neuralStrength: item.neural_strength || 1,
         imageData: item.image_data || undefined,
