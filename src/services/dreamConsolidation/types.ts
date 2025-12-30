@@ -19,12 +19,21 @@ export interface TraitVectorProposal {
   episodesSummary: string;
 }
 
+export interface DreamEpisodeDetail {
+  id: string;
+  preview: string;
+  timestamp?: string;
+  neuralStrength?: number;
+  tags?: string[];
+}
+
 export interface DreamConsolidationResult {
   episodesProcessed: number;
   lessonsGenerated: string[];
   selfSummary: string;
   traitProposal: TraitVectorProposal | null;
   goalsCreated: number;
+  episodeDetails?: DreamEpisodeDetail[];
   identityConsolidation?: {
     narrativeSelfUpdated: boolean;
     shardsCreated: number;

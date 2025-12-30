@@ -211,6 +211,14 @@ export const DreamConsolidationService = {
             // Step 6: Optionally create new goals
             const goalsCreated = await this.createGoalsFromLessons(lessons, agentId);
 
+            const episodeDetails = episodes.map((e) => ({
+                id: e.id,
+                preview: String(e.event || '').slice(0, 120),
+                timestamp: e.timestamp,
+                neuralStrength: typeof e.emotionalDelta === 'number' ? e.emotionalDelta : undefined,
+                tags: Array.isArray(e.tags) ? e.tags.slice(0, 5) : []
+            }));
+
             // Publish completion event
             const result: DreamConsolidationResult = {
                 episodesProcessed: episodes.length,
@@ -218,11 +226,16 @@ export const DreamConsolidationService = {
                 selfSummary,
                 traitProposal,
                 goalsCreated,
+                episodeDetails,
                 // IDENTITY-LITE: Include identity consolidation results
                 identityConsolidation: identityResult,
                 sessionChunkCreated,
                 decayPrune
             };
+
+            const episodePreview = episodeDetails.length > 0
+                ? ` (${episodeDetails.map((e) => e.id).slice(0, 3).join(', ')}${episodeDetails.length > 3 ? ', ...' : ''})`
+                : '';
 
             eventBus.publish({
                 id: generateUUID(),
@@ -232,7 +245,7 @@ export const DreamConsolidationService = {
                 payload: {
                     event: 'DREAM_CONSOLIDATION_COMPLETE',
                     result,
-                    message: `💤 Processed ${episodes.length} episodes, generated ${lessons.length} lessons`
+                    message: `Processed ${episodes.length} episodes${episodePreview}, generated ${lessons.length} lessons`
                 },
                 priority: 0.9
             });
@@ -274,7 +287,8 @@ export const DreamConsolidationService = {
             lessonsGenerated: [],
             selfSummary: '',
             traitProposal: null,
-            goalsCreated: 0
+            goalsCreated: 0,
+            episodeDetails: []
         };
     }
 };
