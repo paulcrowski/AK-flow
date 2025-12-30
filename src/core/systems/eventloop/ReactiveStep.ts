@@ -102,19 +102,19 @@ type IntentInput = {
 };
 
 // FIX-2: Multilingual verb patterns - Polish with diacritics + English
-const CREATE_VERBS_PL = '(?:stworz|utworz|zapisz|tw[oó]rz|utw[oó]rz|stw[oó]rz)';
+const CREATE_VERBS_PL = '(?:stworz|utworz|zapisz|tw[o\\u00f3]rz|utw[o\\u00f3]rz|stw[o\\u00f3]rz)';
 const CREATE_VERBS_EN = '(?:create|make|write|save)';
 const CREATE_VERBS = `(?:${CREATE_VERBS_PL}|${CREATE_VERBS_EN})`;
 
-const APPEND_VERBS_PL = '(?:dopisz|dodaj|dołącz|dolacz)';
+const APPEND_VERBS_PL = '(?:dopisz|dodaj|do\\u0142\\u0105cz|dolacz)';
 const APPEND_VERBS_EN = '(?:append|add)';
 const APPEND_VERBS = `(?:${APPEND_VERBS_PL}|${APPEND_VERBS_EN})`;
 
-const EDIT_VERBS_PL = '(?:edytuj|eydtuj|modyfikuj|zmien|zmień)';
+const EDIT_VERBS_PL = '(?:edytuj|eydtuj|modyfikuj|zmien|zmie\\u0144)';
 const EDIT_VERBS_EN = '(?:edit|modify|change)';
 const EDIT_VERBS = `(?:${EDIT_VERBS_PL}|${EDIT_VERBS_EN})`;
 
-const READ_VERBS_PL = '(?:pokaz|pokaż|otworz|otwórz|wyswietl|wyświetl|przeczytaj)';
+const READ_VERBS_PL = '(?:pokaz|poka\\u017c|otw[o\\u00f3]rz|wyswietl|wy\\u015bwietl|przeczytaj)';
 const READ_VERBS_EN = '(?:show|open|display|read)';
 const READ_VERBS = `(?:${READ_VERBS_PL}|${READ_VERBS_EN})`;
 
@@ -139,7 +139,7 @@ const CREATE_WITH_NAME_REGEX = new RegExp(
   `${CREATE_VERBS}\\s+(?:${FILE_WORD}\\s+)?(?:o\\s+nazwie\\s+|named\\s+)?(.+?)\\s+z\\s+${CONTENT_KEYWORD}\\s+([\\s\\S]+)`,
   'i'
 );
-// FIX-2: Support "twórz plik X a w nim Y" / "create file X with Y"
+// FIX-2: Support "tworz plik X a w nim Y" / "create file X with Y"
 const CREATE_WITH_CONTENT_REGEX = new RegExp(
   `${CREATE_VERBS}\\s+(?:${FILE_WORD}\\s+)?(?:o\\s+nazwie\\s+|named\\s+)?(.+?)\\s+(?:a\\s+w\\s+nim|with|containing)\\s+([\\s\\S]+)`,
   'i'
@@ -159,7 +159,7 @@ const EDIT_REPLACE_REGEX = new RegExp(
   `${EDIT_VERBS}\\s+(?:${FILE_WORD}\\s+)?([^\\s:]+)\\s*:\\s*([\\s\\S]+)`,
   'i'
 );
-const REPLACE_REGEX = /(?:zamien|zamień|zastap|zastąp|replace)\\s+(?:w|w\\s+pliku|in|in\\s+file)\\s+(.+)/i;
+const REPLACE_REGEX = /(?:zamien|zamie\\u0144|zastap|zast\\u0105p|replace)\\s+(?:w|w\\s+pliku|in|in\\s+file)\\s+(.+)/i;
 const READ_REGEX = new RegExp(`${READ_VERBS}\\s+([^\\s,]+)`, 'i');
 
 
@@ -216,7 +216,7 @@ function detectCreateIntent(ctx: IntentInput): ActionFirstResult | null {
     { match: ctx.raw.match(CREATE_WITH_NAME_COLON_REGEX), nameIndex: 1, payloadIndex: 2 },
     { match: ctx.raw.match(CREATE_NO_NAME_REGEX), payloadIndex: 1, preferPhrase: true },
     { match: ctx.raw.match(CREATE_WITH_NAME_REGEX), nameIndex: 1, payloadIndex: 2 },
-    // FIX-2: "twórz plik X a w nim Y" / "create file X with Y"
+    // FIX-2: "tworz plik X a w nim Y" / "create file X with Y"
     { match: ctx.raw.match(CREATE_WITH_CONTENT_REGEX), nameIndex: 1, payloadIndex: 2 }
   ];
 
@@ -690,3 +690,4 @@ export async function runReactiveStep(input: {
   ctx.hadExternalRewardThisTick = true;
   ctx.ticksSinceLastReward = 0;
 }
+
