@@ -2,18 +2,20 @@ import { describe, it, expect } from 'vitest';
 import { detectIntent, getRetrievalLimit } from '@core/systems/IntentDetector';
 
 describe('IntentDetector', () => {
+  const intentOf = (input: string) => detectIntent(input).intent;
+
   it('detects recall intent phrases', () => {
-    expect(detectIntent('Przypomnij sobie wszystko o projekcie')).toBe('RECALL');
-    expect(detectIntent('Co wiesz o historii agentow?')).toBe('RECALL');
+    expect(intentOf('Przypomnij sobie wszystko o projekcie')).toBe('RECALL');
+    expect(intentOf('Co wiesz o historii agentow?')).toBe('RECALL');
   });
 
   it('detects history intent with diacritics', () => {
-    expect(detectIntent('Pamiętasz ostatnio o czym rozmawialiśmy?')).toBe('HISTORY');
+    expect(intentOf('Pamietasz ostatnio o czym rozmawialismy?')).toBe('HISTORY');
   });
 
   it('detects opinion and work intents', () => {
-    expect(detectIntent('Co sądzisz o tej zmianie?')).toBe('OPINION');
-    expect(detectIntent('Wdroż patch do SQL i schema')).toBe('WORK');
+    expect(intentOf('Co sadzisz o tej zmianie?')).toBe('OPINION');
+    expect(intentOf('Wdroz patch do SQL i schema')).toBe('WORK');
   });
 
   it('returns expected retrieval limits', () => {

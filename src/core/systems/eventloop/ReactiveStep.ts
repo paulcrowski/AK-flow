@@ -159,7 +159,7 @@ const EDIT_REPLACE_REGEX = new RegExp(
   `${EDIT_VERBS}\\s+(?:${FILE_WORD}\\s+)?([^\\s:]+)\\s*:\\s*([\\s\\S]+)`,
   'i'
 );
-const REPLACE_REGEX = /(?:zamien|zamie\\u0144|zastap|zast\\u0105p|replace)\\s+(?:w|w\\s+pliku|in|in\\s+file)\\s+(.+)/i;
+const REPLACE_REGEX = /(?:zamien|zamie\u0144|zastap|zast\u0105p|replace)\s+(?:w|w\s+pliku|in|in\s+file)\s+(.+)/i;
 const READ_REGEX = new RegExp(`${READ_VERBS}\\s+([^\\s,]+)`, 'i');
 
 
