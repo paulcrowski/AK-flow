@@ -28,15 +28,15 @@ type ActionFirstResult = {
 };
 
 function publishReactiveSpeech(params: {
-    ctx: any;
-    trace: TraceLike;
-    callbacks: ReactiveCallbacksLike;
-    speechText: string;
-    internalThought: string;
-    meta?: { knowledgeSource?: any; evidenceSource?: any; evidenceDetail?: any; generator?: any };
-    agentMemoryId?: string | null;
-  }): void {
-    const { ctx, trace, callbacks, speechText, internalThought, meta, agentMemoryId } = params;
+  ctx: any;
+  trace: TraceLike;
+  callbacks: ReactiveCallbacksLike;
+  speechText: string;
+  internalThought: string;
+  meta?: { knowledgeSource?: any; evidenceSource?: any; evidenceDetail?: any; generator?: any };
+  agentMemoryId?: string | null;
+}): void {
+  const { ctx, trace, callbacks, speechText, internalThought, meta, agentMemoryId } = params;
   const candidate = ExecutiveGate.createReactiveCandidate(speechText, internalThought, `reactive-${trace.traceId}-${trace.tickNumber}`);
   const gateContext = {
     ...ExecutiveGate.getDefaultContext(ctx.limbic, 0),
@@ -60,10 +60,10 @@ function publishReactiveSpeech(params: {
       });
 
       if (commit.committed) {
-    callbacks.onMessage('assistant', gateDecision.winner.speech_content, 'speech', {
-      ...(meta || {}),
-      ...(agentMemoryId ? { agentMemoryId } : {})
-    });
+        callbacks.onMessage('assistant', gateDecision.winner.speech_content, 'speech', {
+          ...(meta || {}),
+          ...(agentMemoryId ? { agentMemoryId } : {})
+        });
       } else {
         callbacks.onThought(`[REACTIVE_SUPPRESSED] ${commit.blockReason || 'UNKNOWN'}`);
       }
@@ -101,33 +101,67 @@ type IntentInput = {
   normalized: string;
 };
 
+// FIX-2: Multilingual verb patterns - Polish with diacritics + English
+const CREATE_VERBS_PL = '(?:stworz|utworz|zapisz|tw[oó]rz|utw[oó]rz|stw[oó]rz)';
+const CREATE_VERBS_EN = '(?:create|make|write|save)';
+const CREATE_VERBS = `(?:${CREATE_VERBS_PL}|${CREATE_VERBS_EN})`;
+
+const APPEND_VERBS_PL = '(?:dopisz|dodaj|dołącz|dolacz)';
+const APPEND_VERBS_EN = '(?:append|add)';
+const APPEND_VERBS = `(?:${APPEND_VERBS_PL}|${APPEND_VERBS_EN})`;
+
+const EDIT_VERBS_PL = '(?:edytuj|eydtuj|modyfikuj|zmien|zmień)';
+const EDIT_VERBS_EN = '(?:edit|modify|change)';
+const EDIT_VERBS = `(?:${EDIT_VERBS_PL}|${EDIT_VERBS_EN})`;
+
+const READ_VERBS_PL = '(?:pokaz|pokaż|otworz|otwórz|wyswietl|wyświetl|przeczytaj)';
+const READ_VERBS_EN = '(?:show|open|display|read)';
+const READ_VERBS = `(?:${READ_VERBS_PL}|${READ_VERBS_EN})`;
+
+const FILE_WORD = '(?:plik|file)';
 const CONTENT_KEYWORD =
-  '(?:trescia|tre(?:s|\\u015b)ci(?:a|\\u0105)|tekstem|zawartoscia|zawarto(?:s|\\u015b)ci(?:a|\\u0105))';
-const CONTENT_COLON_KEYWORD = '(?:tresc|tre(?:s|\\u015b)(?:c|\\u0107))';
+  '(?:trescia|tre(?:s|\\u015b)ci(?:a|\\u0105)|tekstem|zawartoscia|zawarto(?:s|\\u015b)ci(?:a|\\u0105)|content|text)';
+const CONTENT_COLON_KEYWORD = '(?:tresc|tre(?:s|\\u015b)(?:c|\\u0107)|content)';
+
 const CREATE_NO_NAME_COLON_REGEX = new RegExp(
-  `(?:stworz|utworz|zapisz)\\s+(?:plik\\s+)?${CONTENT_COLON_KEYWORD}\\s*:\\s*([\\s\\S]+)`,
+  `${CREATE_VERBS}\\s+(?:${FILE_WORD}\\s+)?${CONTENT_COLON_KEYWORD}\\s*:\\s*([\\s\\S]+)`,
   'i'
 );
 const CREATE_WITH_NAME_COLON_REGEX = new RegExp(
-  `(?:stworz|utworz|zapisz)\\s+(?:plik\\s+)?(?:o\\s+nazwie\\s+)?(.+?)\\s+${CONTENT_COLON_KEYWORD}\\s*:\\s*([\\s\\S]+)`,
+  `${CREATE_VERBS}\\s+(?:${FILE_WORD}\\s+)?(?:o\\s+nazwie\\s+|named\\s+)?(.+?)\\s+${CONTENT_COLON_KEYWORD}\\s*:\\s*([\\s\\S]+)`,
   'i'
 );
 const CREATE_NO_NAME_REGEX = new RegExp(
-  `(?:stworz|utworz|zapisz)\\s+(?:plik\\s+)?z\\s+${CONTENT_KEYWORD}\\s+([\\s\\S]+)`,
+  `${CREATE_VERBS}\\s+(?:${FILE_WORD}\\s+)?z\\s+${CONTENT_KEYWORD}\\s+([\\s\\S]+)`,
   'i'
 );
 const CREATE_WITH_NAME_REGEX = new RegExp(
-  `(?:stworz|utworz|zapisz)\\s+(?:plik\\s+)?(?:o\\s+nazwie\\s+)?(.+?)\\s+z\\s+${CONTENT_KEYWORD}\\s+([\\s\\S]+)`,
+  `${CREATE_VERBS}\\s+(?:${FILE_WORD}\\s+)?(?:o\\s+nazwie\\s+|named\\s+)?(.+?)\\s+z\\s+${CONTENT_KEYWORD}\\s+([\\s\\S]+)`,
   'i'
 );
-const CREATE_SIMPLE_REGEX = /(?:stworz|utworz|zapisz)\s+(?:plik\s+)?(.+)/i;
-const EDIT_APPEND_REGEX =
-  /(?:edytuj|eydtuj|modyfikuj)\s+(?:plik\s+)?([^\s:]+)\s+(?:dodaj|dopisz)\s+(?:tresc|tekst)?\s*:?\s*([\s\S]+)/i;
-const APPEND_REGEX = /(?:dopisz|dodaj)\s+(?:do)\s+(.+)/i;
-const APPEND_INLINE_REGEX = /(?:dopisz|dodaj)\s+(?:tresc|tekst)?\s*do\s+([^\s:]+)\s+([\s\S]+)/i;
-const EDIT_REPLACE_REGEX = /(?:edytuj|eydtuj|modyfikuj)\s+(?:plik\s+)?([^\s:]+)\s*:\s*([\s\S]+)/i;
-const REPLACE_REGEX = /(?:zamien|zastap)\s+(?:w|w\s+pliku)\s+(.+)/i;
-const READ_REGEX = /(?:pokaz|otworz)\s+([^\s,]+)/i;
+// FIX-2: Support "twórz plik X a w nim Y" / "create file X with Y"
+const CREATE_WITH_CONTENT_REGEX = new RegExp(
+  `${CREATE_VERBS}\\s+(?:${FILE_WORD}\\s+)?(?:o\\s+nazwie\\s+|named\\s+)?(.+?)\\s+(?:a\\s+w\\s+nim|with|containing)\\s+([\\s\\S]+)`,
+  'i'
+);
+const CREATE_SIMPLE_REGEX = new RegExp(`${CREATE_VERBS}\\s+(?:${FILE_WORD}\\s+)?(.+)`, 'i');
+
+const EDIT_APPEND_REGEX = new RegExp(
+  `${EDIT_VERBS}\\s+(?:${FILE_WORD}\\s+)?([^\\s:]+)\\s+${APPEND_VERBS}\\s+(?:tresc|tekst|content|text)?\\s*:?\\s*([\\s\\S]+)`,
+  'i'
+);
+const APPEND_REGEX = new RegExp(`${APPEND_VERBS}\\s+(?:do|to)\\s+(.+)`, 'i');
+const APPEND_INLINE_REGEX = new RegExp(
+  `${APPEND_VERBS}\\s+(?:tresc|tekst|content|text)?\\s*(?:do|to)\\s+([^\\s:]+)\\s+([\\s\\S]+)`,
+  'i'
+);
+const EDIT_REPLACE_REGEX = new RegExp(
+  `${EDIT_VERBS}\\s+(?:${FILE_WORD}\\s+)?([^\\s:]+)\\s*:\\s*([\\s\\S]+)`,
+  'i'
+);
+const REPLACE_REGEX = /(?:zamien|zamień|zastap|zastąp|replace)\\s+(?:w|w\\s+pliku|in|in\\s+file)\\s+(.+)/i;
+const READ_REGEX = new RegExp(`${READ_VERBS}\\s+([^\\s,]+)`, 'i');
+
 
 function normalizeIntentInput(input: string): IntentInput {
   const raw = String(input || '');
@@ -181,7 +215,9 @@ function detectCreateIntent(ctx: IntentInput): ActionFirstResult | null {
     { match: ctx.raw.match(CREATE_NO_NAME_COLON_REGEX), payloadIndex: 1, preferPhrase: true },
     { match: ctx.raw.match(CREATE_WITH_NAME_COLON_REGEX), nameIndex: 1, payloadIndex: 2 },
     { match: ctx.raw.match(CREATE_NO_NAME_REGEX), payloadIndex: 1, preferPhrase: true },
-    { match: ctx.raw.match(CREATE_WITH_NAME_REGEX), nameIndex: 1, payloadIndex: 2 }
+    { match: ctx.raw.match(CREATE_WITH_NAME_REGEX), nameIndex: 1, payloadIndex: 2 },
+    // FIX-2: "twórz plik X a w nim Y" / "create file X with Y"
+    { match: ctx.raw.match(CREATE_WITH_CONTENT_REGEX), nameIndex: 1, payloadIndex: 2 }
   ];
 
   for (const candidate of candidates) {
@@ -543,8 +579,8 @@ export async function runReactiveStep(input: {
 
   const prefetchedMemories = isMainFeatureEnabled('ONE_MIND_ENABLED')
     ? ((await memorySpace.hot.semanticSearch(userInput, {
-        limit: getRetrievalLimit(detectIntent(userInput))
-      })) as any)
+      limit: getRetrievalLimit(detectIntent(userInput))
+    })) as any)
     : undefined;
 
   const result = await CortexSystem.processUserMessage({
