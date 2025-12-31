@@ -342,6 +342,7 @@ export async function runReactiveStep(input: {
   trace: TraceLike;
 }): Promise<void> {
   const { ctx, userInput, callbacks, memorySpace, trace } = input;
+  const isDev = typeof process !== 'undefined' && process.env?.NODE_ENV !== 'production';
 
   TickCommitter.markUserInput();
 
@@ -654,10 +655,10 @@ export async function runReactiveStep(input: {
 
   if (intent.style === 'POETIC') {
     ctx.poeticMode = true;
-    console.log('Intent Detected: POETIC MODE ENABLED');
+    if (isDev) console.log('Intent Detected: POETIC MODE ENABLED');
   } else if (intent.style === 'SIMPLE') {
     ctx.poeticMode = false;
-    console.log('Intent Detected: POETIC MODE DISABLED (Simple Style Requested)');
+    if (isDev) console.log('Intent Detected: POETIC MODE DISABLED (Simple Style Requested)');
   } else if (intent.style === 'ACADEMIC') {
     ctx.poeticMode = false;
   }
