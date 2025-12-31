@@ -14,6 +14,7 @@ import { generateUUID } from '../../../utils/uuid';
 import { detectIntent, getRetrievalLimit } from '../IntentDetector';
 import { getRememberedArtifactName, rememberArtifactName } from '../../utils/artifactNameCache';
 import { buildToolCommitDetails, formatToolCommitMessage } from '../../utils/toolCommit';
+import { detectFuzzyMismatch } from '../../utils/fuzzyMatch';
 
 // P0.1 COMMIT 3: Action-First Policy
 // Feature flag - can be disabled if causing issues
@@ -371,7 +372,35 @@ function detectFileIntent(text: string): ActionFirstResult | null {
   const ctx = normalizeIntentInput(text);
   // Contract: null means no actionable intent (including ignored inputs).
   if (shouldIgnoreActionIntent(ctx)) return null;
-  return detectCreateIntent(ctx) ?? detectAppendIntent(ctx) ?? detectReplaceIntent(ctx) ?? detectReadIntent(ctx);
+
+  const regexResult =
+    detectCreateIntent(ctx) ??
+    detectAppendIntent(ctx) ??
+    detectReplaceIntent(ctx) ??
+    detectReadIntent(ctx);
+
+  const { fuzzyCategory, regexMissed } = detectFuzzyMismatch(text, regexResult);
+  if (regexMissed && fuzzyCategory) {
+    eventBus.publish({
+      id: generateUUID(),
+      timestamp: Date.now(),
+      source: AgentType.CORTEX_FLOW,
+      type: PacketType.PREDICTION_ERROR,
+      payload: {
+        metric: 'FUZZY_REGEX_MISMATCH',
+        fuzzyCategory,
+        inputPreview: text.slice(0, 100)
+      },
+      priority: 0.4
+    });
+
+    const isDev = typeof process !== 'undefined' && process.env?.NODE_ENV !== 'production';
+    if (isDev) {
+      console.log(`[FUZZY_MISMATCH] Detected ${fuzzyCategory}, regex missed. Input: "${text.slice(0, 60)}..."`);
+    }
+  }
+
+  return regexResult;
 }
 
 function detectSearchIntent(_text: string): ActionFirstResult | null {
