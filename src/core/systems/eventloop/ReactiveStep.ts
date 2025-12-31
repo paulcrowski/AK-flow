@@ -19,6 +19,20 @@ import { buildToolCommitDetails, formatToolCommitMessage } from '../../utils/too
 // Feature flag - can be disabled if causing issues
 const ACTION_FIRST_ENABLED = (SYSTEM_CONFIG.features as Record<string, boolean>).P011_ACTION_FIRST_ENABLED ?? true;
 
+// PENDING ACTION - Slot filling for incomplete tool commands
+export type PendingActionType = 'APPEND_CONTENT' | 'REPLACE_CONTENT';
+
+export interface PendingAction {
+  type: PendingActionType;
+  targetId: string;
+  targetName?: string;
+  createdAt: number;
+  expiresAt: number;
+  originalUserInput: string;
+}
+
+const PENDING_ACTION_TTL_MS = 2 * 60 * 1000;
+
 type ActionFirstResult = {
   // No intent uses null at the detector level (not { handled: false }).
   handled: boolean;
@@ -27,6 +41,65 @@ type ActionFirstResult = {
   payload?: string;
   assumption?: string;
 };
+
+function emitPendingActionTelemetry(
+  event: 'SET' | 'USED' | 'EXPIRED' | 'SUPERSEDED' | 'ERROR',
+  action: PendingAction | null,
+  extra?: Record<string, unknown>
+): void {
+  const payload = {
+    event: `PENDING_ACTION_${event}`,
+    actionType: action?.type,
+    targetId: action?.targetId,
+    targetName: action?.targetName,
+    ...(extra ?? {})
+  };
+
+  eventBus.publish({
+    id: generateUUID(),
+    timestamp: Date.now(),
+    source: AgentType.CORTEX_FLOW,
+    type: PacketType.SYSTEM_ALERT,
+    payload,
+    priority: 0.5
+  });
+
+  const isDev = typeof process !== 'undefined' && process.env?.NODE_ENV !== 'production';
+  if (isDev) {
+    console.log(`[PENDING_ACTION:${event}]`, payload);
+  }
+}
+
+function isPendingActionExpired(pending: PendingAction): boolean {
+  return Date.now() > pending.expiresAt;
+}
+
+function clearPendingAction(
+  ctx: any,
+  reason: 'timeout' | 'executed' | 'superseded' | 'error',
+  extra?: Record<string, unknown>
+): void {
+  const old = ctx.pendingAction as PendingAction | null;
+  ctx.pendingAction = null;
+  if (!old) return;
+
+  const eventType = reason === 'timeout'
+    ? 'EXPIRED'
+    : reason === 'executed'
+      ? 'USED'
+      : reason === 'superseded'
+        ? 'SUPERSEDED'
+        : 'ERROR';
+  emitPendingActionTelemetry(eventType, old, { reason, ...(extra ?? {}) });
+}
+
+function setPendingAction(ctx: any, action: PendingAction): void {
+  if (ctx.pendingAction) {
+    emitPendingActionTelemetry('SUPERSEDED', ctx.pendingAction as PendingAction);
+  }
+  ctx.pendingAction = action;
+  emitPendingActionTelemetry('SET', action);
+}
 
 function publishReactiveSpeech(params: {
   ctx: any;
@@ -94,6 +167,12 @@ function splitTargetAndPayload(input: string): { target: string; payload: string
     target: input.slice(0, idx).trim(),
     payload: input.slice(idx + 1).trim()
   };
+}
+
+function isRecognizableTarget(target: string): boolean {
+  const raw = String(target || '').trim();
+  if (!raw) return false;
+  return raw.startsWith('art-') || /^[a-z0-9_-]{1,60}\.(md|txt|json|ts|js|tsx|jsx|css|html)$/i.test(raw);
 }
 
 type IntentInput = {
@@ -248,6 +327,9 @@ function detectAppendIntent(ctx: IntentInput): ActionFirstResult | null {
   if (appendMatch) {
     const { target, payload } = splitTargetAndPayload(String(appendMatch[1] || ''));
     if (target && payload) return { handled: true, action: 'APPEND', target, payload };
+    if (target && !payload && isRecognizableTarget(target)) {
+      return { handled: true, action: 'APPEND', target };
+    }
   }
 
   const appendInlineMatch = ctx.raw.match(APPEND_INLINE_REGEX);
@@ -334,6 +416,71 @@ export type ReactiveCallbacksLike = {
   onLimbicUpdate: (limbic: any) => void;
 };
 
+function tryResolvePendingAction(
+  ctx: any,
+  userInput: string,
+  trace: TraceLike,
+  callbacks: ReactiveCallbacksLike
+): { handled: boolean; syntheticCommand?: string } {
+  const pending = ctx.pendingAction as PendingAction | null;
+  if (!pending) return { handled: false };
+
+  if (isPendingActionExpired(pending)) {
+    clearPendingAction(ctx, 'timeout');
+
+    const isPolish = String(ctx.agentIdentity?.language || '').toLowerCase().includes('pol');
+    publishReactiveSpeech({
+      ctx,
+      trace,
+      callbacks,
+      speechText: isPolish
+        ? 'Minelo za duzo czasu. Podaj polecenie jeszcze raz.'
+        : 'Too much time passed. Please repeat your command.',
+      internalThought: 'PENDING_EXPIRED'
+    });
+    return { handled: true };
+  }
+
+  const newIntent = detectActionableIntent(userInput);
+  if (newIntent.handled && newIntent.action && newIntent.target) {
+    const target = String(newIntent.target || '').trim();
+    if (isRecognizableTarget(target)) {
+      clearPendingAction(ctx, 'superseded');
+      return { handled: false };
+    }
+  }
+
+  const payload = userInput.trim();
+  if (!payload) return { handled: false };
+
+  let syntheticCommand = '';
+  if (pending.type === 'APPEND_CONTENT') {
+    syntheticCommand = `dopisz do ${pending.targetId} ${payload}`;
+  } else if (pending.type === 'REPLACE_CONTENT') {
+    syntheticCommand = `edytuj ${pending.targetId}: ${payload}`;
+  } else {
+    return { handled: false };
+  }
+
+  const isDev = typeof process !== 'undefined' && process.env?.NODE_ENV !== 'production';
+  if (isDev) {
+    console.log(`[PENDING_ACTION] Synthetic: "${syntheticCommand.slice(0, 80)}..."`);
+  }
+
+  const testIntent = detectActionableIntent(syntheticCommand);
+  const testTarget = String(testIntent.target || '').trim();
+  if (!testIntent.handled || !testIntent.action || !testTarget) {
+    clearPendingAction(ctx, 'error', {
+      errorType: 'synthetic_mismatch',
+      syntheticCommand: syntheticCommand.slice(0, 100)
+    });
+    return { handled: false };
+  }
+
+  clearPendingAction(ctx, 'executed');
+  return { handled: true, syntheticCommand };
+}
+
 export async function runReactiveStep(input: {
   ctx: any;
   userInput: string;
@@ -341,10 +488,23 @@ export async function runReactiveStep(input: {
   memorySpace: any;
   trace: TraceLike;
 }): Promise<void> {
-  const { ctx, userInput, callbacks, memorySpace, trace } = input;
+  const { ctx, callbacks, memorySpace, trace } = input;
+  let { userInput } = input;
   const isDev = typeof process !== 'undefined' && process.env?.NODE_ENV !== 'production';
 
   TickCommitter.markUserInput();
+
+  const pendingResult = tryResolvePendingAction(ctx, userInput, trace, callbacks);
+  if (pendingResult.handled) {
+    if (pendingResult.syntheticCommand) {
+      userInput = pendingResult.syntheticCommand;
+      if (isDev) {
+        console.log(`[PENDING_ACTION] Synthesized command: "${userInput.slice(0, 80)}..."`);
+      }
+    } else {
+      return;
+    }
+  }
 
   // P0.1: Action-First - execute tool commands immediately without asking
   if (ACTION_FIRST_ENABLED) {
@@ -488,56 +648,54 @@ export async function runReactiveStep(input: {
             : '';
           const traceId = getCurrentTraceId();
 
-          // FIX-6 Variant C: If no payload, add placeholder AND ask for content
+          // No payload? Set pendingAction (slot filling)
           if (!payload) {
             if (!resolved.ok) {
-              publishReactiveSpeech({ ctx, trace, callbacks, speechText: resolved.userMessage, internalThought: 'APPEND_TARGET_NOT_FOUND' });
-              return;
-            }
-
-            // Generate placeholder content
-            const placeholderContent = `\n\n<!-- TODO: Uzupełnić / TODO: Add content -->\n<!-- Added: ${new Date().toISOString().split('T')[0]} -->`;
-            const intentId = emitToolIntent('APPEND', resolved.id, nameHint || undefined);
-            if (traceId) p0MetricAdd(traceId, { actionFirstTriggered: 1, actionType: 'APPEND', appendPayloadMissing: 1 });
-
-            try {
-              const before = store.get(resolved.id)?.content ?? '';
-              store.append(resolved.id, placeholderContent);
-              if (traceId) p0MetricAdd(traceId, { actionFirstExecuted: 1 });
-              const updated = store.get(resolved.id);
-              const artifactName = rememberArtifactName(
-                resolved.id,
-                updated?.name || resolved.nameHint || getRememberedArtifactName(resolved.id) || ''
-              ) || resolved.nameHint || resolved.id;
-              emitToolResult('APPEND', intentId, { id: resolved.id, name: artifactName, placeholder: true });
-              emitToolCommit({
-                action: 'APPEND',
-                artifactId: resolved.id,
-                artifactName,
-                beforeContent: before,
-                afterContent: updated?.content ?? ''
-              });
-
-              // Ask user for actual content (multilingual)
-              const isPolish = ctx.agentIdentity?.language?.toLowerCase().includes('pol') ||
-                ctx.agentIdentity?.language?.toLowerCase() === 'pl';
-              const askMessage = isPolish
-                ? `Dodałem placeholder do ${artifactName}. Co chcesz tam wpisać?`
-                : `Added placeholder to ${artifactName}. What content should I add?`;
-
               publishReactiveSpeech({
                 ctx,
                 trace,
                 callbacks,
-                speechText: askMessage,
-                internalThought: 'APPEND_NEEDS_CONTENT'
+                speechText: resolved.userMessage,
+                internalThought: 'APPEND_TARGET_NOT_FOUND'
               });
-              updateContextAfterAction(ctx);
-              return;
-            } catch (e) {
-              emitToolError('APPEND', intentId, { arg: resolved.id }, (e as Error)?.message || 'unknown');
               return;
             }
+
+            const pendingAction: PendingAction = {
+              type: 'APPEND_CONTENT',
+              targetId: resolved.id,
+              targetName: nameHint || resolved.nameHint || resolved.id,
+              createdAt: Date.now(),
+              expiresAt: Date.now() + PENDING_ACTION_TTL_MS,
+              originalUserInput: userInput
+            };
+
+            setPendingAction(ctx, pendingAction);
+
+            if (traceId) {
+              p0MetricAdd(traceId, {
+                actionFirstTriggered: 1,
+                actionType: 'APPEND',
+                appendPayloadMissing: 1,
+                pendingActionSet: 1
+              });
+            }
+
+            const isPolish = String(ctx.agentIdentity?.language || '').toLowerCase().includes('pol');
+            const artifactName = pendingAction.targetName || pendingAction.targetId;
+
+            publishReactiveSpeech({
+              ctx,
+              trace,
+              callbacks,
+              speechText: isPolish
+                ? `Co chcesz dodac do ${artifactName}?`
+                : `What should I add to ${artifactName}?`,
+              internalThought: 'PENDING_APPEND_WAITING'
+            });
+
+            updateContextAfterAction(ctx);
+            return;
           }
 
           // Normal flow with payload
@@ -697,4 +855,5 @@ export async function runReactiveStep(input: {
   ctx.hadExternalRewardThisTick = true;
   ctx.ticksSinceLastReward = 0;
 }
+
 
