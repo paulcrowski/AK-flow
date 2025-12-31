@@ -420,7 +420,8 @@ export const useCognitiveKernelLite = (loadedIdentity?: AgentIdentity | null) =>
         setUiConversation: (messages) => actionsRef.current.setUiConversation(messages as any),
         processUserInput: (input) => actionsRef.current.processUserInput(input),
         hydrate: (state) => actionsRef.current.hydrate(state as any),
-        updateSocialDynamics: (payload) => actionsRef.current.updateSocialDynamics(payload)
+        updateSocialDynamics: (payload) => actionsRef.current.updateSocialDynamics(payload),
+        setPendingAction: (action) => getCognitiveState().setPendingAction(action)
       },
       getState: () => getCognitiveState(),
       generateUUID,

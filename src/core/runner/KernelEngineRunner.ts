@@ -1,4 +1,5 @@
 import { AgentType, PacketType } from '../../types';
+import type { PendingAction } from '../systems/eventloop/pending';
 
 export type KernelRunnerInput = {
   clientMessageId: string;
@@ -17,6 +18,7 @@ export type KernelEngineRunnerDeps<TIdentity> = {
     processUserInput: (input: string) => void;
     hydrate: (state: any) => void;
     updateSocialDynamics: (payload: { agentSpoke?: boolean; userResponded?: boolean }) => void;
+    setPendingAction: (action: PendingAction | null) => void;
   };
 
   getState: () => any;
@@ -126,23 +128,32 @@ export class KernelEngineRunner<TIdentity> {
           }
 
           const ctx = this.buildLoopContext({ autonomousMode: true });
+          let nextCtx = ctx;
 
-          const nextCtx = await this.deps.runEventLoopStep(ctx, null, {
-            onMessage: (role: string, text: string, type: any, meta?: any) => {
-              if (role === 'assistant' && type === 'speech') {
-                void this.handleAssistantSpeechAutonomous(text, type, meta);
-              } else if (role === 'assistant' && type === 'thought') {
-                this.deps.actions.setCurrentThought(text);
-              }
-            },
-            onThought: (thought: string) => {
-              this.deps.actions.setCurrentThought(thought);
-            },
-            onSomaUpdate: (soma: any) => this.deps.actions.hydrate({ soma }),
-            onLimbicUpdate: (limbic: any) => this.deps.actions.hydrate({ limbic })
-          });
+          try {
+            const silenceWindow = autonomyCfg.exploreMinSilenceSec;
+            if (silenceSec < silenceWindow) {
+              this.timeoutRef = setTimeout(runTick, Math.max(3000, baseInterval));
+              return;
+            }
 
-          this.syncLoopContextToStore(nextCtx);
+            nextCtx = await this.deps.runEventLoopStep(ctx, null, {
+              onMessage: (role: string, text: string, type: any, meta?: any) => {
+                if (role === 'assistant' && type === 'speech') {
+                  void this.handleAssistantSpeechAutonomous(text, type, meta);
+                } else if (role === 'assistant' && type === 'thought') {
+                  this.deps.actions.setCurrentThought(text);
+                }
+              },
+              onThought: (thought: string) => {
+                this.deps.actions.setCurrentThought(thought);
+              },
+              onSomaUpdate: (soma: any) => this.deps.actions.hydrate({ soma }),
+              onLimbicUpdate: (limbic: any) => this.deps.actions.hydrate({ limbic })
+            });
+          } finally {
+            this.syncLoopContextToStore(nextCtx);
+          }
         }
 
         this.timeoutRef = setTimeout(runTick, baseInterval);
@@ -270,22 +281,25 @@ export class KernelEngineRunner<TIdentity> {
       ]
     });
 
-    const nextCtx = await this.deps.runEventLoopStep(ctx, processedUserInput, {
-      onMessage: (role: string, text: string, type: any, meta?: any) => {
-        if (role === 'assistant' && type === 'speech') {
-          void this.handleAssistantSpeechReactive(text, type, meta);
-        } else if (role === 'assistant' && type === 'thought') {
-          this.deps.actions.setCurrentThought(text);
-        }
-      },
-      onThought: (thought: string) => {
-        this.deps.actions.setCurrentThought(thought);
-      },
-      onSomaUpdate: (soma: any) => this.deps.actions.hydrate({ soma }),
-      onLimbicUpdate: (limbic: any) => this.deps.actions.hydrate({ limbic })
-    });
-
-    this.syncLoopContextToStore(nextCtx);
+    let nextCtx = ctx;
+    try {
+      nextCtx = await this.deps.runEventLoopStep(ctx, processedUserInput, {
+        onMessage: (role: string, text: string, type: any, meta?: any) => {
+          if (role === 'assistant' && type === 'speech') {
+            void this.handleAssistantSpeechReactive(text, type, meta);
+          } else if (role === 'assistant' && type === 'thought') {
+            this.deps.actions.setCurrentThought(text);
+          }
+        },
+        onThought: (thought: string) => {
+          this.deps.actions.setCurrentThought(thought);
+        },
+        onSomaUpdate: (soma: any) => this.deps.actions.hydrate({ soma }),
+        onLimbicUpdate: (limbic: any) => this.deps.actions.hydrate({ limbic })
+      });
+    } finally {
+      this.syncLoopContextToStore(nextCtx);
+    }
   }
 
   private buildLoopContext(opts: { autonomousMode: boolean; conversationOverride?: any[] }) {
@@ -316,6 +330,7 @@ export class KernelEngineRunner<TIdentity> {
       consecutiveAgentSpeeches: state.consecutiveAgentSpeeches,
       ticksSinceLastReward: state.ticksSinceLastReward,
       hadExternalRewardThisTick: false,
+      pendingAction: state.pendingAction ?? null,
       agentIdentity: identity
         ? {
           name: (identity as any).name,
@@ -344,6 +359,10 @@ export class KernelEngineRunner<TIdentity> {
 
     if (Object.keys(patch).length > 0) {
       this.deps.actions.hydrate(patch);
+    }
+
+    if ('pendingAction' in nextCtx) {
+      this.deps.actions.setPendingAction(nextCtx.pendingAction ?? null);
     }
   }
 
