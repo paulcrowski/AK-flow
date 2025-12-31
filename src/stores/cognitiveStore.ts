@@ -21,6 +21,7 @@ import {
   KernelOutput,
   createInitialKernelState
 } from '../core/kernel';
+import type { PendingAction } from '../core/systems/eventloop/pending';
 import type { LimbicState, SomaState, NeurotransmitterState, GoalState, TraitVector } from '../types';
 import type { ConversationSessionSummary } from '../services/ConversationArchive';
 import { StorageService } from '../services/StorageService';
@@ -51,6 +52,7 @@ interface CognitiveStoreState extends KernelState {
 
   // Pending outputs from last dispatch (side effects)
   pendingOutputs: KernelOutput[];
+  pendingAction: PendingAction | null;
 
   // ─────────────────────────────────────────────────────────────────────────
   // CONVERSATION UI STATE (not in KernelState - UI-specific)
@@ -92,6 +94,7 @@ interface CognitiveStoreState extends KernelState {
   setActiveSessionId: (sessionId: string | null) => void;
   setIsProcessing: (processing: boolean) => void;
   setCurrentThought: (thought: string) => void;
+  setPendingAction: (action: PendingAction | null) => void;
 
   // Selectors (for atomic re-renders)
   getLimbic: () => LimbicState;
@@ -132,6 +135,7 @@ export const useCognitiveStore = create<CognitiveStoreState>()(
         // Internal
         _engine: engine,
         pendingOutputs: [],
+        pendingAction: null,
 
         // Conversation UI state
         uiConversation: [],
@@ -299,6 +303,9 @@ export const useCognitiveStore = create<CognitiveStoreState>()(
 
         setCurrentThought: (thought: string) => {
           set({ currentThought: thought });
+        },
+        setPendingAction: (action: PendingAction | null) => {
+          set({ pendingAction: action });
         },
 
         // ─────────────────────────────────────────────────────────────────────
