@@ -324,12 +324,21 @@ function detectAppendIntent(ctx: IntentInput): ActionFirstResult | null {
     if (target && payload) return { handled: true, action: 'APPEND', target, payload };
   }
 
-  const appendMatch = ctx.normalized.match(APPEND_REGEX);
+  const appendMatch = ctx.raw.match(APPEND_REGEX);
   if (appendMatch) {
-    const { target, payload } = splitTargetAndPayload(String(appendMatch[1] || ''));
+    const raw = String(appendMatch[1] || '');
+    const { target, payload } = splitTargetAndPayload(raw);
     if (target && payload) return { handled: true, action: 'APPEND', target, payload };
-    if (target && !payload && isRecognizableTarget(target)) {
-      return { handled: true, action: 'APPEND', target };
+    if (target && !payload) {
+      const parts = target.split(/\s+/);
+      const candidateTarget = parts[0] || '';
+      const restPayload = parts.slice(1).join(' ').trim();
+      if (restPayload && isRecognizableTarget(candidateTarget)) {
+        return { handled: true, action: 'APPEND', target: candidateTarget, payload: restPayload };
+      }
+      if (isRecognizableTarget(target)) {
+        return { handled: true, action: 'APPEND', target };
+      }
     }
   }
 
@@ -498,7 +507,7 @@ function tryResolvePendingAction(
 
   const testIntent = detectActionableIntent(syntheticCommand);
   const testTarget = String(testIntent.target || '').trim();
-  if (!testIntent.handled || !testIntent.action || !testTarget) {
+  if (!testIntent.handled || !testIntent.action || !testTarget || !isRecognizableTarget(testTarget)) {
     clearPendingAction(ctx, 'error', {
       errorType: 'synthetic_mismatch',
       syntheticCommand: syntheticCommand.slice(0, 100)
