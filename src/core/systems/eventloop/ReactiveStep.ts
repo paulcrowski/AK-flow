@@ -321,6 +321,11 @@ function sanitizeFilename(raw: string): string {
   return name;
 }
 
+function extractFilenameFromText(raw: string): string {
+  const match = String(raw || '').match(/[a-z0-9_-]{1,60}\.(md|txt|json|ts|js|tsx|jsx|css|html)/i);
+  return match ? sanitizeFilename(match[0]) : '';
+}
+
 function detectCreateIntent(ctx: IntentInput): ActionFirstResult | null {
   const candidates = [
     { match: ctx.raw.match(CREATE_NO_NAME_COLON_REGEX), payloadIndex: 1, preferPhrase: true },
@@ -337,12 +342,17 @@ function detectCreateIntent(ctx: IntentInput): ActionFirstResult | null {
     if (!payload) continue;
     const name = candidate.nameIndex ? String(candidate.match[candidate.nameIndex] || '').trim() : '';
     const preferPhrase = candidate.preferPhrase ?? !name;
-    const target = deriveCreateTarget(name || payload, { preferPhrase });
+    const sanitizedName = name ? sanitizeFilename(name) : '';
+    const target = sanitizedName || deriveCreateTarget(name || payload, { preferPhrase });
     return { handled: true, action: 'CREATE', target, payload };
   }
 
   const createMatch = ctx.normalized.match(CREATE_SIMPLE_REGEX);
-  if (createMatch) return { handled: true, action: 'CREATE', target: deriveCreateTarget(createMatch[1]) };
+  if (createMatch) {
+    const rawTarget = String(createMatch[1] || '').trim();
+    const explicitTarget = extractFilenameFromText(rawTarget);
+    return { handled: true, action: 'CREATE', target: explicitTarget || deriveCreateTarget(rawTarget) };
+  }
   return null;
 }
 
