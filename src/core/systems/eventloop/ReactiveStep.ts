@@ -15,25 +15,14 @@ import { detectIntent, getRetrievalLimit } from '../IntentDetector';
 import { getRememberedArtifactName, rememberArtifactName } from '../../utils/artifactNameCache';
 import { buildToolCommitDetails, formatToolCommitMessage } from '../../utils/toolCommit';
 import { detectFuzzyMismatch } from '../../utils/fuzzyMatch';
+import type { PendingAction, PendingActionEvent, ResolveDependencies } from './pending';
+import { createPendingAction, setPendingAction, tryResolvePendingAction } from './pending';
 
 // P0.1 COMMIT 3: Action-First Policy
 // Feature flag - can be disabled if causing issues
 const ACTION_FIRST_ENABLED = (SYSTEM_CONFIG.features as Record<string, boolean>).P011_ACTION_FIRST_ENABLED ?? true;
 
 // PENDING ACTION - Slot filling for incomplete tool commands
-export type PendingActionType = 'APPEND_CONTENT' | 'REPLACE_CONTENT';
-
-export interface PendingAction {
-  type: PendingActionType;
-  targetId: string;
-  targetName?: string;
-  createdAt: number;
-  expiresAt: number;
-  originalUserInput: string;
-}
-
-const PENDING_ACTION_TTL_MS = 2 * 60 * 1000;
-
 type ActionFirstResult = {
   // No intent uses null at the detector level (not { handled: false }).
   handled: boolean;
@@ -44,20 +33,20 @@ type ActionFirstResult = {
 };
 
 function emitPendingActionTelemetry(
-  event: 'SET' | 'USED' | 'EXPIRED' | 'SUPERSEDED' | 'ERROR',
-  action: PendingAction | null,
+  event: PendingActionEvent,
+  action: PendingAction,
   extra?: Record<string, unknown>
 ): void {
   const payload = {
     event: `PENDING_ACTION_${event}`,
-    actionType: action?.type,
-    targetId: action?.targetId,
-    targetName: action?.targetName,
+    actionType: action.type,
+    targetId: action.targetId,
+    targetName: action.targetName,
     ...(extra ?? {})
   };
 
   eventBus.publish({
-    id: generateUUID(),
+    id: `pending-${event.toLowerCase()}-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`,
     timestamp: Date.now(),
     source: AgentType.CORTEX_FLOW,
     type: PacketType.SYSTEM_ALERT,
@@ -69,37 +58,6 @@ function emitPendingActionTelemetry(
   if (isDev) {
     console.log(`[PENDING_ACTION:${event}]`, payload);
   }
-}
-
-function isPendingActionExpired(pending: PendingAction): boolean {
-  return Date.now() > pending.expiresAt;
-}
-
-function clearPendingAction(
-  ctx: any,
-  reason: 'timeout' | 'executed' | 'superseded' | 'error',
-  extra?: Record<string, unknown>
-): void {
-  const old = ctx.pendingAction as PendingAction | null;
-  ctx.pendingAction = null;
-  if (!old) return;
-
-  const eventType = reason === 'timeout'
-    ? 'EXPIRED'
-    : reason === 'executed'
-      ? 'USED'
-      : reason === 'superseded'
-        ? 'SUPERSEDED'
-        : 'ERROR';
-  emitPendingActionTelemetry(eventType, old, { reason, ...(extra ?? {}) });
-}
-
-function setPendingAction(ctx: any, action: PendingAction): void {
-  if (ctx.pendingAction) {
-    emitPendingActionTelemetry('SUPERSEDED', ctx.pendingAction as PendingAction);
-  }
-  ctx.pendingAction = action;
-  emitPendingActionTelemetry('SET', action);
 }
 
 function publishReactiveSpeech(params: {
@@ -494,73 +452,6 @@ export type ReactiveCallbacksLike = {
   onLimbicUpdate: (limbic: any) => void;
 };
 
-function tryResolvePendingAction(
-  ctx: any,
-  userInput: string,
-  trace: TraceLike,
-  callbacks: ReactiveCallbacksLike
-): { handled: boolean; syntheticCommand?: string } {
-  const pending = ctx.pendingAction as PendingAction | null;
-  if (!pending) return { handled: false };
-
-  if (isPendingActionExpired(pending)) {
-    clearPendingAction(ctx, 'timeout');
-
-    const isPolish = String(ctx.agentIdentity?.language || '').toLowerCase().includes('pol');
-    publishReactiveSpeech({
-      ctx,
-      trace,
-      callbacks,
-      speechText: isPolish
-        ? 'Minelo za duzo czasu. Podaj polecenie jeszcze raz.'
-        : 'Too much time passed. Please repeat your command.',
-      internalThought: 'PENDING_EXPIRED'
-    });
-    return { handled: true };
-  }
-
-  const newIntent = detectActionableIntent(userInput);
-  if (newIntent.handled && newIntent.action && newIntent.target) {
-    const target = String(newIntent.target || '').trim();
-    // Supersede only when this is a hard command with a recognizable target (file.md or art-xxx).
-    // Not for implicit references, which can be payload like "tego pliku nie ruszaj".
-    if (isRecognizableTarget(target) && !isImplicitReference(target)) {
-      clearPendingAction(ctx, 'superseded');
-      return { handled: false };
-    }
-  }
-
-  const payload = userInput.trim();
-  if (!payload) return { handled: false };
-
-  let syntheticCommand = '';
-  if (pending.type === 'APPEND_CONTENT') {
-    syntheticCommand = `dopisz do ${pending.targetId} ${payload}`;
-  } else if (pending.type === 'REPLACE_CONTENT') {
-    syntheticCommand = `edytuj ${pending.targetId}: ${payload}`;
-  } else {
-    return { handled: false };
-  }
-
-  const isDev = typeof process !== 'undefined' && process.env?.NODE_ENV !== 'production';
-  if (isDev) {
-    console.log(`[PENDING_ACTION] Synthetic: "${syntheticCommand.slice(0, 80)}..."`);
-  }
-
-  const testIntent = detectActionableIntent(syntheticCommand);
-  const testTarget = String(testIntent.target || '').trim();
-  if (!testIntent.handled || !testIntent.action || !testTarget || !isRecognizableTarget(testTarget)) {
-    clearPendingAction(ctx, 'error', {
-      errorType: 'synthetic_mismatch',
-      syntheticCommand: syntheticCommand.slice(0, 100)
-    });
-    return { handled: false };
-  }
-
-  clearPendingAction(ctx, 'executed');
-  return { handled: true, syntheticCommand };
-}
-
 export async function runReactiveStep(input: {
   ctx: any;
   userInput: string;
@@ -574,13 +465,43 @@ export async function runReactiveStep(input: {
 
   TickCommitter.markUserInput();
 
-  const pendingResult = tryResolvePendingAction(ctx, userInput, trace, callbacks);
+  const pendingDeps: ResolveDependencies = {
+    detectActionableIntent,
+    isRecognizableTarget,
+    isImplicitReference,
+    emitTelemetry: emitPendingActionTelemetry
+  };
+
+  const pendingResult = tryResolvePendingAction(ctx, userInput, pendingDeps);
   if (pendingResult.handled) {
+    const isPolish = String(ctx.agentIdentity?.language || '').toLowerCase().includes('pol');
     if (pendingResult.syntheticCommand) {
       userInput = pendingResult.syntheticCommand;
       if (isDev) {
-        console.log(`[PENDING_ACTION] Synthesized command: "${userInput.slice(0, 80)}..."`);
+        console.log(`[PENDING_ACTION] Synthesized: "${userInput.slice(0, 80)}..."`);
       }
+    } else if (pendingResult.action === 'expired') {
+      publishReactiveSpeech({
+        ctx,
+        trace,
+        callbacks,
+        speechText: isPolish
+          ? 'Minęło za dużo czasu. Podaj polecenie jeszcze raz.'
+          : 'Too much time passed. Please repeat.',
+        internalThought: 'PENDING_EXPIRED'
+      });
+      return;
+    } else if (pendingResult.action === 'cancelled') {
+      publishReactiveSpeech({
+        ctx,
+        trace,
+        callbacks,
+        speechText: isPolish
+          ? 'OK, anulowałem operację.'
+          : 'OK, cancelled.',
+        internalThought: 'PENDING_CANCELLED'
+      });
+      return;
     } else {
       return;
     }
@@ -741,16 +662,14 @@ export async function runReactiveStep(input: {
               return;
             }
 
-            const pendingAction: PendingAction = {
-              type: 'APPEND_CONTENT',
-              targetId: resolved.id,
-              targetName: nameHint || resolved.nameHint || resolved.id,
-              createdAt: Date.now(),
-              expiresAt: Date.now() + PENDING_ACTION_TTL_MS,
-              originalUserInput: userInput
-            };
+            const newPending = createPendingAction(
+              'APPEND_CONTENT',
+              resolved.id,
+              nameHint || resolved.nameHint || resolved.id,
+              userInput
+            );
 
-            setPendingAction(ctx, pendingAction);
+            setPendingAction(ctx, newPending, emitPendingActionTelemetry);
 
             if (traceId) {
               p0MetricAdd(traceId, {
@@ -762,7 +681,7 @@ export async function runReactiveStep(input: {
             }
 
             const isPolish = String(ctx.agentIdentity?.language || '').toLowerCase().includes('pol');
-            const artifactName = pendingAction.targetName || pendingAction.targetId;
+            const artifactName = newPending.targetName || newPending.targetId;
 
             publishReactiveSpeech({
               ctx,
