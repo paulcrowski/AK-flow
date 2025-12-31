@@ -304,6 +304,23 @@ function deriveCreateTarget(rawTarget: string, opts?: { preferPhrase?: boolean }
   return `${slug || 'artifact'}.md`;
 }
 
+function sanitizeFilename(raw: string): string {
+  let name = String(raw || '')
+    .replace(/["':]/g, '')
+    .replace(/\s+/g, '-')
+    .trim();
+
+  if (!name || name === '.md' || name === '-.md') {
+    name = `note-${Date.now().toString(36)}.md`;
+  }
+
+  if (!/\.[a-z]{2,4}$/i.test(name)) {
+    name = `${name}.md`;
+  }
+
+  return name;
+}
+
 function detectCreateIntent(ctx: IntentInput): ActionFirstResult | null {
   const candidates = [
     { match: ctx.raw.match(CREATE_NO_NAME_COLON_REGEX), payloadIndex: 1, preferPhrase: true },
