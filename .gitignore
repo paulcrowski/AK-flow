@@ -30,6 +30,8 @@ dist-ssr
 
 # Workspace files
 *.code-workspace
+PLAN_PRZYZIEMNY.md
+PROPOZYCJE_ULEPSZEN.md
 
 # AI scratch / patch workspace
 _patches/
