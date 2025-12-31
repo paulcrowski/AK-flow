@@ -363,40 +363,45 @@ export function repairTruncatedJson(input: string): {
     wasRepaired: boolean;
     repairs: string[];
 } {
-    const original = String(input || '').trim();
-    if (!original) return { repaired: original, wasRepaired: false, repairs: [] };
-
-    let repaired = original;
     const repairs: string[] = [];
+    let result = String(input || '').trim();
 
-    if (/:\s*"[^"]*$/.test(repaired)) {
-        repaired += '"';
+    if (!result) return { repaired: result, wasRepaired: false, repairs };
+
+    // 1. Dangling key without value: "tool_intent": -> "tool_intent": null
+    if (/"\s*:\s*$/.test(result)) {
+        result += 'null';
+        repairs.push('added_null_for_dangling_key');
+    }
+
+    // 2. Unclosed string
+    const quoteCount = (result.match(/(?<!\\)"/g) || []).length;
+    if (quoteCount % 2 !== 0) {
+        result += '"';
         repairs.push('closed_string');
     }
 
-    const openBrackets = (repaired.match(/\[/g) || []).length;
-    const closeBrackets = (repaired.match(/]/g) || []).length;
-    const missingBrackets = openBrackets - closeBrackets;
-    if (missingBrackets > 0) {
-        repaired += ']'.repeat(missingBrackets);
-        repairs.push(`closed_${missingBrackets}_brackets`);
+    // 3. Close brackets/braces
+    const opens = (result.match(/\[/g) || []).length;
+    const closes = (result.match(/\]/g) || []).length;
+    for (let i = 0; i < opens - closes; i++) {
+        result += ']';
+        repairs.push('closed_bracket');
     }
 
-    const openBraces = (repaired.match(/{/g) || []).length;
-    const closeBraces = (repaired.match(/}/g) || []).length;
-    const missingBraces = openBraces - closeBraces;
-    if (missingBraces > 0) {
-        repaired += '}'.repeat(missingBraces);
-        repairs.push(`closed_${missingBraces}_braces`);
+    const openBraces = (result.match(/\{/g) || []).length;
+    const closeBraces = (result.match(/\}/g) || []).length;
+    for (let i = 0; i < openBraces - closeBraces; i++) {
+        result += '}';
+        repairs.push('closed_brace');
     }
 
-    const removedTrailing = repaired.replace(/,(\s*[}\]])/g, '$1');
-    if (removedTrailing !== repaired) {
-        repaired = removedTrailing;
-        repairs.push('removed_trailing_comma');
-    }
+    // 4. Trailing comma
+    const trimmed = result.replace(/,\s*([}\]])/g, '$1');
+    if (trimmed !== result) repairs.push('removed_trailing_comma');
+    result = trimmed;
 
-    return { repaired, wasRepaired: repairs.length > 0, repairs };
+    return { repaired: result, wasRepaired: repairs.length > 0, repairs };
 }
 
 export function parseJsonFromLLM<T>(
