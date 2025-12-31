@@ -495,7 +495,9 @@ function tryResolvePendingAction(
   const newIntent = detectActionableIntent(userInput);
   if (newIntent.handled && newIntent.action && newIntent.target) {
     const target = String(newIntent.target || '').trim();
-    if (isRecognizableTarget(target)) {
+    // Supersede only when this is a hard command with a recognizable target (file.md or art-xxx).
+    // Not for implicit references, which can be payload like "tego pliku nie ruszaj".
+    if (isRecognizableTarget(target) && !isImplicitReference(target)) {
       clearPendingAction(ctx, 'superseded');
       return { handled: false };
     }
