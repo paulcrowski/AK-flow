@@ -349,7 +349,7 @@ function detectAppendIntent(ctx: IntentInput): ActionFirstResult | null {
       if (restPayload && isRecognizableTarget(candidateTarget)) {
         return { handled: true, action: 'APPEND', target: candidateTarget, payload: restPayload };
       }
-      if (isRecognizableTarget(target)) {
+      if (isRecognizableTarget(target) || isImplicitReference(target)) {
         return { handled: true, action: 'APPEND', target };
       }
     }
