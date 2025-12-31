@@ -1,6 +1,6 @@
 # 🧠 AK-FLOW Architecture Map
 
-> **Wersja:** 6.10.2 (2025-12-30)
+> **Wersja:** 6.10.3 (2025-12-31)
 > **Cel:** Prosta mapa jak działa agent i jaki ma flow
 
 ## Archive policy
@@ -9,6 +9,15 @@
 Ten katalog jest wykluczony z kompilacji TypeScript i służy wyłącznie jako referencja do poprzednich iteracji.
 
 ---
+
+## FAZA 6.10.3: Pending Action + Action-First Hardening (2025-12-31)
+
+**Cel:** domknac pending action i parsing append/create bez regresji.
+
+**Mechanika:**
+- PendingAction wydzielony do pending/ + sync ze store i runnerem.
+- Action-First: implicit references, append target guard, create filename sanitization, payload prefix cleanup.
+- JSON repair: dangling key fix + nowe testy scenariuszy pending/append/create.
 
 ## FAZA 6.10.2: P0.2 Hardening (2025-12-30)
 

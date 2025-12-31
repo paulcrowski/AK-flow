@@ -17,11 +17,50 @@
 
 | Metryka | Wartość |
 |---------|---------|
-| Rozwiązanych problemów | 18 |
+| Rozwiązanych problemów | 19 |
 | Całkowity czas | ~48 godzin |
 | Średnia trudność | 3.9/5 |
 | Największy przełom | FactEcho Guard (FAZA 6.0) |
 | Najdłuższy problem | Monolityczny Kernel (8h) |
+
+---
+
+## Problem #27: Pending Action payload/target pollution (APPEND)
+
+**Data:** 2025-12-31
+**Trudnosc:** 3/5
+**Status:** ROZWIAZANY (P0 pending hardening)
+
+### Objawy
+- `dodaj: koty...` w pending tworzylo synthetic `dopisz do art-xxx dodaj: ...` i target `art-xxx dodaj` -> ARTIFACT_NOT_FOUND.
+- `dodaj do tego pliku` nie przechodzilo regexu Action-First (FUZZY_REGEX_MISMATCH).
+- `Utworz plik: "utworz plik test.md"` generowalo `plik:.md`.
+
+### Diagnoza
+- Pending payload nie byl czyszczony z prefiksow typu `dodaj:`/`dopisz:`.
+- APPEND regex pozwalal na spacje w target, co wciagalo payload do targetu.
+- Brak implicit reference matching + zbyt agresywne supersede pending.
+- Ekstrakcja filename brala token przed `:`.
+
+### Rozwiazanie
+- Czyszczenie prefiksow payloadu w pending synthetic commands.
+- Guard na spacje w target + implicit reference detection.
+- Sanityzacja filename dla CREATE; ograniczenie supersede do hard targetow.
+- JSON repair: dangling key fix + testy scenariuszy pending/append/create.
+
+### Pliki
+- src/core/systems/eventloop/pending/pendingAction.logic.ts
+- src/core/systems/eventloop/reactiveStep.helpers.ts
+- src/core/systems/eventloop/ReactiveStep.ts
+- src/core/inference/AIResponseParser.ts
+- __tests__/integration/ActionFirst.test.ts
+- __tests__/unit/AIResponseParser.test.ts
+
+### Testy
+`npx tsc --noEmit`, `npm test`, `npm run build`
+
+### Lekcja
+- Payload po prompcie nie moze psuc targetu; regexy musza trzymac jeden token target.
 
 ---
 

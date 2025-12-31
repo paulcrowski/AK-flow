@@ -1,6 +1,6 @@
 # AK-FLOW: Cognitive Agent Architecture Manifest
-**System Version:** 6.10.2 (P0.2 Hardening)  
-**Last Updated:** 2025-12-30  
+**System Version:** 6.10.3 (Pending Action Hardening)  
+**Last Updated:** 2025-12-31  
 **Architecture Type:** Active Inference (Friston) + Global Workspace Theory + Multi-Modal RAG + **Stateless Inference Engine**  
 **Status:** Autonomous / Stateful / Modular / Self-Aware / Goal-Driven / Personality-Driven / **Emergent Identity**
 
@@ -28,6 +28,20 @@ We embrace the artificial nature as a feature, not a bug.
 - **Measurable Soul:** Emotions and "vibes" are allowed, but they must map to system metrics (Energy, Dopamine), not just literary roleplay.
 
 ---
+
+## What's New in V6.10.3 (2025-12-31)
+
+### Pending Action reliability + Action-First parsing fixes
+
+**Goal:** stabilize append/create workflows and pending payload handling.
+
+**Key changes:**
+- PendingAction extracted into a pending module with store/runner sync; ReactiveStep reduced.
+- Action-First: implicit reference handling, append target guard, create filename sanitization, payload prefix cleanup.
+- JSON repair: handle dangling keys in truncated responses; tests added for implicit append/create and pending scenarios.
+
+**Tests:**
+`npx tsc --noEmit` PASS; `npm test` PASS (665 tests, 1 skipped); `npm run build` PASS (vite warnings about dynamic imports/chunk size).
 
 ## What's New in V6.10.2 (2025-12-30)
 
