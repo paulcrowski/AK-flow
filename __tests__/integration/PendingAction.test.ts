@@ -1,5 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { runReactiveStep } from '@core/systems/eventloop/ReactiveStep';
+import { p0MetricStartTick, publishP0Metric } from '@core/systems/TickLifecycleTelemetry';
+import { pushTraceId, popTraceId } from '@core/trace/TraceContext';
 import { useArtifactStore } from '@/stores/artifactStore';
 import { eventBus } from '@core/EventBus';
 import { PacketType } from '@/types';
@@ -141,5 +143,75 @@ describe('PendingAction - Slot Filling', () => {
 
     const used = events.find((e) => e.payload?.event === 'PENDING_ACTION_USED');
     expect(used).toBeUndefined();
+  });
+
+  it('Scenario D: implicit append target uses last created artifact', async () => {
+    const store = useArtifactStore.getState();
+
+    const ctx = createCtx();
+    const { callbacks } = createCallbacks();
+    const memorySpace = { hot: { semanticSearch: vi.fn() } };
+
+    await runReactiveStep({
+      ctx,
+      userInput: 'utworz plik notatki.md z trescia Start',
+      callbacks,
+      memorySpace,
+      trace: { traceId: 't4', tickNumber: 1, agentId: 'a1' }
+    });
+
+    const created = store.getByName('notatki.md')[0];
+    expect(created).toBeDefined();
+
+    eventBus.clear();
+
+    const traceId = 't4-2';
+    p0MetricStartTick(traceId, 2);
+    pushTraceId(traceId);
+    try {
+      await runReactiveStep({
+        ctx,
+        userInput: 'dodaj do tego pliku',
+        callbacks,
+        memorySpace,
+        trace: { traceId, tickNumber: 2, agentId: 'a1' }
+      });
+      publishP0Metric(traceId, Date.now());
+    } finally {
+      popTraceId(traceId);
+    }
+
+    expect(ctx.pendingAction).not.toBeNull();
+    expect(ctx.pendingAction.type).toBe('APPEND_CONTENT');
+
+    const pendingEvent = eventBus.getHistory().find((e) => e.payload?.event === 'PENDING_ACTION_SET');
+    expect(pendingEvent).toBeDefined();
+
+    const metricEvent = eventBus.getHistory().find((e) => e.payload?.event === 'P0_METRIC');
+    expect(metricEvent?.payload?.pendingActionSet).toBe(1);
+
+    const fuzzyMismatch = eventBus
+      .getHistory()
+      .find((e) => e.type === PacketType.PREDICTION_ERROR && e.payload?.metric === 'FUZZY_REGEX_MISMATCH');
+    expect(fuzzyMismatch).toBeUndefined();
+
+    eventBus.clear();
+
+    await runReactiveStep({
+      ctx,
+      userInput: 'stop',
+      callbacks,
+      memorySpace,
+      trace: { traceId: 't4-3', tickNumber: 3, agentId: 'a1' }
+    });
+
+    expect(ctx.pendingAction).toBeNull();
+    const updated = store.getByName('notatki.md')[0];
+    expect(updated?.content).toContain('stop');
+
+    const appendIntent = eventBus
+      .getHistory()
+      .find((e) => e.type === PacketType.TOOL_INTENT && e.payload?.tool === 'APPEND');
+    expect(appendIntent).toBeDefined();
   });
 });

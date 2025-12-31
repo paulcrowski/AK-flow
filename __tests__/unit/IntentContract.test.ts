@@ -93,12 +93,26 @@ describe('P0.1.1 Action-First intent detection', () => {
         expect(r.payload).toBe('testuje cos');
     });
 
+    it('CREATE: should pick explicit filename from colon text', () => {
+        const r = detectActionableIntentForTesting('utworz plik: "utworz plik test.md"');
+        expect(r.handled).toBe(true);
+        expect(r.action).toBe('CREATE');
+        expect(r.target).toBe('test.md');
+    });
+
     it('APPEND: verb + target + payload required', () => {
         const r = detectActionableIntentForTesting('dopisz do note.md: hello');
         expect(r.handled).toBe(true);
         expect(r.action).toBe('APPEND');
         expect(r.target).toBe('note.md');
         expect(r.payload).toBe('hello');
+    });
+
+    it('APPEND: should accept implicit reference targets without payload', () => {
+        const r = detectActionableIntentForTesting('dodaj do tego pliku');
+        expect(r.handled).toBe(true);
+        expect(r.action).toBe('APPEND');
+        expect(r.target).toBe('tego pliku');
     });
 
     it('REPLACE: verb + target detected (payload optional)', () => {

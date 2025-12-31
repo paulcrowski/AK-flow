@@ -87,5 +87,13 @@ describe('AIResponseParser - robustness', () => {
       expect(() => JSON.parse(res.repaired)).not.toThrow();
       expect(JSON.parse(res.repaired)).toEqual({ a: [1, 2, 3] });
     });
+
+    it('adds null for dangling key', () => {
+      const res = repairTruncatedJson('{"tool_intent":');
+      expect(res.wasRepaired).toBe(true);
+      expect(res.repairs).toContain('added_null_for_dangling_key');
+      expect(() => JSON.parse(res.repaired)).not.toThrow();
+      expect(JSON.parse(res.repaired)).toEqual({ tool_intent: null });
+    });
   });
 });
