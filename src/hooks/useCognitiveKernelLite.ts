@@ -495,7 +495,7 @@ export const useCognitiveKernelLite = (loadedIdentity?: AgentIdentity | null) =>
       const parts: string[] = [];
       if (summary) parts.push(`Sleep summary: ${summary}`);
       if (lessons.length > 0) {
-        const lessonText = lessons.map((l, idx) => `${idx + 1}. ${l}`).join(' ');
+        const lessonText = lessons.map((l: string, idx: number) => `${idx + 1}. ${l}`).join(' ');
         parts.push(`Lessons: ${lessonText}`);
       } else if (summary) {
         parts.push(`Episodes processed: ${episodesProcessed}`);
