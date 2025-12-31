@@ -20,6 +20,7 @@ import { buildToolCommitDetails, formatToolCommitMessage } from '../../utils/too
 const ACTION_FIRST_ENABLED = (SYSTEM_CONFIG.features as Record<string, boolean>).P011_ACTION_FIRST_ENABLED ?? true;
 
 type ActionFirstResult = {
+  // No intent uses null at the detector level (not { handled: false }).
   handled: boolean;
   action?: 'CREATE' | 'READ' | 'APPEND' | 'REPLACE';
   target?: string;
@@ -286,7 +287,8 @@ function detectReadIntent(ctx: IntentInput): ActionFirstResult | null {
 
 function detectFileIntent(text: string): ActionFirstResult | null {
   const ctx = normalizeIntentInput(text);
-  if (shouldIgnoreActionIntent(ctx)) return { handled: false };
+  // Contract: null means no actionable intent (including ignored inputs).
+  if (shouldIgnoreActionIntent(ctx)) return null;
   return detectCreateIntent(ctx) ?? detectAppendIntent(ctx) ?? detectReplaceIntent(ctx) ?? detectReadIntent(ctx);
 }
 
@@ -314,6 +316,10 @@ function detectActionableIntent(input: string): ActionFirstResult {
 
 export function detectActionableIntentForTesting(input: string): ActionFirstResult {
   return detectActionableIntent(input);
+}
+
+export function detectFileIntentForTesting(input: string): ActionFirstResult | null {
+  return detectFileIntent(input);
 }
 
 export type TraceLike = {

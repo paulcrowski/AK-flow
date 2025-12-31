@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import type { DetectedIntent } from '@/types';
 import { parseDetectedIntent } from '@core/systems/IntentContract';
-import { detectActionableIntentForTesting } from '@core/systems/eventloop/ReactiveStep';
+import { detectActionableIntentForTesting, detectFileIntentForTesting } from '@core/systems/eventloop/ReactiveStep';
 
 describe('IntentContract', () => {
     const safeDefault: DetectedIntent = {
@@ -127,5 +127,10 @@ describe('P0.1.1 Action-First intent detection', () => {
     it('should ignore capability questions', () => {
         const r = detectActionableIntentForTesting('umiesz wygenerowac notatke?');
         expect(r.handled).toBe(false);
+    });
+
+    it('detectFileIntent should return null for capability questions (null means no intent)', () => {
+        const r = detectFileIntentForTesting('umiesz wygenerowac notatke?');
+        expect(r).toBeNull();
     });
 });
