@@ -53,6 +53,7 @@ export const cleanJSON = <T>(
   validator?: (data: any) => boolean,
   callsite?: string
 ): T => {
+  const isDev = typeof process !== 'undefined' && process.env?.NODE_ENV !== 'production';
   if (!text) return defaultVal;
 
   try {
@@ -70,16 +71,20 @@ export const cleanJSON = <T>(
       throw new Error(parsedResult.error || 'PARSE_ERROR');
     }
 
-    console.warn('JSON Parsed but failed validation. Using default.');
+    if (isDev) {
+      console.warn('JSON Parsed but failed validation. Using default.');
+    }
     return defaultVal;
   } catch (e2) {
     const hasBrace = text?.includes('{') ?? false;
     const hasBracket = text?.includes('[') ?? false;
     const first60 = text?.substring(0, 60) || 'EMPTY';
 
-    console.warn(
-      `[JSON_PARSE_FAILURE] callsite=${callsite || 'unknown'} hasBrace=${hasBrace} hasBracket=${hasBracket} first60="${first60}"`
-    );
+    if (isDev) {
+      console.warn(
+        `[JSON_PARSE_FAILURE] callsite=${callsite || 'unknown'} hasBrace=${hasBrace} hasBracket=${hasBracket} first60="${first60}"`
+      );
+    }
 
     eventBus.publish({
       id: generateUUID(),
