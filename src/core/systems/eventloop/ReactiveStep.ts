@@ -176,6 +176,19 @@ function isRecognizableTarget(target: string): boolean {
   return raw.startsWith('art-') || /^[a-z0-9_-]{1,60}\.(md|txt|json|ts|js|tsx|jsx|css|html)$/i.test(raw);
 }
 
+function isImplicitReference(target: string): boolean {
+  const normalized = String(target || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim();
+  return /\btego pliku\b/.test(normalized) ||
+    /\bdo tego\b/.test(normalized) ||
+    /\bten plik\b/.test(normalized) ||
+    /\bostatni\b/.test(normalized) ||
+    normalized === 'to';
+}
+
 type IntentInput = {
   raw: string;
   trimmed: string;
