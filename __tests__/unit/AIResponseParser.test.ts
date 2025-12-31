@@ -1,7 +1,13 @@
-import { describe, it, expect } from 'vitest';
-import { parseJsonFromLLM, extractJsonBlock, repairJsonMinimal } from '@utils/AIResponseParser';
+import { describe, it, expect, beforeEach } from 'vitest';
+import { eventBus } from '@core/EventBus';
+import { PacketType } from '@/types';
+import { parseJsonFromLLM, extractJsonBlock, repairJsonMinimal, repairTruncatedJson } from '@utils/AIResponseParser';
 
 describe('AIResponseParser - robustness', () => {
+  beforeEach(() => {
+    eventBus.clear();
+  });
+
   describe('parseJsonFromLLM', () => {
     it('parses clean JSON', () => {
       const res = parseJsonFromLLM<{ foo: number }>('{"foo": 1}');
@@ -34,6 +40,18 @@ describe('AIResponseParser - robustness', () => {
       expect(res.repaired).toBe(true);
     });
 
+    it('repairs truncated JSON when allowed', () => {
+      const res = parseJsonFromLLM<{ foo: string }>('{"foo": "bar"', { allowRepair: true });
+      expect(res.ok).toBe(true);
+      expect(res.value).toEqual({ foo: 'bar' });
+      expect(res.repaired).toBe(true);
+
+      const event = eventBus
+        .getHistory()
+        .find((e) => e.type === PacketType.PREDICTION_ERROR && e.payload?.metric === 'JSON_TRUNCATION_REPAIRED');
+      expect(event).toBeDefined();
+    });
+
     it('parses JSON from fenced block', () => {
       const res = parseJsonFromLLM<{ foo: number }>('```json\n{"foo":2}\n```');
       expect(res.ok).toBe(true);
@@ -59,6 +77,15 @@ describe('AIResponseParser - robustness', () => {
       const repaired = repairJsonMinimal("{'a': 'x',}");
       expect(() => JSON.parse(repaired)).not.toThrow();
       expect(JSON.parse(repaired)).toEqual({ a: 'x' });
+    });
+  });
+
+  describe('repairTruncatedJson helper', () => {
+    it('closes missing braces and brackets', () => {
+      const res = repairTruncatedJson('{"a": [1, 2, 3');
+      expect(res.wasRepaired).toBe(true);
+      expect(() => JSON.parse(res.repaired)).not.toThrow();
+      expect(JSON.parse(res.repaired)).toEqual({ a: [1, 2, 3] });
     });
   });
 });

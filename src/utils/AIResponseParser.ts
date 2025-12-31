@@ -1,3 +1,7 @@
+import { eventBus } from '../core/EventBus';
+import { AgentType, PacketType } from '../types';
+import { generateUUID } from './uuid';
+
 /**
  * AIResponseParser - Utility for extracting structured data from AI responses
  * 
@@ -354,6 +358,47 @@ export function repairJsonMinimal(input: string): string {
     return out;
 }
 
+export function repairTruncatedJson(input: string): {
+    repaired: string;
+    wasRepaired: boolean;
+    repairs: string[];
+} {
+    const original = String(input || '').trim();
+    if (!original) return { repaired: original, wasRepaired: false, repairs: [] };
+
+    let repaired = original;
+    const repairs: string[] = [];
+
+    if (/:\s*"[^"]*$/.test(repaired)) {
+        repaired += '"';
+        repairs.push('closed_string');
+    }
+
+    const openBrackets = (repaired.match(/\[/g) || []).length;
+    const closeBrackets = (repaired.match(/]/g) || []).length;
+    const missingBrackets = openBrackets - closeBrackets;
+    if (missingBrackets > 0) {
+        repaired += ']'.repeat(missingBrackets);
+        repairs.push(`closed_${missingBrackets}_brackets`);
+    }
+
+    const openBraces = (repaired.match(/{/g) || []).length;
+    const closeBraces = (repaired.match(/}/g) || []).length;
+    const missingBraces = openBraces - closeBraces;
+    if (missingBraces > 0) {
+        repaired += '}'.repeat(missingBraces);
+        repairs.push(`closed_${missingBraces}_braces`);
+    }
+
+    const removedTrailing = repaired.replace(/,(\s*[}\]])/g, '$1');
+    if (removedTrailing !== repaired) {
+        repaired = removedTrailing;
+        repairs.push('removed_trailing_comma');
+    }
+
+    return { repaired, wasRepaired: repairs.length > 0, repairs };
+}
+
 export function parseJsonFromLLM<T>(
     text: string | undefined,
     options: LLMJsonParseOptions<T> = {}
@@ -409,6 +454,44 @@ export function parseJsonFromLLM<T>(
                 lastErr = e;
             }
         }
+
+        for (const c of uniq) {
+            const { repaired, wasRepaired, repairs } = repairTruncatedJson(c);
+            if (!wasRepaired) continue;
+            try {
+                const parsed = JSON.parse(repaired);
+                if (options.validator && !options.validator(parsed)) continue;
+
+                eventBus.publish({
+                    id: generateUUID(),
+                    timestamp: Date.now(),
+                    source: AgentType.CORTEX_FLOW,
+                    type: PacketType.PREDICTION_ERROR,
+                    payload: {
+                        metric: 'JSON_TRUNCATION_REPAIRED',
+                        repairs: repairs.join(','),
+                        inputLength: c.length,
+                        outputLength: repaired.length
+                    },
+                    priority: 0.4
+                });
+
+                const isDev = typeof process !== 'undefined' && process.env?.NODE_ENV !== 'production';
+                if (isDev) {
+                    console.log(`[JSON_REPAIR] ${repairs.join(', ')}. In: ${c.length}, Out: ${repaired.length}`);
+                }
+
+                return {
+                    ok: true,
+                    value: parsed as T,
+                    repaired: true,
+                    extracted: c,
+                    error: `TRUNCATION_REPAIRED:${repairs.join(',')}`
+                };
+            } catch (e) {
+                lastErr = e;
+            }
+        }
     }
 
     const error = lastErr instanceof Error ? lastErr.message : lastErr ? String(lastErr) : undefined;
@@ -423,5 +506,6 @@ export default {
     extractSummary,
     extractJsonBlock,
     repairJsonMinimal,
+    repairTruncatedJson,
     parseJsonFromLLM
 };
