@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { runReactiveStep } from '@core/systems/eventloop/ReactiveStep';
 import { p0MetricStartTick, publishP0Metric } from '@core/systems/TickLifecycleTelemetry';
 import { pushTraceId, popTraceId } from '@core/trace/TraceContext';
+import type { PendingAction } from '@core/systems/eventloop/pending';
 import { useArtifactStore } from '@/stores/artifactStore';
 import { eventBus } from '@core/EventBus';
 import { PacketType } from '@/types';
@@ -22,7 +23,7 @@ describe('PendingAction - Slot Filling', () => {
     consecutiveAgentSpeeches: 0,
     hadExternalRewardThisTick: false,
     ticksSinceLastReward: 0,
-    pendingAction: null,
+    pendingAction: null as PendingAction | null,
     agentIdentity: { language: 'Polish' }
   });
 
@@ -50,7 +51,8 @@ describe('PendingAction - Slot Filling', () => {
     await runReactiveStep({ ctx, userInput: 'dopisz do notes.md', callbacks, memorySpace, trace });
 
     expect(ctx.pendingAction).not.toBeNull();
-    expect(ctx.pendingAction.type).toBe('APPEND_CONTENT');
+    const pending = ctx.pendingAction as PendingAction;
+    expect(pending.type).toBe('APPEND_CONTENT');
     expect(messages.some((m) => m.includes('Co chcesz dodac'))).toBe(true);
 
     messages.length = 0;
@@ -97,7 +99,7 @@ describe('PendingAction - Slot Filling', () => {
     });
 
     expect(ctx.pendingAction).toBeNull();
-    expect(messages.some((m) => m.includes('Minelo za duzo czasu'))).toBe(true);
+    expect(messages.some((m) => m.includes('Minęło za dużo czasu'))).toBe(true);
 
     const expired = eventBus.getHistory().find((e) => e.payload?.event === 'PENDING_ACTION_EXPIRED');
     expect(expired).toBeDefined();
@@ -117,7 +119,7 @@ describe('PendingAction - Slot Filling', () => {
       originalUserInput: 'dopisz do first.md'
     };
 
-    const { callbacks } = createCallbacks();
+    const { messages, callbacks } = createCallbacks();
 
     await runReactiveStep({
       ctx,
@@ -149,7 +151,7 @@ describe('PendingAction - Slot Filling', () => {
     const store = useArtifactStore.getState();
 
     const ctx = createCtx();
-    const { callbacks } = createCallbacks();
+    const { messages, callbacks } = createCallbacks();
     const memorySpace = { hot: { semanticSearch: vi.fn() } };
 
     await runReactiveStep({
@@ -182,7 +184,8 @@ describe('PendingAction - Slot Filling', () => {
     }
 
     expect(ctx.pendingAction).not.toBeNull();
-    expect(ctx.pendingAction.type).toBe('APPEND_CONTENT');
+    const pending = ctx.pendingAction as PendingAction;
+    expect(pending.type).toBe('APPEND_CONTENT');
 
     const pendingEvent = eventBus.getHistory().find((e) => e.payload?.event === 'PENDING_ACTION_SET');
     expect(pendingEvent).toBeDefined();
@@ -206,12 +209,12 @@ describe('PendingAction - Slot Filling', () => {
     });
 
     expect(ctx.pendingAction).toBeNull();
-    const updated = store.getByName('notatki.md')[0];
-    expect(updated?.content).toContain('stop');
+    expect(messages.some((m) => m.includes('anulowa'))).toBe(true);
 
-    const appendIntent = eventBus
-      .getHistory()
-      .find((e) => e.type === PacketType.TOOL_INTENT && e.payload?.tool === 'APPEND');
-    expect(appendIntent).toBeDefined();
+    const updated = store.getByName('notatki.md')[0];
+    expect(updated?.content).not.toContain('stop');
+
+    const cancelled = eventBus.getHistory().find((e) => e.payload?.event === 'PENDING_ACTION_CANCELLED');
+    expect(cancelled).toBeDefined();
   });
 });
