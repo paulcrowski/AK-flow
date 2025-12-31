@@ -98,9 +98,17 @@ export function tryResolvePendingAction(
 
   let syntheticCommand = '';
   if (pending.type === 'APPEND_CONTENT') {
-    syntheticCommand = `dopisz do ${pending.targetId} ${payload}`;
+    const cleanPayload = String(payload ?? '')
+      .trim()
+      .replace(/^(dodaj|dopisz|append|add)\s*:\s*/i, '')
+      .trim();
+    syntheticCommand = `dopisz do ${pending.targetId} ${cleanPayload}`;
   } else if (pending.type === 'REPLACE_CONTENT') {
-    syntheticCommand = `edytuj ${pending.targetId}: ${payload}`;
+    const cleanPayload = String(payload ?? '')
+      .trim()
+      .replace(/^(zamie\u0144|zamien|zast\u0105p|zastap|replace|edytuj)\s*:\s*/i, '')
+      .trim();
+    syntheticCommand = `edytuj ${pending.targetId}: ${cleanPayload}`;
   } else {
     return { handled: false };
   }

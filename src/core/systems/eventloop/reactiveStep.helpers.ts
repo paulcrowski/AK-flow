@@ -67,7 +67,7 @@ const EDIT_APPEND_REGEX = new RegExp(
   `${EDIT_VERBS}\\s+(?:${FILE_WORD}\\s+)?([^\\s:]+)\\s+${APPEND_VERBS}\\s+(?:tresc|tekst|content|text)?\\s*:?\\s*([\\s\\S]+)`,
   'i'
 );
-const APPEND_REGEX = new RegExp(`${APPEND_VERBS}\\s+(?:do|to)\\s+(.+)`, 'i');
+const APPEND_REGEX = new RegExp(`${APPEND_VERBS}\\s+(?:do|to)\\s+([^\\s]+)(?:\\s+(.*))?`, 'i');
 const APPEND_INLINE_REGEX = new RegExp(
   `${APPEND_VERBS}\\s+(?:tresc|tekst|content|text)?\\s*(?:do|to)\\s+([^\\s:]+)\\s+([\\s\\S]+)`,
   'i'
@@ -216,8 +216,32 @@ function detectAppendIntent(ctx: IntentInput): ActionFirstResult | null {
 
   const appendMatch = ctx.raw.match(APPEND_REGEX);
   if (appendMatch) {
-    const raw = String(appendMatch[1] || '');
-    const { target, payload } = splitTargetAndPayload(raw);
+    let target = String(appendMatch[1] || '').trim();
+    let payload = String(appendMatch[2] || '').trim();
+
+    if (target) {
+      const split = splitTargetAndPayload(target);
+      target = split.target;
+      payload = [split.payload, payload].filter(Boolean).join(' ').trim();
+    }
+
+    if (payload) {
+      const payloadParts = payload.split(/\s+/);
+      const maybeImplicit = `${target} ${payloadParts[0] || ''}`.trim();
+      if (isImplicitReference(maybeImplicit)) {
+        target = maybeImplicit;
+        payload = payloadParts.slice(1).join(' ').trim();
+      }
+    }
+
+    if (target.includes(' ') && !isImplicitReference(target)) {
+      const parts = target.split(/\s+/);
+      const firstToken = parts[0];
+      const rest = parts.slice(1).join(' ');
+      target = firstToken;
+      payload = `${rest}${payload ? ` ${payload}` : ''}`.trim();
+    }
+
     if (target && payload) return { handled: true, action: 'APPEND', target, payload };
     if (target && !payload) {
       const parts = target.split(/\s+/);
