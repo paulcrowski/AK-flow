@@ -79,6 +79,8 @@ export function CognitiveInterface() {
     const lastResetSessionRef = useRef<string | null>(null); // Guard against StrictMode double-reset
     const [artifactsOpen, setArtifactsOpen] = useState(false);
     const lastArtifactSeenRef = useRef<string | null>(null);
+    const tokenTotalsByTraceRef = useRef(new Map<string, { input: number; output: number; total: number }>());
+    const tokenEventIdsRef = useRef(new Set<string>());
 
     const artifactOrder = useArtifactStore((s) => s.order);
     const artifactsById = useArtifactStore((s) => s.artifactsById);
@@ -144,7 +146,25 @@ export function CognitiveInterface() {
     useEffect(() => {
         const unsubscribe = eventBus.subscribe(PacketType.PREDICTION_ERROR, (packet) => {
             if (packet.source === AgentType.SOMA && packet.payload?.metric === "TOKEN_USAGE") {
-                setSessionTokens(prev => prev + (packet.payload.total || 0));
+                const traceId = String(packet.payload?.traceId || packet.traceId || '');
+                if (!traceId) return;
+                if (tokenEventIdsRef.current.has(packet.id)) return;
+                tokenEventIdsRef.current.add(packet.id);
+
+                const inputTokens = Number(packet.payload?.input_tokens ?? 0) || 0;
+                const outputTokens = Number(packet.payload?.output_tokens ?? 0) || 0;
+                const totalTokens = Number(packet.payload?.total_tokens ?? 0) || 0;
+
+                const current = tokenTotalsByTraceRef.current.get(traceId) || { input: 0, output: 0, total: 0 };
+                tokenTotalsByTraceRef.current.set(traceId, {
+                    input: current.input + inputTokens,
+                    output: current.output + outputTokens,
+                    total: current.total + totalTokens
+                });
+
+                const sessionTotal = Array.from(tokenTotalsByTraceRef.current.values())
+                    .reduce((sum, entry) => sum + entry.total, 0);
+                setSessionTokens(sessionTotal);
             }
         });
         return () => unsubscribe();
