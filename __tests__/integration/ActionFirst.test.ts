@@ -53,4 +53,50 @@ describe('Action-First integration', () => {
     expect(intent).toBeDefined();
     expect(result).toBeDefined();
   });
+
+  it('should reject invalid append target and ask for recent artifacts', async () => {
+    const messages: string[] = [];
+    const callbacks = {
+      onMessage: (role: string, text: string) => {
+        messages.push(`${role}:${text}`);
+      },
+      onThought: vi.fn(),
+      onLimbicUpdate: vi.fn()
+    };
+
+    const ctx: any = {
+      limbic: {},
+      soma: {},
+      conversation: [],
+      silenceStart: Date.now(),
+      lastSpeakTimestamp: Date.now(),
+      goalState: { lastUserInteractionAt: Date.now() },
+      consecutiveAgentSpeeches: 0,
+      hadExternalRewardThisTick: false,
+      ticksSinceLastReward: 0,
+      agentIdentity: { language: 'Polish' }
+    };
+
+    const store = useArtifactStore.getState();
+    store.create('first.md', 'One');
+    store.create('second.md', 'Two');
+
+    await runReactiveStep({
+      ctx,
+      userInput: 'dopisz do foo bar',
+      callbacks,
+      memorySpace: { hot: { semanticSearch: vi.fn() } },
+      trace: { traceId: 'trace_invalid_target', tickNumber: 1, agentId: 'agent-1' }
+    });
+
+    const intent = eventBus.getHistory().find(
+      (e) => e.type === PacketType.TOOL_INTENT && e.payload?.tool === 'APPEND'
+    );
+    expect(intent).toBeUndefined();
+
+    const combined = messages.join(' ');
+    expect(combined).toContain('Nie wiem do którego pliku');
+    expect(combined).toContain('first.md');
+    expect(combined).toContain('second.md');
+  });
 });

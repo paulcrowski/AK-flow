@@ -210,6 +210,30 @@ export async function runReactiveStep(input: {
           }
           return resolved;
         };
+        const isInvalidToolTarget = (rawTarget: string) => {
+          const trimmed = String(rawTarget || '').trim();
+          if (!trimmed) return true;
+          if (trimmed.includes(' ') || trimmed.includes(':')) return true;
+          if (trimmed.startsWith('art-')) return false;
+          return !isRecognizableTarget(trimmed);
+        };
+        const getRecentArtifactNames = () => {
+          const ids = store.order.slice(0, 2);
+          return ids
+            .map((id) => store.get(id)?.name || getRememberedArtifactName(id) || id)
+            .filter(Boolean);
+        };
+        const respondUnknownTarget = () => {
+          const recent = getRecentArtifactNames();
+          const recentLabel = recent.length > 0 ? recent.join(', ') : 'brak';
+          publishReactiveSpeech({
+            ctx,
+            trace,
+            callbacks,
+            speechText: `Nie wiem do którego pliku. Ostatnie dwa: ${recentLabel}. Który?`,
+            internalThought: 'INVALID_TARGET'
+          });
+        };
 
       const emitToolIntent = (tool: string, arg: string, artifactName?: string) => {
         const intentId = generateUUID();
@@ -330,6 +354,10 @@ export async function runReactiveStep(input: {
 
         if (actionIntent.action === 'APPEND') {
           const payload = String(actionIntent.payload || '').trim();
+          if (isInvalidToolTarget(target)) {
+            respondUnknownTarget();
+            return;
+          }
           const resolved = resolveRef(target);
           const nameHint = resolved.ok
             ? rememberArtifactName(
@@ -430,6 +458,10 @@ export async function runReactiveStep(input: {
 
         if (actionIntent.action === 'REPLACE') {
           const payload = String(actionIntent.payload || '').trim();
+          if (isInvalidToolTarget(target)) {
+            respondUnknownTarget();
+            return;
+          }
           const resolved = resolveRef(target);
           const nameHint = resolved.ok
             ? rememberArtifactName(
