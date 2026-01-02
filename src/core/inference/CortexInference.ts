@@ -276,6 +276,7 @@ export async function generateFromCortexState(
 ): Promise<CortexOutput> {
   const cfg = { ...DEFAULT_CONFIG, ...config };
   const traceId = getCurrentTraceId() ?? generateExternalTraceId();
+  let attemptCounter = 0;
 
   const stateJson = formatCortexStateForLLM(state);
 
@@ -384,33 +385,44 @@ INSTRUCTIONS:
     required: ['internal_thought', 'speech_content']
   };
 
-  const runInference = async (prompt: string, callConfig: InferenceConfig, attempt: number): Promise<ParseOutcome> => {
+  const runInference = async (prompt: string, callConfig: InferenceConfig): Promise<ParseOutcome> => {
+    const attempt = attemptCounter++;
     const genAI = getAI();
 
-    const response = await genAI.models.generateContent({
-      model: callConfig.model!,
-      contents: prompt,
-      config: {
-        temperature: callConfig.temperature,
-        maxOutputTokens: callConfig.maxOutputTokens,
-        responseMimeType: 'application/json',
-        responseSchema
-      }
-    });
+    try {
+      const response = await genAI.models.generateContent({
+        model: callConfig.model!,
+        contents: prompt,
+        config: {
+          temperature: callConfig.temperature,
+          maxOutputTokens: callConfig.maxOutputTokens,
+          responseMimeType: 'application/json',
+          responseSchema
+        }
+      });
 
-    const parsed = parseResponse(response.text);
-    emitTokenUsageTelemetry({
-      response,
-      traceId,
-      attempt,
-      op: 'cortexInference',
-      status: parsed.ok ? 'success' : 'parse_fail'
-    });
-    logUsage('generateFromCortexState', response);
-    return parsed;
+      const parsed = parseResponse(response.text);
+      emitTokenUsageTelemetry({
+        response,
+        traceId,
+        attempt,
+        op: 'cortexInference',
+        status: parsed.ok ? 'success' : 'parse_fail'
+      });
+      logUsage('generateFromCortexState', response);
+      return parsed;
+    } catch (error) {
+      emitTokenUsageTelemetry({
+        traceId,
+        attempt,
+        op: 'cortexInference',
+        status: 'transport_fail'
+      });
+      throw error;
+    }
   };
 
-  const primary = await withRetry(() => runInference(fullPrompt, cfg, 0), cfg.retries!, cfg.retryDelayMs!);
+  const primary = await withRetry(() => runInference(fullPrompt, cfg), cfg.retries!, cfg.retryDelayMs!);
   if (primary.ok) return primary.value;
 
   if (shouldRetryParseFailure(primary.reason)) {
