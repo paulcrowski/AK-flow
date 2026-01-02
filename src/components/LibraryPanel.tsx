@@ -15,6 +15,7 @@ export function LibraryPanel() {
   const [isUploading, setIsUploading] = useState(false);
   const [ingestingById, setIngestingById] = useState<Record<string, boolean>>({});
   const [ingestErrorById, setIngestErrorById] = useState<Record<string, string>>({});
+  const [ingestProgressById, setIngestProgressById] = useState<Record<string, { processedChunks: number; totalChunks: number }>>({});
   const [expandedSummaryById, setExpandedSummaryById] = useState<Record<string, boolean>>({});
   const [configDoc, setConfigDoc] = useState<LibraryDocument | null>(null);
   const [isConfigOpen, setIsConfigOpen] = useState(false);
@@ -63,14 +64,33 @@ export function LibraryPanel() {
     if (!canUse) return;
     setIngestErrorById((prev) => ({ ...prev, [doc.id]: '' }));
     setIngestingById((prev) => ({ ...prev, [doc.id]: true }));
-    const res = await ingestLibraryDocument({ document: doc });
+    setIngestProgressById((prev) => ({ ...prev, [doc.id]: { processedChunks: 0, totalChunks: 0 } }));
+    const res = await ingestLibraryDocument({
+      document: doc,
+      onProgress: (progress) => {
+        setIngestProgressById((prev) => ({
+          ...prev,
+          [doc.id]: { processedChunks: progress.processedChunks, totalChunks: progress.totalChunks }
+        }));
+      }
+    });
     if (res.ok === false) {
       setIngestErrorById((prev) => ({ ...prev, [doc.id]: res.error }));
       setIngestingById((prev) => ({ ...prev, [doc.id]: false }));
+      setIngestProgressById((prev) => {
+        const next = { ...prev };
+        delete next[doc.id];
+        return next;
+      });
       return;
     }
     await refresh();
     setIngestingById((prev) => ({ ...prev, [doc.id]: false }));
+    setIngestProgressById((prev) => {
+      const next = { ...prev };
+      delete next[doc.id];
+      return next;
+    });
   };
 
   const toggleSummary = (docId: string) => {
@@ -210,10 +230,16 @@ export function LibraryPanel() {
                 </button>
               </div>
             </div>
-            <div className="mt-1 flex items-center justify-between gap-2">
-              <div className="text-[9px] text-gray-600 font-mono truncate">{d.storage_path}</div>
-              <div className="text-[9px] text-gray-600 font-mono">{Math.round((d.byte_size || 0) / 1024)}kb</div>
+              <div className="mt-1 flex items-center justify-between gap-2">
+                <div className="text-[9px] text-gray-600 font-mono truncate">{d.storage_path}</div>
+                <div className="text-[9px] text-gray-600 font-mono">{Math.round((d.byte_size || 0) / 1024)}kb</div>
             </div>
+
+              {ingestProgressById[d.id] && ingestingById[d.id] && (
+                <div className="mt-1 text-[9px] text-gray-600 font-mono">
+                  ingest: {ingestProgressById[d.id].processedChunks}/{ingestProgressById[d.id].totalChunks}
+                </div>
+              )}
 
               {d.ingested_at && (
                 <div className="mt-2 text-[9px] text-gray-600 font-mono">

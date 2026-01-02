@@ -40,6 +40,11 @@ type ActiveLearningMetrics = {
 const ACTIVE_LEARNING_TOP_K = 15;
 const MIN_IMPORTANCE = 3;
 const MAX_ACTIVE_STRENGTH = 12;
+const MAX_CHUNKS_PER_TICK = 5;
+const FAST_INGEST_CHAR_THRESHOLD = 200_000;
+const FAST_INGEST_CHUNK_THRESHOLD = 80;
+const FAST_INGEST_ACTIVE_LEARNING_LIMIT = 10;
+const SUMMARY_MAX_OUTPUT_TOKENS = 256;
 const IMPORTANCE_KEYWORDS = [
   'summary',
   'conclusion',
@@ -512,6 +517,7 @@ export async function ingestLibraryDocument(params: {
   targetChars?: number;
   maxChars?: number;
   overlapChars?: number;
+  onProgress?: (progress: { documentId: string; processedChunks: number; totalChunks: number }) => void;
 }): Promise<{ ok: true; chunkCount: number } | { ok: false; error: string }> {
   const doc = params.document;
 
@@ -557,28 +563,67 @@ export async function ingestLibraryDocument(params: {
       return { ok: false, error: 'NO_CHUNKS' };
     }
 
+    const totalChunks = chunks.length;
+    const isFastIngest = fullText.length >= FAST_INGEST_CHAR_THRESHOLD || totalChunks >= FAST_INGEST_CHUNK_THRESHOLD;
+    const cachedSummaryByIndex = new Map<number, { content: string; summary: string }>();
+    try {
+      const existing = await supabase
+        .from('library_chunks')
+        .select('chunk_index,content,summary')
+        .eq('document_id', doc.id);
+      if (!existing.error && Array.isArray(existing.data)) {
+        existing.data.forEach((row: any) => {
+          const idx = Number(row?.chunk_index);
+          if (!Number.isFinite(idx)) return;
+          cachedSummaryByIndex.set(idx, {
+            content: String(row?.content || ''),
+            summary: String(row?.summary || '')
+          });
+        });
+      }
+    } catch {
+      // ignore cache lookup failures
+    }
+
     const toInsert: any[] = [];
     const summariesForDoc: { summary: string; content: string }[] = [];
+    let processedChunks = 0;
+    const emitProgress = (processed: number) => {
+      params.onProgress?.({
+        documentId: doc.id,
+        processedChunks: processed,
+        totalChunks
+      });
+    };
+    emitProgress(0);
 
     for (const ch of chunks) {
       let summary = '';
+      const cached = cachedSummaryByIndex.get(ch.chunk_index);
+      const cachedSummary = String(cached?.summary || '').trim();
+      const reuseSummary = cachedSummary && cached?.content === ch.content;
       try {
-        summary = await CortexService.generateText(
-          'summarize_chunk',
-          [
-            'ROLE: AK-FLOW document ingestor.',
-            'TASK: Summarize this chunk of a user document.',
-            'CONSTRAINTS:',
-            '- Output pure text.',
-            '- 2-4 sentences.',
-            '- No markdown, no bullets, no emojis.',
-            '- Preserve key nouns and proper names.',
-            '',
-            'CHUNK:',
-            ch.content.slice(0, 8000)
-          ].join('\n'),
-          { temperature: 0.25, maxOutputTokens: 512 }
-        );
+        if (reuseSummary) {
+          summary = cachedSummary;
+        } else {
+          summary = await CortexService.generateText(
+            'summarize_chunk',
+            [
+              'ROLE: AK-FLOW document ingestor.',
+              'TASK: Summarize this chunk of a user document.',
+              'CONSTRAINTS:',
+              '- Output pure text.',
+              '- 2-4 sentences.',
+              '- Aim for ~120-200 tokens.',
+              '- No markdown, no bullets, no emojis.',
+              '- Preserve key nouns and proper names.',
+              '',
+              'CHUNK:',
+              ch.content.slice(0, 8000)
+            ].join('\n'),
+            { temperature: 0.25, maxOutputTokens: SUMMARY_MAX_OUTPUT_TOKENS }
+          );
+        }
       } catch {
         summary = '';
       }
@@ -595,6 +640,12 @@ export async function ingestLibraryDocument(params: {
         chunk_summary: summary,
         token_count: null
       });
+
+      processedChunks += 1;
+      emitProgress(processedChunks);
+      if (processedChunks % MAX_CHUNKS_PER_TICK === 0) {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      }
     }
 
     const del = await supabase.from('library_chunks').delete().eq('document_id', doc.id);
@@ -677,7 +728,6 @@ export async function ingestLibraryDocument(params: {
         });
       }
 
-      const totalChunks = chunks.length;
       const candidates = chunks
         .map((ch, i) => ({
           chunk_index: ch.chunk_index,
@@ -700,6 +750,9 @@ export async function ingestLibraryDocument(params: {
         return { ...c, heur, baseStrength };
       });
 
+      const activeLearningLimit = isFastIngest
+        ? Math.max(0, Math.min(FAST_INGEST_ACTIVE_LEARNING_LIMIT, ACTIVE_LEARNING_TOP_K))
+        : ACTIVE_LEARNING_TOP_K;
       const alEligible = selected
         .filter((c) => c.heur.score >= MIN_IMPORTANCE)
         .sort((a, b) => {
@@ -709,7 +762,7 @@ export async function ingestLibraryDocument(params: {
           if (dl !== 0) return dl;
           return a.chunk_index - b.chunk_index;
         })
-        .slice(0, ACTIVE_LEARNING_TOP_K);
+        .slice(0, activeLearningLimit);
 
       const alEligibleIndex = new Set(alEligible.map((c) => c.chunk_index));
 
