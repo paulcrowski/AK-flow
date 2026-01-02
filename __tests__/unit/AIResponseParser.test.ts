@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { eventBus } from '@core/EventBus';
 import { PacketType } from '@/types';
-import { parseJsonFromLLM, extractJsonBlock, repairJsonMinimal, repairTruncatedJson } from '@utils/AIResponseParser';
+import { parseJsonFromLLM, extractJsonBlock, repairJsonMinimal, repairTruncatedJson, extractSpeechFromRaw } from '@utils/AIResponseParser';
 
 describe('AIResponseParser - robustness', () => {
   beforeEach(() => {
@@ -94,6 +94,32 @@ describe('AIResponseParser - robustness', () => {
       expect(res.repairs).toContain('added_null_for_dangling_key');
       expect(() => JSON.parse(res.repaired)).not.toThrow();
       expect(JSON.parse(res.repaired)).toEqual({ tool_intent: null });
+    });
+  });
+
+  describe('extractSpeechFromRaw', () => {
+    it('extracts from truncated JSON with speech_content', () => {
+      const raw = '{"internal_thought":"ok","speech_content":"Czesc, jestem AI';
+      const result = extractSpeechFromRaw(raw);
+      expect(result).toBe('Czesc, jestem AI');
+    });
+
+    it('extracts from valid JSON with speech_content', () => {
+      const raw = '{"internal_thought":"ok","speech_content":"Wszystko jasne!"}';
+      const result = extractSpeechFromRaw(raw);
+      expect(result).toBe('Wszystko jasne!');
+    });
+
+    it('returns plain text when raw is not JSON', () => {
+      const raw = 'Czesc! Jak moge ci pomoc?';
+      const result = extractSpeechFromRaw(raw);
+      expect(result).toBe('Czesc! Jak moge ci pomoc?');
+    });
+
+    it('returns null when only internal_thought is present', () => {
+      const raw = '{"internal_thought":"Sekret"}';
+      const result = extractSpeechFromRaw(raw);
+      expect(result).toBeNull();
     });
   });
 });

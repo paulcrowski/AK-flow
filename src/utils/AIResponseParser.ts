@@ -404,6 +404,75 @@ export function repairTruncatedJson(input: string): {
     return { repaired: result, wasRepaired: repairs.length > 0, repairs };
 }
 
+function looksUnsafeSpeech(text: string): boolean {
+    const lower = text.toLowerCase();
+    const keywords = ['internal_thought', 'packettype', 'traceid', 'tool_intent', 'tool_result'];
+    if (keywords.some((kw) => lower.includes(kw))) return true;
+
+    if (/^\s*\[[A-Z0-9_:-]+\]/.test(text)) return true;
+    if (/^\s*\d{4}-\d{2}-\d{2}t\d{2}:\d{2}:\d{2}/i.test(text)) return true;
+    if (/\b(INFO|WARN|ERROR|DEBUG)\b/.test(text) && /:/.test(text)) return true;
+
+    const braceCount = (text.match(/[{}]/g) || []).length;
+    if (braceCount >= 6) return true;
+    if (/^\s*[{[]/.test(text) && /[}\]]\s*$/.test(text)) return true;
+
+    return false;
+}
+
+function finalizeSpeechCandidate(text: string, maxLength: number): string | null {
+    const trimmed = String(text || '').trim();
+    if (!trimmed) return null;
+    const sliced = trimmed.slice(0, maxLength);
+    return looksUnsafeSpeech(sliced) ? null : sliced;
+}
+
+/**
+ * extractSpeechFromRaw - Extracts speech_content from raw LLM output
+ *
+ * Strategy:
+ * 1) Read "speech_content": "..." and unescape
+ * 2) If raw is not JSON-ish, return as plain text (after removing fences)
+ */
+export function extractSpeechFromRaw(raw: string, maxLength: number = 1000): string | null {
+    if (!raw || typeof raw !== 'string') return null;
+
+    const trimmed = raw.trim();
+    if (!trimmed) return null;
+
+    const speechMatch = trimmed.match(/"speech_content"\s*:\s*"((?:[^"\\]|\\.)*)/);
+    if (speechMatch?.[1]) {
+        try {
+            const unescaped = JSON.parse(`"${speechMatch[1]}"`);
+            if (typeof unescaped === 'string') {
+                const candidate = finalizeSpeechCandidate(unescaped, maxLength);
+                if (candidate) return candidate;
+            }
+        } catch {
+            const manual = speechMatch[1]
+                .replace(/\\n/g, '\n')
+                .replace(/\\r/g, '\r')
+                .replace(/\\t/g, '\t')
+                .replace(/\\"/g, '"')
+                .replace(/\\\\/g, '\\');
+            const candidate = finalizeSpeechCandidate(manual, maxLength);
+            if (candidate) return candidate;
+        }
+    }
+
+    const looksLikeJson = trimmed.startsWith('{') || trimmed.startsWith('[');
+    if (!looksLikeJson) {
+        const cleaned = trimmed
+            .replace(/^```(?:json)?\s*/i, '')
+            .replace(/\s*```$/i, '')
+            .trim();
+        const candidate = finalizeSpeechCandidate(cleaned, maxLength);
+        if (candidate) return candidate;
+    }
+
+    return null;
+}
+
 export function parseJsonFromLLM<T>(
     text: string | undefined,
     options: LLMJsonParseOptions<T> = {}
@@ -512,5 +581,6 @@ export default {
     extractJsonBlock,
     repairJsonMinimal,
     repairTruncatedJson,
-    parseJsonFromLLM
+    parseJsonFromLLM,
+    extractSpeechFromRaw
 };
