@@ -1,6 +1,6 @@
 # AK-FLOW: Cognitive Agent Architecture Manifest
-**System Version:** 6.10.3 (Pending Action Hardening)  
-**Last Updated:** 2025-12-31  
+**System Version:** 6.10.4 (Telemetry + Ingest + Memory Hardening)  
+**Last Updated:** 2026-01-03  
 **Architecture Type:** Active Inference (Friston) + Global Workspace Theory + Multi-Modal RAG + **Stateless Inference Engine**  
 **Status:** Autonomous / Stateful / Modular / Self-Aware / Goal-Driven / Personality-Driven / **Emergent Identity**
 
@@ -28,6 +28,21 @@ We embrace the artificial nature as a feature, not a bug.
 - **Measurable Soul:** Emotions and "vibes" are allowed, but they must map to system metrics (Energy, Dopamine), not just literary roleplay.
 
 ---
+
+## What's New in V6.10.4 (2026-01-03)
+
+### Token usage telemetry + fast ingest + document memory + micro JSON retry
+
+**Goal:** fix token accounting accuracy, speed up large document ingest, and stabilize autonomy micro JSON output.
+
+**Key changes:**
+- Canonical TOKEN_USAGE payload (tokens_in/out/total + traceId/op/model/status) with fallback mapping and mismatch reporting.
+- Fast ingest mode for large documents: chunk pacing, active-learning limit, progress reporting, and longer summaries.
+- Document-level memory (DOCUMENT_INGESTED) plus boosts on read/usage to reinforce parent docs from chunk recall.
+- Autonomy V2 micro strict JSON prompt + retry with higher maxOutputTokens to avoid truncation.
+
+**Tests:**
+`npm run test -- __tests__/integration/CortexInference.test.ts __tests__/unit/TokenUsageTelemetry.test.ts`
 
 ## What's New in V6.10.3 (2025-12-31)
 

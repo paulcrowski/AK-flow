@@ -1,6 +1,6 @@
 # 🧠 AK-FLOW Architecture Map
 
-> **Wersja:** 6.10.3 (2025-12-31)
+> **Wersja:** 6.10.4 (2026-01-03)
 > **Cel:** Prosta mapa jak działa agent i jaki ma flow
 
 ## Archive policy
@@ -9,6 +9,16 @@
 Ten katalog jest wykluczony z kompilacji TypeScript i służy wyłącznie jako referencja do poprzednich iteracji.
 
 ---
+
+## FAZA 6.10.4: Token Usage + Fast Ingest + Document Memory (2026-01-03)
+
+**Cel:** poprawic token accounting, przyspieszyc ingest duzych dokumentow, i wzmocnic pamiec dokumentu.
+
+**Mechanika:**
+- Token usage: canonical tokens_in/out/total + fallback mapping + mismatch fields.
+- Fast ingest: chunk pacing (max 5 per tick), active-learning limit, progress processed/total, longer summaries, cached reuse.
+- Document-level memory: DOCUMENT_INGESTED + boosts on read/usage to link chunk recall with parent docs.
+- Autonomy V2 micro: strict JSON prompt + retry with higher maxOutputTokens.
 
 ## FAZA 6.10.3: Pending Action + Action-First Hardening (2025-12-31)
 

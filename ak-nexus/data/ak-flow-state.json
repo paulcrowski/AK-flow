@@ -1,7 +1,7 @@
 {
   "version": "1.0.0",
-  "lastModified": "2025-12-31T13:43:04.000Z",
-  "lastUpdated": "2025-12-31T13:43:04.000Z",
+  "lastModified": "2026-01-03T00:18:27.000Z",
+  "lastUpdated": "2026-01-03T00:18:27.000Z",
   "modifiedBy": "AI_CODEX",
   "tasks": [
     {
@@ -965,6 +965,17 @@
       ],
       "createdAt": "2025-12-31T13:43:04.000Z",
       "updatedAt": "2025-12-31T13:43:04.000Z"
+    },
+    {
+      "id": "note-20260103-001827",
+      "title": "Daily Close: 2026-01-03",
+      "content": "DONE: Token usage telemetry normalized (canonical tokens_in/out/total + fallback mapping + mismatch reporting). Fast ingest mode for large docs (chunk pacing, active-learning limit, progress, summary length targets, cached reuse). Document-level memory (DOCUMENT_INGESTED) with boosts on read/usage. Autonomy micro JSON retry with strict JSON prompt + higher maxOutputTokens. VERIFY: npm run test -- __tests__/integration/CortexInference.test.ts __tests__/unit/TokenUsageTelemetry.test.ts. npm test/build not rerun. COMMITS: 08db755, bf7d137, 6589ba3, 440e12e. NEXT: run full test/build; validate telemetry aggregation + ingest perf; continue READ_FILE/SEARCH_IN_REPO + Work Loop v1.",
+      "category": "INSIGHT",
+      "tags": [
+        "daily_close"
+      ],
+      "createdAt": "2026-01-03T00:18:27.000Z",
+      "updatedAt": "2026-01-03T00:18:27.000Z"
     }
   ],
   "stats": {
