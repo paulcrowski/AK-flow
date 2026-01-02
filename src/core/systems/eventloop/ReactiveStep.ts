@@ -169,9 +169,18 @@ export async function runReactiveStep(input: {
         trace,
         callbacks,
         speechText: isPolish
-          ? 'OK, anulowałem operację.'
+          ? 'OK, anulowane.'
           : 'OK, cancelled.',
         internalThought: 'PENDING_CANCELLED'
+      });
+      return;
+    } else if (pendingResult.action === 'cancelled_no_pending') {
+      publishReactiveSpeech({
+        ctx,
+        trace,
+        callbacks,
+        speechText: 'OK.',
+        internalThought: 'PENDING_CANCEL_NOOP'
       });
       return;
     } else {
@@ -213,6 +222,7 @@ export async function runReactiveStep(input: {
         const isInvalidToolTarget = (rawTarget: string) => {
           const trimmed = String(rawTarget || '').trim();
           if (!trimmed) return true;
+          if (isImplicitReference(trimmed)) return false;
           if (trimmed.includes(' ') || trimmed.includes(':')) return true;
           if (trimmed.startsWith('art-')) return false;
           return !isRecognizableTarget(trimmed);

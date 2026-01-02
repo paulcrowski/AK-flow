@@ -16,7 +16,7 @@ export type PendingActionEvent = 'SET' | 'USED' | 'EXPIRED' | 'SUPERSEDED' | 'CA
 export interface PendingResolveResult {
   handled: boolean;
   syntheticCommand?: string;
-  action?: 'expired' | 'cancelled' | 'executed' | 'superseded';
+  action?: 'expired' | 'cancelled' | 'cancelled_no_pending' | 'executed' | 'superseded';
 }
 
 export type EmitPendingTelemetryFn = (

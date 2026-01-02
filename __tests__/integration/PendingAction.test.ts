@@ -209,7 +209,7 @@ describe('PendingAction - Slot Filling', () => {
     });
 
     expect(ctx.pendingAction).toBeNull();
-    expect(messages.some((m) => m.includes('anulowa'))).toBe(true);
+    expect(messages.some((m) => m.includes('anulowane'))).toBe(true);
 
     const updated = store.getByName('notatki.md')[0];
     expect(updated?.content).not.toContain('stop');
@@ -241,5 +241,25 @@ describe('PendingAction - Slot Filling', () => {
       (e) => e.type === PacketType.TOOL_INTENT && e.payload?.tool === 'APPEND'
     );
     expect(toolIntent).toBeDefined();
+  });
+
+  it('Scenario F: cancel command with no pending returns OK', async () => {
+    const ctx = createCtx();
+    const { messages, callbacks } = createCallbacks();
+    const memorySpace = { hot: { semanticSearch: vi.fn() } };
+
+    await runReactiveStep({
+      ctx,
+      userInput: 'stop',
+      callbacks,
+      memorySpace,
+      trace: { traceId: 't6', tickNumber: 1, agentId: 'a1' }
+    });
+
+    expect(ctx.pendingAction).toBeNull();
+    expect(messages.some((m) => m.trim() === 'OK.')).toBe(true);
+
+    const toolIntent = eventBus.getHistory().find((e) => e.type === PacketType.TOOL_INTENT);
+    expect(toolIntent).toBeUndefined();
   });
 });

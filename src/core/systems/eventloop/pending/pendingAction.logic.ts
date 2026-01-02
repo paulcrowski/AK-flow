@@ -70,7 +70,12 @@ export function tryResolvePendingAction(
   deps: ResolveDependencies
 ): PendingResolveResult {
   const pending = ctx.pendingAction as PendingAction | null;
-  if (!pending) return { handled: false };
+  if (!pending) {
+    if (isCancelCommand(userInput)) {
+      return { handled: true, action: 'cancelled_no_pending' };
+    }
+    return { handled: false };
+  }
 
   const { detectActionableIntent, isRecognizableTarget, isImplicitReference, emitTelemetry } = deps;
 
