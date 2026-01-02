@@ -17,6 +17,8 @@ import { eventBus } from '../EventBus';
 import { AgentType, PacketType } from '../../types';
 import { generateUUID } from '../../utils/uuid';
 import { parseJsonFromLLM } from '../../utils/AIResponseParser';
+import { p0MetricAdd } from '../systems/TickLifecycleTelemetry';
+import { getCurrentTraceId } from '../trace/TraceContext';
 
 // Lazy initialization - nie blokuj jeśli brak klucza
 let ai: GoogleGenAI | null = null;
@@ -74,6 +76,11 @@ function logUsage(operation: string, response: any): void {
   }
 }
 
+function recordParseFailMetric(): void {
+  const traceId = getCurrentTraceId();
+  if (traceId) p0MetricAdd(traceId, { parseFailCount: 1 });
+}
+
 /**
  * Parsuje odpowiedź JSON z LLM
  */
@@ -81,6 +88,7 @@ function parseResponse(text: string | undefined): CortexOutput {
   if (!text) {
     console.warn('[CortexInference] Empty response');
     // FIX-4: Log empty response as parse failure
+    recordParseFailMetric();
     eventBus.publish({
       id: generateUUID(),
       timestamp: Date.now(),
@@ -109,6 +117,7 @@ function parseResponse(text: string | undefined): CortexOutput {
 
     console.warn('[CortexInference] Invalid output structure');
     // FIX-4: Log invalid structure
+    recordParseFailMetric();
     eventBus.publish({
       id: generateUUID(),
       timestamp: Date.now(),
@@ -127,6 +136,7 @@ function parseResponse(text: string | undefined): CortexOutput {
     console.error('[CortexInference] Parse error:', error);
 
     // Log parse failure
+    recordParseFailMetric();
     eventBus.publish({
       id: generateUUID(),
       timestamp: Date.now(),
