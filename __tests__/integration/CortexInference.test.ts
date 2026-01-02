@@ -38,11 +38,11 @@ describe('CortexInference telemetry', () => {
   it('increments parseFailCount in P0_METRIC on parse failure', async () => {
     generateContentMock
       .mockResolvedValueOnce({
-        text: 'not json',
+        text: '{"internal_thought":"only thought"}',
         usage: { prompt_tokens: 5, completion_tokens: 7, total_tokens: 12 }
       })
       .mockResolvedValueOnce({
-        text: 'still not json',
+        text: '{"internal_thought":"still only thought"}',
         usage: { prompt_tokens: 5, completion_tokens: 7, total_tokens: 12 }
       });
 
@@ -78,7 +78,7 @@ describe('CortexInference telemetry', () => {
   it('retries once with JSON-only prompt and retry config', async () => {
     generateContentMock
       .mockResolvedValueOnce({
-        text: 'not json',
+        text: '{"internal_thought":"only thought"}',
         usage: { prompt_tokens: 3, completion_tokens: 4, total_tokens: 7 }
       })
       .mockResolvedValueOnce({
@@ -125,11 +125,11 @@ describe('CortexInference telemetry', () => {
   it('returns fallback message after retry fails', async () => {
     generateContentMock
       .mockResolvedValueOnce({
-        text: 'not json',
+        text: '{"internal_thought":"only thought"}',
         usage: { prompt_tokens: 2, completion_tokens: 2, total_tokens: 4 }
       })
       .mockResolvedValueOnce({
-        text: 'still not json',
+        text: '{"internal_thought":"still only thought"}',
         usage: { prompt_tokens: 2, completion_tokens: 2, total_tokens: 4 }
       });
 
@@ -179,7 +179,7 @@ describe('CortexInference telemetry', () => {
 
   it('emits parse_fail event with zero tokens when usage is missing', async () => {
     generateContentMock.mockResolvedValue({
-      text: 'not json'
+      text: '{"internal_thought":"only thought"}'
     });
 
     const state = buildMinimalCortexState({
@@ -204,5 +204,28 @@ describe('CortexInference telemetry', () => {
       expect(tokenEvent?.payload?.total_tokens).toBe(0);
       expect(tokenEvent?.payload?.traceId).toBe(traceId);
     });
+  });
+
+  it('recovers speech from malformed JSON and returns degraded output', async () => {
+    generateContentMock.mockResolvedValue({
+      text: '{"internal_thought":"ok","speech_content":"Odpowiedz dla usera" BROKEN',
+      usage: { prompt_tokens: 2, completion_tokens: 3, total_tokens: 5 }
+    });
+
+    const state = buildMinimalCortexState({
+      agentId,
+      metaStates: META_STATES_BASELINE,
+      userInput: 'recover'
+    });
+
+    const output = await generateFromCortexState(state);
+
+    expect(output.speech_content).toBe('Odpowiedz dla usera');
+    expect(output.generator).toBe('system');
+
+    const degraded = eventBus.getHistory().find(
+      (e) => e.type === PacketType.PREDICTION_ERROR && e.payload?.metric === 'CORTEX_PARSE_DEGRADED'
+    );
+    expect(degraded).toBeDefined();
   });
 });

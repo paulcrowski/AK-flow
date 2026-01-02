@@ -16,7 +16,7 @@ import { MAX_CORTEX_STATE_SIZE } from '../types/CortexState';
 import { eventBus } from '../EventBus';
 import { AgentType, PacketType } from '../../types';
 import { generateUUID } from '../../utils/uuid';
-import { parseJsonFromLLM } from '../../utils/AIResponseParser';
+import { parseJsonFromLLM, extractSpeechFromRaw } from '../../utils/AIResponseParser';
 import { p0MetricAdd } from '../systems/TickLifecycleTelemetry';
 import { generateExternalTraceId, getCurrentTraceId } from '../trace/TraceContext';
 
@@ -130,13 +130,50 @@ const PARSE_FAILURE_FALLBACK: CortexOutput = {
   speech_content: PARSE_FAILURE_MESSAGE
 };
 
+function buildDegradedOutput(speech: string, reason: string): CortexOutput {
+  return {
+    internal_thought: `[DEGRADED] ${reason}`,
+    speech_content: speech,
+    knowledge_source: 'system',
+    evidence_source: 'system',
+    generator: 'system',
+    stimulus_response: {
+      valence: 'neutral',
+      salience: 'low',
+      novelty: 'routine'
+    }
+  };
+}
+
+function emitParseDegraded(params: {
+  reason: string;
+  extractedLength: number;
+  rawLength: number;
+  parseReason?: string;
+}): void {
+  eventBus.publish({
+    id: generateUUID(),
+    timestamp: Date.now(),
+    source: AgentType.CORTEX_FLOW,
+    type: PacketType.PREDICTION_ERROR,
+    payload: {
+      metric: 'CORTEX_PARSE_DEGRADED',
+      reason: params.reason,
+      extractedLength: params.extractedLength,
+      rawLength: params.rawLength,
+      parseReason: params.parseReason
+    },
+    priority: 0.5
+  });
+}
+
 /**
  * Parsuje odpowiedź JSON z LLM
  */
 function parseResponse(text: string | undefined): ParseOutcome {
+  const rawSample = text ? text.substring(0, 300) : 'EMPTY';
   if (!text) {
     console.warn('[CortexInference] Empty response');
-    // FIX-4: Log empty response as parse failure
     recordParseFailMetric();
     eventBus.publish({
       id: generateUUID(),
@@ -161,8 +198,18 @@ function parseResponse(text: string | undefined): ParseOutcome {
 
     if (parsedResult.ok && parsedResult.value) {
       if (!isValidCortexOutput(parsedResult.value)) {
-        console.warn('[CortexInference] Invalid output structure');
-        // FIX-4: Log invalid structure
+        console.warn('[CortexInference] Invalid output structure, trying speech extraction');
+        const extracted = extractSpeechFromRaw(text);
+        if (extracted) {
+          emitParseDegraded({
+            reason: 'INVALID_STRUCTURE_RECOVERED',
+            extractedLength: extracted.length,
+            rawLength: text.length,
+            parseReason: 'VALIDATION_FAILED'
+          });
+          return { ok: true, value: buildDegradedOutput(extracted, 'Invalid structure') };
+        }
+
         recordParseFailMetric();
         eventBus.publish({
           id: generateUUID(),
@@ -172,7 +219,7 @@ function parseResponse(text: string | undefined): ParseOutcome {
           payload: {
             metric: 'CORTEX_PARSE_FAILURE',
             reason: 'INVALID_STRUCTURE',
-            rawOutput: text?.substring(0, 500) || 'EMPTY',
+            rawOutput: rawSample,
             parseReason: 'VALIDATION_FAILED'
           },
           priority: 0.8
@@ -181,6 +228,17 @@ function parseResponse(text: string | undefined): ParseOutcome {
       }
 
       return { ok: true, value: parsedResult.value };
+    }
+
+    const extracted = extractSpeechFromRaw(text);
+    if (extracted) {
+      emitParseDegraded({
+        reason: 'PARSE_FAILED_RECOVERED',
+        extractedLength: extracted.length,
+        rawLength: text.length,
+        parseReason: parsedResult.reason
+      });
+      return { ok: true, value: buildDegradedOutput(extracted, 'Parse failed') };
     }
 
     const failureReason: ParseFailureReason = parsedResult.reason === 'NO_JSON'
@@ -198,7 +256,7 @@ function parseResponse(text: string | undefined): ParseOutcome {
       payload: {
         metric: 'CORTEX_PARSE_FAILURE',
         reason: failureReason,
-        rawOutput: text?.substring(0, 500) || 'EMPTY',
+        rawOutput: rawSample,
         parseReason: parsedResult.reason,
         error: parsedResult.error
       },
@@ -208,7 +266,16 @@ function parseResponse(text: string | undefined): ParseOutcome {
   } catch (error) {
     console.error('[CortexInference] Parse error:', error);
 
-    // Log parse failure
+    const extracted = text ? extractSpeechFromRaw(text) : null;
+    if (extracted) {
+      emitParseDegraded({
+        reason: 'EXCEPTION_RECOVERED',
+        extractedLength: extracted.length,
+        rawLength: text?.length ?? 0
+      });
+      return { ok: true, value: buildDegradedOutput(extracted, 'Exception caught') };
+    }
+
     recordParseFailMetric();
     eventBus.publish({
       id: generateUUID(),
@@ -217,7 +284,7 @@ function parseResponse(text: string | undefined): ParseOutcome {
       type: PacketType.PREDICTION_ERROR,
       payload: {
         metric: 'CORTEX_PARSE_FAILURE',
-        rawOutput: text?.substring(0, 500) || 'EMPTY',
+        rawOutput: rawSample,
         error: (error as Error).message
       },
       priority: 0.8
