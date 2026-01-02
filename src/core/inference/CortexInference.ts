@@ -19,6 +19,7 @@ import { generateUUID } from '../../utils/uuid';
 import { parseJsonFromLLM, extractSpeechFromRaw } from '../../utils/AIResponseParser';
 import { p0MetricAdd } from '../systems/TickLifecycleTelemetry';
 import { generateExternalTraceId, getCurrentTraceId } from '../trace/TraceContext';
+import { extractTokenUsageFromResponse } from '../telemetry/tokenUsage';
 
 // Lazy initialization - nie blokuj jeśli brak klucza
 let ai: GoogleGenAI | null = null;
@@ -56,7 +57,17 @@ const DEFAULT_CONFIG: InferenceConfig = {
 /**
  * Logowanie użycia tokenów
  */
-function logUsage(operation: string, response: any): void {
+function logUsage(
+  operation: string,
+  response: any,
+  meta?: {
+    traceId?: string;
+    attempt?: number;
+    op?: string;
+    status?: 'success' | 'parse_fail' | 'transport_fail';
+    model?: string;
+  }
+): void {
   if (response?.usageMetadata) {
     const { promptTokenCount, candidatesTokenCount, totalTokenCount } = response.usageMetadata;
     eventBus.publish({
@@ -74,40 +85,33 @@ function logUsage(operation: string, response: any): void {
       priority: 0.1
     });
   }
-}
 
-function clampTokenCount(value: unknown): number {
-  const n = Number(value);
-  return Number.isFinite(n) && n > 0 ? Math.trunc(n) : 0;
-}
+  const usageCounts = extractTokenUsageFromResponse(response);
+  const traceId = meta?.traceId ?? getCurrentTraceId() ?? generateExternalTraceId();
+  const status = meta?.status ?? 'success';
+  const op = meta?.op ?? operation;
+  const model =
+    meta?.model ??
+    response?.model ??
+    response?.modelName ??
+    response?.modelVersion ??
+    'unknown';
 
-function emitTokenUsageTelemetry(params: {
-  response?: any;
-  traceId: string;
-  attempt: number;
-  op: string;
-  status: 'success' | 'parse_fail' | 'transport_fail';
-}): void {
-  const usage = params.response?.usage;
-  const inputTokens = usage ? clampTokenCount(usage.prompt_tokens) : 0;
-  const outputTokens = usage ? clampTokenCount(usage.completion_tokens) : 0;
-  const totalTokens = usage ? clampTokenCount(usage.total_tokens) : 0;
   // Diagnostic only: prompt stats are not used for token cost accounting.
   eventBus.publish({
     id: generateUUID(),
-    traceId: params.traceId,
+    traceId,
     timestamp: Date.now(),
     source: AgentType.SOMA,
     type: PacketType.PREDICTION_ERROR,
     payload: {
       metric: 'TOKEN_USAGE',
-      traceId: params.traceId,
-      attempt: params.attempt,
-      op: params.op,
-      status: params.status,
-      input_tokens: inputTokens,
-      output_tokens: outputTokens,
-      total_tokens: totalTokens
+      traceId,
+      op,
+      status,
+      model,
+      ...(meta?.attempt !== undefined ? { attempt: meta.attempt } : {}),
+      ...usageCounts
     },
     priority: 0.1
   });
@@ -470,21 +474,21 @@ INSTRUCTIONS:
       });
 
       const parsed = parseResponse(response.text);
-      emitTokenUsageTelemetry({
-        response,
+      logUsage('generateFromCortexState', response, {
         traceId,
         attempt,
         op: 'cortexInference',
-        status: parsed.ok ? 'success' : 'parse_fail'
+        status: parsed.ok ? 'success' : 'parse_fail',
+        model: callConfig.model
       });
-      logUsage('generateFromCortexState', response);
       return parsed;
     } catch (error) {
-      emitTokenUsageTelemetry({
+      logUsage('generateFromCortexState', undefined, {
         traceId,
         attempt,
         op: 'cortexInference',
-        status: 'transport_fail'
+        status: 'transport_fail',
+        model: callConfig.model
       });
       throw error;
     }
@@ -622,8 +626,6 @@ Use Google Search to find information, then generate your response as JSON.`;
       }
     });
 
-    logUsage('generateWithSearch', response);
-
     // Extract sources
     const groundingChunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
     const sources = groundingChunks
@@ -631,6 +633,11 @@ Use Google Search to find information, then generate your response as JSON.`;
       .filter(Boolean) as Array<{ title: string; uri: string }>;
 
     const parsed = parseResponse(response.text);
+    logUsage('generateWithSearch', response, {
+      op: 'generateWithSearch',
+      status: parsed.ok ? 'success' : 'parse_fail',
+      model: cfg.model
+    });
     const output = parsed.ok ? parsed.value : PARSE_FAILURE_FALLBACK;
     return { ...output, sources };
   }, cfg.retries!, cfg.retryDelayMs!);

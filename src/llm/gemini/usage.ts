@@ -3,33 +3,49 @@ import { AgentType, PacketType } from '../../types';
 import { generateUUID } from '../../utils/uuid';
 import { getCurrentAgentId } from '../../services/supabase';
 import { TokenUsageLedger } from '../../core/telemetry/TokenUsageLedger';
+import { extractTokenUsageFromResponse } from '../../core/telemetry/tokenUsage';
+import { generateExternalTraceId, getCurrentTraceId } from '../../core/trace/TraceContext';
 
-export function logUsage(operation: string, response: any) {
-  if (response && response.usageMetadata) {
-    const { promptTokenCount, candidatesTokenCount, totalTokenCount } = response.usageMetadata;
+export function logUsage(
+  operation: string,
+  response: any,
+  meta?: { model?: string; status?: string; traceId?: string }
+) {
+  if (!response) return;
 
-    TokenUsageLedger.record({
-      agentId: getCurrentAgentId(),
+  const usageCounts = extractTokenUsageFromResponse(response);
+  const traceId = meta?.traceId ?? getCurrentTraceId() ?? generateExternalTraceId();
+  const model =
+    meta?.model ??
+    response?.model ??
+    response?.modelName ??
+    response?.modelVersion ??
+    'unknown';
+  const status = meta?.status ?? 'success';
+
+  TokenUsageLedger.record({
+    agentId: getCurrentAgentId(),
+    op: operation,
+    inTokens: usageCounts.tokens_in,
+    outTokens: usageCounts.tokens_out,
+    totalTokens: usageCounts.tokens_total,
+    at: Date.now()
+  });
+
+  eventBus.publish({
+    id: generateUUID(),
+    traceId,
+    timestamp: Date.now(),
+    source: AgentType.SOMA,
+    type: PacketType.PREDICTION_ERROR,
+    payload: {
+      metric: 'TOKEN_USAGE',
+      traceId,
       op: operation,
-      inTokens: promptTokenCount || 0,
-      outTokens: candidatesTokenCount || 0,
-      totalTokens: totalTokenCount || 0,
-      at: Date.now()
-    });
-
-    eventBus.publish({
-      id: generateUUID(),
-      timestamp: Date.now(),
-      source: AgentType.SOMA,
-      type: PacketType.PREDICTION_ERROR,
-      payload: {
-        metric: 'TOKEN_USAGE',
-        op: operation,
-        in: promptTokenCount || 0,
-        out: candidatesTokenCount || 0,
-        total: totalTokenCount || 0
-      },
-      priority: 0.1
-    });
-  }
+      model,
+      status,
+      ...usageCounts
+    },
+    priority: 0.1
+  });
 }

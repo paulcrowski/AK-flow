@@ -16,6 +16,7 @@ import { useLoadedAgentIdentity } from '../hooks/useLoadedAgentIdentity';
 import { useArtifactStore } from '../stores/artifactStore';
 import { generateUUID } from '../utils/uuid';
 import { uploadLibraryFile } from '../services/LibraryService';
+import { normalizeTokenUsagePayload } from '../core/telemetry/tokenUsage';
 
 export function CognitiveInterface() {
     // --- SESSION (Multi-Agent) ---
@@ -151,14 +152,15 @@ export function CognitiveInterface() {
     useEffect(() => {
         const unsubscribe = eventBus.subscribe(PacketType.PREDICTION_ERROR, (packet) => {
             if (packet.source === AgentType.SOMA && packet.payload?.metric === "TOKEN_USAGE") {
-                const traceId = String(packet.payload?.traceId || packet.traceId || '');
+                const usage = normalizeTokenUsagePayload(packet.payload, { traceId: packet.traceId });
+                const traceId = String(usage.traceId || '');
                 if (!traceId) return;
                 if (tokenEventIdsRef.current.has(packet.id)) return;
                 tokenEventIdsRef.current.add(packet.id);
 
-                const inputTokens = Number(packet.payload?.input_tokens ?? 0) || 0;
-                const outputTokens = Number(packet.payload?.output_tokens ?? 0) || 0;
-                const totalTokens = Number(packet.payload?.total_tokens ?? 0) || 0;
+                const inputTokens = usage.tokens_in;
+                const outputTokens = usage.tokens_out;
+                const totalTokens = usage.tokens_total;
 
                 const current = tokenTotalsByTraceRef.current.get(traceId) || { input: 0, output: 0, total: 0 };
                 tokenTotalsByTraceRef.current.set(traceId, {

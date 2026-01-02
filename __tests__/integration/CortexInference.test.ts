@@ -118,7 +118,7 @@ describe('CortexInference telemetry', () => {
     expect(attempts).toContain(0);
     expect(attempts).toContain(1);
     tokenEvents.forEach((e) => expect(e.payload?.traceId).toBe(traceId));
-    const sum = tokenEvents.reduce((acc, e) => acc + (e.payload?.total_tokens || 0), 0);
+    const sum = tokenEvents.reduce((acc, e) => acc + (e.payload?.tokens_total || 0), 0);
     expect(sum).toBe(16);
   });
 
@@ -169,9 +169,9 @@ describe('CortexInference telemetry', () => {
     expect(tokenEvents).toHaveLength(1);
     const tokenEvent = tokenEvents[0];
     expect(tokenEvent?.payload?.op).toBe('cortexInference');
-    expect(tokenEvent?.payload?.input_tokens).toBe(2);
-    expect(tokenEvent?.payload?.output_tokens).toBe(3);
-    expect(tokenEvent?.payload?.total_tokens).toBe(5);
+    expect(tokenEvent?.payload?.tokens_in).toBe(2);
+    expect(tokenEvent?.payload?.tokens_out).toBe(3);
+    expect(tokenEvent?.payload?.tokens_total).toBe(5);
     expect(tokenEvent?.payload?.status).toBe('success');
     expect(tokenEvent?.payload?.attempt).toBe(0);
     expect(tokenEvent?.payload?.traceId).toBe(traceId);
@@ -199,9 +199,9 @@ describe('CortexInference telemetry', () => {
     expect(tokenEvents).toHaveLength(2);
     tokenEvents.forEach((tokenEvent) => {
       expect(tokenEvent?.payload?.status).toBe('parse_fail');
-      expect(tokenEvent?.payload?.input_tokens).toBe(0);
-      expect(tokenEvent?.payload?.output_tokens).toBe(0);
-      expect(tokenEvent?.payload?.total_tokens).toBe(0);
+      expect(tokenEvent?.payload?.tokens_in).toBe(0);
+      expect(tokenEvent?.payload?.tokens_out).toBe(0);
+      expect(tokenEvent?.payload?.tokens_total).toBe(0);
       expect(tokenEvent?.payload?.traceId).toBe(traceId);
     });
   });
