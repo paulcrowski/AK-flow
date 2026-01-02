@@ -36,10 +36,15 @@ describe('CortexInference telemetry', () => {
   });
 
   it('increments parseFailCount in P0_METRIC on parse failure', async () => {
-    generateContentMock.mockResolvedValue({
-      text: 'not json',
-      usageMetadata: { promptTokenCount: 5, candidatesTokenCount: 7, totalTokenCount: 12 }
-    });
+    generateContentMock
+      .mockResolvedValueOnce({
+        text: 'not json',
+        usageMetadata: { promptTokenCount: 5, candidatesTokenCount: 7, totalTokenCount: 12 }
+      })
+      .mockResolvedValueOnce({
+        text: 'still not json',
+        usageMetadata: { promptTokenCount: 5, candidatesTokenCount: 7, totalTokenCount: 12 }
+      });
 
     const state = buildMinimalCortexState({
       agentId,
@@ -61,13 +66,67 @@ describe('CortexInference telemetry', () => {
       (e) => e.payload?.event === 'P0_METRIC' && e.traceId === traceId
     );
 
-    expect(metricEvent?.payload?.parseFailCount).toBe(1);
+    expect(metricEvent?.payload?.parseFailCount).toBe(2);
 
-    const tokenEvent = eventBus.getHistory().find(
+    const tokenEvents = eventBus.getHistory().filter(
       (e) => e.type === PacketType.PREDICTION_ERROR && e.payload?.metric === 'TOKEN_USAGE'
     );
-    expect(tokenEvent?.payload?.op).toBe('cortexInference');
-    expect(tokenEvent?.payload?.total).toBe(12);
+    expect(tokenEvents).toHaveLength(2);
+    tokenEvents.forEach((e) => expect(e.payload?.op).toBe('cortexInference'));
+  });
+
+  it('retries once with JSON-only prompt and retry config', async () => {
+    generateContentMock
+      .mockResolvedValueOnce({
+        text: 'not json',
+        usageMetadata: { promptTokenCount: 3, candidatesTokenCount: 4, totalTokenCount: 7 }
+      })
+      .mockResolvedValueOnce({
+        text: '{"internal_thought":"ok","speech_content":"retry"}',
+        usageMetadata: { promptTokenCount: 4, candidatesTokenCount: 5, totalTokenCount: 9 }
+      });
+
+    const state = buildMinimalCortexState({
+      agentId,
+      metaStates: META_STATES_BASELINE,
+      userInput: 'retry me'
+    });
+
+    const output = await generateFromCortexState(state);
+
+    expect(generateContentMock).toHaveBeenCalledTimes(2);
+    const secondCall = generateContentMock.mock.calls[1]?.[0] as {
+      contents: string;
+      config: { temperature: number; maxOutputTokens: number };
+    };
+    expect(secondCall.contents).toContain('Wyłącznie poprawny JSON zgodny ze schemą. Bez markdown. Bez komentarzy.');
+    expect(secondCall.contents).not.toContain('Analyze the input state');
+    expect(secondCall.config.temperature).toBe(0.2);
+    expect(secondCall.config.maxOutputTokens).toBe(6144);
+    expect(output.speech_content).toBe('retry');
+  });
+
+  it('returns fallback message after retry fails', async () => {
+    generateContentMock
+      .mockResolvedValueOnce({
+        text: 'not json',
+        usageMetadata: { promptTokenCount: 2, candidatesTokenCount: 2, totalTokenCount: 4 }
+      })
+      .mockResolvedValueOnce({
+        text: 'still not json',
+        usageMetadata: { promptTokenCount: 2, candidatesTokenCount: 2, totalTokenCount: 4 }
+      });
+
+    const state = buildMinimalCortexState({
+      agentId,
+      metaStates: META_STATES_BASELINE,
+      userInput: 'fail twice'
+    });
+
+    const output = await generateFromCortexState(state);
+
+    expect(generateContentMock).toHaveBeenCalledTimes(2);
+    expect(output.speech_content).toBe('Nie dostałem poprawnego JSON. Powtórz polecenie jednym zdaniem.');
   });
 
   it('emits TOKEN_USAGE telemetry on successful response', async () => {

@@ -100,10 +100,22 @@ function recordParseFailMetric(): void {
   if (traceId) p0MetricAdd(traceId, { parseFailCount: 1 });
 }
 
+type ParseFailureReason = 'EMPTY_RESPONSE' | 'NO_JSON' | 'PARSE_ERROR' | 'INVALID_STRUCTURE';
+
+type ParseOutcome =
+  | { ok: true; value: CortexOutput }
+  | { ok: false; reason: ParseFailureReason };
+
+const PARSE_FAILURE_MESSAGE = 'Nie dostałem poprawnego JSON. Powtórz polecenie jednym zdaniem.';
+const PARSE_FAILURE_FALLBACK: CortexOutput = {
+  ...FALLBACK_CORTEX_OUTPUT,
+  speech_content: PARSE_FAILURE_MESSAGE
+};
+
 /**
  * Parsuje odpowiedź JSON z LLM
  */
-function parseResponse(text: string | undefined): CortexOutput {
+function parseResponse(text: string | undefined): ParseOutcome {
   if (!text) {
     console.warn('[CortexInference] Empty response');
     // FIX-4: Log empty response as parse failure
@@ -120,22 +132,45 @@ function parseResponse(text: string | undefined): CortexOutput {
       },
       priority: 0.8
     });
-    return { ...FALLBACK_CORTEX_OUTPUT };
+    return { ok: false, reason: 'EMPTY_RESPONSE' };
   }
 
   try {
-    const parsedResult = parseJsonFromLLM<CortexOutput>(text, {
+    const parsedResult = parseJsonFromLLM<unknown>(text, {
       allowRepair: true,
-      validator: isValidCortexOutput,
       requireJsonBlock: false
     });
 
     if (parsedResult.ok && parsedResult.value) {
-      return parsedResult.value;
+      if (!isValidCortexOutput(parsedResult.value)) {
+        console.warn('[CortexInference] Invalid output structure');
+        // FIX-4: Log invalid structure
+        recordParseFailMetric();
+        eventBus.publish({
+          id: generateUUID(),
+          timestamp: Date.now(),
+          source: AgentType.CORTEX_FLOW,
+          type: PacketType.PREDICTION_ERROR,
+          payload: {
+            metric: 'CORTEX_PARSE_FAILURE',
+            reason: 'INVALID_STRUCTURE',
+            rawOutput: text?.substring(0, 500) || 'EMPTY',
+            parseReason: 'VALIDATION_FAILED'
+          },
+          priority: 0.8
+        });
+        return { ok: false, reason: 'INVALID_STRUCTURE' };
+      }
+
+      return { ok: true, value: parsedResult.value };
     }
 
-    console.warn('[CortexInference] Invalid output structure');
-    // FIX-4: Log invalid structure
+    const failureReason: ParseFailureReason = parsedResult.reason === 'NO_JSON'
+      ? 'NO_JSON'
+      : parsedResult.reason === 'EMPTY'
+        ? 'EMPTY_RESPONSE'
+        : 'PARSE_ERROR';
+    console.warn('[CortexInference] Parse failure:', failureReason);
     recordParseFailMetric();
     eventBus.publish({
       id: generateUUID(),
@@ -144,13 +179,14 @@ function parseResponse(text: string | undefined): CortexOutput {
       type: PacketType.PREDICTION_ERROR,
       payload: {
         metric: 'CORTEX_PARSE_FAILURE',
-        reason: 'INVALID_STRUCTURE',
+        reason: failureReason,
         rawOutput: text?.substring(0, 500) || 'EMPTY',
-        parseReason: parsedResult.reason
+        parseReason: parsedResult.reason,
+        error: parsedResult.error
       },
       priority: 0.8
     });
-    return { ...FALLBACK_CORTEX_OUTPUT };
+    return { ok: false, reason: failureReason };
   } catch (error) {
     console.error('[CortexInference] Parse error:', error);
 
@@ -186,8 +222,12 @@ function parseResponse(text: string | undefined): CortexOutput {
       priority: 0.7
     });
 
-    return { ...FALLBACK_CORTEX_OUTPUT };
+    return { ok: false, reason: 'PARSE_ERROR' };
   }
+}
+
+function shouldRetryParseFailure(reason: ParseFailureReason): boolean {
+  return reason === 'INVALID_STRUCTURE' || reason === 'NO_JSON' || reason === 'PARSE_ERROR' || reason === 'EMPTY_RESPONSE';
 }
 
 /**
@@ -235,18 +275,20 @@ export async function generateFromCortexState(
     console.error(`[CortexInference] 🚨 IDENTITY_MISMATCH: hard_facts.agentName="${hf.agentName}" but core_identity.name="${state.core_identity.name}"`);
   }
 
-  // Buduj pełny prompt
-  const fullPrompt = `${MINIMAL_CORTEX_SYSTEM_PROMPT}
+  const promptBase = `${MINIMAL_CORTEX_SYSTEM_PROMPT}
 
 INPUT STATE:
 ${stateJson}
 
 INSTRUCTIONS:
-1. Analyze the input state and the user's intent.
+`;
+  // Buduj pełny prompt
+  const fullPrompt = `${promptBase}1. Analyze the input state and the user's intent.
 2. Generate your response strictly as a VALID JSON object.
 3. DO NOT include any text before or after the JSON.
 4. DO NOT use markdown code blocks like \`\`\`json.
 5. Just raw JSON.`;
+  const retryPrompt = `${promptBase}Wyłącznie poprawny JSON zgodny ze schemą. Bez markdown. Bez komentarzy.`;
 
   eventBus.publish({
     id: generateUUID(),
@@ -274,72 +316,85 @@ INSTRUCTIONS:
     priority: 0.1
   });
 
-  return withRetry(async () => {
+  const responseSchema = {
+    type: Type.OBJECT,
+    properties: {
+      internal_thought: { type: Type.STRING },
+      speech_content: { type: Type.STRING },
+      knowledge_source: { type: Type.STRING, nullable: true },
+      evidence_source: { type: Type.STRING, nullable: true },
+      generator: { type: Type.STRING, nullable: true },
+      // PIONEER ARCHITECTURE (13/10): stimulus_response replaces mood_shift
+      // LLM classifies SYMBOLICALLY, EmotionEngine computes NUMERICALLY
+      stimulus_response: {
+        type: Type.OBJECT,
+        nullable: true,
+        description: 'Your SYMBOLIC assessment. System computes actual emotions.',
+        properties: {
+          valence: { type: Type.STRING },  // positive | negative | neutral
+          salience: { type: Type.STRING }, // low | medium | high
+          novelty: { type: Type.STRING },  // routine | interesting | surprising
+          threat: { type: Type.STRING }    // none | mild | severe (existential threat)
+        }
+      },
+      // ARCHITEKTURA 3-WARSTWOWA: tool_intent dla Decision Gate
+      tool_intent: {
+        type: Type.OBJECT,
+        nullable: true,
+        properties: {
+          tool: { type: Type.STRING },
+          query: { type: Type.STRING },
+          reason: { type: Type.STRING }
+        },
+        required: ['tool', 'query', 'reason']
+      },
+      // PRISM ARCHITECTURE (13/10): fact_echo - LLM echoes facts it used
+      fact_echo: {
+        type: Type.OBJECT,
+        nullable: true,
+        description: 'Echo back any hard facts you used in speech_content. Guard compares these against system facts.',
+        properties: {
+          energy: { type: Type.NUMBER, nullable: true },
+          time: { type: Type.STRING, nullable: true },
+          dopamine: { type: Type.NUMBER, nullable: true },
+          serotonin: { type: Type.NUMBER, nullable: true },
+          norepinephrine: { type: Type.NUMBER, nullable: true },
+          btc_price: { type: Type.NUMBER, nullable: true }
+        }
+      }
+    },
+    required: ['internal_thought', 'speech_content']
+  };
+
+  const runInference = async (prompt: string, callConfig: InferenceConfig): Promise<ParseOutcome> => {
     const genAI = getAI();
 
     const response = await genAI.models.generateContent({
-      model: cfg.model!,
-      contents: fullPrompt,
+      model: callConfig.model!,
+      contents: prompt,
       config: {
-        temperature: cfg.temperature,
-        maxOutputTokens: cfg.maxOutputTokens,
+        temperature: callConfig.temperature,
+        maxOutputTokens: callConfig.maxOutputTokens,
         responseMimeType: 'application/json',
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            internal_thought: { type: Type.STRING },
-            speech_content: { type: Type.STRING },
-            knowledge_source: { type: Type.STRING, nullable: true },
-            evidence_source: { type: Type.STRING, nullable: true },
-            generator: { type: Type.STRING, nullable: true },
-            // PIONEER ARCHITECTURE (13/10): stimulus_response replaces mood_shift
-            // LLM classifies SYMBOLICALLY, EmotionEngine computes NUMERICALLY
-            stimulus_response: {
-              type: Type.OBJECT,
-              nullable: true,
-              description: 'Your SYMBOLIC assessment. System computes actual emotions.',
-              properties: {
-                valence: { type: Type.STRING },  // positive | negative | neutral
-                salience: { type: Type.STRING }, // low | medium | high
-                novelty: { type: Type.STRING },  // routine | interesting | surprising
-                threat: { type: Type.STRING }    // none | mild | severe (existential threat)
-              }
-            },
-            // ARCHITEKTURA 3-WARSTWOWA: tool_intent dla Decision Gate
-            tool_intent: {
-              type: Type.OBJECT,
-              nullable: true,
-              properties: {
-                tool: { type: Type.STRING },
-                query: { type: Type.STRING },
-                reason: { type: Type.STRING }
-              },
-              required: ['tool', 'query', 'reason']
-            },
-            // PRISM ARCHITECTURE (13/10): fact_echo - LLM echoes facts it used
-            fact_echo: {
-              type: Type.OBJECT,
-              nullable: true,
-              description: 'Echo back any hard facts you used in speech_content. Guard compares these against system facts.',
-              properties: {
-                energy: { type: Type.NUMBER, nullable: true },
-                time: { type: Type.STRING, nullable: true },
-                dopamine: { type: Type.NUMBER, nullable: true },
-                serotonin: { type: Type.NUMBER, nullable: true },
-                norepinephrine: { type: Type.NUMBER, nullable: true },
-                btc_price: { type: Type.NUMBER, nullable: true }
-              }
-            }
-          },
-          required: ['internal_thought', 'speech_content']
-        }
+        responseSchema
       }
     });
 
     emitTokenUsageTelemetry(response, 'cortexInference');
     logUsage('generateFromCortexState', response);
     return parseResponse(response.text);
-  }, cfg.retries!, cfg.retryDelayMs!);
+  };
+
+  const primary = await withRetry(() => runInference(fullPrompt, cfg), cfg.retries!, cfg.retryDelayMs!);
+  if (primary.ok) return primary.value;
+
+  if (shouldRetryParseFailure(primary.reason)) {
+    const retryConfig: InferenceConfig = { ...cfg, temperature: 0.2, maxOutputTokens: 6144 };
+    const retry = await withRetry(() => runInference(retryPrompt, retryConfig), cfg.retries!, cfg.retryDelayMs!);
+    if (retry.ok) return retry.value;
+  }
+
+  return { ...PARSE_FAILURE_FALLBACK };
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -470,7 +525,8 @@ Use Google Search to find information, then generate your response as JSON.`;
       .map((c: any) => c.web?.uri ? { title: c.web.title || '', uri: c.web.uri } : null)
       .filter(Boolean) as Array<{ title: string; uri: string }>;
 
-    const output = parseResponse(response.text);
+    const parsed = parseResponse(response.text);
+    const output = parsed.ok ? parsed.value : PARSE_FAILURE_FALLBACK;
     return { ...output, sources };
   }, cfg.retries!, cfg.retryDelayMs!);
 }
