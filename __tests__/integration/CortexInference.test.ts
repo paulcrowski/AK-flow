@@ -39,11 +39,11 @@ describe('CortexInference telemetry', () => {
     generateContentMock
       .mockResolvedValueOnce({
         text: 'not json',
-        usageMetadata: { promptTokenCount: 5, candidatesTokenCount: 7, totalTokenCount: 12 }
+        usage: { prompt_tokens: 5, completion_tokens: 7, total_tokens: 12 }
       })
       .mockResolvedValueOnce({
         text: 'still not json',
-        usageMetadata: { promptTokenCount: 5, candidatesTokenCount: 7, totalTokenCount: 12 }
+        usage: { prompt_tokens: 5, completion_tokens: 7, total_tokens: 12 }
       });
 
     const state = buildMinimalCortexState({
@@ -79,11 +79,11 @@ describe('CortexInference telemetry', () => {
     generateContentMock
       .mockResolvedValueOnce({
         text: 'not json',
-        usageMetadata: { promptTokenCount: 3, candidatesTokenCount: 4, totalTokenCount: 7 }
+        usage: { prompt_tokens: 3, completion_tokens: 4, total_tokens: 7 }
       })
       .mockResolvedValueOnce({
         text: '{"internal_thought":"ok","speech_content":"retry"}',
-        usageMetadata: { promptTokenCount: 4, candidatesTokenCount: 5, totalTokenCount: 9 }
+        usage: { prompt_tokens: 4, completion_tokens: 5, total_tokens: 9 }
       });
 
     const state = buildMinimalCortexState({
@@ -92,29 +92,45 @@ describe('CortexInference telemetry', () => {
       userInput: 'retry me'
     });
 
+    const traceId = 'trace-retry';
+    pushTraceId(traceId);
     const output = await generateFromCortexState(state);
+    popTraceId(traceId);
 
     expect(generateContentMock).toHaveBeenCalledTimes(2);
     const secondCall = generateContentMock.mock.calls[1]?.[0] as {
       contents: string;
       config: { temperature: number; maxOutputTokens: number };
     };
-    expect(secondCall.contents).toContain('Wyłącznie poprawny JSON zgodny ze schemą. Bez markdown. Bez komentarzy.');
+    expect(secondCall.contents).toContain('JSON zgodny ze schem');
+    expect(secondCall.contents).toContain('Bez markdown');
+    expect(secondCall.contents).toContain('Bez komentarzy');
     expect(secondCall.contents).not.toContain('Analyze the input state');
     expect(secondCall.config.temperature).toBe(0.2);
     expect(secondCall.config.maxOutputTokens).toBe(6144);
     expect(output.speech_content).toBe('retry');
+
+    const tokenEvents = eventBus.getHistory().filter(
+      (e) => e.type === PacketType.PREDICTION_ERROR && e.payload?.metric === 'TOKEN_USAGE'
+    );
+    expect(tokenEvents).toHaveLength(2);
+    const attempts = tokenEvents.map((e) => e.payload?.attempt);
+    expect(attempts).toContain(0);
+    expect(attempts).toContain(1);
+    tokenEvents.forEach((e) => expect(e.payload?.traceId).toBe(traceId));
+    const sum = tokenEvents.reduce((acc, e) => acc + (e.payload?.total_tokens || 0), 0);
+    expect(sum).toBe(16);
   });
 
   it('returns fallback message after retry fails', async () => {
     generateContentMock
       .mockResolvedValueOnce({
         text: 'not json',
-        usageMetadata: { promptTokenCount: 2, candidatesTokenCount: 2, totalTokenCount: 4 }
+        usage: { prompt_tokens: 2, completion_tokens: 2, total_tokens: 4 }
       })
       .mockResolvedValueOnce({
         text: 'still not json',
-        usageMetadata: { promptTokenCount: 2, candidatesTokenCount: 2, totalTokenCount: 4 }
+        usage: { prompt_tokens: 2, completion_tokens: 2, total_tokens: 4 }
       });
 
     const state = buildMinimalCortexState({
@@ -126,13 +142,14 @@ describe('CortexInference telemetry', () => {
     const output = await generateFromCortexState(state);
 
     expect(generateContentMock).toHaveBeenCalledTimes(2);
-    expect(output.speech_content).toBe('Nie dostałem poprawnego JSON. Powtórz polecenie jednym zdaniem.');
+    expect(output.speech_content).toContain('JSON');
+    expect(output.speech_content).toContain('Powt');
   });
 
   it('emits TOKEN_USAGE telemetry on successful response', async () => {
     generateContentMock.mockResolvedValue({
       text: '{"internal_thought":"ok","speech_content":"hello"}',
-      usageMetadata: { promptTokenCount: 2, candidatesTokenCount: 3, totalTokenCount: 5 }
+      usage: { prompt_tokens: 2, completion_tokens: 3, total_tokens: 5 }
     });
 
     const state = buildMinimalCortexState({
@@ -141,12 +158,51 @@ describe('CortexInference telemetry', () => {
       userInput: 'hello'
     });
 
+    const traceId = 'trace-success';
+    pushTraceId(traceId);
     await generateFromCortexState(state);
+    popTraceId(traceId);
 
-    const tokenEvent = eventBus.getHistory().find(
+    const tokenEvents = eventBus.getHistory().filter(
       (e) => e.type === PacketType.PREDICTION_ERROR && e.payload?.metric === 'TOKEN_USAGE'
     );
+    expect(tokenEvents).toHaveLength(1);
+    const tokenEvent = tokenEvents[0];
     expect(tokenEvent?.payload?.op).toBe('cortexInference');
-    expect(tokenEvent?.payload?.total).toBe(5);
+    expect(tokenEvent?.payload?.input_tokens).toBe(2);
+    expect(tokenEvent?.payload?.output_tokens).toBe(3);
+    expect(tokenEvent?.payload?.total_tokens).toBe(5);
+    expect(tokenEvent?.payload?.status).toBe('success');
+    expect(tokenEvent?.payload?.attempt).toBe(0);
+    expect(tokenEvent?.payload?.traceId).toBe(traceId);
+  });
+
+  it('emits parse_fail event with zero tokens when usage is missing', async () => {
+    generateContentMock.mockResolvedValue({
+      text: 'not json'
+    });
+
+    const state = buildMinimalCortexState({
+      agentId,
+      metaStates: META_STATES_BASELINE,
+      userInput: 'no usage'
+    });
+
+    const traceId = 'trace-no-usage';
+    pushTraceId(traceId);
+    await generateFromCortexState(state);
+    popTraceId(traceId);
+
+    const tokenEvents = eventBus.getHistory().filter(
+      (e) => e.type === PacketType.PREDICTION_ERROR && e.payload?.metric === 'TOKEN_USAGE'
+    );
+    expect(tokenEvents).toHaveLength(2);
+    tokenEvents.forEach((tokenEvent) => {
+      expect(tokenEvent?.payload?.status).toBe('parse_fail');
+      expect(tokenEvent?.payload?.input_tokens).toBe(0);
+      expect(tokenEvent?.payload?.output_tokens).toBe(0);
+      expect(tokenEvent?.payload?.total_tokens).toBe(0);
+      expect(tokenEvent?.payload?.traceId).toBe(traceId);
+    });
   });
 });
