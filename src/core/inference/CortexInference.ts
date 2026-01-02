@@ -92,6 +92,7 @@ function emitTokenUsageTelemetry(params: {
   const inputTokens = usage ? clampTokenCount(usage.prompt_tokens) : 0;
   const outputTokens = usage ? clampTokenCount(usage.completion_tokens) : 0;
   const totalTokens = usage ? clampTokenCount(usage.total_tokens) : 0;
+  // Diagnostic only: prompt stats are not used for token cost accounting.
   eventBus.publish({
     id: generateUUID(),
     traceId: params.traceId,
