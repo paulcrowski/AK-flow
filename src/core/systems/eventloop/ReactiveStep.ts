@@ -158,7 +158,7 @@ export async function runReactiveStep(input: {
         trace,
         callbacks,
         speechText: isPolish
-          ? 'Minęło za dużo czasu. Podaj polecenie jeszcze raz.'
+          ? 'Minęło za dużo czasu. Powiedz jeszcze raz co dopisać.'
           : 'Too much time passed. Please repeat.',
         internalThought: 'PENDING_EXPIRED'
       });

@@ -99,7 +99,7 @@ describe('PendingAction - Slot Filling', () => {
     });
 
     expect(ctx.pendingAction).toBeNull();
-    expect(messages.some((m) => m.includes('Minęło za dużo czasu'))).toBe(true);
+    expect(messages.some((m) => m.includes('Powiedz jeszcze raz co dopisa'))).toBe(true);
 
     const expired = eventBus.getHistory().find((e) => e.payload?.event === 'PENDING_ACTION_EXPIRED');
     expect(expired).toBeDefined();

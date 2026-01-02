@@ -187,7 +187,7 @@ export function isValidToolIntent(intent: unknown): intent is ToolIntent {
 /** Domyślny output w przypadku błędu parsowania */
 export const FALLBACK_CORTEX_OUTPUT: Readonly<CortexOutput> = {
   internal_thought: 'Parse error - using fallback',
-  speech_content: 'Wystąpił problem przy przetwarzaniu tej prośby. Spróbuj proszę sformułować pytanie inaczej.',
+  speech_content: 'Nie dostałem poprawnego JSON. Powtórz polecenie jednym zdaniem.',
   knowledge_source: 'system',
   evidence_source: 'system',
   generator: 'system',
