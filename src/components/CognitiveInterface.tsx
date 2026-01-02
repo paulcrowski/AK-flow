@@ -15,10 +15,11 @@ import { TraceHudControls } from './trace/TraceHudControls';
 import { useLoadedAgentIdentity } from '../hooks/useLoadedAgentIdentity';
 import { useArtifactStore } from '../stores/artifactStore';
 import { generateUUID } from '../utils/uuid';
+import { uploadLibraryFile } from '../services/LibraryService';
 
 export function CognitiveInterface() {
     // --- SESSION (Multi-Agent) ---
-    const { userId, agentId, currentAgent, getAgentIdentity, logout } = useSession();
+    const { userId, authUserId, userEmail, agentId, currentAgent, getAgentIdentity, logout } = useSession();
 
     const {
         traceHud,
@@ -72,6 +73,9 @@ export function CognitiveInterface() {
         successCount: number;
         failCount: number;
     } | null>(null);
+    const [uploadError, setUploadError] = useState('');
+    const [uploadStatus, setUploadStatus] = useState('');
+    const [isUploadingFile, setIsUploadingFile] = useState(false);
     const [cooldownCountdown, setCooldownCountdown] = useState(0);
     const chatEndRef = useRef<HTMLDivElement>(null);
     const chatScrollRef = useRef<HTMLDivElement>(null);
@@ -81,6 +85,7 @@ export function CognitiveInterface() {
     const lastArtifactSeenRef = useRef<string | null>(null);
     const tokenTotalsByTraceRef = useRef(new Map<string, { input: number; output: number; total: number }>());
     const tokenEventIdsRef = useRef(new Set<string>());
+    const uploadStatusTimerRef = useRef<number | null>(null);
 
     const artifactOrder = useArtifactStore((s) => s.order);
     const artifactsById = useArtifactStore((s) => s.artifactsById);
@@ -201,6 +206,15 @@ export function CognitiveInterface() {
         return () => clearInterval(interval);
     }, [embeddingStatus?.cooldownActive, embeddingStatus?.cooldownUntil]);
 
+    useEffect(() => {
+        return () => {
+            if (uploadStatusTimerRef.current !== null) {
+                clearTimeout(uploadStatusTimerRef.current);
+                uploadStatusTimerRef.current = null;
+            }
+        };
+    }, []);
+
     // --- CONFESSION V2 LISTENER INIT ---
     const limbicRef = useRef(limbicState);
     limbicRef.current = limbicState;
@@ -267,6 +281,66 @@ export function CognitiveInterface() {
         shouldAutoScrollRef.current = true;
         handleInput(input);
         setInput('');
+    };
+
+    const handleUploadFile = async (file: File) => {
+        if (!file) return;
+        if (isUploadingFile) return;
+
+        const lower = file.name.toLowerCase();
+        const isText = lower.endsWith('.txt') || lower.endsWith('.md') || lower.endsWith('.json');
+        const isImage =
+            lower.endsWith('.png') ||
+            lower.endsWith('.jpg') ||
+            lower.endsWith('.jpeg') ||
+            lower.endsWith('.webp');
+        const maxImageBytes = 10 * 1024 * 1024;
+
+        if (!authUserId || !userEmail) {
+            setUploadError('No Supabase session (authUserId/userEmail).');
+            setUploadStatus('');
+            return;
+        }
+        if (!isText && !isImage) {
+            setUploadError('Allowed: .txt, .md, .json, .png, .jpg, .jpeg, .webp');
+            setUploadStatus('');
+            return;
+        }
+        if (isImage && file.size > maxImageBytes) {
+            setUploadError('Image too large (max 10MB).');
+            setUploadStatus('');
+            return;
+        }
+
+        if (uploadStatusTimerRef.current !== null) {
+            clearTimeout(uploadStatusTimerRef.current);
+            uploadStatusTimerRef.current = null;
+        }
+
+        setUploadError('');
+        setIsUploadingFile(true);
+        setUploadStatus(`Uploading ${file.name}...`);
+
+        const res = await uploadLibraryFile({
+            file,
+            authUserId,
+            userEmail,
+            agentId: agentId ?? null
+        });
+
+        if (res.ok === false) {
+            setUploadError(res.error);
+            setUploadStatus('');
+            setIsUploadingFile(false);
+            return;
+        }
+
+        setIsUploadingFile(false);
+        setUploadStatus(`Uploaded ${res.document.original_name}. Open Library and click INGEST.`);
+        uploadStatusTimerRef.current = window.setTimeout(() => {
+            setUploadStatus('');
+            uploadStatusTimerRef.current = null;
+        }, 5000);
     };
 
     // Biological States
@@ -440,11 +514,15 @@ export function CognitiveInterface() {
                     value={input}
                     onChange={setInput}
                     onSend={onSend}
+                    onUploadFile={handleUploadFile}
                     onToggleSleep={toggleSleep}
                     disabled={isSleeping || !!systemError}
                     isSleeping={isSleeping}
                     isFatigued={isFatigued}
                     isCritical={isCritical}
+                    isUploading={isUploadingFile}
+                    uploadError={uploadError}
+                    uploadStatus={uploadStatus}
                 />
             </div>
 
