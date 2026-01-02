@@ -115,6 +115,14 @@ describe('P0.1.1 Action-First intent detection', () => {
         expect(r.target).toBe('tego pliku');
     });
 
+    it('APPEND: should detect payload without explicit target', () => {
+        const r = detectActionableIntentForTesting('dopisz nowa linijke tylko');
+        expect(r.handled).toBe(true);
+        expect(r.action).toBe('APPEND');
+        expect(r.target).toBeUndefined();
+        expect(r.payload).toBe('nowa linijke tylko');
+    });
+
     it('REPLACE: verb + target detected (payload optional)', () => {
         const r = detectActionableIntentForTesting('zamien w note.md: nowa tresc');
         expect(r.handled).toBe(true);

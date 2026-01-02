@@ -182,19 +182,34 @@ export async function runReactiveStep(input: {
   // P0.1: Action-First - execute tool commands immediately without asking
   if (ACTION_FIRST_ENABLED) {
     const actionIntent = detectActionableIntent(userInput);
-    if (actionIntent.handled && actionIntent.action && actionIntent.target) {
+    if (actionIntent.handled && actionIntent.action) {
       const store = useArtifactStore.getState();
-      const target = actionIntent.target;
-
-      const resolveRef = (refRaw: string) => {
-        const traceId = getCurrentTraceId();
-        if (traceId) p0MetricAdd(traceId, { artifactResolveAttempt: 1 });
-        const resolved = normalizeArtifactRef(refRaw);
-        if (traceId) {
-          p0MetricAdd(traceId, resolved.ok ? { artifactResolveSuccess: 1 } : { artifactResolveFail: 1 });
-        }
-        return resolved;
+      const resolveImplicitTarget = () => {
+        const lastFocusedId = store.order?.[0] ?? null;
+        const lastCreatedId = store.lastCreatedId ?? null;
+        const id = lastFocusedId || lastCreatedId;
+        if (!id) return null;
+        const artifact = store.get(id);
+        const nameHint = artifact?.name || getRememberedArtifactName(id) || '';
+        return { id, nameHint };
       };
+      const implicitTarget =
+        (!actionIntent.target && (actionIntent.action === 'APPEND' || actionIntent.action === 'REPLACE'))
+          ? resolveImplicitTarget()
+          : null;
+      const target = actionIntent.target || implicitTarget?.id;
+      const implicitNameHint = implicitTarget?.nameHint || '';
+
+      if (target) {
+        const resolveRef = (refRaw: string) => {
+          const traceId = getCurrentTraceId();
+          if (traceId) p0MetricAdd(traceId, { artifactResolveAttempt: 1 });
+          const resolved = normalizeArtifactRef(refRaw);
+          if (traceId) {
+            p0MetricAdd(traceId, resolved.ok ? { artifactResolveSuccess: 1 } : { artifactResolveFail: 1 });
+          }
+          return resolved;
+        };
 
       const emitToolIntent = (tool: string, arg: string, artifactName?: string) => {
         const intentId = generateUUID();
@@ -317,7 +332,10 @@ export async function runReactiveStep(input: {
           const payload = String(actionIntent.payload || '').trim();
           const resolved = resolveRef(target);
           const nameHint = resolved.ok
-            ? rememberArtifactName(resolved.id, resolved.nameHint || getRememberedArtifactName(resolved.id) || '')
+            ? rememberArtifactName(
+                resolved.id,
+                resolved.nameHint || implicitNameHint || getRememberedArtifactName(resolved.id) || ''
+              )
             : '';
           const traceId = getCurrentTraceId();
 
@@ -360,7 +378,7 @@ export async function runReactiveStep(input: {
               trace,
               callbacks,
               speechText: isPolish
-                ? `Co chcesz dodac do ${artifactName}?`
+                ? `Co dopisać do ${artifactName}?`
                 : `What should I add to ${artifactName}?`,
               internalThought: 'PENDING_APPEND_WAITING'
             });
@@ -411,13 +429,63 @@ export async function runReactiveStep(input: {
         }
 
         if (actionIntent.action === 'REPLACE') {
+          const payload = String(actionIntent.payload || '').trim();
           const resolved = resolveRef(target);
-          const next = String(actionIntent.payload || '').trim() || `TODO: REPLACE requested\n\n${userInput}`;
           const nameHint = resolved.ok
-            ? rememberArtifactName(resolved.id, resolved.nameHint || getRememberedArtifactName(resolved.id) || '')
+            ? rememberArtifactName(
+                resolved.id,
+                resolved.nameHint || implicitNameHint || getRememberedArtifactName(resolved.id) || ''
+              )
             : '';
-          const intentId = emitToolIntent('REPLACE', resolved.ok ? resolved.id : target, nameHint || undefined);
           const traceId = getCurrentTraceId();
+
+          if (!payload) {
+            if (!resolved.ok) {
+              publishReactiveSpeech({
+                ctx,
+                trace,
+                callbacks,
+                speechText: resolved.userMessage,
+                internalThought: 'REPLACE_TARGET_NOT_FOUND'
+              });
+              return;
+            }
+
+            const newPending = createPendingAction(
+              'REPLACE_CONTENT',
+              resolved.id,
+              nameHint || resolved.nameHint || resolved.id,
+              userInput
+            );
+
+            setPendingAction(ctx, newPending, emitPendingActionTelemetry);
+
+            if (traceId) {
+              p0MetricAdd(traceId, {
+                actionFirstTriggered: 1,
+                actionType: 'REPLACE',
+                pendingActionSet: 1
+              });
+            }
+
+            const isPolish = String(ctx.agentIdentity?.language || '').toLowerCase().includes('pol');
+            const artifactName = newPending.targetName || newPending.targetId;
+
+            publishReactiveSpeech({
+              ctx,
+              trace,
+              callbacks,
+              speechText: isPolish
+                ? `Co dopisać do ${artifactName}?`
+                : `What should I replace in ${artifactName}?`,
+              internalThought: 'PENDING_REPLACE_WAITING'
+            });
+
+            updateContextAfterAction(ctx);
+            return;
+          }
+
+          const intentId = emitToolIntent('REPLACE', resolved.ok ? resolved.id : target, nameHint || undefined);
           if (traceId) p0MetricAdd(traceId, { actionFirstTriggered: 1, actionType: 'REPLACE' });
           if (!resolved.ok) {
             emitToolError('REPLACE', intentId, { arg: target }, resolved.userMessage);
@@ -426,7 +494,7 @@ export async function runReactiveStep(input: {
           }
           try {
             const before = store.get(resolved.id)?.content ?? '';
-            store.replace(resolved.id, next);
+            store.replace(resolved.id, payload);
             if (traceId) p0MetricAdd(traceId, { actionFirstExecuted: 1 });
             const updated = store.get(resolved.id);
             const artifactName = rememberArtifactName(
@@ -459,6 +527,7 @@ export async function runReactiveStep(input: {
       } catch (e) {
         // Action failed, fall through to normal processing
         callbacks.onThought(`[ACTION_FIRST_ERROR] ${(e as Error)?.message || 'unknown'}`);
+      }
       }
     }
   }

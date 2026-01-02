@@ -265,6 +265,14 @@ function detectAppendIntent(ctx: IntentInput): ActionFirstResult | null {
     }
   }
 
+  const appendFallbackMatch = ctx.normalized.match(new RegExp(`^${APPEND_VERBS}\\b\\s*(.*)$`, 'i'));
+  if (appendFallbackMatch) {
+    const payload = String(appendFallbackMatch[1] || '').trim();
+    return payload
+      ? { handled: true, action: 'APPEND', payload }
+      : { handled: true, action: 'APPEND' };
+  }
+
   return null;
 }
 
@@ -280,6 +288,14 @@ function detectReplaceIntent(ctx: IntentInput): ActionFirstResult | null {
   if (replaceMatch) {
     const { target, payload } = splitTargetAndPayload(String(replaceMatch[1] || ''));
     if (target) return { handled: true, action: 'REPLACE', target, payload };
+  }
+
+  const replaceFallbackMatch = ctx.normalized.match(/^(?:zamien|zastap|replace)\b\s*(.*)$/i);
+  if (replaceFallbackMatch) {
+    const payload = String(replaceFallbackMatch[1] || '').trim();
+    return payload
+      ? { handled: true, action: 'REPLACE', payload }
+      : { handled: true, action: 'REPLACE' };
   }
 
   return null;

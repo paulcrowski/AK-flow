@@ -53,7 +53,7 @@ describe('PendingAction - Slot Filling', () => {
     expect(ctx.pendingAction).not.toBeNull();
     const pending = ctx.pendingAction as PendingAction;
     expect(pending.type).toBe('APPEND_CONTENT');
-    expect(messages.some((m) => m.includes('Co chcesz dodac'))).toBe(true);
+    expect(messages.some((m) => m.includes('Co dopisa'))).toBe(true);
 
     messages.length = 0;
     await runReactiveStep({
@@ -216,5 +216,30 @@ describe('PendingAction - Slot Filling', () => {
 
     const cancelled = eventBus.getHistory().find((e) => e.payload?.event === 'PENDING_ACTION_CANCELLED');
     expect(cancelled).toBeDefined();
+  });
+
+  it('Scenario E: implicit append target with payload uses last created artifact', async () => {
+    const store = useArtifactStore.getState();
+    const id = store.create('note.md', 'Start');
+
+    const ctx = createCtx();
+    const { callbacks } = createCallbacks();
+    const memorySpace = { hot: { semanticSearch: vi.fn() } };
+
+    await runReactiveStep({
+      ctx,
+      userInput: 'dopisz nowa linijke tylko',
+      callbacks,
+      memorySpace,
+      trace: { traceId: 't5', tickNumber: 1, agentId: 'a1' }
+    });
+
+    const updated = store.get(id);
+    expect(updated?.content).toContain('nowa linijke tylko');
+
+    const toolIntent = eventBus.getHistory().find(
+      (e) => e.type === PacketType.TOOL_INTENT && e.payload?.tool === 'APPEND'
+    );
+    expect(toolIntent).toBeDefined();
   });
 });
