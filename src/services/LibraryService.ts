@@ -51,6 +51,9 @@ function sanitizeFilename(name: string): string {
 function inferMimeType(file: File): string {
   if (file.type) return file.type;
   const lower = file.name.toLowerCase();
+  if (lower.endsWith('.png')) return 'image/png';
+  if (lower.endsWith('.jpg') || lower.endsWith('.jpeg')) return 'image/jpeg';
+  if (lower.endsWith('.webp')) return 'image/webp';
   if (lower.endsWith('.md')) return 'text/markdown';
   if (lower.endsWith('.txt')) return 'text/plain';
   if (lower.endsWith('.json')) return 'application/json';
@@ -59,6 +62,10 @@ function inferMimeType(file: File): string {
 
 function inferDocType(file: File): string {
   const lower = file.name.toLowerCase();
+  if (file.type && file.type.startsWith('image/')) return 'image';
+  if (lower.endsWith('.png') || lower.endsWith('.jpg') || lower.endsWith('.jpeg') || lower.endsWith('.webp')) {
+    return 'image';
+  }
   if (lower.endsWith('.json')) return 'json';
   return 'text';
 }

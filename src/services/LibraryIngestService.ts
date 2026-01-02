@@ -1,5 +1,6 @@
 import { supabase, MemoryService } from './supabase';
 import { CortexService } from '../llm/gemini';
+import { parseJSONStrict } from '../llm/gemini/json';
 import type { LibraryDocument } from './LibraryService';
 import { WorkspaceHomeostasisService } from './WorkspaceHomeostasisService';
 import { isMemorySubEnabled } from '../core/config/featureFlags';
@@ -19,6 +20,67 @@ type ChunkingConfig = {
   maxChunks: number;
   singleChunkBelowChars: number;
 };
+
+type ChunkImportance = {
+  score: number;
+  isStructural: boolean;
+  hasEmphasis: boolean;
+  isIntro: boolean;
+  isConclusion: boolean;
+  keywordHits: string[];
+};
+
+type ActiveLearningMetrics = {
+  importance: number;
+  surprise: number;
+  actionable: number;
+  concepts: string[];
+};
+
+const ACTIVE_LEARNING_TOP_K = 15;
+const MIN_IMPORTANCE = 3;
+const MAX_ACTIVE_STRENGTH = 12;
+const IMPORTANCE_KEYWORDS = [
+  'summary',
+  'conclusion',
+  'results',
+  'finding',
+  'findings',
+  'recommendation',
+  'recommendations',
+  'important',
+  'key',
+  'must',
+  'should',
+  'overview',
+  'introduction',
+  'objective',
+  'objectives',
+  'goal',
+  'goals',
+  'scope',
+  'critical',
+  'note',
+  'warning',
+  'tl;dr',
+  'podsumowanie',
+  'wnioski',
+  'wyniki',
+  'ustalenia',
+  'rekomendacje',
+  'zalecenia',
+  'wstep',
+  'cel',
+  'cele',
+  'zakres',
+  'istotne',
+  'kluczowe',
+  'uwaga',
+  'ostrzezenie',
+  'ryzyko',
+  'decyzja',
+  'dzialanie'
+];
 
 function stableHex32(input: string): string {
   const s = String(input || '');
@@ -55,6 +117,124 @@ function normalizeNewlines(text: string): string {
   return String(text || '').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
 }
 
+function assessChunkImportance(
+  content: string,
+  chunkIndex: number,
+  totalChunks: number,
+  docName: string
+): ChunkImportance {
+  const merged = `${docName}\n${content}`.toLowerCase();
+  const introBand = Math.max(1, Math.floor(totalChunks * 0.1));
+  const isIntro = chunkIndex <= Math.max(0, introBand - 1);
+  const isConclusion = totalChunks > 0 && chunkIndex >= Math.max(0, totalChunks - introBand);
+  const isStructural = /(^|\n)\s*(#{1,6}\s+|[-*]\s+|\d+\.\s+)/.test(content);
+  const hasEmphasis =
+    /(IMPORTANT|CRITICAL|MUST|SHOULD|NOTE|WARNING|UWAGA|TL;DR)/i.test(content) ||
+    /\*\*.+\*\*/.test(content) ||
+    /!!+/.test(content);
+  const keywordHits = IMPORTANCE_KEYWORDS.filter((kw) => merged.includes(kw));
+
+  let score = 1;
+  if (isIntro || isConclusion) score += 1;
+  if (keywordHits.length > 0) score += 1;
+  if (keywordHits.length >= 3) score += 1;
+  if (isStructural) score += 1;
+  if (hasEmphasis) score += 1;
+  score = clampInt(score, 1, 5);
+
+  return {
+    score,
+    isStructural,
+    hasEmphasis,
+    isIntro,
+    isConclusion,
+    keywordHits: Array.from(new Set(keywordHits))
+  };
+}
+
+function calculateNeuralStrength(heur: ChunkImportance): number {
+  const base = 3 + (heur.score - 1) * 1.5;
+  const structuralBoost = heur.isStructural ? 0.6 : 0;
+  const emphasisBoost = heur.hasEmphasis ? 0.6 : 0;
+  return clampInt(Math.round(base + structuralBoost + emphasisBoost), 3, 9);
+}
+
+function calculateActiveLearningBoost(metrics: ActiveLearningMetrics): number {
+  const importanceBoost = metrics.importance - 3;
+  const surpriseBoost = metrics.surprise - 3;
+  const actionableBoost = metrics.actionable - 3;
+  const raw = importanceBoost + 0.5 * (surpriseBoost + actionableBoost);
+  return Math.max(0, Math.round(raw));
+}
+
+async function enhanceWithActiveLearning(input: {
+  content: string;
+  summary: string;
+  docName: string;
+  chunkIndex: number;
+}): Promise<{ ok: boolean; metrics?: ActiveLearningMetrics; error?: string }> {
+  try {
+    const docName = String(input.docName || 'document').slice(0, 120);
+    const summary = String(input.summary || '').slice(0, 1200);
+    const content = String(input.content || '').slice(0, 2000);
+    const prompt = [
+      'ROLE: AK-FLOW chunk evaluator.',
+      'TASK: Score this chunk for memory recall priority.',
+      'RETURN JSON ONLY:',
+      '{"importance":1-5,"surprise":1-5,"actionable":1-5,"concepts":["..."]}',
+      'CONSTRAINTS:',
+      '- concepts: up to 6 short phrases',
+      '- no markdown, no extra keys',
+      `DOC_NAME: ${docName}`,
+      `CHUNK_INDEX: ${input.chunkIndex}`,
+      'SUMMARY:',
+      summary,
+      'CONTENT:',
+      content
+    ].join('\n');
+
+    const raw = await CortexService.generateText('chunk_active_learning', prompt, {
+      temperature: 0.2,
+      maxOutputTokens: 512
+    });
+
+    const parseResult = parseJSONStrict<ActiveLearningMetrics>(raw, (data) => {
+      if (!data || typeof data !== 'object') return false;
+      const typed = data as Record<string, unknown>;
+      return (
+        typeof typed.importance === 'number' &&
+        typeof typed.surprise === 'number' &&
+        typeof typed.actionable === 'number' &&
+        Array.isArray(typed.concepts)
+      );
+    });
+
+    if (!parseResult.success || !parseResult.data) {
+      return { ok: false, error: parseResult.error || 'parse_failed' };
+    }
+
+    const metrics = parseResult.data;
+    const concepts = Array.isArray(metrics.concepts)
+      ? metrics.concepts
+          .map((c) => String(c || '').trim())
+          .filter(Boolean)
+          .slice(0, 6)
+      : [];
+
+    return {
+      ok: true,
+      metrics: {
+        importance: clampInt(metrics.importance, 1, 5),
+        surprise: clampInt(metrics.surprise, 1, 5),
+        actionable: clampInt(metrics.actionable, 1, 5),
+        concepts
+      }
+    };
+  } catch (err) {
+    return { ok: false, error: String((err as Error)?.message || err) };
+  }
+}
+
 function isMarkdownDoc(doc: LibraryDocument): boolean {
   const name = (doc.original_name || '').toLowerCase();
   const mime = (doc.mime_type || '').toLowerCase();
@@ -65,6 +245,55 @@ function isJsonDoc(doc: LibraryDocument): boolean {
   const name = (doc.original_name || '').toLowerCase();
   const mime = (doc.mime_type || '').toLowerCase();
   return name.endsWith('.json') || mime.includes('application/json') || mime.endsWith('+json');
+}
+
+function isImageDoc(doc: LibraryDocument): boolean {
+  const name = (doc.original_name || '').toLowerCase();
+  const mime = (doc.mime_type || '').toLowerCase();
+  return (
+    doc.doc_type === 'image' ||
+    mime.startsWith('image/') ||
+    name.endsWith('.png') ||
+    name.endsWith('.jpg') ||
+    name.endsWith('.jpeg') ||
+    name.endsWith('.webp')
+  );
+}
+
+function inferImageHint(name: string): 'chart' | 'document' | 'auto' {
+  const lower = String(name || '').toLowerCase();
+  if (/(chart|diagram|plot|wykres|graf)/.test(lower)) return 'chart';
+  if (/(scan|document|doc|report|invoice|page|strona|raport|faktura)/.test(lower)) return 'document';
+  return 'auto';
+}
+
+async function blobToDataUrl(blob: Blob): Promise<string> {
+  if (typeof FileReader === 'undefined') {
+    const buffer = await blob.arrayBuffer();
+    const bytes = new Uint8Array(buffer);
+    let binary = '';
+    for (let i = 0; i < bytes.length; i++) {
+      binary += String.fromCharCode(bytes[i]);
+    }
+    if (typeof btoa !== 'function') throw new Error('btoa_unavailable');
+    const base64 = btoa(binary);
+    const mime = blob.type || 'application/octet-stream';
+    return `data:${mime};base64,${base64}`;
+  }
+
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = typeof reader.result === 'string' ? reader.result : '';
+      if (!result) {
+        reject(new Error('dataurl_empty'));
+        return;
+      }
+      resolve(result);
+    };
+    reader.onerror = () => reject(new Error('dataurl_failed'));
+    reader.readAsDataURL(blob);
+  });
 }
 
 function splitMarkdownIntoBlocks(text: string): { start: number; end: number; text: string }[] {
@@ -255,6 +484,15 @@ async function downloadDocumentText(doc: LibraryDocument): Promise<string> {
   const dl = await supabase.storage.from(doc.storage_bucket).download(doc.storage_path);
   if (dl.error) throw new Error(dl.error.message);
 
+  if (isImageDoc(doc)) {
+    const base64Data = await blobToDataUrl(dl.data);
+    const hint = inferImageHint(doc.original_name);
+    const mimeType = doc.mime_type || 'image/jpeg';
+    const ocr = await CortexService.extractTextFromImage(base64Data, mimeType, hint);
+    if (!ocr.ok) throw new Error(ocr.error || 'OCR_FAILED');
+    return normalizeNewlines(ocr.text);
+  }
+
   const raw = normalizeNewlines(await dl.data.text());
   if (isJsonDoc(doc)) {
     try {
@@ -439,12 +677,14 @@ export async function ingestLibraryDocument(params: {
         });
       }
 
+      const totalChunks = chunks.length;
       const candidates = chunks
         .map((ch, i) => ({
           chunk_index: ch.chunk_index,
           start_offset: ch.start_offset,
           end_offset: ch.end_offset,
-          summary: String(summariesForDoc[i]?.summary || '').trim()
+          summary: String(summariesForDoc[i]?.summary || '').trim(),
+          content: String(summariesForDoc[i]?.content || ch.content || '').trim()
         }))
         .filter((c) => Boolean(c.summary));
 
@@ -454,7 +694,45 @@ export async function ingestLibraryDocument(params: {
         return a.chunk_index - b.chunk_index;
       });
 
-      for (const c of candidates.slice(0, K)) {
+      const selected = candidates.slice(0, K).map((c) => {
+        const heur = assessChunkImportance(c.content, c.chunk_index, totalChunks, doc.original_name);
+        const baseStrength = calculateNeuralStrength(heur);
+        return { ...c, heur, baseStrength };
+      });
+
+      const alEligible = selected
+        .filter((c) => c.heur.score >= MIN_IMPORTANCE)
+        .sort((a, b) => {
+          const ds = b.heur.score - a.heur.score;
+          if (ds !== 0) return ds;
+          const dl = b.summary.length - a.summary.length;
+          if (dl !== 0) return dl;
+          return a.chunk_index - b.chunk_index;
+        })
+        .slice(0, ACTIVE_LEARNING_TOP_K);
+
+      const alEligibleIndex = new Set(alEligible.map((c) => c.chunk_index));
+
+      for (const c of selected) {
+        let finalStrength = c.baseStrength;
+        let alMetrics: ActiveLearningMetrics | undefined;
+
+        if (alEligibleIndex.has(c.chunk_index)) {
+          const al = await enhanceWithActiveLearning({
+            content: c.content,
+            summary: c.summary,
+            docName: doc.original_name,
+            chunkIndex: c.chunk_index
+          });
+          if (al.ok && al.metrics) {
+            alMetrics = al.metrics;
+            const boost = calculateActiveLearningBoost(al.metrics);
+            finalStrength = clampInt(c.baseStrength + boost, 3, MAX_ACTIVE_STRENGTH);
+          }
+        }
+
+        console.log('[LibraryIngest] Chunk', c.chunk_index, 'importance', c.heur.score, 'strength', finalStrength);
+
         const content = [
           'WORKSPACE_CHUNK_SUMMARY',
           `doc_id=${doc.id}`,
@@ -466,10 +744,9 @@ export async function ingestLibraryDocument(params: {
         await MemoryService.storeMemory({
           id: stableUuidLike(`workspace:chunk:${doc.id}:${c.chunk_index}:${c.summary}`),
           content,
-          skipEmbedding: true,
           emotionalContext: neutralEmotion,
           timestamp: new Date().toISOString(),
-          neuralStrength: clampInt(1 + Math.min(3, Math.floor(c.summary.length / 200)), 1, 4),
+          neuralStrength: finalStrength,
           isCoreMemory: false,
           metadata: {
             kind: 'WORKSPACE_CHUNK_SUMMARY',
@@ -480,7 +757,15 @@ export async function ingestLibraryDocument(params: {
             doc_type: doc.doc_type,
             chunk_index: c.chunk_index,
             start_offset: c.start_offset,
-            end_offset: c.end_offset
+            end_offset: c.end_offset,
+            importance_score: c.heur.score,
+            is_structural: c.heur.isStructural,
+            has_emphasis: c.heur.hasEmphasis,
+            active_learning: Boolean(alMetrics),
+            al_importance: alMetrics?.importance,
+            al_surprise: alMetrics?.surprise,
+            al_actionable: alMetrics?.actionable,
+            al_concepts: alMetrics?.concepts
           }
         });
       }

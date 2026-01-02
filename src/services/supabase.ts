@@ -152,6 +152,7 @@ export const MemoryService = {
       const embedding = wantsEmbedding
         ? await CortexService.generateEmbedding(memory.content)
         : null;
+      const hasEmbedding = Array.isArray(embedding) && embedding.length > 0;
 
       if (wantsEmbedding && !embedding) {
         console.warn('[MemoryService] Embedding unavailable, storing without embedding');
@@ -178,6 +179,15 @@ export const MemoryService = {
         typeof memory.neuralStrength === 'number'
           ? memory.neuralStrength
           : computeNeuralStrength(memory.emotionalContext);
+      const metadataKind = typeof memory.metadata?.kind === 'string' ? memory.metadata.kind : '';
+      const emitStoreTelemetry = () => {
+        if (!metadataKind) return;
+        console.log('[MEMORY_STORE]', {
+          kind: metadataKind,
+          hasEmbedding,
+          neuralStrength: derivedNeuralStrength
+        });
+      };
 
       const basePayload = {
         agent_id: currentAgentId,
@@ -300,6 +310,7 @@ export const MemoryService = {
           }
 
           console.log('Fallback Insert Successful (Legacy Mode)');
+          emitStoreTelemetry();
           if (wantsMetadata) {
             eventBus.publish({
               id: generateUUID(),
@@ -321,6 +332,7 @@ export const MemoryService = {
         }
 
         console.log('Fallback Insert Successful (V3.1 Mode)');
+        emitStoreTelemetry();
         if (wantsMetadata) {
           eventBus.publish({
             id: generateUUID(),
@@ -354,6 +366,7 @@ export const MemoryService = {
           priority: 0.2
         });
       }
+      emitStoreTelemetry();
       return {
         memoryId: resultV32.data?.id ?? null,
         skipped: false,
@@ -369,6 +382,40 @@ export const MemoryService = {
       
       console.error(`Memory Store Error (Handled): ${errorMsg}`);
       return { memoryId: null, skipped: false, reason: 'ERROR' };
+    }
+  },
+
+  async findMemoryIdByDocumentId(
+    documentId: string,
+    kind: 'WORKSPACE_DOC_SUMMARY' | 'WORKSPACE_CHUNK_SUMMARY' = 'WORKSPACE_DOC_SUMMARY'
+  ): Promise<string | null> {
+    try {
+      if (!currentAgentId) {
+        console.warn('[MemoryService] No agent selected, returning empty');
+        return null;
+      }
+      if (!documentId) return null;
+
+      const { data, error } = await supabase
+        .from('memories')
+        .select('id')
+        .eq('agent_id', currentAgentId)
+        .eq('metadata->>kind', kind)
+        .eq('metadata->>document_id', documentId)
+        .order('created_at', { ascending: false })
+        .limit(1);
+
+      if (error) {
+        console.warn('[MemoryService] findMemoryIdByDocumentId failed:', error.message);
+        return null;
+      }
+
+      const row = Array.isArray(data) ? data[0] : data;
+      const id = row && typeof row.id === 'string' ? row.id : null;
+      return id;
+    } catch (err) {
+      console.warn('[MemoryService] findMemoryIdByDocumentId error:', err);
+      return null;
     }
   },
 

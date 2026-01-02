@@ -5,6 +5,7 @@ import {
   getLibraryChunkByIndex,
   searchLibraryChunks
 } from '../services/LibraryService';
+import { MemoryService } from '../services/supabase';
 import { AgentType, PacketType } from '../types';
 import { withTimeout } from './toolRuntime';
 import { useArtifactStore } from '../stores/artifactStore';
@@ -41,6 +42,31 @@ export async function consumeWorkspaceTags(params: {
       h = Math.imul(h, 16777619);
     }
     return (h >>> 0).toString(16).padStart(8, '0');
+  };
+
+  const boostReadMemory = async (params: {
+    tool: string;
+    documentId: string;
+    kind: 'WORKSPACE_DOC_SUMMARY' | 'WORKSPACE_CHUNK_SUMMARY';
+    delta?: number;
+    chunkIndex?: number;
+  }) => {
+    try {
+      const memoryId = await MemoryService.findMemoryIdByDocumentId(params.documentId, params.kind);
+      if (!memoryId) return;
+      const delta = params.delta ?? 2;
+      void MemoryService.boostMemoryStrength(memoryId, delta);
+      console.log('[MEMORY_READ_BOOST]', {
+        tool: params.tool,
+        documentId: params.documentId,
+        chunkIndex: params.chunkIndex,
+        kind: params.kind,
+        delta,
+        memoryId
+      });
+    } catch {
+      // ignore boost errors
+    }
   };
 
   const executeWorkspaceTool = async (toolRaw: string, argRaw: string) => {
@@ -192,6 +218,12 @@ export async function consumeWorkspaceTags(params: {
         });
 
         deps.addMessage('assistant', text, 'tool_result');
+        await boostReadMemory({
+          tool,
+          documentId,
+          kind: 'WORKSPACE_DOC_SUMMARY',
+          delta: 2
+        });
         return;
       }
 
@@ -223,6 +255,13 @@ export async function consumeWorkspaceTags(params: {
         });
 
         deps.addMessage('assistant', text, 'tool_result');
+        await boostReadMemory({
+          tool,
+          documentId,
+          kind: 'WORKSPACE_CHUNK_SUMMARY',
+          delta: 2,
+          chunkIndex
+        });
         return;
       }
 
@@ -301,6 +340,12 @@ export async function consumeWorkspaceTags(params: {
         });
 
         deps.addMessage('assistant', text, 'tool_result');
+        await boostReadMemory({
+          tool,
+          documentId,
+          kind: 'WORKSPACE_DOC_SUMMARY',
+          delta: 2
+        });
         return;
       }
 

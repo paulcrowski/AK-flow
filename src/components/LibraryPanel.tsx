@@ -19,6 +19,7 @@ export function LibraryPanel() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const canUse = Boolean(authUserId && userEmail);
+  const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 
   const filteredDocs = useMemo(() => {
     if (!agentId) return documents;
@@ -85,8 +86,22 @@ export function LibraryPanel() {
       }
 
       const lower = file.name.toLowerCase();
-      if (!(lower.endsWith('.txt') || lower.endsWith('.md') || lower.endsWith('.json'))) {
-        setError('Dozwolone pliki: .txt, .md, .json');
+      const isText =
+        lower.endsWith('.txt') ||
+        lower.endsWith('.md') ||
+        lower.endsWith('.json');
+      const isImage =
+        lower.endsWith('.png') ||
+        lower.endsWith('.jpg') ||
+        lower.endsWith('.jpeg') ||
+        lower.endsWith('.webp');
+
+      if (!isText && !isImage) {
+        setError('Allowed: .txt, .md, .json, .png, .jpg, .jpeg, .webp');
+        return;
+      }
+      if (isImage && file.size > MAX_IMAGE_BYTES) {
+        setError('Image too large (max 10MB).');
         return;
       }
 
@@ -131,7 +146,7 @@ export function LibraryPanel() {
       <input
         ref={fileInputRef}
         type="file"
-        accept=".txt,.md,.json,text/plain,text/markdown,application/json"
+        accept=".txt,.md,.json,.png,.jpg,.jpeg,.webp,text/plain,text/markdown,application/json,image/png,image/jpeg,image/webp"
         onChange={onFileSelected}
         className="hidden"
       />
@@ -141,9 +156,9 @@ export function LibraryPanel() {
           onClick={onChooseFile}
           disabled={!canUse || isUploading}
           className="flex items-center justify-between px-3 py-2 rounded-lg border border-gray-700 bg-gray-900/30 text-[11px] font-mono text-gray-300 hover:bg-gray-900/60 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          title={!canUse ? 'Zaloguj się przez Supabase Auth' : 'Upload .txt/.md/.json'}
+          title={!canUse ? 'Log in via Supabase Auth' : 'Upload .txt/.md/.json/.png/.jpg/.webp'}
         >
-          <span className="flex items-center gap-2"><FileUp size={12} /> UPLOAD .TXT/.MD/.JSON</span>
+          <span className="flex items-center gap-2"><FileUp size={12} /> UPLOAD .TXT/.MD/.JSON/.PNG/.JPG/.WEBP</span>
           <span>{isUploading ? '...' : ''}</span>
         </button>
 

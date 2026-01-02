@@ -412,8 +412,9 @@ export function createCortexTextService(ai: GoogleGenAI) {
         }
         const response = await withRetry(async () => {
           return ai.models.embedContent({
-            model: 'text-embedding-004',
-            contents: text
+            model: 'gemini-embedding-001',
+            contents: text,
+            config: { outputDimensionality: 768 }
           });
         }, 2, 1000);
         embeddingFailureCount = 0;
@@ -435,6 +436,47 @@ export function createCortexTextService(ai: GoogleGenAI) {
         emitEmbeddingsStatus();
         console.warn('Embedding Error (handled):', err);
         return null;
+      }
+    },
+
+    async extractTextFromImage(
+      base64Data: string,
+      mimeType: string,
+      hint?: string
+    ): Promise<{ ok: boolean; text: string; error?: string }> {
+      try {
+        if (!base64Data) return { ok: false, text: '', error: 'empty_image' };
+        const cleaned = base64Data.replace(/^data:image\/(png|jpeg|webp);base64,/, '');
+        const safeMime = mimeType && mimeType.startsWith('image/') ? mimeType : 'image/jpeg';
+        const hintLabel = String(hint || 'auto').slice(0, 40);
+        const prompt = [
+          'ROLE: OCR extractor for user documents.',
+          'TASK: Extract all readable text from the image.',
+          'CONSTRAINTS:',
+          '- Return plain text only.',
+          '- Preserve line breaks where useful.',
+          '- If there is no readable text, return an empty string.',
+          `HINT: ${hintLabel}`
+        ].join('\n');
+
+        const response = await withRetry(async () => {
+          return ai.models.generateContent({
+            model: 'gemini-2.0-flash',
+            contents: {
+              parts: [
+                { inlineData: { mimeType: safeMime, data: cleaned } },
+                { text: prompt }
+              ]
+            }
+          });
+        }, 1, 1000);
+
+        logUsage('extractTextFromImage', response);
+        const text = (getGeminiText(response) || '').trim();
+        if (!text) return { ok: false, text: '', error: 'empty_text' };
+        return { ok: true, text };
+      } catch (err) {
+        return { ok: false, text: '', error: String((err as Error)?.message || err) };
       }
     },
 

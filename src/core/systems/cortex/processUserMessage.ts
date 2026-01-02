@@ -69,6 +69,51 @@ function buildStructuredPrompt(params: {
         `;
 }
 
+const MEMORY_AUTO_BOOST_LIMIT = 6;
+const MEMORY_AUTO_BOOST_DELTA = 1;
+const MEMORY_AUTO_BOOST_EXCLUDE_PREFIXES = ['SESSION_CHUNK', 'IDENTITY_SHARD'];
+
+const isUuidLike = (s: string) =>
+  /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(s);
+
+const isSyntheticMemoryContent = (content: string) =>
+  MEMORY_AUTO_BOOST_EXCLUDE_PREFIXES.some((prefix) => content.startsWith(prefix));
+
+const pickBoostableMemoryIds = (
+  memories: Array<{ id?: string; content?: string }>,
+  limit: number
+): string[] => {
+  const ids: string[] = [];
+  const seen = new Set<string>();
+
+  for (const mem of memories) {
+    const id = typeof mem?.id === 'string' ? mem.id.trim() : '';
+    if (!id || seen.has(id) || !isUuidLike(id)) continue;
+    const content = typeof mem?.content === 'string' ? mem.content : '';
+    if (content && isSyntheticMemoryContent(content)) continue;
+    seen.add(id);
+    ids.push(id);
+    if (ids.length >= limit) break;
+  }
+
+  return ids;
+};
+
+const autoBoostUsedMemories = (params: {
+  memories: Array<{ id?: string; content?: string }>;
+  isParseFallback: boolean;
+  turnId?: string | null;
+}) => {
+  if (params.isParseFallback || params.memories.length === 0) return;
+  const ids = pickBoostableMemoryIds(params.memories, MEMORY_AUTO_BOOST_LIMIT);
+  if (ids.length === 0) return;
+  void Promise.allSettled(ids.map((id) => MemoryService.boostMemoryStrength(id, MEMORY_AUTO_BOOST_DELTA)));
+  console.log('[MEMORY_AUTO_BOOST]', {
+    turnId: params.turnId ?? 'unknown',
+    boostedCount: ids.length
+  });
+};
+
 export async function processUserMessage(params: ProcessInputParams): Promise<ProcessResult> {
   const {
     text,
@@ -258,6 +303,11 @@ export async function processUserMessage(params: ProcessInputParams): Promise<Pr
         neuralStrength
       });
       const agentMemoryId = memoryStore.memoryId ?? null;
+      autoBoostUsedMemories({
+        memories,
+        isParseFallback,
+        turnId: getCurrentTraceId() ?? agentMemoryId ?? null
+      });
 
       const stimulusWeights = mapStimulusResponseToWeights((output as any).stimulus_response);
 
@@ -320,6 +370,11 @@ export async function processUserMessage(params: ProcessInputParams): Promise<Pr
     neuralStrength
   });
   const agentMemoryId = memoryStore.memoryId ?? null;
+  autoBoostUsedMemories({
+    memories,
+    isParseFallback: false,
+    turnId: getCurrentTraceId() ?? agentMemoryId ?? null
+  });
 
   const stimulusWeights = mapStimulusResponseToWeights((cortexResult as any).stimulus_response);
 
