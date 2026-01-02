@@ -18,7 +18,7 @@ import { AgentType, PacketType } from '../../types';
 import { generateUUID } from '../../utils/uuid';
 import { parseJsonFromLLM } from '../../utils/AIResponseParser';
 import { p0MetricAdd } from '../systems/TickLifecycleTelemetry';
-import { getCurrentTraceId } from '../trace/TraceContext';
+import { generateExternalTraceId, getCurrentTraceId } from '../trace/TraceContext';
 
 // Lazy initialization - nie blokuj jeśli brak klucza
 let ai: GoogleGenAI | null = null;
@@ -76,20 +76,37 @@ function logUsage(operation: string, response: any): void {
   }
 }
 
-function emitTokenUsageTelemetry(response: any, op: string): void {
-  if (!response?.usageMetadata) return;
-  const { promptTokenCount, candidatesTokenCount, totalTokenCount } = response.usageMetadata;
+function clampTokenCount(value: unknown): number {
+  const n = Number(value);
+  return Number.isFinite(n) && n > 0 ? Math.trunc(n) : 0;
+}
+
+function emitTokenUsageTelemetry(params: {
+  response?: any;
+  traceId: string;
+  attempt: number;
+  op: string;
+  status: 'success' | 'parse_fail' | 'transport_fail';
+}): void {
+  const usage = params.response?.usage;
+  const inputTokens = usage ? clampTokenCount(usage.prompt_tokens) : 0;
+  const outputTokens = usage ? clampTokenCount(usage.completion_tokens) : 0;
+  const totalTokens = usage ? clampTokenCount(usage.total_tokens) : 0;
   eventBus.publish({
     id: generateUUID(),
+    traceId: params.traceId,
     timestamp: Date.now(),
     source: AgentType.SOMA,
     type: PacketType.PREDICTION_ERROR,
     payload: {
       metric: 'TOKEN_USAGE',
-      op,
-      in: promptTokenCount || 0,
-      out: candidatesTokenCount || 0,
-      total: totalTokenCount || 0
+      traceId: params.traceId,
+      attempt: params.attempt,
+      op: params.op,
+      status: params.status,
+      input_tokens: inputTokens,
+      output_tokens: outputTokens,
+      total_tokens: totalTokens
     },
     priority: 0.1
   });
@@ -258,6 +275,7 @@ export async function generateFromCortexState(
   config: InferenceConfig = {}
 ): Promise<CortexOutput> {
   const cfg = { ...DEFAULT_CONFIG, ...config };
+  const traceId = getCurrentTraceId() ?? generateExternalTraceId();
 
   const stateJson = formatCortexStateForLLM(state);
 
@@ -366,7 +384,7 @@ INSTRUCTIONS:
     required: ['internal_thought', 'speech_content']
   };
 
-  const runInference = async (prompt: string, callConfig: InferenceConfig): Promise<ParseOutcome> => {
+  const runInference = async (prompt: string, callConfig: InferenceConfig, attempt: number): Promise<ParseOutcome> => {
     const genAI = getAI();
 
     const response = await genAI.models.generateContent({
@@ -380,12 +398,19 @@ INSTRUCTIONS:
       }
     });
 
-    emitTokenUsageTelemetry(response, 'cortexInference');
+    const parsed = parseResponse(response.text);
+    emitTokenUsageTelemetry({
+      response,
+      traceId,
+      attempt,
+      op: 'cortexInference',
+      status: parsed.ok ? 'success' : 'parse_fail'
+    });
     logUsage('generateFromCortexState', response);
-    return parseResponse(response.text);
+    return parsed;
   };
 
-  const primary = await withRetry(() => runInference(fullPrompt, cfg), cfg.retries!, cfg.retryDelayMs!);
+  const primary = await withRetry(() => runInference(fullPrompt, cfg, 0), cfg.retries!, cfg.retryDelayMs!);
   if (primary.ok) return primary.value;
 
   if (shouldRetryParseFailure(primary.reason)) {
