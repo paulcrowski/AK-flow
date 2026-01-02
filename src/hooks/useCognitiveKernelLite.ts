@@ -18,11 +18,11 @@
 
 import { useEffect, useRef, useCallback, useState, useMemo } from 'react';
 import { eventBus } from '../core/EventBus';
-import { AgentType, PacketType, CognitiveError, TraitVector, NeurotransmitterState } from '../types';
+import { AgentType, PacketType, CognitiveError, TraitVector, NeurotransmitterState, type CognitivePacket } from '../types';
 import { generateUUID } from '../utils/uuid';
 import { MIN_TICK_MS, MAX_TICK_MS } from '../core/constants';
 import { EventLoop } from '../core/systems/EventLoop';
-import { DreamConsolidationService } from '../services/DreamConsolidationService';
+import { DreamConsolidationService, type DreamConsolidationResult } from '../services/DreamConsolidationService';
 import { executeWakeProcess } from '../core/services/WakeService';
 import { getAutonomyConfig } from '../core/config/systemConfig';
 import { archiveMessage, getConversationHistory, getRecentSessions, type ConversationSessionSummary } from '../services/ConversationArchive';
@@ -447,7 +447,7 @@ export const useCognitiveKernelLite = (loadedIdentity?: AgentIdentity | null) =>
   // EVENTBUS SUBSCRIPTIONS
   // ─────────────────────────────────────────────────────────────────────────
   useEffect(() => {
-    const unsubscribe = eventBus.subscribe(PacketType.FIELD_UPDATE, (packet) => {
+    const unsubscribe = eventBus.subscribe(PacketType.FIELD_UPDATE, (packet: CognitivePacket) => {
       if (packet.source === AgentType.NEUROCHEM && packet.payload?.action === 'DOPAMINE_PENALTY') {
         const delta = packet.payload.delta || 0;
         actions.updateNeuro({ dopamine: delta });
@@ -458,7 +458,7 @@ export const useCognitiveKernelLite = (loadedIdentity?: AgentIdentity | null) =>
   }, [actions]);
 
   useEffect(() => {
-    const unsubscribe = eventBus.subscribe(PacketType.SYSTEM_ALERT, (packet: any) => {
+    const unsubscribe = eventBus.subscribe(PacketType.SYSTEM_ALERT, (packet: CognitivePacket) => {
       if (packet?.payload?.event !== 'TOOL_COMMIT') return;
       const message = String(packet.payload?.message || '').trim();
       if (!message) return;
@@ -481,16 +481,16 @@ export const useCognitiveKernelLite = (loadedIdentity?: AgentIdentity | null) =>
       return match ? match[1] : cleaned;
     };
 
-    const unsubscribe = eventBus.subscribe(PacketType.SYSTEM_ALERT, (packet: any) => {
+    const unsubscribe = eventBus.subscribe(PacketType.SYSTEM_ALERT, (packet: CognitivePacket) => {
       if (packet?.payload?.event !== 'DREAM_CONSOLIDATION_COMPLETE') return;
-      const result = packet.payload?.result || {};
-      const summary = toSingleSentence(String(result?.selfSummary || ''));
-      const lessonsRaw = Array.isArray(result?.lessonsGenerated) ? result.lessonsGenerated : [];
+      const result = (packet.payload?.result ?? {}) as Partial<DreamConsolidationResult>;
+      const summary = toSingleSentence(String(result.selfSummary || ''));
+      const lessonsRaw = Array.isArray(result.lessonsGenerated) ? result.lessonsGenerated : [];
       const lessons = lessonsRaw
-        .map((l: any) => normalize(String(l || '')))
+        .map((lesson) => normalize(String(lesson || '')))
         .filter(Boolean)
         .slice(0, 3);
-      const episodesProcessed = Number(result?.episodesProcessed || 0);
+      const episodesProcessed = Number(result.episodesProcessed || 0);
 
       const parts: string[] = [];
       if (summary) parts.push(`Sleep summary: ${summary}`);

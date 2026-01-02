@@ -14,6 +14,8 @@ import { renderHook, act } from '@testing-library/react';
 import { useCognitiveKernelLite } from '@/hooks/useCognitiveKernelLite';
 import { useCognitiveStore } from '@/stores/cognitiveStore';
 import { KernelController } from '@core/runner/KernelController';
+import { eventBus } from '@core/EventBus';
+import { AgentType, PacketType } from '@/types';
 
 // Mock CortexSystem to avoid API calls
 vi.mock('@core/systems/CortexSystem', () => ({
@@ -140,6 +142,36 @@ describe('useCognitiveKernelLite', () => {
       const { result } = renderHook(() => useCognitiveKernelLite());
 
       expect(result.current.systemError).toBeNull();
+    });
+
+    it('should add sleep summary message on DREAM_CONSOLIDATION_COMPLETE', () => {
+      const { unmount } = renderHook(() => useCognitiveKernelLite());
+
+      act(() => {
+        eventBus.publishSync({
+          id: 'dream-test',
+          timestamp: Date.now(),
+          source: AgentType.CORTEX_FLOW,
+          type: PacketType.SYSTEM_ALERT,
+          payload: {
+            event: 'DREAM_CONSOLIDATION_COMPLETE',
+            result: {
+              selfSummary: 'Zrobilem postep.',
+              lessonsGenerated: ['Lekcja pierwsza', 'Lekcja druga'],
+              episodesProcessed: 2
+            }
+          },
+          priority: 0.2
+        });
+      });
+
+      const messages = useCognitiveStore.getState().uiConversation;
+      const combined = messages
+        .map((m) => String((m as { text?: string })?.text || ''))
+        .join(' ');
+      expect(combined).toContain('Sleep summary:');
+      expect(combined).toContain('Lessons:');
+      unmount();
     });
   });
 
