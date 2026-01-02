@@ -337,10 +337,21 @@ export function CognitiveInterface() {
 
         setIsUploadingFile(false);
         setUploadStatus(`Uploaded ${res.document.original_name}. Open Library and click INGEST.`);
+        eventBus.publish({
+            id: generateUUID(),
+            timestamp: Date.now(),
+            source: AgentType.CORTEX_FLOW,
+            type: PacketType.SYSTEM_ALERT,
+            payload: {
+                event: 'LIBRARY_UPLOAD_OK',
+                document: res.document
+            },
+            priority: 0.4
+        });
         uploadStatusTimerRef.current = window.setTimeout(() => {
             setUploadStatus('');
             uploadStatusTimerRef.current = null;
-        }, 5000);
+        }, 12000);
     };
 
     // Biological States

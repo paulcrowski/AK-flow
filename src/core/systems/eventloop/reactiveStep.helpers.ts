@@ -56,9 +56,9 @@ const CREATE_WITH_NAME_REGEX = new RegExp(
   `${CREATE_VERBS}\\s+(?:${FILE_WORD}\\s+)?(?:o\\s+nazwie\\s+|named\\s+)?(.+?)\\s+z\\s+${CONTENT_KEYWORD}\\s+([\\s\\S]+)`,
   'i'
 );
-// FIX-2: Support "tworz plik X a w nim Y" / "create file X with Y"
+// FIX-2: Support "tworz plik X a w nim/w niej Y" / "create file X with Y"
 const CREATE_WITH_CONTENT_REGEX = new RegExp(
-  `${CREATE_VERBS}\\s+(?:${FILE_WORD}\\s+)?(?:o\\s+nazwie\\s+|named\\s+)?(.+?)\\s+(?:a\\s+w\\s+nim|with|containing)\\s+([\\s\\S]+)`,
+  `${CREATE_VERBS}\\s+(?:${FILE_WORD}\\s+)?(?:o\\s+nazwie\\s+|named\\s+)?(.+?)\\s+(?:a\\s+w\\s+nim|w\\s+nim|w\\s+niej|with|containing)\\s+(?:(?:napisz|wpisz|zapisz|napis|wpis|zapis)\\s+)?([\\s\\S]+)`,
   'i'
 );
 const CREATE_SIMPLE_REGEX = new RegExp(`${CREATE_VERBS}\\s+(?:${FILE_WORD}\\s+)?(.+)`, 'i');

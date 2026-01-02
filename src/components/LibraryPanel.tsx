@@ -1,6 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { FileUp, RefreshCw, Loader2, Sparkles, ChevronDown, ChevronUp, Layers } from 'lucide-react';
 import { useSession } from '../contexts/SessionContext';
+import { eventBus } from '../core/EventBus';
+import { PacketType } from '../types';
 import { listLibraryDocuments, uploadLibraryFile, type LibraryDocument } from '../services/LibraryService';
 import { ingestLibraryDocument } from '../services/LibraryIngestService';
 import { LibraryConfigModal } from './LibraryConfigModal';
@@ -44,6 +46,16 @@ export function LibraryPanel() {
   useEffect(() => {
     void refresh();
   }, [refresh]);
+
+  useEffect(() => {
+    const unsubscribe = eventBus.subscribe(PacketType.SYSTEM_ALERT, (packet) => {
+      if (packet.payload?.event !== 'LIBRARY_UPLOAD_OK') return;
+      const docAgentId = packet.payload?.document?.agent_id ?? null;
+      if (agentId && docAgentId && docAgentId !== agentId) return;
+      void refresh();
+    });
+    return () => unsubscribe();
+  }, [agentId, refresh]);
 
   const onChooseFile = () => fileInputRef.current?.click();
 
