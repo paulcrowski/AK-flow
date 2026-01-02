@@ -72,6 +72,7 @@ function buildStructuredPrompt(params: {
 const MEMORY_AUTO_BOOST_LIMIT = 6;
 const MEMORY_AUTO_BOOST_DELTA = 1;
 const MEMORY_AUTO_BOOST_EXCLUDE_PREFIXES = ['SESSION_CHUNK', 'IDENTITY_SHARD'];
+const DOCUMENT_MEMORY_PREFIXES = ['WORKSPACE_DOC_SUMMARY', 'WORKSPACE_CHUNK_SUMMARY'];
 
 const isUuidLike = (s: string) =>
   /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(s);
@@ -99,6 +100,14 @@ const pickBoostableMemoryIds = (
   return ids;
 };
 
+const extractDocumentIdFromMemoryContent = (content: string): string | null => {
+  if (!content) return null;
+  const match = content.match(/doc_id=([0-9a-fA-F-]{16,})/);
+  if (!match) return null;
+  const candidate = match[1];
+  return isUuidLike(candidate) ? candidate : null;
+};
+
 const autoBoostUsedMemories = (params: {
   memories: Array<{ id?: string; content?: string }>;
   isParseFallback: boolean;
@@ -108,9 +117,34 @@ const autoBoostUsedMemories = (params: {
   const ids = pickBoostableMemoryIds(params.memories, MEMORY_AUTO_BOOST_LIMIT);
   if (ids.length === 0) return;
   void Promise.allSettled(ids.map((id) => MemoryService.boostMemoryStrength(id, MEMORY_AUTO_BOOST_DELTA)));
+
+  const boostedIdSet = new Set(ids);
+  const docIds = new Set<string>();
+  for (const mem of params.memories) {
+    const memId = typeof mem?.id === 'string' ? mem.id.trim() : '';
+    if (!memId || !boostedIdSet.has(memId)) continue;
+    const content = typeof mem?.content === 'string' ? mem.content : '';
+    if (!DOCUMENT_MEMORY_PREFIXES.some((prefix) => content.startsWith(prefix))) continue;
+    const docId = extractDocumentIdFromMemoryContent(content);
+    if (docId) docIds.add(docId);
+  }
+
+  if (docIds.size > 0) {
+    void Promise.allSettled(
+      [...docIds].map(async (docId) => {
+        const docMemoryId = await MemoryService.findMemoryIdByDocumentId(docId, 'DOCUMENT_INGESTED');
+        if (docMemoryId) {
+          return MemoryService.boostMemoryStrength(docMemoryId, MEMORY_AUTO_BOOST_DELTA);
+        }
+        return null;
+      })
+    );
+  }
+
   console.log('[MEMORY_AUTO_BOOST]', {
     turnId: params.turnId ?? 'unknown',
-    boostedCount: ids.length
+    boostedCount: ids.length,
+    documentBoostedCount: docIds.size
   });
 };
 

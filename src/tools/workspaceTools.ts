@@ -52,17 +52,23 @@ export async function consumeWorkspaceTags(params: {
     chunkIndex?: number;
   }) => {
     try {
-      const memoryId = await MemoryService.findMemoryIdByDocumentId(params.documentId, params.kind);
-      if (!memoryId) return;
       const delta = params.delta ?? 2;
-      void MemoryService.boostMemoryStrength(memoryId, delta);
+      const memoryId = await MemoryService.findMemoryIdByDocumentId(params.documentId, params.kind);
+      if (memoryId) {
+        void MemoryService.boostMemoryStrength(memoryId, delta);
+      }
+      const docMemoryId = await MemoryService.findMemoryIdByDocumentId(params.documentId, 'DOCUMENT_INGESTED');
+      if (docMemoryId) {
+        void MemoryService.boostMemoryStrength(docMemoryId, delta);
+      }
       console.log('[MEMORY_READ_BOOST]', {
         tool: params.tool,
         documentId: params.documentId,
         chunkIndex: params.chunkIndex,
         kind: params.kind,
         delta,
-        memoryId
+        memoryId,
+        docMemoryId
       });
     } catch {
       // ignore boost errors

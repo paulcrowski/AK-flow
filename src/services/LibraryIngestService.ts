@@ -45,6 +45,16 @@ const FAST_INGEST_CHAR_THRESHOLD = 200_000;
 const FAST_INGEST_CHUNK_THRESHOLD = 80;
 const FAST_INGEST_ACTIVE_LEARNING_LIMIT = 10;
 const SUMMARY_MAX_OUTPUT_TOKENS = 256;
+const DOCUMENT_TOPIC_MIN_COUNT = 2;
+const DOCUMENT_TOPIC_MAX = 6;
+const DOCUMENT_TOPIC_STOPWORDS = new Set([
+  'this', 'that', 'with', 'from', 'into', 'about', 'there', 'their', 'these', 'those',
+  'which', 'while', 'where', 'when', 'what', 'will', 'have', 'has', 'were', 'been',
+  'your', 'yours', 'their', 'them', 'they', 'then', 'than', 'also', 'some', 'more',
+  'less', 'such', 'very', 'just', 'like', 'over', 'under', 'between',
+  'jest', 'jako', 'oraz', 'sie', 'siez', 'taki', 'taka', 'takie', 'dla', 'oraz', 'oraz',
+  'jego', 'jej', 'ich', 'ten', 'tam', 'tutaj', 'tutaj', 'dzis', 'dzisiaj'
+]);
 const IMPORTANCE_KEYWORDS = [
   'summary',
   'conclusion',
@@ -120,6 +130,30 @@ function stableUuidLike(input: string): string {
 
 function normalizeNewlines(text: string): string {
   return String(text || '').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+}
+
+function extractDocumentTopics(texts: string[]): string[] {
+  const counts = new Map<string, number>();
+
+  for (const raw of texts) {
+    const normalized = String(raw || '')
+      .toLowerCase()
+      .replace(/\[[^\]]+\]/g, ' ')
+      .replace(/[^\p{L}0-9]+/gu, ' ');
+
+    const tokens = normalized.split(/\s+/).map((t) => t.trim()).filter(Boolean);
+    for (const tok of tokens) {
+      if (tok.length < 4) continue;
+      if (DOCUMENT_TOPIC_STOPWORDS.has(tok)) continue;
+      counts.set(tok, (counts.get(tok) || 0) + 1);
+    }
+  }
+
+  return [...counts.entries()]
+    .filter(([, count]) => count >= DOCUMENT_TOPIC_MIN_COUNT)
+    .sort((a, b) => b[1] - a[1])
+    .map(([topic]) => topic)
+    .slice(0, DOCUMENT_TOPIC_MAX);
 }
 
 function assessChunkImportance(
@@ -700,6 +734,47 @@ export async function ingestLibraryDocument(params: {
       const neutralEmotion = { fear: 0, curiosity: 0, frustration: 0, satisfaction: 0 };
 
       const docSummaryText = String(globalSummary || '').trim();
+      const summarySeeds = summariesForDoc
+        .map((c) => {
+          const s = String(c.summary || '').trim();
+          if (s) return s;
+          return String(c.content || '').slice(0, 180).trim();
+        })
+        .filter(Boolean)
+        .slice(0, 12);
+      const fallbackSummary = summarySeeds.join(' ').trim();
+      const docSummaryShort = (docSummaryText || fallbackSummary).slice(0, 1200).trim();
+      const topics = extractDocumentTopics([doc.original_name, docSummaryShort, ...summarySeeds]);
+
+      if (docSummaryShort) {
+        const ingestedContent = [
+          'DOCUMENT_INGESTED',
+          `doc_id=${doc.id}`,
+          `title=${doc.original_name}`,
+          `topics=${topics.join(', ')}`,
+          '',
+          docSummaryShort
+        ].join('\n');
+
+        await MemoryService.storeMemory({
+          id: stableUuidLike(`workspace:doc_ingested:${doc.id}:${docSummaryShort}`),
+          content: ingestedContent,
+          emotionalContext: neutralEmotion,
+          timestamp: new Date().toISOString(),
+          neuralStrength: 4,
+          isCoreMemory: false,
+          metadata: {
+            kind: 'DOCUMENT_INGESTED',
+            document_id: doc.id,
+            original_name: doc.original_name,
+            topics,
+            global_summary: docSummaryShort,
+            ingested_at: new Date().toISOString(),
+            chunk_count: totalChunks
+          }
+        });
+      }
+
       if (docSummaryText) {
         const content = [
           'WORKSPACE_DOC_SUMMARY',

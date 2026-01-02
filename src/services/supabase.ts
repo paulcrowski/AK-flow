@@ -387,7 +387,7 @@ export const MemoryService = {
 
   async findMemoryIdByDocumentId(
     documentId: string,
-    kind: 'WORKSPACE_DOC_SUMMARY' | 'WORKSPACE_CHUNK_SUMMARY' = 'WORKSPACE_DOC_SUMMARY'
+    kind: 'WORKSPACE_DOC_SUMMARY' | 'WORKSPACE_CHUNK_SUMMARY' | 'DOCUMENT_INGESTED' = 'WORKSPACE_DOC_SUMMARY'
   ): Promise<string | null> {
     try {
       if (!currentAgentId) {

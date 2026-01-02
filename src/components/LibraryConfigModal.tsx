@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Loader2, RefreshCw } from 'lucide-react';
-import { supabase } from '../services/supabase';
+import { supabase, MemoryService } from '../services/supabase';
 import { listLibraryChunks, type LibraryChunk, type LibraryDocument } from '../services/LibraryService';
 import { safeParseJson, splitTodo3, type SplitResult } from '../utils/splitTodo3';
 
@@ -53,6 +53,21 @@ export function LibraryConfigModal(props: {
     setActionOutput(null);
     void reloadChunks();
   }, [canShow, reloadChunks]);
+
+  useEffect(() => {
+    if (!doc || !isOpen) return;
+    if (tab !== 'chunks') return;
+    let cancelled = false;
+    const boostRead = async () => {
+      const memoryId = await MemoryService.findMemoryIdByDocumentId(doc.id, 'DOCUMENT_INGESTED');
+      if (!memoryId || cancelled) return;
+      void MemoryService.boostMemoryStrength(memoryId, 2);
+    };
+    void boostRead();
+    return () => {
+      cancelled = true;
+    };
+  }, [doc?.id, isOpen, tab]);
 
   const isNexusStateJson = useMemo(() => {
     if (!doc) return false;
