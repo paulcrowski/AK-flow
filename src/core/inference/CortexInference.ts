@@ -76,6 +76,25 @@ function logUsage(operation: string, response: any): void {
   }
 }
 
+function emitTokenUsageTelemetry(response: any, op: string): void {
+  if (!response?.usageMetadata) return;
+  const { promptTokenCount, candidatesTokenCount, totalTokenCount } = response.usageMetadata;
+  eventBus.publish({
+    id: generateUUID(),
+    timestamp: Date.now(),
+    source: AgentType.SOMA,
+    type: PacketType.PREDICTION_ERROR,
+    payload: {
+      metric: 'TOKEN_USAGE',
+      op,
+      in: promptTokenCount || 0,
+      out: candidatesTokenCount || 0,
+      total: totalTokenCount || 0
+    },
+    priority: 0.1
+  });
+}
+
 function recordParseFailMetric(): void {
   const traceId = getCurrentTraceId();
   if (traceId) p0MetricAdd(traceId, { parseFailCount: 1 });
@@ -317,6 +336,7 @@ INSTRUCTIONS:
       }
     });
 
+    emitTokenUsageTelemetry(response, 'cortexInference');
     logUsage('generateFromCortexState', response);
     return parseResponse(response.text);
   }, cfg.retries!, cfg.retryDelayMs!);

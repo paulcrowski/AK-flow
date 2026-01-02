@@ -6,6 +6,7 @@ import { buildMinimalCortexState, setCachedIdentity, clearIdentityCache } from '
 import { META_STATES_BASELINE } from '@core/types/MetaStates';
 import { DEFAULT_TRAIT_VECTOR } from '@core/types/TraitVector';
 import { generateFromCortexState } from '@core/inference/CortexInference';
+import { PacketType } from '@/types';
 
 const generateContentMock = vi.fn();
 
@@ -61,5 +62,32 @@ describe('CortexInference telemetry', () => {
     );
 
     expect(metricEvent?.payload?.parseFailCount).toBe(1);
+
+    const tokenEvent = eventBus.getHistory().find(
+      (e) => e.type === PacketType.PREDICTION_ERROR && e.payload?.metric === 'TOKEN_USAGE'
+    );
+    expect(tokenEvent?.payload?.op).toBe('cortexInference');
+    expect(tokenEvent?.payload?.total).toBe(12);
+  });
+
+  it('emits TOKEN_USAGE telemetry on successful response', async () => {
+    generateContentMock.mockResolvedValue({
+      text: '{"internal_thought":"ok","speech_content":"hello"}',
+      usageMetadata: { promptTokenCount: 2, candidatesTokenCount: 3, totalTokenCount: 5 }
+    });
+
+    const state = buildMinimalCortexState({
+      agentId,
+      metaStates: META_STATES_BASELINE,
+      userInput: 'hello'
+    });
+
+    await generateFromCortexState(state);
+
+    const tokenEvent = eventBus.getHistory().find(
+      (e) => e.type === PacketType.PREDICTION_ERROR && e.payload?.metric === 'TOKEN_USAGE'
+    );
+    expect(tokenEvent?.payload?.op).toBe('cortexInference');
+    expect(tokenEvent?.payload?.total).toBe(5);
   });
 });
