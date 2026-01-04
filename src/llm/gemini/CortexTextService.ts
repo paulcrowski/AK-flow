@@ -23,7 +23,8 @@ import { buildDeepResearchPrompt } from './prompts/deepResearchPrompt';
 import { buildGenerateResponsePrompt } from './prompts/generateResponsePrompt';
 import { buildAutonomousVolitionPrompt } from './prompts/autonomousVolitionPrompt';
 import { buildDetectIntentPrompts } from './prompts/detectIntentPrompt';
-import { createAutonomyV2Runner } from './cortexAutonomyV2';
+import type { UnifiedContext } from '../../core/context';
+import type { AutonomyV2Output } from './cortexAutonomyV2';
 
 import { DETECT_INTENT_RESPONSE_SCHEMA } from './detectIntentSchema';
 import {
@@ -194,7 +195,16 @@ export function createCortexTextService(ai: GoogleGenAI) {
     });
   };
 
-  const { autonomousVolitionV2 } = createAutonomyV2Runner(ai, logUsage);
+  let autonomyV2RunnerPromise: Promise<{
+    autonomousVolitionV2: (ctx: UnifiedContext) => Promise<AutonomyV2Output>;
+  }> | null = null;
+
+  const getAutonomyV2Runner = () => {
+    if (!autonomyV2RunnerPromise) {
+      autonomyV2RunnerPromise = import('./cortexAutonomyV2').then((mod) => mod.createAutonomyV2Runner(ai, logUsage));
+    }
+    return autonomyV2RunnerPromise;
+  };
 
   return {
     async generateEmbedding(text: string): Promise<number[] | null> {
@@ -431,7 +441,10 @@ export function createCortexTextService(ai: GoogleGenAI) {
       }, 1, 3000);
     },
 
-    autonomousVolitionV2,
+    async autonomousVolitionV2(ctx: UnifiedContext): Promise<AutonomyV2Output> {
+      const runner = await getAutonomyV2Runner();
+      return runner.autonomousVolitionV2(ctx);
+    },
 
     async structuredDialogue(prompt: string): Promise<{
       responseText: string;
