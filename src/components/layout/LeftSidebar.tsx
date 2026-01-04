@@ -139,6 +139,7 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
         </div>
       </div>
 
+      <div className="flex-1 overflow-y-auto overflow-x-hidden custom-scrollbar flex flex-col">
       {/* Quick Settings */}
       <div className="p-4 border-b border-gray-800 shrink-0">
         <div className="text-[10px] font-mono tracking-widest text-gray-500 mb-3">QUICK SETTINGS</div>
@@ -258,7 +259,7 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
       </div>
 
       {/* Sessions List */}
-      <div className="flex-1 overflow-hidden flex flex-col min-h-0">
+      <div className="flex-1 overflow-hidden flex flex-col min-h-[320px]">
         <div className="p-4 border-b border-gray-800 bg-[#0a0c10]/40 shrink-0">
           <div className="flex items-center justify-between mb-2">
             <div className="text-[10px] font-black tracking-[0.2em] text-cyan-500/80 uppercase">Tematy</div>
@@ -358,6 +359,7 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
             )}
           </div>
         </div>
+      </div>
       </div>
     </div>
   );

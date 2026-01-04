@@ -20,6 +20,7 @@ export function LibraryPanel() {
   const [expandedDocById, setExpandedDocById] = useState<Record<string, boolean>>({});
   const [deletingById, setDeletingById] = useState<Record<string, boolean>>({});
   const [deleteErrorById, setDeleteErrorById] = useState<Record<string, string>>({});
+  const [isCollapsed, setIsCollapsed] = useState(false);
   const [configDoc, setConfigDoc] = useState<LibraryDocument | null>(null);
   const [isConfigOpen, setIsConfigOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -217,14 +218,23 @@ export function LibraryPanel() {
     <div className="p-4 border-b border-gray-800">
       <div className="flex items-center justify-between mb-2">
         <div className="text-[10px] font-mono tracking-widest text-gray-500">LIBRARY</div>
-        <button
-          onClick={refresh}
-          className="text-gray-500 hover:text-gray-300 transition-colors"
-          title="Refresh"
-          disabled={!canUse || isLoading}
-        >
-          <RefreshCw size={14} className={isLoading ? 'animate-spin' : ''} />
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setIsCollapsed((v) => !v)}
+            className="text-gray-500 hover:text-gray-300 transition-colors"
+            title={isCollapsed ? 'Expand' : 'Collapse'}
+          >
+            {isCollapsed ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
+          </button>
+          <button
+            onClick={refresh}
+            className="text-gray-500 hover:text-gray-300 transition-colors"
+            title="Refresh"
+            disabled={!canUse || isLoading}
+          >
+            <RefreshCw size={14} className={isLoading ? 'animate-spin' : ''} />
+          </button>
+        </div>
       </div>
 
       <input
@@ -235,7 +245,8 @@ export function LibraryPanel() {
         className="hidden"
       />
 
-      <div className="grid grid-cols-1 gap-2">
+      {!isCollapsed && (
+        <div className="grid grid-cols-1 gap-2">
         <button
           onClick={onChooseFile}
           disabled={!canUse || isUploading}
@@ -264,7 +275,14 @@ export function LibraryPanel() {
             <div className="flex items-center justify-between gap-2">
               <div className="min-w-0">
                 <div className="text-[11px] text-gray-200 truncate">{d.original_name}</div>
-                <div className="text-[9px] text-gray-600 font-mono">{d.status}</div>
+                <div
+                  className={d.status === 'ingested'
+                    ? 'text-[9px] font-mono text-emerald-400'
+                    : 'text-[9px] font-mono text-gray-600'}
+                  title={d.status === 'ingested' ? 'Ingested (chunks ready)' : 'Uploaded (not ingested)'}
+                >
+                  {d.status}
+                </div>
               </div>
               <div className="flex items-center gap-2">
                 <button
@@ -282,6 +300,15 @@ export function LibraryPanel() {
                 >
                   {deletingById[d.id] ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />}
                 </button>
+                {(d.status === 'ingested' || Boolean(d.ingested_at) || (d.global_summary && String(d.global_summary).trim())) && (
+                  <button
+                    onClick={() => openConfig(d)}
+                    className="p-1 rounded-md border border-gray-800/60 text-gray-500 hover:text-gray-200 hover:bg-gray-800/30 transition-colors"
+                    title="Open config"
+                  >
+                    <Layers size={12} />
+                  </button>
+                )}
                 <button
                   onClick={() => onIngest(d)}
                   disabled={!canUse || Boolean(ingestingById[d.id]) || Boolean(deletingById[d.id])}
@@ -332,29 +359,19 @@ export function LibraryPanel() {
                   )}
 
                   {(d.status === 'ingested' || Boolean(d.ingested_at) || (d.global_summary && String(d.global_summary).trim())) && (
-                    <div className="mt-2 flex items-center justify-between">
-                      <div>
-                        {d.global_summary && String(d.global_summary).length > 220 && (
-                          <button
-                            onClick={() => toggleSummary(d.id)}
-                            className="text-[9px] font-mono text-gray-500 hover:text-gray-300 transition-colors"
-                            title={expandedSummaryById[d.id] ? 'Collapse' : 'Expand'}
-                          >
-                            <span className="flex items-center gap-1">
-                              {expandedSummaryById[d.id] ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
-                              {expandedSummaryById[d.id] ? 'LESS' : 'MORE'}
-                            </span>
-                          </button>
-                        )}
-                      </div>
-
-                      <button
-                        onClick={() => openConfig(d)}
-                        className="text-[9px] font-mono text-gray-500 hover:text-gray-300 transition-colors"
-                        title="Open config"
-                      >
-                        <span className="flex items-center gap-1"><Layers size={12} /> CONFIG</span>
-                      </button>
+                    <div className="mt-2">
+                      {d.global_summary && String(d.global_summary).length > 220 && (
+                        <button
+                          onClick={() => toggleSummary(d.id)}
+                          className="text-[9px] font-mono text-gray-500 hover:text-gray-300 transition-colors"
+                          title={expandedSummaryById[d.id] ? 'Collapse' : 'Expand'}
+                        >
+                          <span className="flex items-center gap-1">
+                            {expandedSummaryById[d.id] ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+                            {expandedSummaryById[d.id] ? 'LESS' : 'MORE'}
+                          </span>
+                        </button>
+                      )}
                     </div>
                   )}
                 </>
@@ -377,7 +394,8 @@ export function LibraryPanel() {
             <div className="text-[11px] text-gray-600 italic">No documents yet.</div>
           )}
         </div>
-      </div>
+        </div>
+      )}
 
       <LibraryConfigModal doc={configDoc} isOpen={isConfigOpen} onClose={closeConfig} />
     </div>
