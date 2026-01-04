@@ -168,6 +168,7 @@ describe('EventLoop', () => {
     });
 
     it('forces observe before cortex response on file questions', async () => {
+        evidenceLedger.clear();
         const beforeEvidence = evidenceLedger.getCount();
 
         await EventLoop.runSingleStep(

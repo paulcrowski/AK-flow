@@ -31,10 +31,11 @@ describe('RawContract', () => {
         expect(r.reason).toBe('NO_JSON_OBJECT');
     });
 
-    it('should fail closed when prefixed with prose before json object', () => {
+    it('should accept json prefixed with prose when fail-closed is disabled', () => {
         const r = applyAutonomyV2RawContract('json {"internal_monologue":"x","voice_pressure":0.5,"speech_content":"y"}');
-        expect(r.ok).toBe(false);
-        expect(r.reason).toBe('NO_JSON_OBJECT');
+        expect(r.ok).toBe(true);
+        expect(r.value.internal_monologue).toBe('x');
+        expect(r.value.speech_content).toBe('y');
     });
 
     it('should fail closed on invalid json', () => {

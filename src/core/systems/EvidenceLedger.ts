@@ -39,6 +39,10 @@ export class EvidenceLedger {
     const key = keyword.toLowerCase();
     return this.items.some((i) => i.ref.toLowerCase().includes(key));
   }
+
+  clear(): void {
+    this.items = [];
+  }
 }
 
 export const evidenceLedger = new EvidenceLedger();
