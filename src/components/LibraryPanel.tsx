@@ -300,15 +300,13 @@ export function LibraryPanel() {
                 >
                   {deletingById[d.id] ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />}
                 </button>
-                {(d.status === 'ingested' || Boolean(d.ingested_at) || (d.global_summary && String(d.global_summary).trim())) && (
-                  <button
-                    onClick={() => openConfig(d)}
-                    className="p-1 rounded-md border border-gray-800/60 text-gray-500 hover:text-gray-200 hover:bg-gray-800/30 transition-colors"
-                    title="Open config"
-                  >
-                    <Layers size={12} />
-                  </button>
-                )}
+                <button
+                  onClick={() => openConfig(d)}
+                  className="p-1 rounded-md border border-gray-800/60 text-gray-500 hover:text-gray-200 hover:bg-gray-800/30 transition-colors"
+                  title="Open config"
+                >
+                  <Layers size={12} />
+                </button>
                 <button
                   onClick={() => onIngest(d)}
                   disabled={!canUse || Boolean(ingestingById[d.id]) || Boolean(deletingById[d.id])}

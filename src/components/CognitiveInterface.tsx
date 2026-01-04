@@ -386,7 +386,6 @@ export function CognitiveInterface() {
                 autonomousMode={autonomousMode}
                 isSleeping={isSleeping}
                 chemistryEnabled={chemistryEnabled}
-                conversation={conversation}
                 conversationSessions={conversationSessions}
                 activeConversationSessionId={activeConversationSessionId}
                 pinnedSessions={pinnedSessions}
