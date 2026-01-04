@@ -5,12 +5,186 @@ import {
   getLibraryChunkByIndex,
   searchLibraryChunks
 } from '../services/LibraryService';
-import { MemoryService } from '../services/supabase';
+import { MemoryService, getCurrentAgentId } from '../services/supabase';
 import { AgentType, PacketType } from '../types';
 import { withTimeout } from './toolRuntime';
 import { useArtifactStore } from '../stores/artifactStore';
+import { promises as fs } from 'fs';
+import path from 'path';
+import { eventBus } from '../core/EventBus';
+import { evidenceLedger } from '../core/systems/EvidenceLedger';
+import { DEFAULT_AGENT_ID, getAgentWorldRoot, isPathAllowed, normalizePath } from '../core/systems/WorldAccess';
+import { generateUUID } from '../utils/uuid';
 
 export const WORKSPACE_TAG_REGEX = /\[(SEARCH_LIBRARY|READ_LIBRARY_CHUNK|READ_LIBRARY_DOC|READ_LIBRARY_RANGE|SEARCH_IN_REPO|READ_FILE|READ_FILE_CHUNK|READ_FILE_RANGE):\s*([^\]]+?)\]/i;
+
+export type WorldToolName = 'LIST_DIR' | 'READ_FILE' | 'WRITE_FILE' | 'APPEND_FILE';
+
+export type WorldToolResult = {
+  ok: boolean;
+  path: string;
+  content?: string;
+  entries?: string[];
+  error?: string;
+  evidenceId?: string;
+};
+
+const resolveWorldPath = (rawPath: string, agentId: string): string => {
+  const normalized = normalizePath(rawPath);
+  if (!normalized) return normalized;
+  if (path.isAbsolute(normalized)) {
+    return normalizePath(path.normalize(normalized));
+  }
+  const base = getAgentWorldRoot(agentId);
+  return normalizePath(path.normalize(path.join(base, normalized)));
+};
+
+const isWriteAllowed = (resolvedPath: string, agentId: string): boolean => {
+  const norm = normalizePath(resolvedPath);
+  return norm.startsWith(`${getAgentWorldRoot(agentId)}`);
+};
+
+const validateNoteFormat = (content: string): boolean => {
+  const hasClaim = /^claim:/mi.test(content);
+  const hasEvidence = /^evidence:/mi.test(content);
+  const hasNext = /^next:/mi.test(content);
+  return hasClaim && hasEvidence && hasNext;
+};
+
+const shouldValidateNote = (resolvedPath: string): boolean => {
+  const norm = normalizePath(resolvedPath);
+  return norm.includes('/notes/');
+};
+
+export async function executeWorldTool(input: {
+  tool: WorldToolName;
+  path: string;
+  content?: string;
+  agentId?: string | null;
+}): Promise<WorldToolResult> {
+  const agentId = input.agentId || getCurrentAgentId() || DEFAULT_AGENT_ID;
+  if (normalizePath(input.path).includes('..')) {
+    return { ok: false, path: input.path, error: 'PATH_TRAVERSAL' };
+  }
+  const resolved = resolveWorldPath(input.path, agentId);
+
+  if (!isPathAllowed(resolved, agentId)) {
+    return { ok: false, path: resolved, error: 'PATH_NOT_ALLOWED' };
+  }
+
+  const intentId = generateUUID();
+  eventBus.publish({
+    id: intentId,
+    timestamp: Date.now(),
+    source: AgentType.CORTEX_FLOW,
+    type: PacketType.TOOL_INTENT,
+    payload: { tool: input.tool, path: resolved },
+    priority: 0.7
+  });
+
+  try {
+    if (input.tool === 'LIST_DIR') {
+      const entries = await fs.readdir(resolved, { withFileTypes: true });
+      const names = entries.map((e) => (e.isDirectory() ? `${e.name}/` : e.name));
+      evidenceLedger.record('LOG_EVENT', `LIST_DIR:${resolved}`);
+      eventBus.publish({
+        id: generateUUID(),
+        timestamp: Date.now(),
+        source: AgentType.CORTEX_FLOW,
+        type: PacketType.TOOL_RESULT,
+        payload: { tool: input.tool, path: resolved, count: names.length, intentId },
+        priority: 0.7
+      });
+      return { ok: true, path: resolved, entries: names };
+    }
+
+    if (input.tool === 'READ_FILE') {
+      const content = await fs.readFile(resolved, 'utf8');
+      const evidenceId = evidenceLedger.record('READ_FILE', resolved);
+      eventBus.publish({
+        id: generateUUID(),
+        timestamp: Date.now(),
+        source: AgentType.CORTEX_FLOW,
+        type: PacketType.TOOL_RESULT,
+        payload: { tool: input.tool, path: resolved, length: content.length, intentId },
+        priority: 0.7
+      });
+      return { ok: true, path: resolved, content, evidenceId };
+    }
+
+    if (input.tool === 'WRITE_FILE') {
+      if (!isWriteAllowed(resolved, agentId)) {
+        return { ok: false, path: resolved, error: 'WRITE_NOT_ALLOWED' };
+      }
+      const content = String(input.content ?? '');
+      if (shouldValidateNote(resolved) && !validateNoteFormat(content)) {
+        eventBus.publish({
+          id: generateUUID(),
+          timestamp: Date.now(),
+          source: AgentType.CORTEX_FLOW,
+          type: PacketType.NOTE_REJECTED,
+          payload: { path: resolved, reason: 'INVALID_NOTE_FORMAT' },
+          priority: 0.7
+        });
+        return { ok: false, path: resolved, error: 'INVALID_NOTE_FORMAT' };
+      }
+      await fs.mkdir(path.dirname(resolved), { recursive: true });
+      await fs.writeFile(resolved, content);
+      eventBus.publish({
+        id: generateUUID(),
+        timestamp: Date.now(),
+        source: AgentType.CORTEX_FLOW,
+        type: PacketType.TOOL_RESULT,
+        payload: { tool: input.tool, path: resolved, intentId },
+        priority: 0.7
+      });
+      return { ok: true, path: resolved };
+    }
+
+    if (input.tool === 'APPEND_FILE') {
+      if (!isWriteAllowed(resolved, agentId)) {
+        return { ok: false, path: resolved, error: 'WRITE_NOT_ALLOWED' };
+      }
+      const content = String(input.content ?? '');
+      await fs.mkdir(path.dirname(resolved), { recursive: true });
+      await fs.appendFile(resolved, content);
+      eventBus.publish({
+        id: generateUUID(),
+        timestamp: Date.now(),
+        source: AgentType.CORTEX_FLOW,
+        type: PacketType.TOOL_RESULT,
+        payload: { tool: input.tool, path: resolved, intentId },
+        priority: 0.7
+      });
+      return { ok: true, path: resolved };
+    }
+
+    return { ok: false, path: resolved, error: 'UNKNOWN_TOOL' };
+  } catch (error: any) {
+    const message = error?.message || String(error);
+    eventBus.publish({
+      id: generateUUID(),
+      timestamp: Date.now(),
+      source: AgentType.CORTEX_FLOW,
+      type: PacketType.TOOL_ERROR,
+      payload: { tool: input.tool, path: resolved, intentId, error: message },
+      priority: 0.8
+    });
+    return { ok: false, path: resolved, error: message };
+  }
+}
+
+export const listDir = (path: string, agentId?: string | null) =>
+  executeWorldTool({ tool: 'LIST_DIR', path, agentId });
+
+export const readFile = (path: string, agentId?: string | null) =>
+  executeWorldTool({ tool: 'READ_FILE', path, agentId });
+
+export const writeFile = (path: string, content: string, agentId?: string | null) =>
+  executeWorldTool({ tool: 'WRITE_FILE', path, content, agentId });
+
+export const appendFile = (path: string, content: string, agentId?: string | null) =>
+  executeWorldTool({ tool: 'APPEND_FILE', path, content, agentId });
 
 export async function consumeWorkspaceTags(params: {
   cleanText: string;
@@ -116,6 +290,10 @@ export async function consumeWorkspaceTags(params: {
               )
             ].join('\n');
 
+        if (res.hits.length > 0) {
+          evidenceLedger.record('SEARCH_HIT', arg);
+        }
+
         publish({
           id: makeId(),
           timestamp: Date.now(),
@@ -172,6 +350,7 @@ export async function consumeWorkspaceTags(params: {
 
         const textChunk = raw.slice(start, end);
         const hash = hashText(textChunk);
+        evidenceLedger.record('READ_FILE', `${documentId}#${start}:${end}`);
 
         try {
           useArtifactStore.getState().addEvidence({
@@ -246,6 +425,7 @@ export async function consumeWorkspaceTags(params: {
         if (!res.chunk) throw new Error('CHUNK_NOT_FOUND');
 
         const chunkText = String(res.chunk.content || '').trim();
+        evidenceLedger.record('READ_FILE', `${documentId}#${chunkIndex}`);
         const text = [
           `READ_LIBRARY_CHUNK ${documentId}#${chunkIndex}:`,
           chunkText.slice(0, 8000)
@@ -335,6 +515,8 @@ export async function consumeWorkspaceTags(params: {
         ]
           .filter(Boolean)
           .join('\n');
+
+        evidenceLedger.record('READ_FILE', originalName || documentId);
 
         publish({
           id: makeId(),

@@ -4,6 +4,7 @@ import { AgentType, PacketType } from '../types';
 import { getCurrentTraceId } from '../core/trace/TraceContext';
 import type { ToolParserDeps } from './toolParser';
 import { searchInFlight, scheduleSoftTimeout } from './toolRuntime';
+import { evidenceLedger } from '../core/systems/EvidenceLedger';
 
 type InFlightSearchOp = {
   promise: Promise<any>;
@@ -121,6 +122,10 @@ function startSearchOp(params: {
           synthesisLength: research.synthesis.length,
           late: op.timeoutEmitted.has(id)
         });
+      }
+
+      if (research.sources && research.sources.length > 0) {
+        evidenceLedger.record('SEARCH_HIT', params.query);
       }
 
       if (op.timeoutEmitted.size > 0) {
