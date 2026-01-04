@@ -33,6 +33,19 @@ vi.mock('@services/SessionChunkService', () => ({
     }
 }));
 
+const mockSleepCycle = vi.fn().mockResolvedValue({
+    timestamp: 0,
+    reinforced: [],
+    decayed: [],
+    modified: [],
+    deprecated: [],
+    selectedTensionForTomorrow: null
+});
+
+vi.mock('@core/systems/SleepSystem', () => ({
+    performSleepCycle: (...args: any[]) => mockSleepCycle(...args)
+}));
+
 const calmLimbic: LimbicState = {
     fear: 0.1,
     curiosity: 0.5,
@@ -86,6 +99,7 @@ describe('DreamConsolidationService', () => {
         expect(result.traitProposal).toBeNull();
         expect(result.sessionChunkCreated).toBe(true);
         expect(result.decayPrune).toEqual({ decayed: 2, pruned: 1 });
+        expect(mockSleepCycle).toHaveBeenCalled();
 
         const history = eventBus.getHistory();
         const complete = history.find(p => (p as any)?.payload?.event === 'DREAM_CONSOLIDATION_COMPLETE');

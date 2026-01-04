@@ -7,6 +7,7 @@ import { resetAutonomyBackoff } from '@core/systems/eventloop/AutonomousVolition
 import * as GoalSystem from '@core/systems/GoalSystem';
 import { SYSTEM_CONFIG } from '@core/config/systemConfig';
 import { CortexService } from '@llm/gemini';
+import { evidenceLedger } from '@core/systems/EvidenceLedger';
 
 // Mock dependencies
 vi.mock('@core/systems/LimbicSystem', () => ({
@@ -164,6 +165,27 @@ describe('EventLoop', () => {
             expect.anything()
         );
         expect(result.silenceStart).toBeGreaterThan(0);
+    });
+
+    it('forces observe before cortex response on file questions', async () => {
+        const beforeEvidence = evidenceLedger.getCount();
+
+        await EventLoop.runSingleStep(
+            mockCtx,
+            'Co jest w src/core/systems/cortex/memoryRecall.ts?',
+            mockCallbacks
+        );
+
+        const toolCalls = vi.mocked(mockCallbacks.onMessage).mock.calls.filter((call) => call[2] === 'tool_result');
+        expect(toolCalls.length).toBeGreaterThan(0);
+        expect(evidenceLedger.getCount()).toBeGreaterThan(beforeEvidence);
+        expect(mockCallbacks.onMessage).toHaveBeenCalledWith('assistant', 'Mock Thought', 'thought');
+        expect(mockCallbacks.onMessage).toHaveBeenCalledWith(
+            'assistant',
+            'Mock Response',
+            'speech',
+            expect.anything()
+        );
     });
 
     it('selectThinkMode should return reactive when input is present', () => {
