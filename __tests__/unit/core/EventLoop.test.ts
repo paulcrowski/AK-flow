@@ -8,6 +8,7 @@ import * as GoalSystem from '@core/systems/GoalSystem';
 import { SYSTEM_CONFIG } from '@core/config/systemConfig';
 import { CortexService } from '@llm/gemini';
 import { evidenceLedger } from '@core/systems/EvidenceLedger';
+import { TickCommitter } from '@core/systems/TickCommitter';
 
 // Mock dependencies
 vi.mock('@core/systems/LimbicSystem', () => ({
@@ -103,6 +104,7 @@ describe('EventLoop', () => {
         vi.setSystemTime(baseNow + 3_600_000);
 
         resetAutonomyBackoff();
+        TickCommitter.resetForTesting();
         eventBus.clear();
         budgetState.count = 0;
         vi.mocked(getCurrentAgentId).mockReturnValue('test-agent');

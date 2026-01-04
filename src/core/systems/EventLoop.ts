@@ -81,7 +81,7 @@ export namespace EventLoop {
     const schemaStores = new Map<string, SchemaStore>();
     const pendingWakeObserve = { key: null as string | null };
 
-    const FILE_REF_REGEX = /([A-Za-z]:[\\/][^\s]+|\/[^\s]+|[A-Za-z0-9._-]+\.[A-Za-z0-9]{1,8})/;
+    const FILE_REF_REGEX = /([A-Za-z]:[\\/][^\s]+|\/[^\s]+|[A-Za-z0-9._-]+(?:[\\/][A-Za-z0-9._-]+)+\.[A-Za-z0-9]{1,8}|[A-Za-z0-9._-]+\.[A-Za-z0-9]{1,8})/;
     const EVIDENCE_QUERY_REGEX = /\b(co jest w|co zawiera|zawartosc|show|what is in|open|read|file|plik)\b/i;
     const SKIP_DIRS = new Set(['node_modules', '.git', 'dist', 'ak-nexus', 'database', '_patches', '_workbench']);
     const safeCwd = typeof process !== 'undefined' && typeof process.cwd === 'function' ? process.cwd() : '';
@@ -104,7 +104,7 @@ export namespace EventLoop {
         if (!input) return null;
         const match = String(input).match(FILE_REF_REGEX);
         if (!match?.[1]) return null;
-        return match[1].replace(/[),.;:]+$/, '');
+        return match[1].replace(/[),.;:!?"']+$/, '');
     };
 
     const findFileByName = async (
