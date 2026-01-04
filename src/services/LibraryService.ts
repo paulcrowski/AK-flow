@@ -250,3 +250,51 @@ export async function downloadLibraryDocumentText(params: {
 
   return { ok: true, doc, text };
 }
+
+export async function deleteLibraryDocument(params: {
+  document: LibraryDocument;
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  const doc = params.document;
+  if (!doc?.id) return { ok: false, error: 'missing_document_id' };
+
+  const storageBucket = doc.storage_bucket || 'ak_library';
+  const storagePath = doc.storage_path;
+
+  if (storagePath) {
+    const storageDel = await supabase.storage.from(storageBucket).remove([storagePath]);
+    if (storageDel.error) {
+      const msg = storageDel.error.message || 'storage_delete_failed';
+      if (!/not found/i.test(msg)) {
+        return { ok: false, error: msg };
+      }
+    }
+  }
+
+  const chunkDel = await supabase
+    .from('library_chunks')
+    .delete()
+    .eq('document_id', doc.id);
+  if (chunkDel.error) return { ok: false, error: chunkDel.error.message };
+
+  const docDel = await supabase
+    .from('library_documents')
+    .delete()
+    .eq('id', doc.id);
+  if (docDel.error) return { ok: false, error: docDel.error.message };
+
+  try {
+    let memQuery = supabase
+      .from('memories')
+      .delete()
+      .eq('metadata->>document_id', doc.id);
+    if (doc.agent_id) memQuery = memQuery.eq('agent_id', doc.agent_id);
+    const memDel = await memQuery;
+    if (memDel.error) {
+      console.warn('[LibraryService] delete memories failed:', memDel.error.message);
+    }
+  } catch (err) {
+    console.warn('[LibraryService] delete memories error:', err);
+  }
+
+  return { ok: true };
+}

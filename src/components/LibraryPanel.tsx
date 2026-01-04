@@ -1,9 +1,9 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { FileUp, RefreshCw, Loader2, Sparkles, ChevronDown, ChevronUp, Layers } from 'lucide-react';
+import { FileUp, RefreshCw, Loader2, Sparkles, ChevronDown, ChevronUp, Layers, Trash2 } from 'lucide-react';
 import { useSession } from '../contexts/SessionContext';
 import { eventBus } from '../core/EventBus';
 import { PacketType } from '../types';
-import { listLibraryDocuments, uploadLibraryFile, type LibraryDocument } from '../services/LibraryService';
+import { deleteLibraryDocument, listLibraryDocuments, uploadLibraryFile, type LibraryDocument } from '../services/LibraryService';
 import { ingestLibraryDocument } from '../services/LibraryIngestService';
 import { LibraryConfigModal } from './LibraryConfigModal';
 
@@ -17,6 +17,9 @@ export function LibraryPanel() {
   const [ingestErrorById, setIngestErrorById] = useState<Record<string, string>>({});
   const [ingestProgressById, setIngestProgressById] = useState<Record<string, { processedChunks: number; totalChunks: number }>>({});
   const [expandedSummaryById, setExpandedSummaryById] = useState<Record<string, boolean>>({});
+  const [expandedDocById, setExpandedDocById] = useState<Record<string, boolean>>({});
+  const [deletingById, setDeletingById] = useState<Record<string, boolean>>({});
+  const [deleteErrorById, setDeleteErrorById] = useState<Record<string, string>>({});
   const [configDoc, setConfigDoc] = useState<LibraryDocument | null>(null);
   const [isConfigOpen, setIsConfigOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -97,6 +100,10 @@ export function LibraryPanel() {
     setExpandedSummaryById((prev) => ({ ...prev, [docId]: !prev[docId] }));
   };
 
+  const toggleDoc = (docId: string) => {
+    setExpandedDocById((prev) => ({ ...prev, [docId]: !prev[docId] }));
+  };
+
   const openConfig = useCallback((doc: LibraryDocument) => {
     setConfigDoc(doc);
     setIsConfigOpen(true);
@@ -105,6 +112,51 @@ export function LibraryPanel() {
   const closeConfig = useCallback(() => {
     setIsConfigOpen(false);
   }, []);
+
+  const onDelete = async (doc: LibraryDocument) => {
+    if (!canUse) return;
+    const name = doc.original_name || doc.id;
+    const shouldDelete = typeof window === 'undefined'
+      ? true
+      : window.confirm(`Delete "${name}"? This removes the file and its chunks.`);
+    if (!shouldDelete) return;
+
+    setDeleteErrorById((prev) => ({ ...prev, [doc.id]: '' }));
+    setDeletingById((prev) => ({ ...prev, [doc.id]: true }));
+    const res = await deleteLibraryDocument({ document: doc });
+    if (res.ok === false) {
+      setDeleteErrorById((prev) => ({ ...prev, [doc.id]: res.error }));
+      setDeletingById((prev) => ({ ...prev, [doc.id]: false }));
+      return;
+    }
+
+    if (configDoc?.id === doc.id) {
+      setIsConfigOpen(false);
+      setConfigDoc(null);
+    }
+
+    await refresh();
+    setDeletingById((prev) => {
+      const next = { ...prev };
+      delete next[doc.id];
+      return next;
+    });
+    setDeleteErrorById((prev) => {
+      const next = { ...prev };
+      delete next[doc.id];
+      return next;
+    });
+    setIngestProgressById((prev) => {
+      const next = { ...prev };
+      delete next[doc.id];
+      return next;
+    });
+    setIngestErrorById((prev) => {
+      const next = { ...prev };
+      delete next[doc.id];
+      return next;
+    });
+  };
 
   const onFileSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
     try {
@@ -202,7 +254,7 @@ export function LibraryPanel() {
           {canUse ? (userEmail || '—') : 'Not authenticated'}
         </div>
 
-        <div className="space-y-2">
+        <div className="space-y-2 max-h-[42vh] overflow-y-auto pr-1 custom-scrollbar">
           {(filteredDocs || []).slice(0, 10).map((d) => (
             <div
               key={d.id}
@@ -210,12 +262,29 @@ export function LibraryPanel() {
               title={d.storage_path}
             >
             <div className="flex items-center justify-between gap-2">
-              <div className="text-[11px] text-gray-200 truncate">{d.original_name}</div>
-              <div className="flex items-center gap-2">
+              <div className="min-w-0">
+                <div className="text-[11px] text-gray-200 truncate">{d.original_name}</div>
                 <div className="text-[9px] text-gray-600 font-mono">{d.status}</div>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => toggleDoc(d.id)}
+                  className="p-1 rounded-md border border-gray-800/60 text-gray-500 hover:text-gray-200 hover:bg-gray-800/30 transition-colors"
+                  title={expandedDocById[d.id] ? 'Collapse details' : 'Expand details'}
+                >
+                  {expandedDocById[d.id] ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+                </button>
+                <button
+                  onClick={() => onDelete(d)}
+                  disabled={!canUse || Boolean(deletingById[d.id])}
+                  className="p-1 rounded-md border border-gray-800/60 text-gray-500 hover:text-red-300 hover:bg-gray-800/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  title="Delete file"
+                >
+                  {deletingById[d.id] ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />}
+                </button>
                 <button
                   onClick={() => onIngest(d)}
-                  disabled={!canUse || Boolean(ingestingById[d.id])}
+                  disabled={!canUse || Boolean(ingestingById[d.id]) || Boolean(deletingById[d.id])}
                   className="px-2 py-1 rounded-md border border-gray-700 bg-gray-900/30 text-[9px] font-mono text-gray-300 hover:bg-gray-900/60 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   title="Ingest: chunking + summaries"
                 >
@@ -230,9 +299,8 @@ export function LibraryPanel() {
                 </button>
               </div>
             </div>
-              <div className="mt-1 flex items-center justify-between gap-2">
-                <div className="text-[9px] text-gray-600 font-mono truncate">{d.storage_path}</div>
-                <div className="text-[9px] text-gray-600 font-mono">{Math.round((d.byte_size || 0) / 1024)}kb</div>
+              <div className="mt-1 text-[9px] text-gray-600 font-mono">
+                {Math.round((d.byte_size || 0) / 1024)}kb
             </div>
 
               {ingestProgressById[d.id] && ingestingById[d.id] && (
@@ -241,54 +309,65 @@ export function LibraryPanel() {
                 </div>
               )}
 
-              {d.ingested_at && (
-                <div className="mt-2 text-[9px] text-gray-600 font-mono">
-                  ingested: {new Date(d.ingested_at).toLocaleString()}
-                </div>
-              )}
+              {expandedDocById[d.id] && (
+                <>
+                  <div className="mt-2 text-[9px] text-gray-600 font-mono truncate">{d.storage_path}</div>
 
-              {(d.global_summary && String(d.global_summary).trim()) && (
-                <div className="mt-2">
-                  <div
-                    className={`text-[10px] text-gray-400 leading-snug break-words whitespace-pre-wrap ${expandedSummaryById[d.id] ? 'max-h-40 overflow-y-auto pr-1' : ''}`}
-                  >
-                    {expandedSummaryById[d.id]
-                      ? String(d.global_summary)
-                      : `${String(d.global_summary).slice(0, 220)}${String(d.global_summary).length > 220 ? '…' : ''}`}
-                  </div>
-                </div>
-              )}
+                  {d.ingested_at && (
+                    <div className="mt-2 text-[9px] text-gray-600 font-mono">
+                      ingested: {new Date(d.ingested_at).toLocaleString()}
+                    </div>
+                  )}
 
-              {(d.status === 'ingested' || Boolean(d.ingested_at) || (d.global_summary && String(d.global_summary).trim())) && (
-                <div className="mt-2 flex items-center justify-between">
-                  <div>
-                    {d.global_summary && String(d.global_summary).length > 220 && (
-                      <button
-                        onClick={() => toggleSummary(d.id)}
-                        className="text-[9px] font-mono text-gray-500 hover:text-gray-300 transition-colors"
-                        title={expandedSummaryById[d.id] ? 'Collapse' : 'Expand'}
+                  {(d.global_summary && String(d.global_summary).trim()) && (
+                    <div className="mt-2">
+                      <div
+                        className={`text-[10px] text-gray-400 leading-snug break-words whitespace-pre-wrap ${expandedSummaryById[d.id] ? 'max-h-40 overflow-y-auto pr-1' : ''}`}
                       >
-                        <span className="flex items-center gap-1">
-                          {expandedSummaryById[d.id] ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
-                          {expandedSummaryById[d.id] ? 'LESS' : 'MORE'}
-                        </span>
-                      </button>
-                    )}
-                  </div>
+                        {expandedSummaryById[d.id]
+                          ? String(d.global_summary)
+                          : `${String(d.global_summary).slice(0, 220)}${String(d.global_summary).length > 220 ? '...' : ''}`}
+                      </div>
+                    </div>
+                  )}
 
-                  <button
-                    onClick={() => openConfig(d)}
-                    className="text-[9px] font-mono text-gray-500 hover:text-gray-300 transition-colors"
-                    title="Open config"
-                  >
-                    <span className="flex items-center gap-1"><Layers size={12} /> CONFIG</span>
-                  </button>
-                </div>
+                  {(d.status === 'ingested' || Boolean(d.ingested_at) || (d.global_summary && String(d.global_summary).trim())) && (
+                    <div className="mt-2 flex items-center justify-between">
+                      <div>
+                        {d.global_summary && String(d.global_summary).length > 220 && (
+                          <button
+                            onClick={() => toggleSummary(d.id)}
+                            className="text-[9px] font-mono text-gray-500 hover:text-gray-300 transition-colors"
+                            title={expandedSummaryById[d.id] ? 'Collapse' : 'Expand'}
+                          >
+                            <span className="flex items-center gap-1">
+                              {expandedSummaryById[d.id] ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+                              {expandedSummaryById[d.id] ? 'LESS' : 'MORE'}
+                            </span>
+                          </button>
+                        )}
+                      </div>
+
+                      <button
+                        onClick={() => openConfig(d)}
+                        className="text-[9px] font-mono text-gray-500 hover:text-gray-300 transition-colors"
+                        title="Open config"
+                      >
+                        <span className="flex items-center gap-1"><Layers size={12} /> CONFIG</span>
+                      </button>
+                    </div>
+                  )}
+                </>
               )}
 
               {ingestErrorById[d.id] && (
                 <div className="mt-2 text-[10px] text-red-400 break-words">
                   {ingestErrorById[d.id]}
+                </div>
+              )}
+              {deleteErrorById[d.id] && (
+                <div className="mt-2 text-[10px] text-red-400 break-words">
+                  {deleteErrorById[d.id]}
                 </div>
               )}
             </div>
