@@ -27,3 +27,8 @@ export {
   type MemorySpace,
   type SemanticSearchProvider
 } from '../systems/MemorySpace';
+
+// Schema memory (world-bound)
+export type { Schema } from './SchemaStore';
+export { SchemaStore } from './SchemaStore';
+export { createSchemaFromObservation } from './SchemaBuilder';

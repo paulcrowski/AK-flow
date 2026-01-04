@@ -46,3 +46,6 @@ export { MAX_CORTEX_STATE_SIZE } from './CortexState';
 // === Cortex Output ===
 export type { CortexOutput } from './CortexOutput';
 export { isValidCortexOutput, FALLBACK_CORTEX_OUTPUT } from './CortexOutput';
+
+// === Witness Types ===
+export type { ChunkRef, Tension, WitnessFrame } from './WitnessTypes';
