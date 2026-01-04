@@ -5,6 +5,7 @@ import { promises as fs } from 'fs';
 import { buildWitnessFrame } from '@core/systems/WitnessSystem';
 import { detectBeliefViolation } from '@core/systems/CoreBeliefs';
 import { selectAction } from '@core/systems/ActionSelector';
+import type { Intention } from '@core/systems/IntentionSystem';
 import { createSchemaFromObservation } from '@core/memory/SchemaBuilder';
 import { SchemaStore } from '@core/memory/SchemaStore';
 import { performSleepCycle } from '@core/systems/SleepSystem';
@@ -138,6 +139,35 @@ describe('SiliconBeing core systems', () => {
     });
 
     expect(result.action).toBe('observe');
+  });
+
+  it('uses intention when choosing between observe and suggest', () => {
+    const intention: Intention = {
+      id: 'int_1',
+      tensionKey: 't1',
+      belief: 'growth',
+      readiness: 0.8,
+      deferred: false,
+      createdAt: Date.now()
+    };
+
+    const suggest = selectAction({
+      intention,
+      drive: 'growth',
+      readiness: 0.8,
+      energy: 80,
+      evidenceCount: 2
+    });
+    expect(suggest.action).toBe('suggest');
+
+    const observe = selectAction({
+      intention,
+      drive: 'growth',
+      readiness: 0.4,
+      energy: 80,
+      evidenceCount: 1
+    });
+    expect(observe.action).toBe('observe');
   });
 
   it('rejects notes without claim/evidence/next', async () => {

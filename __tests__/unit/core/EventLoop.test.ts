@@ -1,4 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import path from 'path';
+import { promises as fs } from 'fs';
 import { EventLoop } from '@core/systems/EventLoop';
 import { eventBus } from '@core/EventBus';
 import { getCurrentAgentId } from '@services/supabase';
@@ -9,6 +11,8 @@ import { SYSTEM_CONFIG } from '@core/config/systemConfig';
 import { CortexService } from '@llm/gemini';
 import { evidenceLedger } from '@core/systems/EvidenceLedger';
 import { TickCommitter } from '@core/systems/TickCommitter';
+import { DEFAULT_AGENT_ID, getAgentWorldRoot } from '@core/systems/WorldAccess';
+import { PacketType } from '@/types';
 
 // Mock dependencies
 vi.mock('@core/systems/LimbicSystem', () => ({
@@ -189,6 +193,69 @@ describe('EventLoop', () => {
             'speech',
             expect.anything()
         );
+    });
+
+    it('emits scan limit events and avoids blocking when scan is limited', async () => {
+        evidenceLedger.clear();
+        eventBus.clear();
+
+        const prevDepth = (SYSTEM_CONFIG as any).siliconBeing?.fileScanMaxDepth;
+        const prevCount = (SYSTEM_CONFIG as any).siliconBeing?.fileScanMaxCount;
+        (SYSTEM_CONFIG as any).siliconBeing.fileScanMaxDepth = 0;
+        (SYSTEM_CONFIG as any).siliconBeing.fileScanMaxCount = 1;
+
+        const agentId = getCurrentAgentId() || DEFAULT_AGENT_ID;
+        const worldRoot = path.normalize(getAgentWorldRoot(agentId));
+        await fs.mkdir(worldRoot, { recursive: true });
+
+        const missingFile = `missing_${Date.now()}.ts`;
+        try {
+            await EventLoop.runSingleStep(
+                mockCtx,
+                `Co jest w ${missingFile}?`,
+                mockCallbacks
+            );
+        } finally {
+            (SYSTEM_CONFIG as any).siliconBeing.fileScanMaxDepth = prevDepth;
+            (SYSTEM_CONFIG as any).siliconBeing.fileScanMaxCount = prevCount;
+        }
+
+        const history = eventBus.getHistory();
+        expect(history.some((p) => p.type === PacketType.FILE_SCAN_SUMMARY)).toBe(true);
+        expect(history.some((p) => p.type === PacketType.FILE_SCAN_LIMIT_REACHED)).toBe(true);
+        expect(history.some((p) => p.type === PacketType.EVIDENCE_BLOCKED_BY_SCAN_LIMIT)).toBe(true);
+
+        const toolCalls = vi.mocked(mockCallbacks.onMessage).mock.calls.filter((call) => call[2] === 'tool_result');
+        expect(
+            toolCalls.some((call) => String(call[1]).startsWith(`LIST_DIR /_world/${agentId}`))
+        ).toBe(true);
+        expect(mockCallbacks.onMessage).toHaveBeenCalledWith(
+            'assistant',
+            'Mock Response',
+            'speech',
+            expect.anything()
+        );
+    });
+
+    it('truncates observe content to limit', async () => {
+        evidenceLedger.clear();
+
+        const filePath = path.join(process.cwd(), 'src', 'core', 'systems', 'cortex', 'memoryRecall.ts');
+        const raw = await fs.readFile(filePath, 'utf8');
+        expect(raw.length).toBeGreaterThan(8000);
+
+        await EventLoop.runSingleStep(
+            mockCtx,
+            `Co jest w ${filePath.replace(/\\/g, '/')}?`,
+            mockCallbacks
+        );
+
+        const toolCall = vi.mocked(mockCallbacks.onMessage).mock.calls.find((call) => call[2] === 'tool_result');
+        expect(toolCall).toBeTruthy();
+
+        const toolText = String(toolCall?.[1] ?? '');
+        const content = toolText.split('\n').slice(1).join('\n');
+        expect(content.length).toBe(8000);
     });
 
     it('selectThinkMode should return reactive when input is present', () => {

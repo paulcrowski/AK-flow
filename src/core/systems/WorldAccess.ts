@@ -20,7 +20,7 @@ export function isPathAllowed(path: string, agentId: string): boolean {
   const raw = normalizePath(path);
   if (raw.includes('..')) return false;
 
-  const inWorld = raw.startsWith(`${WORLD_ROOT}/${agentId}`);
+  const inWorld = ALLOWED_ROOTS.some((root) => raw.startsWith(`${root}/${agentId}`));
   const inReadonly = READONLY_ROOTS.some((r) => raw.startsWith(r));
 
   return inWorld || inReadonly;

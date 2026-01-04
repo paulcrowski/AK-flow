@@ -14,6 +14,19 @@ export function selectAction(input: {
     return { action: 'rest', reason: 'energy_critical' };
   }
 
+  if (input.intention) {
+    if (input.evidenceCount === 0) {
+      return { action: 'observe', reason: 'intention_requires_evidence' };
+    }
+    if (input.readiness > 0.7 && input.evidenceCount >= 2) {
+      return { action: 'suggest', reason: 'intention_ready' };
+    }
+    if (input.readiness < 0.5) {
+      return { action: 'observe', reason: 'intention_readiness_low' };
+    }
+    return { action: 'note', reason: 'intention_capture' };
+  }
+
   if (input.drive === 'truth' && input.evidenceCount === 0) {
     return { action: 'observe', reason: 'TRUTH_REQUIRES_EVIDENCE' };
   }

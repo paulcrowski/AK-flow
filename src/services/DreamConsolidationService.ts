@@ -298,7 +298,21 @@ export const DreamConsolidationService = {
      */
     async createGoalsFromLessons(lessons: string[], agentId: string | null): Promise<number> {
         // For now, just return 0 - goal creation from lessons is optional
-        // Can be implemented later with GoalJournalService
+        // TODO(PHASE2): implement goal creation from lessons (GoalJournalService or equivalent).
+        if (lessons.length > 0) {
+            eventBus.publish({
+                id: generateUUID(),
+                timestamp: Date.now(),
+                source: AgentType.CORTEX_FLOW,
+                type: PacketType.LESSON_GOALS_PLACEHOLDER,
+                payload: {
+                    event: 'LESSON_GOALS_PLACEHOLDER',
+                    lessonsCount: lessons.length,
+                    agentId
+                },
+                priority: 0.5
+            });
+        }
         return 0;
     },
 

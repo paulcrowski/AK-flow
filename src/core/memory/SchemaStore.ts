@@ -91,12 +91,17 @@ export class SchemaStore {
     await fs.writeFile(path.join(dir, filename), JSON.stringify(schema, null, 2));
   }
 
-  async incrementUsage(id: string, evidenceRef?: string): Promise<void> {
+  async incrementUsage(
+    id: string,
+    evidenceRef?: string,
+    mutate?: (schema: Schema) => void
+  ): Promise<Schema | null> {
     const schema = await this.load(id);
-    if (schema) {
-      schema.usageCount += 1;
-      if (evidenceRef) schema.evidenceRefs.push(evidenceRef);
-      await this.save(schema);
-    }
+    if (!schema) return null;
+    schema.usageCount += 1;
+    if (evidenceRef) schema.evidenceRefs.push(evidenceRef);
+    if (mutate) mutate(schema);
+    await this.save(schema);
+    return schema;
   }
 }

@@ -81,10 +81,50 @@ export namespace EventLoop {
     const schemaStores = new Map<string, SchemaStore>();
     const pendingWakeObserve = { key: null as string | null };
 
+    const DEFAULT_CHUNK_RELEVANCE = 0.6;
+    const READINESS_BOOST_PER_TICK = 0.01;
+    const FILE_CONTENT_TRUNCATE_LIMIT = 8000;
+    const EVIDENCE_TYPES = ['READ_FILE', 'TEST_OUTPUT', 'SEARCH_HIT'] as const;
+
     const FILE_REF_REGEX = /([A-Za-z]:[\\/][^\s]+|\/[^\s]+|[A-Za-z0-9._-]+(?:[\\/][A-Za-z0-9._-]+)+\.[A-Za-z0-9]{1,8}|[A-Za-z0-9._-]+\.[A-Za-z0-9]{1,8})/;
     const EVIDENCE_QUERY_REGEX = /\b(co jest w|co zawiera|zawartosc|show|what is in|open|read|file|plik)\b/i;
     const SKIP_DIRS = new Set(['node_modules', '.git', 'dist', 'ak-nexus', 'database', '_patches', '_workbench']);
     const safeCwd = typeof process !== 'undefined' && typeof process.cwd === 'function' ? process.cwd() : '';
+
+    type FileScanLimits = { maxDepth: number; maxCount: number };
+    type FileScanState = {
+        visitedCount: number;
+        maxDepthReached: number;
+        hitCountLimit: boolean;
+        hitDepthLimit: boolean;
+    };
+    type FileScanSummary = {
+        requestedDepth: number;
+        requestedCount: number;
+        visitedCount: number;
+        maxDepthReached: number;
+        hitCountLimit: boolean;
+        hitDepthLimit: boolean;
+        foundCount: number;
+        query: string;
+        target: string;
+    };
+    type FileScanResult = {
+        resolvedPath: string;
+        found: boolean;
+        summary: FileScanSummary | null;
+    };
+
+    const getFileScanLimits = (): FileScanLimits => {
+        const config = (SYSTEM_CONFIG as any).siliconBeing ?? {};
+        const depthRaw = Number(config.fileScanMaxDepth);
+        const countRaw = Number(config.fileScanMaxCount);
+        const maxDepth = Number.isFinite(depthRaw) ? Math.max(0, Math.floor(depthRaw)) : 6;
+        const maxCount = Number.isFinite(countRaw) ? Math.max(0, Math.floor(countRaw)) : 2000;
+        return { maxDepth, maxCount };
+    };
+
+    const getEvidenceCount = () => evidenceLedger.getCount(300000, [...EVIDENCE_TYPES]);
 
     const getSchemaStore = (worldRoot: string) => {
         const existing = schemaStores.get(worldRoot);
@@ -111,9 +151,15 @@ export namespace EventLoop {
         root: string,
         target: string,
         depth: number,
-        state: { count: number }
+        limits: FileScanLimits,
+        state: FileScanState
     ): Promise<string | null> => {
-        if (depth > 6 || state.count > 2000) return null;
+        if (depth > limits.maxDepth) {
+            state.hitDepthLimit = true;
+            state.maxDepthReached = Math.max(state.maxDepthReached, depth);
+            return null;
+        }
+        state.maxDepthReached = Math.max(state.maxDepthReached, depth);
         let entries: any[] = [];
         try {
             entries = await fs.readdir(root, { withFileTypes: true });
@@ -121,11 +167,14 @@ export namespace EventLoop {
             return null;
         }
         for (const entry of entries) {
-            if (state.count > 2000) return null;
-            state.count += 1;
+            if (state.visitedCount >= limits.maxCount) {
+                state.hitCountLimit = true;
+                return null;
+            }
+            state.visitedCount += 1;
             if (entry.isDirectory()) {
                 if (SKIP_DIRS.has(entry.name)) continue;
-                const found = await findFileByName(path.join(root, entry.name), target, depth + 1, state);
+                const found = await findFileByName(path.join(root, entry.name), target, depth + 1, limits, state);
                 if (found) return found;
             } else if (entry.isFile() && entry.name.toLowerCase() === target.toLowerCase()) {
                 return path.join(root, entry.name);
@@ -134,27 +183,81 @@ export namespace EventLoop {
         return null;
     };
 
-    const resolveObservationPath = async (rawTarget: string): Promise<string> => {
+    const emitFileScanSummary = (summary: FileScanSummary) => {
+        eventBus.publish({
+            id: generateUUID(),
+            timestamp: Date.now(),
+            source: AgentType.CORTEX_FLOW,
+            type: PacketType.FILE_SCAN_SUMMARY,
+            payload: summary,
+            priority: 0.5
+        });
+        if (summary.hitCountLimit || summary.hitDepthLimit) {
+            eventBus.publish({
+                id: generateUUID(),
+                timestamp: Date.now(),
+                source: AgentType.CORTEX_FLOW,
+                type: PacketType.FILE_SCAN_LIMIT_REACHED,
+                payload: summary,
+                priority: 0.6
+            });
+        }
+    };
+
+    const resolveObservationPath = async (
+        rawTarget: string,
+        options?: { query?: string; candidateRoots?: string[]; limits?: FileScanLimits }
+    ): Promise<FileScanResult> => {
         const normalized = String(rawTarget || '').trim();
-        if (!normalized) return normalized;
-        if (path.isAbsolute(normalized) || normalized.startsWith('/')) return normalized;
+        if (!normalized) {
+            return { resolvedPath: normalized, found: false, summary: null };
+        }
+        if (path.isAbsolute(normalized) || normalized.startsWith('/')) {
+            return { resolvedPath: normalized, found: true, summary: null };
+        }
         if (normalized.includes('/') || normalized.includes('\\')) {
-            return safeCwd ? path.resolve(safeCwd, normalized) : normalized;
+            return {
+                resolvedPath: safeCwd ? path.resolve(safeCwd, normalized) : normalized,
+                found: true,
+                summary: null
+            };
         }
         const cached = fileLookupCache.get(normalized);
-        if (cached) return cached;
-        const state = { count: 0 };
-        const candidateRoots = safeCwd ? [path.join(safeCwd, 'src'), safeCwd] : [];
+        if (cached) {
+            return { resolvedPath: cached, found: true, summary: null };
+        }
+        const limits = options?.limits ?? getFileScanLimits();
+        const state: FileScanState = {
+            visitedCount: 0,
+            maxDepthReached: 0,
+            hitCountLimit: false,
+            hitDepthLimit: false
+        };
+        const candidateRoots = options?.candidateRoots ?? (safeCwd ? [path.join(safeCwd, 'src'), safeCwd] : []);
+        let foundPath: string | null = null;
         for (const root of candidateRoots) {
-            const found = await findFileByName(root, normalized, 0, state);
+            const found = await findFileByName(root, normalized, 0, limits, state);
             if (found) {
-                fileLookupCache.set(normalized, found);
-                return found;
+                foundPath = found;
+                break;
             }
         }
-        const fallback = safeCwd ? path.resolve(safeCwd, normalized) : normalized;
-        fileLookupCache.set(normalized, fallback);
-        return fallback;
+        const summary: FileScanSummary = {
+            requestedDepth: limits.maxDepth,
+            requestedCount: limits.maxCount,
+            visitedCount: state.visitedCount,
+            maxDepthReached: state.maxDepthReached,
+            hitCountLimit: state.hitCountLimit,
+            hitDepthLimit: state.hitDepthLimit,
+            foundCount: foundPath ? 1 : 0,
+            query: String(options?.query ?? ''),
+            target: normalized
+        };
+        emitFileScanSummary(summary);
+
+        const resolved = foundPath ?? (safeCwd ? path.resolve(safeCwd, normalized) : normalized);
+        fileLookupCache.set(normalized, resolved);
+        return { resolvedPath: resolved, found: Boolean(foundPath), summary };
     };
 
     const buildChunkCandidates = (input: string | null, ctx: LoopContext): ChunkRef[] => {
@@ -172,7 +275,7 @@ export namespace EventLoop {
             chunks.push({
                 id: `conv_${Date.now()}`,
                 summary: String(lastTurn.text).slice(0, 100),
-                relevance: 0.6,
+                relevance: DEFAULT_CHUNK_RELEVANCE,
                 type: 'memory'
             });
         }
@@ -244,9 +347,14 @@ export namespace EventLoop {
 
             tensionRegistry.tickDecay();
 
-            const evidenceCount = evidenceLedger.getCount();
+            const evidenceCount = getEvidenceCount();
             const needsEvidence = Boolean(params.input && questionRequiresEvidence(params.input))
                 || Boolean(pendingWakeObserve.key && !params.input);
+
+            if (evidenceCount > 0) {
+                tensionRegistry.resolve('evidence_missing');
+                tensionRegistry.resolve('truth_no_evidence_scan_limited');
+            }
 
             const beliefViolation = detectBeliefViolation({
                 memoryCoherence: 1,
@@ -269,7 +377,7 @@ export namespace EventLoop {
 
             const witnessTensions: WitnessTension[] = [];
             if (selectedTensionItem) {
-                const boost = (topTensions[0]?.severity ?? 0) + 0.01;
+                const boost = (topTensions[0]?.severity ?? 0) + READINESS_BOOST_PER_TICK;
                 witnessTensions.push({
                     key: selectedTensionItem.key,
                     belief: selectedTensionItem.belief,
@@ -348,10 +456,10 @@ export namespace EventLoop {
                     .slice(0, 48) || `schema_${Date.now()}`;
                 const existing = await schemaStore.load(schemaId);
                 if (existing) {
-                    existing.attributes = Array.from(new Set([...existing.attributes, ...draft.attributes])).slice(0, 3);
-                    existing.evidenceRefs = Array.from(new Set([...existing.evidenceRefs, ...draft.evidenceRefs]));
-                    existing.usageCount += 1;
-                    await schemaStore.save(existing);
+                    await schemaStore.incrementUsage(schemaId, undefined, (schema) => {
+                        schema.attributes = Array.from(new Set([...schema.attributes, ...draft.attributes])).slice(0, 3);
+                        schema.evidenceRefs = Array.from(new Set([...schema.evidenceRefs, ...draft.evidenceRefs]));
+                    });
                 } else {
                     const now = Date.now();
                     const schema: Schema = {
@@ -364,17 +472,17 @@ export namespace EventLoop {
                 }
             };
 
-            const executeObserve = async () => {
+            const executeObserve = async (options: { allowScanFallback: boolean }) => {
                 const target = extractFileTarget(params.input);
                 if (target) {
-                    const resolvedPath = await resolveObservationPath(target);
+                    const initialScan = await resolveObservationPath(target, { query: params.input ?? '' });
                     const readResult = await executeWorldTool({
                         tool: 'READ_FILE',
-                        path: resolvedPath,
+                        path: initialScan.resolvedPath,
                         agentId
                     });
                     if (readResult.ok && readResult.content && readResult.evidenceId) {
-                        const toolText = `READ_FILE ${readResult.path}\n${readResult.content.slice(0, 8000)}`;
+                        const toolText = `READ_FILE ${readResult.path}\n${readResult.content.slice(0, FILE_CONTENT_TRUNCATE_LIMIT)}`;
                         callbacks.onMessage('assistant', toolText, 'tool_result');
                         ctx.conversation.push({ role: 'assistant', text: toolText, type: 'tool_result' });
                         await upsertSchema({
@@ -382,12 +490,76 @@ export namespace EventLoop {
                             content: readResult.content,
                             evidenceId: readResult.evidenceId
                         });
-                        return true;
+                        return { observed: true, skipEvidenceGate: false };
+                    }
+
+                    const scanSummary = initialScan.summary;
+                    const scanLimitHit = Boolean(scanSummary && (scanSummary.hitCountLimit || scanSummary.hitDepthLimit));
+                    if (
+                        options.allowScanFallback &&
+                        scanSummary &&
+                        scanSummary.foundCount === 0 &&
+                        scanLimitHit
+                    ) {
+                        eventBus.publish({
+                            id: generateUUID(),
+                            timestamp: Date.now(),
+                            source: AgentType.CORTEX_FLOW,
+                            type: PacketType.EVIDENCE_BLOCKED_BY_SCAN_LIMIT,
+                            payload: {
+                                event: 'EVIDENCE_BLOCKED_BY_SCAN_LIMIT',
+                                target,
+                                query: String(params.input ?? ''),
+                                scan: scanSummary,
+                                recentEvidence: evidenceLedger.listRecent(5),
+                                hasEvidenceForTarget: evidenceLedger.hasEvidenceFor(target)
+                            },
+                            priority: 0.7
+                        });
+                        tensionRegistry.upsert('truth_no_evidence_scan_limited', 'truth', 0.7);
+
+                        const listRoot = await executeWorldTool({
+                            tool: 'LIST_DIR',
+                            path: worldRoot,
+                            agentId
+                        });
+                        if (listRoot.ok && listRoot.entries) {
+                            const toolText = `LIST_DIR ${listRoot.path}\n${listRoot.entries.join('\n')}`;
+                            callbacks.onMessage('assistant', toolText, 'tool_result');
+                            ctx.conversation.push({ role: 'assistant', text: toolText, type: 'tool_result' });
+                        }
+
+                        const narrowedRoots = safeCwd ? [path.join(safeCwd, 'src')] : [];
+                        const narrowedScan = await resolveObservationPath(target, {
+                            query: params.input ?? '',
+                            candidateRoots: narrowedRoots,
+                            limits: getFileScanLimits()
+                        });
+                        const narrowedRead = await executeWorldTool({
+                            tool: 'READ_FILE',
+                            path: narrowedScan.resolvedPath,
+                            agentId
+                        });
+                        if (narrowedRead.ok && narrowedRead.content && narrowedRead.evidenceId) {
+                            const toolText = `READ_FILE ${narrowedRead.path}\n${narrowedRead.content.slice(0, FILE_CONTENT_TRUNCATE_LIMIT)}`;
+                            callbacks.onMessage('assistant', toolText, 'tool_result');
+                            ctx.conversation.push({ role: 'assistant', text: toolText, type: 'tool_result' });
+                            await upsertSchema({
+                                path: narrowedRead.path,
+                                content: narrowedRead.content,
+                                evidenceId: narrowedRead.evidenceId
+                            });
+                            return { observed: true, skipEvidenceGate: false };
+                        }
+                        if (!narrowedRead.ok) {
+                            callbacks.onThought(`[OBSERVE_ERROR] ${narrowedRead.error || 'unknown'}`);
+                        }
+                        return { observed: false, skipEvidenceGate: true };
                     }
                     if (!readResult.ok) {
                         callbacks.onThought(`[OBSERVE_ERROR] ${readResult.error || 'unknown'}`);
                     }
-                    return false;
+                    return { observed: false, skipEvidenceGate: false };
                 }
 
                 if (pendingWakeObserve.key && !params.input) {
@@ -415,23 +587,25 @@ export namespace EventLoop {
 
                     if (listSchemas.ok || listNotes.ok) {
                         pendingWakeObserve.key = null;
-                        return true;
+                        return { observed: true, skipEvidenceGate: false };
                     }
                 }
 
-                return false;
+                return { observed: false, skipEvidenceGate: false };
             };
 
+            let skipEvidenceGate = false;
             if (action.action === 'observe') {
                 try {
-                    await executeObserve();
+                    const observeResult = await executeObserve({ allowScanFallback: forceObserve });
+                    skipEvidenceGate = observeResult.skipEvidenceGate;
                 } catch (error: any) {
                     callbacks.onThought(`[OBSERVE_ERROR] ${error?.message || String(error)}`);
                 }
             }
 
-            const updatedEvidenceCount = evidenceLedger.getCount();
-            if (needsEvidence && updatedEvidenceCount === 0) {
+            const updatedEvidenceCount = getEvidenceCount();
+            if (needsEvidence && updatedEvidenceCount === 0 && !skipEvidenceGate) {
                 eventBus.publish({
                     id: generateUUID(),
                     timestamp: Date.now(),

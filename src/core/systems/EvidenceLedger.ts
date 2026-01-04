@@ -26,9 +26,13 @@ export class EvidenceLedger {
     return item.id;
   }
 
-  getCount(windowMs: number = 300000): number {
+  getCount(windowMs: number = 300000, types?: EvidenceItem['type'][]): number {
     const cutoff = Date.now() - windowMs;
-    return this.items.filter((i) => i.timestamp > cutoff).length;
+    return this.items.filter((i) => {
+      if (i.timestamp <= cutoff) return false;
+      if (!types || types.length === 0) return true;
+      return types.includes(i.type);
+    }).length;
   }
 
   listRecent(n: number = 5): EvidenceItem[] {

@@ -207,7 +207,9 @@ export const SYSTEM_CONFIG = {
 
   siliconBeing: {
     enabled: true,
-    chemistryEnabled: false
+    chemistryEnabled: false,
+    fileScanMaxDepth: 6,
+    fileScanMaxCount: 2000
   },
 
   // ─────────────────────────────────────────────────────────────────────────
