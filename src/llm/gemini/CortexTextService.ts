@@ -194,7 +194,7 @@ export function createCortexTextService(ai: GoogleGenAI) {
     });
   };
 
-  const { autonomousVolitionV2 } = createAutonomyV2Runner(ai);
+  const { autonomousVolitionV2 } = createAutonomyV2Runner(ai, logUsage);
 
   return {
     async generateEmbedding(text: string): Promise<number[] | null> {

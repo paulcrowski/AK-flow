@@ -13,7 +13,6 @@ import { generateUUID } from '../../utils/uuid';
 import { getGeminiText } from './text';
 import { parseJSONStrict } from './json';
 import { withRetry } from './retry';
-import { logUsage } from './usage';
 import {
   AUTONOMOUS_VOLITION_V2_RESPONSE_SCHEMA,
   AUTONOMOUS_VOLITION_V2_MICRO_RESPONSE_SCHEMA
@@ -24,6 +23,12 @@ export type AutonomyV2Output = {
   voice_pressure: number;
   speech_content: string;
 };
+
+type LogUsage = (
+  operation: string,
+  response: any,
+  meta?: { model?: string; status?: string; traceId?: string }
+) => void;
 
 type AutonomyV2ParseFailure = {
   reason?: string;
@@ -171,7 +176,7 @@ const publishAutonomyV2ParseFail = (params: {
   });
 };
 
-const callAutonomyV2 = async (ai: GoogleGenAI, params: {
+const callAutonomyV2 = async (ai: GoogleGenAI, logUsage: LogUsage, params: {
   prompt: string;
   schema: Record<string, unknown>;
   maxOutputTokens: number;
@@ -198,9 +203,13 @@ const callAutonomyV2 = async (ai: GoogleGenAI, params: {
   return { rawText, parsed: parseAutonomyV2Response(rawText) };
 };
 
-const runAutonomyV2WithRetry = async (ai: GoogleGenAI, prompt: string): Promise<AutonomyV2Output> => {
+const runAutonomyV2WithRetry = async (
+  ai: GoogleGenAI,
+  logUsage: LogUsage,
+  prompt: string
+): Promise<AutonomyV2Output> => {
   return withRetry(async () => {
-    const primary = await callAutonomyV2(ai, {
+    const primary = await callAutonomyV2(ai, logUsage, {
       prompt,
       schema: AUTONOMOUS_VOLITION_V2_RESPONSE_SCHEMA,
       // FIX-5: Increased from 1536 to prevent NO_BALANCED_JSON_BLOCK truncation errors
@@ -213,7 +222,7 @@ const runAutonomyV2WithRetry = async (ai: GoogleGenAI, prompt: string): Promise<
 
     if (shouldRetryAutonomyV2(primary.parsed.failure)) {
       const microPrompt = buildAutonomyV2MicroPrompt(prompt);
-      const micro = await callAutonomyV2(ai, {
+      const micro = await callAutonomyV2(ai, logUsage, {
         prompt: microPrompt,
         schema: AUTONOMOUS_VOLITION_V2_MICRO_RESPONSE_SCHEMA,
         maxOutputTokens: 1024,
@@ -225,7 +234,7 @@ const runAutonomyV2WithRetry = async (ai: GoogleGenAI, prompt: string): Promise<
 
       if (shouldRetryAutonomyV2(micro.parsed.failure)) {
         const microRetryPrompt = buildAutonomyV2MicroRetryPrompt(prompt);
-        const microRetry = await callAutonomyV2(ai, {
+        const microRetry = await callAutonomyV2(ai, logUsage, {
           prompt: microRetryPrompt,
           schema: AUTONOMOUS_VOLITION_V2_MICRO_RESPONSE_SCHEMA,
           maxOutputTokens: 1536,
@@ -261,11 +270,11 @@ const runAutonomyV2WithRetry = async (ai: GoogleGenAI, prompt: string): Promise<
   }, 1, 3000);
 };
 
-export function createAutonomyV2Runner(ai: GoogleGenAI) {
+export function createAutonomyV2Runner(ai: GoogleGenAI, logUsage: LogUsage) {
   return {
     autonomousVolitionV2: async (ctx: UnifiedContext): Promise<AutonomyV2Output> => {
       const prompt = buildAutonomyV2Prompt(ctx);
-      return runAutonomyV2WithRetry(ai, prompt);
+      return runAutonomyV2WithRetry(ai, logUsage, prompt);
     }
   };
 }
