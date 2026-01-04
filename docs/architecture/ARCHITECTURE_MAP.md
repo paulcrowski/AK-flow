@@ -1,6 +1,6 @@
 # 🧠 AK-FLOW Architecture Map
 
-> **Wersja:** 6.10.4 (2026-01-03)
+> **Wersja:** 6.10.5 (2026-01-04)
 > **Cel:** Prosta mapa jak działa agent i jaki ma flow
 
 ## Archive policy
@@ -9,6 +9,15 @@
 Ten katalog jest wykluczony z kompilacji TypeScript i służy wyłącznie jako referencja do poprzednich iteracji.
 
 ---
+
+## FAZA 6.10.5: Evidence Scan Guard + Intention Actions (2026-01-04)
+
+**Cel:** uniknac zawisu evidence gate przy limitach skanu i skleić akcje z intencja.
+
+**Mechanika:**
+- FILE_SCAN_SUMMARY/FILE_SCAN_LIMIT_REACHED + EVIDENCE_BLOCKED_BY_SCAN_LIMIT z fallback LIST_DIR i ponownym scanem.
+- ActionSelector respektuje intencje, a drive liczy wagi priorytetow przekonan.
+- Placeholder telemetry dla lesson-goals w DreamConsolidation.
 
 ## FAZA 6.10.4: Token Usage + Fast Ingest + Document Memory (2026-01-03)
 

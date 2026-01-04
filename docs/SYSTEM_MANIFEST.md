@@ -1,6 +1,6 @@
 # AK-FLOW: Cognitive Agent Architecture Manifest
-**System Version:** 6.10.4 (Telemetry + Ingest + Memory Hardening)  
-**Last Updated:** 2026-01-03  
+**System Version:** 6.10.5 (Evidence Scan Guard + Intention Actions)  
+**Last Updated:** 2026-01-04  
 **Architecture Type:** Active Inference (Friston) + Global Workspace Theory + Multi-Modal RAG + **Stateless Inference Engine**  
 **Status:** Autonomous / Stateful / Modular / Self-Aware / Goal-Driven / Personality-Driven / **Emergent Identity**
 
@@ -28,6 +28,23 @@ We embrace the artificial nature as a feature, not a bug.
 - **Measurable Soul:** Emotions and "vibes" are allowed, but they must map to system metrics (Energy, Dopamine), not just literary roleplay.
 
 ---
+
+## What's New in V6.10.5 (2026-01-04)
+
+### Evidence scan guard + intention action glue
+
+**Goal:** prevent evidence-gate stalls when file scans hit limits and align actions with active intentions.
+
+**Key changes:**
+- File scan telemetry (summary/limit events) with scan-limited fallback and gate bypass to avoid silent stalls.
+- Action selection uses intention signals; witness drive now respects belief priority weights.
+- Lesson-goal placeholder telemetry plus scan-limit/truncation/intention tests.
+
+**Configuration (Single Source):**
+- core/config/systemConfig.ts -> SYSTEM_CONFIG.siliconBeing.fileScanMaxDepth/fileScanMaxCount
+
+**Tests:**
+`npx vitest run __tests__/unit/core/EventLoop.test.ts __tests__/unit/core/SiliconBeing.test.ts`
 
 ## What's New in V6.10.4 (2026-01-03)
 
