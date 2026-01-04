@@ -28,6 +28,10 @@ import { storeSelfSummary } from './dreamConsolidation/storage';
 import { storeTopicShardsFromRecent } from './dreamConsolidation/topicShards';
 import { proposeTraitChanges } from './dreamConsolidation/traitProposal';
 import { SessionChunkService } from './SessionChunkService';
+import { SchemaStore } from '../core/memory/SchemaStore';
+import { performSleepCycle } from '../core/systems/SleepSystem';
+import { tensionRegistry } from '../core/systems/TensionRegistry';
+import { DEFAULT_AGENT_ID, getAgentWorldRoot } from '../core/systems/WorldAccess';
 
 // --- TYPES ---
 
@@ -52,6 +56,21 @@ export const DreamConsolidationService = {
     ): Promise<DreamConsolidationResult> {
         const agentId = getCurrentAgentId();
         const timestamp = new Date().toISOString();
+        const worldRoot = getAgentWorldRoot(agentId || DEFAULT_AGENT_ID);
+        const schemaStore = new SchemaStore(worldRoot);
+
+        const runSleepCycle = async () => {
+            try {
+                await performSleepCycle({
+                    store: schemaStore,
+                    usedSchemaIds: [],
+                    tensionRegistry,
+                    errors: []
+                });
+            } catch (error) {
+                console.warn('[DreamConsolidation] SleepSystem failed:', error);
+            }
+        };
 
         console.log('💤 [DreamConsolidation] Starting sleep consolidation...');
 
@@ -109,6 +128,8 @@ export const DreamConsolidationService = {
                     sessionChunkCreated,
                     decayPrune
                 };
+
+                await runSleepCycle();
 
                 eventBus.publish({
                     id: generateUUID(),
@@ -237,6 +258,8 @@ export const DreamConsolidationService = {
                 ? ` (${episodeDetails.map((e) => e.id).slice(0, 3).join(', ')}${episodeDetails.length > 3 ? ', ...' : ''})`
                 : '';
 
+            await runSleepCycle();
+
             eventBus.publish({
                 id: generateUUID(),
                 timestamp: Date.now(),
@@ -265,6 +288,7 @@ export const DreamConsolidationService = {
                 },
                 priority: 0.9
             });
+            await runSleepCycle();
             return this.createEmptyResult();
         }
     },

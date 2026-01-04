@@ -24,6 +24,20 @@ import { publishTickStart, publishTickSkipped, publishThinkModeSelected, publish
 import { isMainFeatureEnabled } from '../config/featureFlags';
 import { SYSTEM_CONFIG } from '../config/systemConfig';
 import { ThinkModeSelector, createAutonomyBudgetTracker, createTickTraceScope, runAutonomousVolitionStep, runReactiveStep, runGoalDrivenStep } from './eventloop/index';
+import type { ChunkRef, Tension as WitnessTension } from '../types/WitnessTypes';
+import { buildWitnessFrame } from './WitnessSystem';
+import { detectBeliefViolation } from './CoreBeliefs';
+import { evidenceLedger } from './EvidenceLedger';
+import { tensionRegistry, type TensionItem } from './TensionRegistry';
+import { formIntention } from './IntentionSystem';
+import { selectAction, type ActionType } from './ActionSelector';
+import { SchemaStore, type Schema } from '../memory/SchemaStore';
+import { createSchemaFromObservation } from '../memory/SchemaBuilder';
+import { DEFAULT_AGENT_ID, getAgentWorldRoot } from './WorldAccess';
+import { executeWorldTool } from '../../tools/workspaceTools';
+import { generateUUID } from '../../utils/uuid';
+import { promises as fs } from 'fs';
+import path from 'path';
 
 export namespace EventLoop {
     export type ThinkMode = 'reactive' | 'goal_driven' | 'autonomous' | 'idle';
@@ -63,6 +77,114 @@ export namespace EventLoop {
         }
     });
     let tickCount = 0;
+    const fileLookupCache = new Map<string, string>();
+    const schemaStores = new Map<string, SchemaStore>();
+    const pendingWakeObserve = { key: null as string | null };
+
+    const FILE_REF_REGEX = /([A-Za-z]:[\\/][^\s]+|\/[^\s]+|[A-Za-z0-9._-]+\.[A-Za-z0-9]{1,8})/;
+    const EVIDENCE_QUERY_REGEX = /\b(co jest w|co zawiera|zawartosc|show|what is in|open|read|file|plik)\b/i;
+    const SKIP_DIRS = new Set(['node_modules', '.git', 'dist', 'ak-nexus', 'database', '_patches', '_workbench']);
+    const safeCwd = typeof process !== 'undefined' && typeof process.cwd === 'function' ? process.cwd() : '';
+
+    const getSchemaStore = (worldRoot: string) => {
+        const existing = schemaStores.get(worldRoot);
+        if (existing) return existing;
+        const store = new SchemaStore(worldRoot);
+        schemaStores.set(worldRoot, store);
+        return store;
+    };
+
+    const questionRequiresEvidence = (input: string) => {
+        const normalized = String(input || '').toLowerCase();
+        if (FILE_REF_REGEX.test(normalized)) return true;
+        return EVIDENCE_QUERY_REGEX.test(normalized);
+    };
+
+    const extractFileTarget = (input: string | null): string | null => {
+        if (!input) return null;
+        const match = String(input).match(FILE_REF_REGEX);
+        if (!match?.[1]) return null;
+        return match[1].replace(/[),.;:]+$/, '');
+    };
+
+    const findFileByName = async (
+        root: string,
+        target: string,
+        depth: number,
+        state: { count: number }
+    ): Promise<string | null> => {
+        if (depth > 6 || state.count > 2000) return null;
+        let entries: any[] = [];
+        try {
+            entries = await fs.readdir(root, { withFileTypes: true });
+        } catch {
+            return null;
+        }
+        for (const entry of entries) {
+            if (state.count > 2000) return null;
+            state.count += 1;
+            if (entry.isDirectory()) {
+                if (SKIP_DIRS.has(entry.name)) continue;
+                const found = await findFileByName(path.join(root, entry.name), target, depth + 1, state);
+                if (found) return found;
+            } else if (entry.isFile() && entry.name.toLowerCase() === target.toLowerCase()) {
+                return path.join(root, entry.name);
+            }
+        }
+        return null;
+    };
+
+    const resolveObservationPath = async (rawTarget: string): Promise<string> => {
+        const normalized = String(rawTarget || '').trim();
+        if (!normalized) return normalized;
+        if (path.isAbsolute(normalized) || normalized.startsWith('/')) return normalized;
+        if (normalized.includes('/') || normalized.includes('\\')) {
+            return safeCwd ? path.resolve(safeCwd, normalized) : normalized;
+        }
+        const cached = fileLookupCache.get(normalized);
+        if (cached) return cached;
+        const state = { count: 0 };
+        const candidateRoots = safeCwd ? [path.join(safeCwd, 'src'), safeCwd] : [];
+        for (const root of candidateRoots) {
+            const found = await findFileByName(root, normalized, 0, state);
+            if (found) {
+                fileLookupCache.set(normalized, found);
+                return found;
+            }
+        }
+        const fallback = safeCwd ? path.resolve(safeCwd, normalized) : normalized;
+        fileLookupCache.set(normalized, fallback);
+        return fallback;
+    };
+
+    const buildChunkCandidates = (input: string | null, ctx: LoopContext): ChunkRef[] => {
+        const chunks: ChunkRef[] = [];
+        if (input) {
+            chunks.push({
+                id: `input_${Date.now()}`,
+                summary: String(input).slice(0, 100),
+                relevance: 1,
+                type: 'observation'
+            });
+        }
+        const lastTurn = ctx.conversation?.[ctx.conversation.length - 1];
+        if (lastTurn?.text) {
+            chunks.push({
+                id: `conv_${Date.now()}`,
+                summary: String(lastTurn.text).slice(0, 100),
+                relevance: 0.6,
+                type: 'memory'
+            });
+        }
+        return chunks;
+    };
+
+    const toWitnessTension = (item: TensionItem, evidenceCount: number): WitnessTension => ({
+        key: item.key,
+        belief: item.belief,
+        severity: item.severity,
+        evidenceCount
+    });
 
     // ═══════════════════════════════════════════════════════════════════════════
     // SOCIAL DYNAMICS: Now unified in ExecutiveGate.checkSocialDynamics()
@@ -108,6 +230,225 @@ export namespace EventLoop {
         let skipped = false;
         let skipReason: string | null = null;
 
+        const runSiliconCycle = async (params: {
+            input: string | null;
+        }): Promise<{ blockCortex: boolean }> => {
+            const agentId = trace.agentId || getCurrentAgentId() || DEFAULT_AGENT_ID;
+            const worldRoot = getAgentWorldRoot(agentId);
+            const schemaStore = getSchemaStore(worldRoot);
+
+            if (!ctx.soma.isSleeping && pendingWakeObserve.key === null) {
+                const selected = tensionRegistry.consumeSelectedForTomorrow();
+                if (selected) pendingWakeObserve.key = selected;
+            }
+
+            tensionRegistry.tickDecay();
+
+            const evidenceCount = evidenceLedger.getCount();
+            const needsEvidence = Boolean(params.input && questionRequiresEvidence(params.input))
+                || Boolean(pendingWakeObserve.key && !params.input);
+
+            const beliefViolation = detectBeliefViolation({
+                memoryCoherence: 1,
+                evidenceCount,
+                learningOpportunity: false,
+                taskPending: Boolean(ctx.goalState?.activeGoal)
+            });
+
+            if (beliefViolation) {
+                const key = beliefViolation.belief === 'truth'
+                    ? 'evidence_missing'
+                    : `belief_${beliefViolation.belief}`;
+                tensionRegistry.upsert(key, beliefViolation.belief, beliefViolation.severity);
+            }
+
+            const topTensions = tensionRegistry.top(3);
+            const selectedTensionItem = pendingWakeObserve.key
+                ? tensionRegistry.get(pendingWakeObserve.key)
+                : null;
+
+            const witnessTensions: WitnessTension[] = [];
+            if (selectedTensionItem) {
+                const boost = (topTensions[0]?.severity ?? 0) + 0.01;
+                witnessTensions.push({
+                    key: selectedTensionItem.key,
+                    belief: selectedTensionItem.belief,
+                    severity: Math.max(selectedTensionItem.severity, boost),
+                    evidenceCount
+                });
+            }
+            for (const item of topTensions) {
+                if (item.key === selectedTensionItem?.key) continue;
+                witnessTensions.push(toWitnessTension(item, evidenceCount));
+            }
+
+            const contextPressure = Math.max(0, Math.min(1, ctx.soma.cognitiveLoad / 100));
+            const chunkCandidates = buildChunkCandidates(params.input, ctx);
+
+            const witnessFrame = buildWitnessFrame({
+                energyBudget: ctx.soma.energy,
+                contextPressure,
+                beliefViolation,
+                tensions: witnessTensions,
+                evidenceCount,
+                chunkCandidates
+            });
+
+            eventBus.publish({
+                id: generateUUID(),
+                timestamp: Date.now(),
+                source: AgentType.CORTEX_FLOW,
+                type: PacketType.WITNESS_FRAME_UPDATED,
+                payload: witnessFrame,
+                priority: 0.6
+            });
+
+            const dominantItem = selectedTensionItem || topTensions[0] || null;
+            const intention = formIntention(dominantItem, ctx.soma.energy, witnessFrame.readinessToAct);
+
+            const selectedAction = selectAction({
+                intention,
+                drive: witnessFrame.dominantDrive,
+                readiness: witnessFrame.readinessToAct,
+                energy: ctx.soma.energy,
+                evidenceCount
+            });
+
+            const forceObserve = needsEvidence && evidenceCount === 0;
+            const wakeObserve = Boolean(pendingWakeObserve.key && !params.input);
+            const action = forceObserve || wakeObserve
+                ? { action: 'observe' as ActionType, reason: forceObserve ? 'evidence_gate' : 'wake_observe' }
+                : selectedAction;
+
+            eventBus.publish({
+                id: generateUUID(),
+                timestamp: Date.now(),
+                source: AgentType.CORTEX_FLOW,
+                type: PacketType.ACTION_SELECTED,
+                payload: {
+                    action: action.action,
+                    reason: action.reason,
+                    intentionId: intention?.id ?? null
+                },
+                priority: 0.6
+            });
+
+            const upsertSchema = async (params: { path: string; content: string; evidenceId: string }) => {
+                const concept = path.basename(params.path).replace(/\.[^.]+$/, '');
+                const draft = createSchemaFromObservation({
+                    concept,
+                    observation: params.content,
+                    evidenceRef: params.evidenceId
+                });
+                if (!draft) return;
+                const schemaId = concept
+                    .toLowerCase()
+                    .replace(/[^a-z0-9]+/g, '_')
+                    .replace(/^_+|_+$/g, '')
+                    .slice(0, 48) || `schema_${Date.now()}`;
+                const existing = await schemaStore.load(schemaId);
+                if (existing) {
+                    existing.attributes = Array.from(new Set([...existing.attributes, ...draft.attributes])).slice(0, 3);
+                    existing.evidenceRefs = Array.from(new Set([...existing.evidenceRefs, ...draft.evidenceRefs]));
+                    existing.usageCount += 1;
+                    await schemaStore.save(existing);
+                } else {
+                    const now = Date.now();
+                    const schema: Schema = {
+                        id: schemaId,
+                        createdAt: now,
+                        updatedAt: now,
+                        ...draft
+                    };
+                    await schemaStore.save(schema);
+                }
+            };
+
+            const executeObserve = async () => {
+                const target = extractFileTarget(params.input);
+                if (target) {
+                    const resolvedPath = await resolveObservationPath(target);
+                    const readResult = await executeWorldTool({
+                        tool: 'READ_FILE',
+                        path: resolvedPath,
+                        agentId
+                    });
+                    if (readResult.ok && readResult.content && readResult.evidenceId) {
+                        const toolText = `READ_FILE ${readResult.path}\n${readResult.content.slice(0, 8000)}`;
+                        callbacks.onMessage('assistant', toolText, 'tool_result');
+                        ctx.conversation.push({ role: 'assistant', text: toolText, type: 'tool_result' });
+                        await upsertSchema({
+                            path: readResult.path,
+                            content: readResult.content,
+                            evidenceId: readResult.evidenceId
+                        });
+                        return true;
+                    }
+                    if (!readResult.ok) {
+                        callbacks.onThought(`[OBSERVE_ERROR] ${readResult.error || 'unknown'}`);
+                    }
+                    return false;
+                }
+
+                if (pendingWakeObserve.key && !params.input) {
+                    const listSchemas = await executeWorldTool({
+                        tool: 'LIST_DIR',
+                        path: `${worldRoot}/knowledge/schemas`,
+                        agentId
+                    });
+                    if (listSchemas.ok && listSchemas.entries) {
+                        const toolText = `LIST_DIR ${listSchemas.path}\n${listSchemas.entries.join('\n')}`;
+                        callbacks.onMessage('assistant', toolText, 'tool_result');
+                        ctx.conversation.push({ role: 'assistant', text: toolText, type: 'tool_result' });
+                    }
+
+                    const listNotes = await executeWorldTool({
+                        tool: 'LIST_DIR',
+                        path: `${worldRoot}/notes`,
+                        agentId
+                    });
+                    if (listNotes.ok && listNotes.entries) {
+                        const toolText = `LIST_DIR ${listNotes.path}\n${listNotes.entries.join('\n')}`;
+                        callbacks.onMessage('assistant', toolText, 'tool_result');
+                        ctx.conversation.push({ role: 'assistant', text: toolText, type: 'tool_result' });
+                    }
+
+                    if (listSchemas.ok || listNotes.ok) {
+                        pendingWakeObserve.key = null;
+                        return true;
+                    }
+                }
+
+                return false;
+            };
+
+            if (action.action === 'observe') {
+                try {
+                    await executeObserve();
+                } catch (error: any) {
+                    callbacks.onThought(`[OBSERVE_ERROR] ${error?.message || String(error)}`);
+                }
+            }
+
+            const updatedEvidenceCount = evidenceLedger.getCount();
+            if (needsEvidence && updatedEvidenceCount === 0) {
+                eventBus.publish({
+                    id: generateUUID(),
+                    timestamp: Date.now(),
+                    source: AgentType.CORTEX_FLOW,
+                    type: PacketType.EVIDENCE_GATE_BLOCKED,
+                    payload: { reason: 'missing_evidence', input: params.input },
+                    priority: 0.7
+                });
+                if (params.input) {
+                    ctx.goalState.lastUserInteractionAt = Date.now();
+                }
+                return { blockCortex: true };
+            }
+
+            return { blockCortex: false };
+        };
+
         try {
             // P0 ONE MIND: Hard gate when no agent is selected.
             // Must happen before any LLM or memory hydration.
@@ -129,6 +470,14 @@ export namespace EventLoop {
             const cooledLimbic = LimbicSystem.applyHomeostasis(ctx.limbic);
             ctx.limbic = cooledLimbic;
             callbacks.onLimbicUpdate(ctx.limbic);
+
+            const siliconEnabled = Boolean((SYSTEM_CONFIG as any).siliconBeing?.enabled);
+            if (siliconEnabled && !ctx.soma.isSleeping && (input || ctx.autonomousMode)) {
+                const siliconResult = await runSiliconCycle({ input });
+                if (siliconResult.blockCortex) {
+                    return ctx;
+                }
+            }
 
         // 2. Process User Input (if any)
         if (input) {
