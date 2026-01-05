@@ -7,14 +7,22 @@
  */
 
 import React, { useMemo } from 'react';
-import { LogOut, Power, Moon, Sun, Zap, RefreshCw, Pin, Copy, Trash2, FileText, ChevronDown, ChevronUp } from 'lucide-react';
+import { LogOut, Power, Moon, Sun, Zap, RefreshCw, Pin, Copy, Trash2, FileText, ChevronDown, ChevronUp, FolderOpen } from 'lucide-react';
 import { AgentSelector } from '../AgentSelector';
 import { LibraryPanel } from '../LibraryPanel';
 import type { ConversationSessionSummary } from '../../services/ConversationArchive';
 import { useArtifactStore } from '../../stores/artifactStore';
+import {
+  canUseFileSystemAccess,
+  getWorldDirectoryStatus,
+  requestWorldDirectoryHandle,
+  type WorldDirectoryStatus
+} from '../../tools/worldDirectoryAccess';
+import { DEFAULT_AGENT_ID, getAgentFolderName } from '../../core/systems/WorldAccess';
 
 interface LeftSidebarProps {
   userId: string | null;
+  agentId: string | null;
   currentAgentName: string | null;
   autonomousMode: boolean;
   isSleeping: boolean;
@@ -33,6 +41,7 @@ interface LeftSidebarProps {
 
 export const LeftSidebar: React.FC<LeftSidebarProps> = ({
   userId,
+  agentId,
   currentAgentName,
   autonomousMode,
   isSleeping,
@@ -67,6 +76,14 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
   const removeArtifact = useArtifactStore((s) => s.remove);
   const [lastAction, setLastAction] = React.useState<string | null>(null);
   const lastCreatedIdRef = React.useRef<string | null>(null);
+  const [worldMessage, setWorldMessage] = React.useState<string | null>(null);
+  const worldMessageTimeoutRef = React.useRef<number | null>(null);
+  const fsAccessSupported = canUseFileSystemAccess();
+  const agentFolderName = useMemo(() => {
+    if (!agentId) return DEFAULT_AGENT_ID;
+    return getAgentFolderName(agentId, currentAgentName || undefined);
+  }, [agentId, currentAgentName]);
+  const [worldStatus, setWorldStatus] = React.useState<WorldDirectoryStatus>(() => getWorldDirectoryStatus(agentId));
 
   React.useEffect(() => {
     if (!lastCreatedId || lastCreatedIdRef.current === lastCreatedId) return;
@@ -78,6 +95,67 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
     const t = setTimeout(() => setLastAction(null), 2500);
     return () => clearTimeout(t);
   }, [artifactsById, lastCreatedId]);
+
+  React.useEffect(() => {
+    return () => {
+      if (worldMessageTimeoutRef.current !== null) {
+        clearTimeout(worldMessageTimeoutRef.current);
+        worldMessageTimeoutRef.current = null;
+      }
+    };
+  }, []);
+
+  const pushWorldMessage = (message: string) => {
+    setWorldMessage(message);
+    if (worldMessageTimeoutRef.current !== null) {
+      clearTimeout(worldMessageTimeoutRef.current);
+    }
+    worldMessageTimeoutRef.current = window.setTimeout(() => {
+      setWorldMessage(null);
+      worldMessageTimeoutRef.current = null;
+    }, 4000);
+  };
+
+  React.useEffect(() => {
+    setWorldStatus(getWorldDirectoryStatus(agentId));
+  }, [agentId]);
+
+  const handlePickWorld = async () => {
+    if (!agentId) {
+      pushWorldMessage('Select agent first');
+      return;
+    }
+    const status = await requestWorldDirectoryHandle(agentId, currentAgentName || undefined);
+    setWorldStatus(status);
+    if (status.ok) {
+      const label = status.mode === 'world' ? `${status.name}/${agentFolderName}` : status.name;
+      pushWorldMessage(`World root set: ${label}`);
+      return;
+    }
+    if (status.reason === 'NAME_MISMATCH') {
+      pushWorldMessage(`Pick folder named _world or ${agentFolderName}`);
+    } else if (status.reason === 'UNSUPPORTED') {
+      pushWorldMessage('Folder access not supported');
+    } else if (status.reason === 'PERMISSION_DENIED') {
+      pushWorldMessage('Folder permission denied');
+    } else if (status.reason === 'CANCELLED') {
+      pushWorldMessage('Folder selection cancelled');
+    } else {
+      const suffix = status.detail ? ` (${status.detail})` : '';
+      pushWorldMessage(`Folder selection failed${suffix}`);
+    }
+  };
+
+  const worldLabel = (() => {
+    if (worldStatus.ok) {
+      if (worldStatus.mode === 'world') {
+        return `${worldStatus.name}/${agentFolderName}`;
+      }
+      return worldStatus.name ?? 'READY';
+    }
+    if (worldStatus.reason === 'UNSUPPORTED') return 'UNSUPPORTED';
+    return 'NOT SET';
+  })();
 
   const copyText = async (text: string) => {
     const payload = String(text || '');
@@ -175,7 +253,29 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
             <span className="flex items-center gap-2"><RefreshCw size={12} /> RESET</span>
             <span>NOW</span>
           </button>
+
+          <button
+            onClick={handlePickWorld}
+            className="flex items-center justify-between px-3 py-2 rounded-lg border border-gray-700 bg-gray-900/30 text-[11px] font-mono text-gray-400 hover:bg-gray-900/60 transition-colors"
+            disabled={!fsAccessSupported}
+            title={fsAccessSupported ? 'Select _world or agent folder' : 'Folder access not supported'}
+          >
+            <span className="flex items-center gap-2"><FolderOpen size={12} /> WORLD ROOT</span>
+            <span>{worldLabel}</span>
+          </button>
+          {worldMessage && (
+            <div className="text-[10px] font-mono text-gray-500">{worldMessage}</div>
+          )}
         </div>
+        {!fsAccessSupported ? (
+          <div className="mt-2 text-[10px] font-mono text-gray-500">
+            Folder access requires secure Chromium context (File System Access API).
+          </div>
+        ) : (
+          <div className="mt-2 text-[10px] font-mono text-gray-500">
+            Pick folder named _world or {agentFolderName}.
+          </div>
+        )}
       </div>
 
       <div className="shrink-0">

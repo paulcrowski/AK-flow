@@ -12,15 +12,32 @@ export function normalizePath(input: string): string {
   return String(input || '').replace(/\\/g, '/');
 }
 
-export function getAgentWorldRoot(agentId: string): string {
-  return `${WORLD_ROOT}/${agentId}`;
+export function normalizeAgentFolderName(name: string): string {
+  const raw = String(name || '').trim();
+  if (!raw) return '';
+  const noSeparators = raw.replace(/[\\/]+/g, '_');
+  const noTraversal = noSeparators.replace(/\.\.+/g, '_');
+  return noTraversal.trim();
 }
 
-export function isPathAllowed(path: string, agentId: string): boolean {
+export function getAgentFolderName(agentId: string, agentName?: string | null): string {
+  const normalized = normalizeAgentFolderName(agentName || '');
+  if (normalized) return normalized;
+  if (agentId) return agentId;
+  return DEFAULT_AGENT_ID;
+}
+
+export function getAgentWorldRoot(agentId: string, agentName?: string | null): string {
+  const folder = getAgentFolderName(agentId, agentName);
+  return `${WORLD_ROOT}/${folder}`;
+}
+
+export function isPathAllowed(path: string, agentId: string, agentName?: string | null): boolean {
   const raw = normalizePath(path);
   if (raw.includes('..')) return false;
 
-  const inWorld = ALLOWED_ROOTS.some((root) => raw.startsWith(`${root}/${agentId}`));
+  const folder = getAgentFolderName(agentId, agentName);
+  const inWorld = ALLOWED_ROOTS.some((root) => raw.startsWith(`${root}/${folder}`));
   const inReadonly = READONLY_ROOTS.some((r) => raw.startsWith(r));
 
   return inWorld || inReadonly;

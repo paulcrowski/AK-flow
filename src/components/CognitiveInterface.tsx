@@ -382,6 +382,7 @@ export function CognitiveInterface() {
             {/* LEFT SIDEBAR */}
             <LeftSidebar
                 userId={userId}
+                agentId={agentId ?? null}
                 currentAgentName={currentAgent?.name || null}
                 autonomousMode={autonomousMode}
                 isSleeping={isSleeping}

@@ -5,7 +5,7 @@ import { AgentSelector } from '../components/AgentSelector';
 import { CognitiveInterface } from '../components/CognitiveInterface';
 import { ComponentErrorBoundary } from '../components/ComponentErrorBoundary';
 import { Brain, Loader2 } from 'lucide-react';
-import { setCurrentAgentId } from '../services/supabase';
+import { setCurrentAgentId, setCurrentAgentName } from '../services/supabase';
 import { logSystemConfig, validateWiring } from '../core/config';
 import { eventBus } from '../core/EventBus';
 import { PacketType } from '../types';
@@ -44,12 +44,13 @@ validateWiring().then(result => {
 });
 
 function App() {
-    const { userId, agentId, isLoading } = useSession();
+    const { userId, agentId, currentAgent, isLoading } = useSession();
 
     // Ensure global services know about the active agent
     useEffect(() => {
         setCurrentAgentId(agentId);
-    }, [agentId]);
+        setCurrentAgentName(currentAgent?.name ?? null);
+    }, [agentId, currentAgent?.name]);
 
     // 1. LOGIN SCREEN
     if (!userId) {

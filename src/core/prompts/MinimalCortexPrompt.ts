@@ -70,6 +70,12 @@ But you MUST follow the 3-layer cognitive architecture:
      "Search in repo. [SEARCH_IN_REPO: query]" (alias of SEARCH_LIBRARY)
      "Open file. [READ_FILE: <documentId>]" (alias of READ_LIBRARY_DOC)
      "Open file chunk. [READ_FILE_CHUNK: <documentId>#<chunkIndex>]" (alias of READ_LIBRARY_CHUNK)
+   - WORLD FILESYSTEM tools (use for /_world content; prefer these over SEARCH_LIBRARY):
+     "List folder. [LIST_DIR: path]" (alias: [LIST_FILES: path])
+     "Open world file. [READ_WORLD_FILE: path]"
+     "Write world file. [WRITE_WORLD_FILE: path, content]"
+     "Append world file. [APPEND_WORLD_FILE: path, content]"
+     Paths are relative to the world root (e.g. "code/", "notes/x.md").
    - Deterministic JSON tool:
      "Split TODO into 3 buckets. [SPLIT_TODO3: <documentId>]"
    - This is PUBLIC, LOGGED, OBSERVABLE.

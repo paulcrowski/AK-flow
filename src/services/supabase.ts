@@ -55,6 +55,7 @@ const compressNeuralImage = async (base64Str: string): Promise<string | null> =>
 
 // Current agent context - set by SessionContext
 let currentAgentId: string | null = null;
+let currentAgentName: string | null = null;
 
 // Current owner context (auth.uid) - set by SessionContext
 let currentOwnerId: string | null = null;
@@ -68,6 +69,12 @@ export const setCurrentAgentId = (agentId: string | null) => {
 };
 
 export const getCurrentAgentId = () => currentAgentId;
+
+export const setCurrentAgentName = (name: string | null) => {
+  currentAgentName = name ? String(name).trim() : null;
+};
+
+export const getCurrentAgentName = () => currentAgentName;
 
 export const setCurrentOwnerId = (ownerId: string | null) => {
   currentOwnerId = ownerId;
