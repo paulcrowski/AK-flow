@@ -138,9 +138,7 @@ const executeWorldToolWithFsAccess = async (params: {
   if (!allowed) {
     return { ok: false, path: resolved, error: 'PATH_NOT_ALLOWED' };
   }
-  const relative = selection.mode === 'world'
-    ? resolved.slice(WORLD_ROOT_PATH.length).replace(/^\/+/, '')
-    : resolved.slice(basePath.length).replace(/^\/+/, '');
+  const relative = resolved.slice(basePath.length).replace(/^\/+/, '');
 
   const intentId = generateUUID();
   eventBus.publish({

@@ -4,17 +4,13 @@ import type { SchemaStore } from '../memory/SchemaStore';
 import type { TensionRegistry } from './TensionRegistry';
 
 type FsModule = typeof import('fs/promises');
-let fsModule: FsModule | null = null;
 const IS_NODE =
   typeof process !== 'undefined' &&
   Boolean((process as { versions?: { node?: string } }).versions?.node);
 
 const getFs = async (): Promise<FsModule | null> => {
   if (!IS_NODE) return null;
-  if (!fsModule) {
-    fsModule = await import('fs/promises');
-  }
-  return fsModule;
+  return import('fs/promises');
 };
 
 const normalizePath = (input: string): string => String(input || '').replace(/\\/g, '/');

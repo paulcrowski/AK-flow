@@ -105,7 +105,7 @@ export namespace EventLoop {
     const EVIDENCE_QUERY_REGEX = /\b(co jest w|co zawiera|zawartosc|show|what is in|open|read|file|plik)\b/i;
     const DIR_QUERY_REGEX = /\b(katalog|folder|directory|dir|lista plikow|list files?)\b/i;
     const DIR_TARGET_REGEX = /(?:katalog|folder|directory|dir|lista plikow|list files?(?: in)?)\s+["'`]?([A-Za-z]:[\\/][^\s"'`]+|\/[^\s"'`]+|[A-Za-z0-9._-]+(?:[\\/][A-Za-z0-9._-]+)*)/i;
-    const DIR_TRAILING_REGEX = /([A-Za-z]:[\\/][^\s"'`]+|\/[^\s"'`]+|[A-Za-z0-9._-]+(?:[\\/][A-Za-z0-9._-]+)*\/)/;
+    const DIR_TRAILING_REGEX = /([A-Za-z]:[\\/][^\s"'`]+[\\/]|\/[^\s"'`]+\/|[A-Za-z0-9._-]+(?:[\\/][A-Za-z0-9._-]+)*\/)/;
     const SKIP_DIRS = new Set(['node_modules', '.git', 'dist', 'ak-nexus', 'database', '_patches', '_workbench']);
     const safeCwd = typeof process !== 'undefined' && typeof process.cwd === 'function' ? process.cwd() : '';
 
@@ -191,7 +191,12 @@ export namespace EventLoop {
         const keywordMatch = raw.match(DIR_TARGET_REGEX);
         if (keywordMatch?.[1]) return keywordMatch[1].replace(/[),.;:!?"']+$/, '');
         const trailingMatch = raw.match(DIR_TRAILING_REGEX);
-        if (trailingMatch?.[1]) return trailingMatch[1].replace(/[),.;:!?"']+$/, '');
+        if (trailingMatch?.[1]) {
+            const trimmed = raw.replace(/[),.;:!?"']+$/, '');
+            if (trimmed.endsWith(trailingMatch[1])) {
+                return trailingMatch[1].replace(/[),.;:!?"']+$/, '');
+            }
+        }
         return null;
     };
 
