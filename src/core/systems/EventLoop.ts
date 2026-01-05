@@ -126,6 +126,7 @@ export namespace EventLoop {
         foundCount: number;
         query: string;
         target: string;
+        scanAvailable?: boolean;
     };
     type FileScanResult = {
         resolvedPath: string;
@@ -296,11 +297,12 @@ export namespace EventLoop {
                 requestedCount: limits.maxCount,
                 visitedCount: 0,
                 maxDepthReached: 0,
-                hitCountLimit: true,
-                hitDepthLimit: true,
+                hitCountLimit: false,
+                hitDepthLimit: false,
                 foundCount: 0,
                 query: String(options?.query ?? ''),
-                target: normalized
+                target: normalized,
+                scanAvailable: false
             };
             emitFileScanSummary(summary);
             const fallback = safeCwd ? joinPaths(safeCwd, normalized) : normalized;

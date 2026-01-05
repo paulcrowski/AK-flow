@@ -74,13 +74,56 @@ const resolveDirectoryHandle = async (
   return current;
 };
 
+const readFileViaHandle = async (params: {
+  dirHandle: FileSystemDirectoryHandle;
+  fileName: string;
+  resolvedPath: string;
+  intentId: string;
+  foundIn?: string;
+}): Promise<WorldToolResult> => {
+  const { dirHandle, fileName, resolvedPath, intentId, foundIn } = params;
+  try {
+    const fileHandle = await dirHandle.getFileHandle(fileName);
+    const file = await fileHandle.getFile();
+    const content = await file.text();
+    const evidenceId = evidenceLedger.record('READ_FILE', resolvedPath);
+    eventBus.publish({
+      id: generateUUID(),
+      timestamp: Date.now(),
+      source: AgentType.CORTEX_FLOW,
+      type: PacketType.TOOL_RESULT,
+      payload: {
+        tool: 'READ_FILE',
+        path: resolvedPath,
+        length: content.length,
+        intentId,
+        ...(foundIn ? { foundIn } : {})
+      },
+      priority: 0.7
+    });
+    return { ok: true, path: resolvedPath, content, evidenceId };
+  } catch {
+    return { ok: false, path: resolvedPath, error: 'FILE_READ_ERROR' };
+  }
+};
+
 const executeWorldToolWithFsAccess = async (params: {
   input: { tool: WorldToolName; path: string; content?: string };
   agentId: string;
 }): Promise<WorldToolResult> => {
   const { input, agentId } = params;
   const selection = getWorldDirectorySelection(agentId);
-  const rawPath = normalizeFsPath(input.path);
+  let rawPath = normalizeFsPath(input.path);
+  if (selection) {
+    const TOP_LEVEL_ALIASES = ['code', 'docs', 'notes', 'engineering', 'research', 'vision', 'todolist'];
+    for (const alias of TOP_LEVEL_ALIASES) {
+      const withSlash = `/${alias}`;
+      if (rawPath === withSlash || rawPath.startsWith(`${withSlash}/`)) {
+        rawPath = rawPath.slice(1);
+        break;
+      }
+    }
+  }
   if (!selection) {
     return { ok: false, path: rawPath || input.path, error: 'WORLD_ROOT_NOT_SELECTED' };
   }
@@ -155,20 +198,38 @@ const executeWorldToolWithFsAccess = async (params: {
       const fileName = segments.pop();
       if (!fileName) return { ok: false, path: resolved, error: 'PATH_IS_DIRECTORY' };
       const dirHandle = await resolveDirectoryHandle(rootHandle, segments, false);
-      if (!dirHandle) return { ok: false, path: resolved, error: 'NOT_FOUND' };
-      const fileHandle = await dirHandle.getFileHandle(fileName);
-      const file = await fileHandle.getFile();
-      const content = await file.text();
-      const evidenceId = evidenceLedger.record('READ_FILE', resolved);
-      eventBus.publish({
-        id: generateUUID(),
-        timestamp: Date.now(),
-        source: AgentType.CORTEX_FLOW,
-        type: PacketType.TOOL_RESULT,
-        payload: { tool: input.tool, path: resolved, length: content.length, intentId },
-        priority: 0.7
-      });
-      return { ok: true, path: resolved, content, evidenceId };
+      if (dirHandle) {
+        const primary = await readFileViaHandle({
+          dirHandle,
+          fileName,
+          resolvedPath: resolved,
+          intentId
+        });
+        if (primary.ok) return primary;
+      }
+
+      if (segments.length === 0) {
+        const KNOWN_DIRS = ['code', 'docs', 'notes', 'engineering', 'research', 'vision', 'todolist'];
+        for (const knownDir of KNOWN_DIRS) {
+          try {
+            const tryDir = await rootHandle.getDirectoryHandle(knownDir, { create: false });
+            await tryDir.getFileHandle(fileName, { create: false });
+            const newResolved = joinPaths(basePath, knownDir, fileName);
+            const fallback = await readFileViaHandle({
+              dirHandle: tryDir,
+              fileName,
+              resolvedPath: newResolved,
+              intentId,
+              foundIn: knownDir
+            });
+            if (fallback.ok) return fallback;
+          } catch {
+            continue;
+          }
+        }
+      }
+
+      return { ok: false, path: resolved, error: 'NOT_FOUND' };
     }
 
     if (input.tool === 'WRITE_FILE') {
