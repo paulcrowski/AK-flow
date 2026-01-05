@@ -1,9 +1,25 @@
-import { promises as fs } from 'fs';
-import path from 'path';
 import { eventBus } from '../EventBus';
 import { AgentType, PacketType } from '../../types';
 import type { SchemaStore } from '../memory/SchemaStore';
 import type { TensionRegistry } from './TensionRegistry';
+
+type FsModule = typeof import('fs/promises');
+let fsModule: FsModule | null = null;
+const IS_NODE =
+  typeof process !== 'undefined' &&
+  Boolean((process as { versions?: { node?: string } }).versions?.node);
+
+const getFs = async (): Promise<FsModule | null> => {
+  if (!IS_NODE) return null;
+  if (!fsModule) {
+    fsModule = await import('fs/promises');
+  }
+  return fsModule;
+};
+
+const normalizePath = (input: string): string => String(input || '').replace(/\\/g, '/');
+const joinPaths = (...parts: string[]): string =>
+  normalizePath(parts.filter(Boolean).join('/')).replace(/\/+/g, '/');
 
 export interface SleepUpdate {
   timestamp: number;
@@ -61,13 +77,18 @@ export async function performSleepCycle(input: {
   result.selectedTensionForTomorrow = topTension?.key || null;
   input.tensionRegistry.setSelectedForTomorrow(result.selectedTensionForTomorrow);
 
-  const logDir = path.join(input.store.getWorldRoot(), 'experiments', 'sleep_logs');
-  await fs.mkdir(logDir, { recursive: true });
-  const logPath = path.join(
-    logDir,
-    `${new Date().toISOString().replace(/:/g, '-')}.json`
-  );
-  await fs.writeFile(logPath, JSON.stringify(result, null, 2));
+  const fs = await getFs();
+  if (fs) {
+    const logDir = joinPaths(input.store.getWorldRoot(), 'experiments', 'sleep_logs');
+    await fs.mkdir(logDir, { recursive: true });
+    const logPath = joinPaths(
+      logDir,
+      `${new Date().toISOString().replace(/:/g, '-')}.json`
+    );
+    await fs.writeFile(logPath, JSON.stringify(result, null, 2));
+  } else {
+    console.warn('[SleepSystem] FS unavailable, skipping sleep log write.');
+  }
 
   eventBus.publish({
     id: `sleep_cycle_${Date.now()}`,

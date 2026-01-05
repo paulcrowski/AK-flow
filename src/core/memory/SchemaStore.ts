@@ -1,7 +1,23 @@
-import { promises as fs } from 'fs';
-import path from 'path';
 import { eventBus } from '../EventBus';
 import { AgentType, PacketType } from '../../types';
+
+type FsModule = typeof import('fs/promises');
+let fsModule: FsModule | null = null;
+const IS_NODE =
+  typeof process !== 'undefined' &&
+  Boolean((process as { versions?: { node?: string } }).versions?.node);
+
+const getFs = async (): Promise<FsModule | null> => {
+  if (!IS_NODE) return null;
+  if (!fsModule) {
+    fsModule = await import('fs/promises');
+  }
+  return fsModule;
+};
+
+const normalizePath = (input: string): string => String(input || '').replace(/\\/g, '/');
+const joinPaths = (...parts: string[]): string =>
+  normalizePath(parts.filter(Boolean).join('/')).replace(/\/+/g, '/');
 
 export interface Schema {
   id: string;
@@ -24,19 +40,21 @@ export class SchemaStore {
   }
 
   private schemasPath(): string {
-    return path.join(this.worldRoot, 'knowledge', 'schemas');
+    return joinPaths(this.worldRoot, 'knowledge', 'schemas');
   }
 
   private historyPath(id: string): string {
-    return path.join(this.schemasPath(), '_history', id);
+    return joinPaths(this.schemasPath(), '_history', id);
   }
 
   private schemaFile(id: string): string {
-    return path.join(this.schemasPath(), `${id}.json`);
+    return joinPaths(this.schemasPath(), `${id}.json`);
   }
 
   async list(): Promise<string[]> {
     try {
+      const fs = await getFs();
+      if (!fs) return [];
       const entries = await fs.readdir(this.schemasPath(), { withFileTypes: true });
       return entries
         .filter((e) => e.isFile() && e.name.endsWith('.json'))
@@ -48,6 +66,8 @@ export class SchemaStore {
 
   async load(id: string): Promise<Schema | null> {
     try {
+      const fs = await getFs();
+      if (!fs) return null;
       const raw = await fs.readFile(this.schemaFile(id), 'utf8');
       return JSON.parse(raw) as Schema;
     } catch {
@@ -56,6 +76,8 @@ export class SchemaStore {
   }
 
   async save(schema: Schema): Promise<void> {
+    const fs = await getFs();
+    if (!fs) return;
     await fs.mkdir(this.schemasPath(), { recursive: true });
 
     const existing = await this.load(schema.id);
@@ -85,10 +107,12 @@ export class SchemaStore {
   }
 
   private async saveHistory(schema: Schema): Promise<void> {
+    const fs = await getFs();
+    if (!fs) return;
     const dir = this.historyPath(schema.id);
     await fs.mkdir(dir, { recursive: true });
     const filename = `${schema.revision}_${Date.now()}.json`;
-    await fs.writeFile(path.join(dir, filename), JSON.stringify(schema, null, 2));
+    await fs.writeFile(joinPaths(dir, filename), JSON.stringify(schema, null, 2));
   }
 
   async incrementUsage(

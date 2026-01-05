@@ -28,8 +28,6 @@ import { storeSelfSummary } from './dreamConsolidation/storage';
 import { storeTopicShardsFromRecent } from './dreamConsolidation/topicShards';
 import { proposeTraitChanges } from './dreamConsolidation/traitProposal';
 import { SessionChunkService } from './SessionChunkService';
-import { SchemaStore } from '../core/memory/SchemaStore';
-import { performSleepCycle } from '../core/systems/SleepSystem';
 import { tensionRegistry } from '../core/systems/TensionRegistry';
 import { DEFAULT_AGENT_ID, getAgentWorldRoot } from '../core/systems/WorldAccess';
 
@@ -42,6 +40,9 @@ export type { ConsolidationEpisode, DreamConsolidationResult, TraitVectorProposa
 const MAX_EPISODES_TO_PROCESS = 5;
 // Lowered threshold to reduce empty consolidations
 const MIN_NEURAL_STRENGTH_FOR_CONSOLIDATION = 5; // Integer 0-100 (percentage)
+const IS_NODE =
+    typeof process !== 'undefined' &&
+    Boolean((process as { versions?: { node?: string } }).versions?.node);
 
 // --- SERVICE ---
 
@@ -56,11 +57,16 @@ export const DreamConsolidationService = {
     ): Promise<DreamConsolidationResult> {
         const agentId = getCurrentAgentId();
         const timestamp = new Date().toISOString();
-        const worldRoot = getAgentWorldRoot(agentId || DEFAULT_AGENT_ID);
-        const schemaStore = new SchemaStore(worldRoot);
+        const worldRoot = getAgentWorldRoot(agentId || DEFAULT_AGENT_ID, agentName);
 
         const runSleepCycle = async () => {
+            if (!IS_NODE) return;
             try {
+                const [{ SchemaStore }, { performSleepCycle }] = await Promise.all([
+                    import('../core/memory/SchemaStore'),
+                    import('../core/systems/SleepSystem')
+                ]);
+                const schemaStore = new SchemaStore(worldRoot);
                 await performSleepCycle({
                     store: schemaStore,
                     usedSchemaIds: [],

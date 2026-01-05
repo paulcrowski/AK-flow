@@ -17,7 +17,7 @@ import { GoalContext } from './GoalSystem';
 import { ExecutiveGate } from './ExecutiveGate';
 import { UserStylePrefs } from './StyleGuard';
 import { TraceContext, generateTraceId, pushTraceId, popTraceId } from '../trace/TraceContext';
-import { getCurrentAgentId } from '../../services/supabase';
+import { getCurrentAgentId, getCurrentAgentName } from '../../services/supabase';
 import { createMemorySpace } from './MemorySpace';
 import { TickCommitter } from './TickCommitter';
 import { publishTickStart, publishTickSkipped, publishThinkModeSelected, publishTickEnd, p0MetricStartTick, publishP0Metric } from './TickLifecycleTelemetry';
@@ -31,13 +31,11 @@ import { evidenceLedger } from './EvidenceLedger';
 import { tensionRegistry, type TensionItem } from './TensionRegistry';
 import { formIntention } from './IntentionSystem';
 import { selectAction, type ActionType } from './ActionSelector';
-import { SchemaStore, type Schema } from '../memory/SchemaStore';
+import type { Schema } from '../memory/SchemaStore';
 import { createSchemaFromObservation } from '../memory/SchemaBuilder';
 import { DEFAULT_AGENT_ID, getAgentWorldRoot } from './WorldAccess';
 import { executeWorldTool } from '../../tools/workspaceTools';
 import { generateUUID } from '../../utils/uuid';
-import { promises as fs } from 'fs';
-import path from 'path';
 
 export namespace EventLoop {
     export type ThinkMode = 'reactive' | 'goal_driven' | 'autonomous' | 'idle';
@@ -78,16 +76,36 @@ export namespace EventLoop {
     });
     let tickCount = 0;
     const fileLookupCache = new Map<string, string>();
-    const schemaStores = new Map<string, SchemaStore>();
+    type SchemaStoreLike = {
+        load(id: string): Promise<Schema | null>;
+        save(schema: Schema): Promise<void>;
+        incrementUsage(
+            id: string,
+            evidenceRef?: string,
+            mutate?: (schema: Schema) => void
+        ): Promise<Schema | null>;
+    };
+    const schemaStores = new Map<string, SchemaStoreLike>();
     const pendingWakeObserve = { key: null as string | null };
+    const isNode =
+        typeof process !== 'undefined' &&
+        Boolean((process as { versions?: { node?: string } }).versions?.node);
 
     const DEFAULT_CHUNK_RELEVANCE = 0.6;
     const READINESS_BOOST_PER_TICK = 0.01;
     const FILE_CONTENT_TRUNCATE_LIMIT = 8000;
     const EVIDENCE_TYPES = ['READ_FILE', 'TEST_OUTPUT', 'SEARCH_HIT'] as const;
+    const normalizeFsPath = (input: string) => String(input || '').replace(/\\/g, '/');
+    const joinPaths = (...parts: string[]) =>
+        normalizeFsPath(parts.filter(Boolean).join('/')).replace(/\/+/g, '/');
+    const isAbsolutePath = (value: string) => /^[A-Za-z]:[\\/]/.test(value) || value.startsWith('/');
+    const baseName = (value: string) => normalizeFsPath(value).split('/').pop() ?? value;
 
     const FILE_REF_REGEX = /([A-Za-z]:[\\/][^\s]+|\/[^\s]+|[A-Za-z0-9._-]+(?:[\\/][A-Za-z0-9._-]+)+\.[A-Za-z0-9]{1,8}|[A-Za-z0-9._-]+\.[A-Za-z0-9]{1,8})/;
     const EVIDENCE_QUERY_REGEX = /\b(co jest w|co zawiera|zawartosc|show|what is in|open|read|file|plik)\b/i;
+    const DIR_QUERY_REGEX = /\b(katalog|folder|directory|dir|lista plikow|list files?)\b/i;
+    const DIR_TARGET_REGEX = /(?:katalog|folder|directory|dir|lista plikow|list files?(?: in)?)\s+["'`]?([A-Za-z]:[\\/][^\s"'`]+|\/[^\s"'`]+|[A-Za-z0-9._-]+(?:[\\/][A-Za-z0-9._-]+)*)/i;
+    const DIR_TRAILING_REGEX = /([A-Za-z]:[\\/][^\s"'`]+|\/[^\s"'`]+|[A-Za-z0-9._-]+(?:[\\/][A-Za-z0-9._-]+)*\/)/;
     const SKIP_DIRS = new Set(['node_modules', '.git', 'dist', 'ak-nexus', 'database', '_patches', '_workbench']);
     const safeCwd = typeof process !== 'undefined' && typeof process.cwd === 'function' ? process.cwd() : '';
 
@@ -124,12 +142,30 @@ export namespace EventLoop {
         return { maxDepth, maxCount };
     };
 
+    type FsModule = typeof import('fs/promises');
+    let fsPromise: Promise<FsModule | null> | null = null;
+    let schemaStoreCtor: (new (worldRoot: string) => SchemaStoreLike) | null = null;
+
+    const loadFs = async (): Promise<FsModule | null> => {
+        if (!isNode) return null;
+        if (!fsPromise) {
+            fsPromise = import('fs/promises').catch(() => null);
+        }
+        return fsPromise;
+    };
+
     const getEvidenceCount = () => evidenceLedger.getCount(300000, [...EVIDENCE_TYPES]);
 
-    const getSchemaStore = (worldRoot: string) => {
+    const getSchemaStore = async (worldRoot: string): Promise<SchemaStoreLike | null> => {
+        if (!isNode) return null;
         const existing = schemaStores.get(worldRoot);
         if (existing) return existing;
-        const store = new SchemaStore(worldRoot);
+        if (!schemaStoreCtor) {
+            const mod = await import('../memory/SchemaStore');
+            schemaStoreCtor = mod.SchemaStore as unknown as new (root: string) => SchemaStoreLike;
+        }
+        if (!schemaStoreCtor) return null;
+        const store = new schemaStoreCtor(worldRoot);
         schemaStores.set(worldRoot, store);
         return store;
     };
@@ -137,6 +173,7 @@ export namespace EventLoop {
     const questionRequiresEvidence = (input: string) => {
         const normalized = String(input || '').toLowerCase();
         if (FILE_REF_REGEX.test(normalized)) return true;
+        if (DIR_QUERY_REGEX.test(normalized)) return false;
         return EVIDENCE_QUERY_REGEX.test(normalized);
     };
 
@@ -147,12 +184,23 @@ export namespace EventLoop {
         return match[1].replace(/[),.;:!?"']+$/, '');
     };
 
+    const extractDirectoryTarget = (input: string | null): string | null => {
+        if (!input) return null;
+        const raw = String(input);
+        const keywordMatch = raw.match(DIR_TARGET_REGEX);
+        if (keywordMatch?.[1]) return keywordMatch[1].replace(/[),.;:!?"']+$/, '');
+        const trailingMatch = raw.match(DIR_TRAILING_REGEX);
+        if (trailingMatch?.[1]) return trailingMatch[1].replace(/[),.;:!?"']+$/, '');
+        return null;
+    };
+
     const findFileByName = async (
         root: string,
         target: string,
         depth: number,
         limits: FileScanLimits,
-        state: FileScanState
+        state: FileScanState,
+        fsModule: FsModule
     ): Promise<string | null> => {
         if (depth > limits.maxDepth) {
             state.hitDepthLimit = true;
@@ -162,7 +210,7 @@ export namespace EventLoop {
         state.maxDepthReached = Math.max(state.maxDepthReached, depth);
         let entries: any[] = [];
         try {
-            entries = await fs.readdir(root, { withFileTypes: true });
+            entries = await fsModule.readdir(root, { withFileTypes: true });
         } catch {
             return null;
         }
@@ -174,10 +222,17 @@ export namespace EventLoop {
             state.visitedCount += 1;
             if (entry.isDirectory()) {
                 if (SKIP_DIRS.has(entry.name)) continue;
-                const found = await findFileByName(path.join(root, entry.name), target, depth + 1, limits, state);
+                const found = await findFileByName(
+                    joinPaths(root, entry.name),
+                    target,
+                    depth + 1,
+                    limits,
+                    state,
+                    fsModule
+                );
                 if (found) return found;
             } else if (entry.isFile() && entry.name.toLowerCase() === target.toLowerCase()) {
-                return path.join(root, entry.name);
+                return joinPaths(root, entry.name);
             }
         }
         return null;
@@ -212,12 +267,12 @@ export namespace EventLoop {
         if (!normalized) {
             return { resolvedPath: normalized, found: false, summary: null };
         }
-        if (path.isAbsolute(normalized) || normalized.startsWith('/')) {
+        if (isAbsolutePath(normalized)) {
             return { resolvedPath: normalized, found: true, summary: null };
         }
         if (normalized.includes('/') || normalized.includes('\\')) {
             return {
-                resolvedPath: safeCwd ? path.resolve(safeCwd, normalized) : normalized,
+                resolvedPath: safeCwd ? joinPaths(safeCwd, normalized) : normalized,
                 found: true,
                 summary: null
             };
@@ -233,10 +288,28 @@ export namespace EventLoop {
             hitCountLimit: false,
             hitDepthLimit: false
         };
-        const candidateRoots = options?.candidateRoots ?? (safeCwd ? [path.join(safeCwd, 'src'), safeCwd] : []);
+        const candidateRoots = options?.candidateRoots ?? (safeCwd ? [joinPaths(safeCwd, 'src'), safeCwd] : []);
+        const fsModule = await loadFs();
+        if (!fsModule) {
+            const summary: FileScanSummary = {
+                requestedDepth: limits.maxDepth,
+                requestedCount: limits.maxCount,
+                visitedCount: 0,
+                maxDepthReached: 0,
+                hitCountLimit: true,
+                hitDepthLimit: true,
+                foundCount: 0,
+                query: String(options?.query ?? ''),
+                target: normalized
+            };
+            emitFileScanSummary(summary);
+            const fallback = safeCwd ? joinPaths(safeCwd, normalized) : normalized;
+            fileLookupCache.set(normalized, fallback);
+            return { resolvedPath: fallback, found: false, summary };
+        }
         let foundPath: string | null = null;
         for (const root of candidateRoots) {
-            const found = await findFileByName(root, normalized, 0, limits, state);
+            const found = await findFileByName(root, normalized, 0, limits, state, fsModule);
             if (found) {
                 foundPath = found;
                 break;
@@ -255,7 +328,7 @@ export namespace EventLoop {
         };
         emitFileScanSummary(summary);
 
-        const resolved = foundPath ?? (safeCwd ? path.resolve(safeCwd, normalized) : normalized);
+        const resolved = foundPath ?? (safeCwd ? joinPaths(safeCwd, normalized) : normalized);
         fileLookupCache.set(normalized, resolved);
         return { resolvedPath: resolved, found: Boolean(foundPath), summary };
     };
@@ -337,8 +410,9 @@ export namespace EventLoop {
             input: string | null;
         }): Promise<{ blockCortex: boolean }> => {
             const agentId = trace.agentId || getCurrentAgentId() || DEFAULT_AGENT_ID;
-            const worldRoot = getAgentWorldRoot(agentId);
-            const schemaStore = getSchemaStore(worldRoot);
+            const agentName = getCurrentAgentName();
+            const worldRoot = getAgentWorldRoot(agentId, agentName);
+            const schemaStore = await getSchemaStore(worldRoot);
 
             if (!ctx.soma.isSleeping && pendingWakeObserve.key === null) {
                 const selected = tensionRegistry.consumeSelectedForTomorrow();
@@ -442,7 +516,8 @@ export namespace EventLoop {
             });
 
             const upsertSchema = async (params: { path: string; content: string; evidenceId: string }) => {
-                const concept = path.basename(params.path).replace(/\.[^.]+$/, '');
+                if (!schemaStore) return;
+                const concept = baseName(params.path).replace(/\.[^.]+$/, '');
                 const draft = createSchemaFromObservation({
                     concept,
                     observation: params.content,
@@ -473,6 +548,25 @@ export namespace EventLoop {
             };
 
             const executeObserve = async (options: { allowScanFallback: boolean }) => {
+                const dirTarget = extractDirectoryTarget(params.input);
+                if (dirTarget) {
+                    const listResult = await executeWorldTool({
+                        tool: 'LIST_DIR',
+                        path: dirTarget,
+                        agentId
+                    });
+                    if (listResult.ok && listResult.entries) {
+                        const toolText = `LIST_DIR ${listResult.path}\n${listResult.entries.join('\n')}`;
+                        callbacks.onMessage('assistant', toolText, 'tool_result');
+                        ctx.conversation.push({ role: 'assistant', text: toolText, type: 'tool_result' });
+                        return { observed: true, skipEvidenceGate: false };
+                    }
+                    if (!listResult.ok) {
+                        callbacks.onThought(`[OBSERVE_ERROR] ${listResult.error || 'unknown'}`);
+                    }
+                    return { observed: false, skipEvidenceGate: false };
+                }
+
                 const target = extractFileTarget(params.input);
                 if (target) {
                     const initialScan = await resolveObservationPath(target, { query: params.input ?? '' });
@@ -529,7 +623,7 @@ export namespace EventLoop {
                             ctx.conversation.push({ role: 'assistant', text: toolText, type: 'tool_result' });
                         }
 
-                        const narrowedRoots = safeCwd ? [path.join(safeCwd, 'src')] : [];
+                        const narrowedRoots = safeCwd ? [joinPaths(safeCwd, 'src')] : [];
                         const narrowedScan = await resolveObservationPath(target, {
                             query: params.input ?? '',
                             candidateRoots: narrowedRoots,
