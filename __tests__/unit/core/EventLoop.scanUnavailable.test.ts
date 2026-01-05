@@ -1,7 +1,5 @@
 import { describe, it, expect, vi, beforeAll, afterAll, beforeEach } from 'vitest';
-import { eventBus } from '@core/EventBus';
 import { PacketType } from '@/types';
-import { evidenceLedger } from '@core/systems/EvidenceLedger';
 
 vi.mock('@core/systems/LimbicSystem', () => ({
   LimbicSystem: {
@@ -70,14 +68,18 @@ describe('EventLoop scan availability', () => {
   });
 
   beforeEach(() => {
-    eventBus.clear();
-    evidenceLedger.clear();
     vi.useRealTimers();
   });
 
   it('emits scanAvailable=false when file scanning is unavailable', async () => {
     vi.resetModules();
-    const { EventLoop } = await import('@core/systems/EventLoop');
+    const [{ EventLoop }, { eventBus }, { evidenceLedger }] = await Promise.all([
+      import('@core/systems/EventLoop'),
+      import('@core/EventBus'),
+      import('@core/systems/EvidenceLedger')
+    ]);
+    eventBus.clear();
+    evidenceLedger.clear();
 
     const mockCtx: EventLoop.LoopContext = {
       soma: { energy: 100, cognitiveLoad: 0, isSleeping: false },

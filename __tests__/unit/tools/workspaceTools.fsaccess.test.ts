@@ -1,5 +1,4 @@
 import { describe, it, expect, vi, beforeAll, afterAll, beforeEach } from 'vitest';
-import { eventBus } from '@core/EventBus';
 import { PacketType } from '@/types';
 
 const originalVersions = process.versions;
@@ -81,7 +80,6 @@ describe('workspaceTools FS access', () => {
   });
 
   beforeEach(() => {
-    eventBus.clear();
     rootHandle = new FakeDirHandle();
     const codeDir = new FakeDirHandle();
     codeDir.addFile('README.md', 'hello from code');
@@ -90,7 +88,11 @@ describe('workspaceTools FS access', () => {
 
   it('aliases /code paths for fs access', async () => {
     vi.resetModules();
-    const { executeWorldTool } = await import('@tools/workspaceTools');
+    const [{ executeWorldTool }, { eventBus }] = await Promise.all([
+      import('@tools/workspaceTools'),
+      import('@core/EventBus')
+    ]);
+    eventBus.clear();
 
     const result = await executeWorldTool({
       tool: 'READ_FILE',
@@ -107,7 +109,11 @@ describe('workspaceTools FS access', () => {
 
   it('falls back to known dirs when file is requested from root', async () => {
     vi.resetModules();
-    const { executeWorldTool } = await import('@tools/workspaceTools');
+    const [{ executeWorldTool }, { eventBus }] = await Promise.all([
+      import('@tools/workspaceTools'),
+      import('@core/EventBus')
+    ]);
+    eventBus.clear();
 
     const result = await executeWorldTool({
       tool: 'READ_FILE',
