@@ -372,27 +372,7 @@ export function selectAction(ctx: UnifiedContext): ActionDecision {
     };
   }
 
-  const store = useArtifactStore.getState();
-  const artifacts = store.list();
-  const isStale = grounding.silenceDurationSec > 300;
-  const needsSnapshot = artifacts.length > 5;
-  if (!pendingWork && (isStale || needsSnapshot)) {
-    return {
-      action: 'MAINTAIN',
-      allowed: true,
-      reason: isStale ? 'No pending work and conversation stale (>5min)' : 'No pending work and artifact debt (>5)',
-      groundingScore: 0.5,
-      suggestedPrompt: buildActionPrompt('MAINTAIN', ctx, grounding)
-    };
-  }
-  
-  // Default: SILENCE
-  return {
-    action: 'SILENCE',
-    allowed: true,
-    reason: 'No pending work',
-    groundingScore: 0
-  };
+  return pickDrive(ctx);
 }
 
 /**
