@@ -34,6 +34,7 @@ import { getCurrentTraceId, getStartupTraceId } from '../core/trace/TraceContext
 import { loadConversation, loadConversationForSession, syncToLocalStorage, mapTurnsToUiMessages } from '../core/memory/ConversationStore';
 import { KernelController } from '../core/runner/KernelController';
 import { initRuntime, type RuntimeHandle } from '@runtime/initRuntime';
+import { applyActionFeedback } from '../core/systems/eventloop/AutonomousVolitionStep';
 
 // Deterministic RNG for reproducible behavior
 const rng = createRng(SYSTEM_CONFIG.rng.seed);
@@ -471,6 +472,30 @@ export const useCognitiveKernelLite = (loadedIdentity?: AgentIdentity | null) =>
     });
     return () => unsubscribe();
   }, []);
+
+  useEffect(() => {
+    const handleToolResult = (packet: CognitivePacket) => {
+      const tool = String(packet.payload?.tool || '');
+      if (!tool) return;
+      setLimbicState((prev) => applyActionFeedback({ success: true, tool }, prev));
+    };
+
+    const handleToolError = (packet: CognitivePacket) => {
+      const tool = String(packet.payload?.tool || '');
+      if (!tool) return;
+      setLimbicState((prev) => applyActionFeedback({ success: false, tool }, prev));
+    };
+
+    const unsubResult = eventBus.subscribe(PacketType.TOOL_RESULT, handleToolResult);
+    const unsubError = eventBus.subscribe(PacketType.TOOL_ERROR, handleToolError);
+    const unsubTimeout = eventBus.subscribe(PacketType.TOOL_TIMEOUT, handleToolError);
+
+    return () => {
+      unsubResult();
+      unsubError();
+      unsubTimeout();
+    };
+  }, [setLimbicState]);
 
   useEffect(() => {
     const normalize = (input: string) => String(input || '').replace(/\s+/g, ' ').trim();

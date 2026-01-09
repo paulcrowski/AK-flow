@@ -91,6 +91,40 @@ const autonomyFailureState = {
   baseCooldownMs: 25_000
 };
 
+const normalizeToolName = (tool: string): string => {
+  const name = String(tool || '');
+  if (name.startsWith('READ_FILE')) return 'READ_FILE';
+  if (name.startsWith('LIST_')) return 'LIST_DIR';
+  if (name.startsWith('SEARCH')) return 'SEARCH';
+  if (name.startsWith('WRITE') || name.startsWith('APPEND')) return 'WRITE_FILE';
+  if (name.startsWith('READ_ARTIFACT')) return 'READ_ARTIFACT';
+  return 'OTHER';
+};
+
+export function applyActionFeedback(
+  result: { success: boolean; tool: string },
+  limbic: LimbicState
+): LimbicState {
+  const toolNorm = normalizeToolName(result.tool);
+
+  if (result.success && (toolNorm === 'READ_FILE' || toolNorm === 'LIST_DIR')) {
+    return {
+      ...limbic,
+      curiosity: Math.max(0.1, limbic.curiosity - 0.15),
+      satisfaction: Math.min(1, limbic.satisfaction + 0.1)
+    };
+  }
+
+  if (!result.success) {
+    return {
+      ...limbic,
+      frustration: Math.min(1, limbic.frustration + 0.1)
+    };
+  }
+
+  return limbic;
+}
+
 function shouldTriggerAutonomy(silenceMs: number, minSilenceMs: number): boolean {
   const now = Date.now();
   const { lastAttemptAt, consecutiveFailures, baseCooldownMs } = autonomyFailureState;
