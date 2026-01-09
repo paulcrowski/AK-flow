@@ -20,8 +20,10 @@
  */
 
 import type { UnifiedContext } from '../context';
+import type { LimbicState, NeurotransmitterState, SomaState } from '../../types';
 import { getAutonomyConfig, SYSTEM_CONFIG } from '../config/systemConfig';
 import { useArtifactStore } from '../../stores/artifactStore';
+import { tensionRegistry } from './TensionRegistry';
 
 // P0.1 COMMIT 4: Work-First Autonomy
 // Feature flag - can be disabled if causing issues
@@ -80,6 +82,13 @@ export type AutonomyAction =
   | 'REFLECT'
   | 'REST';
 
+interface Desires {
+  explore: number;
+  resolve: number;
+  create: number;
+  rest: number;
+}
+
 /**
  * Action decision with reasoning
  */
@@ -107,6 +116,34 @@ export interface GroundingAnalysis {
 // ═══════════════════════════════════════════════════════════════════════════
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════════════════════
+
+const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
+
+export function computeDesires(
+  soma: SomaState,
+  limbic: LimbicState,
+  neuro: NeurotransmitterState
+): Desires {
+  const topTension = tensionRegistry.top(1)[0]?.severity || 0;
+  const energyNorm = soma.energy / 100;
+  const loadNorm = soma.cognitiveLoad / 100;
+  const dopamineLow = 1 - (neuro.dopamine / 100);
+
+  return {
+    explore: clamp01(
+      limbic.curiosity * (1 - limbic.satisfaction) * (1 + dopamineLow * 0.3)
+    ),
+    resolve: clamp01(
+      Math.max(limbic.frustration, limbic.fear, topTension)
+    ),
+    create: clamp01(
+      limbic.satisfaction * energyNorm * (1 - limbic.frustration)
+    ),
+    rest: clamp01(
+      (1 - energyNorm) * 0.7 + loadNorm * 0.3
+    )
+  };
+}
 
 const CONFIG = {
   /** Minimum conversation turns to allow SUMMARIZE */
