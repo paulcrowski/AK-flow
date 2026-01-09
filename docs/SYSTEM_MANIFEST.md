@@ -1,6 +1,6 @@
 # AK-FLOW: Cognitive Agent Architecture Manifest
-**System Version:** 6.10.5 (Evidence Scan Guard + Intention Actions)  
-**Last Updated:** 2026-01-04  
+**System Version:** 6.10.6 (Autonomy Bio Loop + World Routing)  
+**Last Updated:** 2026-01-09  
 **Architecture Type:** Active Inference (Friston) + Global Workspace Theory + Multi-Modal RAG + **Stateless Inference Engine**  
 **Status:** Autonomous / Stateful / Modular / Self-Aware / Goal-Driven / Personality-Driven / **Emergent Identity**
 
@@ -28,6 +28,23 @@ We embrace the artificial nature as a feature, not a bug.
 - **Measurable Soul:** Emotions and "vibes" are allowed, but they must map to system metrics (Energy, Dopamine), not just literary roleplay.
 
 ---
+
+## What's New in V6.10.6 (2026-01-09)
+
+### Autonomy bio loop + world routing
+
+**Goal:** replace SILENCE as default by driving action from internal state, and prevent world paths from being routed into artifacts.
+
+**Key changes:**
+- World-vs-artifact routing helpers with routing telemetry for read intents.
+- Autonomy drives (EXPLORE_WORLD/MEMORY/REFLECT/REST), desire computation, drive selection, and action prompts.
+- Limbic feedback on tool results plus centralized tool energy costs and normalization.
+
+**Configuration (Single Source):**
+- No config changes.
+
+**Tests:**
+Not rerun (new unit tests added for routing, desires, drive selection, feedback, energy, and autonomy selection).
 
 ## What's New in V6.10.5 (2026-01-04)
 

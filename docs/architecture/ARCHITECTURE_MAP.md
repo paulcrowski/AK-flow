@@ -1,6 +1,6 @@
 # 🧠 AK-FLOW Architecture Map
 
-> **Wersja:** 6.10.5 (2026-01-04)
+> **Wersja:** 6.10.6 (2026-01-09)
 > **Cel:** Prosta mapa jak działa agent i jaki ma flow
 
 ## Archive policy
@@ -9,6 +9,15 @@
 Ten katalog jest wykluczony z kompilacji TypeScript i służy wyłącznie jako referencja do poprzednich iteracji.
 
 ---
+
+## FAZA 6.10.6: Autonomia Bio Loop + World Routing (2026-01-09)
+
+**Cel:** odblokowac autonomie bez SILENCE jako defaultu i poprawic routing world vs artifact.
+
+**Mechanika:**
+- Routing heuristics (path/verb) + ROUTING_DECISION telemetry dla READ intents.
+- computeDesires + pickDrive oraz nowe akcje: EXPLORE_WORLD/MEMORY/REFLECT/REST.
+- Feedback loop po TOOL_RESULT (limbic) + centralne TOOL_COST.
 
 ## FAZA 6.10.5: Evidence Scan Guard + Intention Actions (2026-01-04)
 
