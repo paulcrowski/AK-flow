@@ -74,7 +74,11 @@ export type AutonomyAction =
   | 'EXPLORE'    // Propose new topic (restricted) - DEPRECATED in P0.1
   | 'WORK'       // P0.1: Append to pending artifact
   | 'MAINTAIN'   // P0: System maintenance (snapshot, cleanup)
-  | 'SILENCE';   // Say nothing (default fallback)
+  | 'SILENCE'    // Say nothing (default fallback)
+  | 'EXPLORE_WORLD'
+  | 'EXPLORE_MEMORY'
+  | 'REFLECT'
+  | 'REST';
 
 /**
  * Action decision with reasoning
