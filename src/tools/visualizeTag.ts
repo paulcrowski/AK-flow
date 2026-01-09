@@ -5,7 +5,7 @@ import type { ToolParserDeps } from './toolParser';
 import { visualInFlight, scheduleSoftTimeout } from './toolRuntime';
 import * as SomaSystem from '../core/systems/SomaSystem';
 import * as LimbicSystem from '../core/systems/LimbicSystem';
-import { VISUAL_BASE_COOLDOWN_MS, VISUAL_ENERGY_COST_BASE } from '../core/constants';
+import { VISUAL_BASE_COOLDOWN_MS } from '../core/constants';
 
 function findVisualizeMatch(cleanText: string): { raw: string; prompt: string } | null {
   const direct = cleanText.match(/\[VISUALIZE:\s*([\s\S]*?)\]/i);
@@ -77,12 +77,8 @@ function startVisualOp(params: {
   params.deps.lastVisualTimestampRef.current = now;
   params.deps.visualBingeCountRef.current += 1;
 
-  const energyCost = VISUAL_ENERGY_COST_BASE * (currentBinge + 1);
-
   params.deps.setSomaState((prev) => {
-    let updated = SomaSystem.applyEnergyCost(prev, energyCost);
-    updated = SomaSystem.applyCognitiveLoad(updated, 15);
-    return updated;
+    return SomaSystem.applyCognitiveLoad(prev, 15);
   });
 
   params.deps.setLimbicState((prev) => LimbicSystem.applyVisualEmotionalCost(prev, currentBinge));

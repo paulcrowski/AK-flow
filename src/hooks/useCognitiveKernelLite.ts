@@ -21,7 +21,7 @@ import { eventBus } from '../core/EventBus';
 import { AgentType, PacketType, CognitiveError, TraitVector, NeurotransmitterState, type CognitivePacket } from '../types';
 import { generateUUID } from '../utils/uuid';
 import { MIN_TICK_MS, MAX_TICK_MS } from '../core/constants';
-import { EventLoop } from '../core/systems/EventLoop';
+import { EventLoop, normalizeToolName, TOOL_COST } from '../core/systems/EventLoop';
 import { DreamConsolidationService, type DreamConsolidationResult } from '../services/DreamConsolidationService';
 import { executeWakeProcess } from '../core/services/WakeService';
 import { getAutonomyConfig } from '../core/config/systemConfig';
@@ -35,6 +35,7 @@ import { loadConversation, loadConversationForSession, syncToLocalStorage, mapTu
 import { KernelController } from '../core/runner/KernelController';
 import { initRuntime, type RuntimeHandle } from '@runtime/initRuntime';
 import { applyActionFeedback } from '../core/systems/eventloop/AutonomousVolitionStep';
+import * as SomaSystem from '../core/systems/SomaSystem';
 
 // Deterministic RNG for reproducible behavior
 const rng = createRng(SYSTEM_CONFIG.rng.seed);
@@ -474,9 +475,16 @@ export const useCognitiveKernelLite = (loadedIdentity?: AgentIdentity | null) =>
   }, []);
 
   useEffect(() => {
+    const applyEnergyDrain = (tool: string) => {
+      const toolName = normalizeToolName(tool);
+      const cost = TOOL_COST[toolName] ?? 2;
+      setSomaState((prev) => SomaSystem.applyEnergyCost(prev, cost));
+    };
+
     const handleToolResult = (packet: CognitivePacket) => {
       const tool = String(packet.payload?.tool || '');
       if (!tool) return;
+      applyEnergyDrain(tool);
       setLimbicState((prev) => applyActionFeedback({ success: true, tool }, prev));
     };
 
@@ -495,7 +503,7 @@ export const useCognitiveKernelLite = (loadedIdentity?: AgentIdentity | null) =>
       unsubError();
       unsubTimeout();
     };
-  }, [setLimbicState]);
+  }, [setLimbicState, setSomaState]);
 
   useEffect(() => {
     const normalize = (input: string) => String(input || '').replace(/\s+/g, ' ').trim();
