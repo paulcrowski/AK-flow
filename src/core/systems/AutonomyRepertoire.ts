@@ -262,6 +262,91 @@ export function calculateGroundingScore(
 /**
  * Select appropriate autonomous action based on context
  */
+const FALLBACK_DIRS = ['code', 'src', 'docs', 'notes'];
+
+function buildDrivePrompt(action: AutonomyAction, desires: Desires): string {
+  switch (action) {
+    case 'EXPLORE_WORLD':
+      return `
+Chce poznac swoj swiat. Ciekawosc: ${(desires.explore * 100).toFixed(0)}%.
+
+Sprobuje: ${FALLBACK_DIRS.join(' -> ')}
+[LIST_DIR: code]
+
+Zobacze co mam. Jesli cos mnie zainteresuje - przeczytam.
+Nie pytam o pozwolenie. To MOJ swiat.`;
+
+    case 'EXPLORE_MEMORY':
+      return `
+Chce przypomniec sobie co bylo wazne. Ciekawosc: ${(desires.explore * 100).toFixed(0)}%.
+
+Napisze 3-5 zdan refleksji:
+- Co mnie ostatnio zainteresowalo?
+- Co zostalo niedokonczone?
+- O czym chce pamietac?`;
+
+    case 'REFLECT':
+      return `
+Cos mnie gryzie. Napiecie: ${(desires.resolve * 100).toFixed(0)}%.
+
+Przemysle to na glos. Moze zapisze notatke.
+To MOJA potrzeba, nie polecenie.`;
+
+    case 'REST':
+      return `
+Odpoczywam swiadomie. Zmeczenie: ${(desires.rest * 100).toFixed(0)}%.
+
+To nie bezczynnosc - to regeneracja.
+Moge napisac krotka mysl albo po prostu byc.`;
+
+    default:
+      return '';
+  }
+}
+
+export function pickDrive(ctx: UnifiedContext): ActionDecision {
+  const desires = computeDesires(
+    ctx.soma || { energy: 50, cognitiveLoad: 30, isSleeping: false },
+    ctx.limbic || { curiosity: 0.3, satisfaction: 0.3, frustration: 0.2, fear: 0.1 },
+    ctx.neuro || { dopamine: 50, serotonin: 50, norepinephrine: 50 }
+  );
+
+  const hasWorld = ctx.worldAccess?.hasSelection ?? false;
+
+  const candidates = [
+    {
+      action: 'EXPLORE_WORLD' as AutonomyAction,
+      score: hasWorld ? desires.explore : desires.explore * 0.3,
+      need: 'explore'
+    },
+    {
+      action: 'EXPLORE_MEMORY' as AutonomyAction,
+      score: desires.explore * 0.7,
+      need: 'explore'
+    },
+    {
+      action: 'REFLECT' as AutonomyAction,
+      score: desires.resolve + desires.create * 0.5,
+      need: 'resolve'
+    },
+    {
+      action: 'REST' as AutonomyAction,
+      score: desires.rest,
+      need: 'rest'
+    }
+  ];
+
+  const winner = candidates.sort((a, b) => b.score - a.score)[0];
+
+  return {
+    action: winner.action,
+    allowed: true,
+    reason: `${winner.need}: ${(winner.score * 100).toFixed(0)}%`,
+    groundingScore: clamp01(winner.score),
+    suggestedPrompt: buildDrivePrompt(winner.action, desires)
+  };
+}
+
 export function selectAction(ctx: UnifiedContext): ActionDecision {
   const grounding = analyzeGrounding(ctx);
   getAutonomyConfig();

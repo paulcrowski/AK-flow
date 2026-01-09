@@ -22,6 +22,7 @@ import { p0MetricAdd } from '../TickLifecycleTelemetry';
 import { detectIntent, getIntentType, getRetrievalLimit, type IntentResult, type IntentType } from '../IntentDetector';
 import { SessionChunkService } from '../../../services/SessionChunkService';
 import { fetchIdentityShards } from '../../services/IdentityDataService';
+import { getWorldDirectorySelection } from '@tools/worldDirectoryAccess';
 
 export type BudgetTracker = {
   checkBudget: (limit: number) => boolean;
@@ -265,6 +266,7 @@ export async function runAutonomousVolitionStep(input: {
   }
 
   const sessionMemory = await SessionMemoryService.getSessionStatsSafe();
+  const hasWorldSelection = trace.agentId ? Boolean(getWorldDirectorySelection(trace.agentId)) : false;
 
   const unifiedContext = UnifiedContextBuilder.build({
     agentName: basePersona.name,
@@ -282,6 +284,7 @@ export async function runAutonomousVolitionStep(input: {
     sessionChunks,
     identityShards,
     semanticMatches,
+    worldAccess: { hasSelection: hasWorldSelection },
     activeGoal: ctx.goalState.activeGoal
       ? {
           description: ctx.goalState.activeGoal.description,

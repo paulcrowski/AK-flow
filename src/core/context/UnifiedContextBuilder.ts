@@ -117,6 +117,7 @@ export interface UnifiedContext {
   basePersona: BasePersona;
   traitVector: TraitVector;
   stylePrefs: StylePrefs;
+  soma: SomaState;
   limbic: LimbicState;
   neuro: NeurotransmitterState;
   dialogueAnchor: DialogueAnchor;
@@ -124,6 +125,7 @@ export interface UnifiedContext {
   socialFrame: SocialFrame;
   sessionMemory?: SessionMemory;
   activeGoal?: { description: string; source: string; priority: number };
+  worldAccess?: { hasSelection: boolean };
   /** Action-specific prompt from AutonomyRepertoire (for autonomous mode) */
   actionPrompt?: string;
 }
@@ -166,6 +168,7 @@ export interface ContextBuilderInput {
   socialDynamics?: SocialDynamics;
   silenceStart: number;
   lastUserInteractionAt: number;
+  worldAccess?: { hasSelection: boolean };
   
   // Goal (optional)
   activeGoal?: { description: string; source: string; priority: number };
@@ -252,13 +255,15 @@ export const UnifiedContextBuilder = {
       basePersona: input.basePersona,
       traitVector: input.traitVector,
       stylePrefs,
+      soma: input.soma,
       limbic: input.limbic,
       neuro: input.neuro,
       dialogueAnchor,
       memoryAnchor,
       socialFrame,
       sessionMemory: input.sessionMemory,
-      activeGoal: input.activeGoal
+      activeGoal: input.activeGoal,
+      worldAccess: input.worldAccess
     };
   },
   
@@ -508,6 +513,10 @@ ALLOWED ACTIONS:
 2. CLARIFY - ask about something unclear
 3. SUMMARIZE - recap if conversation is long
 4. EXPLORE - new topic ONLY if the ACTION PROMPT selects EXPLORE as allowed
+5. EXPLORE_WORLD - explore files/directories in the world
+6. EXPLORE_MEMORY - reflect on memory and recent context
+7. REFLECT - think aloud about tension or unresolved issues
+8. REST - rest intentionally when energy is low
 ${actionPrompt}
 
 OUTPUT JSON:
