@@ -2,6 +2,9 @@ import { eventBus } from '../../EventBus';
 import { AgentType, PacketType } from '../../../types';
 import { generateUUID } from '../../../utils/uuid';
 import { detectFuzzyMismatch } from '../../utils/fuzzyMatch';
+import { getCurrentAgentId } from '@services/supabase';
+import { getWorldDirectorySelection } from '@tools/worldDirectoryAccess';
+import { hasWorldIntent, looksLikeArtifactRef, looksLikeWorldPath, routeDomain } from '@tools/toolParser';
 
 type ActionFirstResult = {
   // No intent uses null at the detector level (not { handled: false }).
@@ -301,10 +304,38 @@ function detectReplaceIntent(ctx: IntentInput): ActionFirstResult | null {
   return null;
 }
 
-function detectReadIntent(ctx: IntentInput): ActionFirstResult | null {
+function detectReadIntent(ctx: IntentInput, hasWorldAccess: boolean): ActionFirstResult | null {
   const readMatch = ctx.normalized.match(READ_REGEX);
-  if (readMatch) return { handled: true, action: 'READ', target: readMatch[1] };
-  return null;
+  if (!readMatch) return null;
+
+  const target = String(readMatch[1] || '').trim();
+  const domain = routeDomain(target, hasWorldAccess);
+  const reason = looksLikeArtifactRef(target)
+    ? 'artifact_ref'
+    : looksLikeWorldPath(target)
+      ? 'world_path'
+      : hasWorldAccess && hasWorldIntent(ctx.raw)
+        ? 'world_verb'
+        : 'default_artifact';
+
+  eventBus.publish({
+    id: generateUUID(),
+    timestamp: Date.now(),
+    source: AgentType.CORTEX_FLOW,
+    type: PacketType.SYSTEM_ALERT,
+    payload: {
+      event: 'ROUTING_DECISION',
+      input: ctx.raw,
+      domain,
+      reason,
+      parsedTarget: target,
+      tool: domain === 'WORLD' ? 'READ_FILE' : 'READ_ARTIFACT'
+    },
+    priority: 0.4
+  });
+
+  if (domain === 'WORLD') return null;
+  return { handled: true, action: 'READ', target };
 }
 
 function detectFileIntent(text: string): ActionFirstResult | null {
@@ -312,11 +343,14 @@ function detectFileIntent(text: string): ActionFirstResult | null {
   // Contract: null means no actionable intent (including ignored inputs).
   if (shouldIgnoreActionIntent(ctx)) return null;
 
+  const agentId = getCurrentAgentId?.() || null;
+  const hasWorldAccess = agentId ? Boolean(getWorldDirectorySelection(agentId)) : false;
+
   const regexResult =
     detectCreateIntent(ctx) ??
     detectAppendIntent(ctx) ??
     detectReplaceIntent(ctx) ??
-    detectReadIntent(ctx);
+    detectReadIntent(ctx, hasWorldAccess);
 
   const { fuzzyCategory, regexMissed } = detectFuzzyMismatch(text, regexResult);
   if (regexMissed && fuzzyCategory) {

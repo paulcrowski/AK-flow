@@ -16,6 +16,42 @@ import { withTimeout } from './toolRuntime';
 import { consumeSearchTag } from './searchTag';
 import { consumeVisualizeTag } from './visualizeTag';
 
+// Routing helpers: world vs artifact
+export const FILE_EXTENSIONS = /\.(md|txt|ts|js|jsx|tsx|json|yaml|yml|py|log|csv|html|css|sql)$/i;
+export const TOP_DIRS = ['code', 'docs', 'notes', 'engineering', 'research', 'vision', 'todolist', 'src'];
+export const WORLD_VERBS = ['przeczytaj', 'pokaz', 'lista', 'otworz', 'sprawdz', 'read', 'list', 'open', 'show', 'check'];
+
+export function looksLikeWorldPath(input: string): boolean {
+  const x = String(input || '').trim();
+  if (!x) return false;
+  if (x.startsWith('/')) return true;
+  if (x.includes('/')) return true;
+  if (TOP_DIRS.some((d) => x === d || x.startsWith(`${d}/`))) return true;
+  if (FILE_EXTENSIONS.test(x)) return true;
+  return false;
+}
+
+export function looksLikeArtifactRef(input: string): boolean {
+  const x = String(input || '').trim().toLowerCase();
+  if (x.includes('artefakt') || x.includes('artifact')) return true;
+  return /(^|\s)art-\d+(\s|$)/i.test(x);
+}
+
+export function hasWorldIntent(input: string): boolean {
+  const lower = String(input || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
+  return WORLD_VERBS.some((v) => lower.includes(v));
+}
+
+export function routeDomain(input: string, hasWorldAccess: boolean): 'ARTIFACT' | 'WORLD' {
+  if (looksLikeArtifactRef(input)) return 'ARTIFACT';
+  if (looksLikeWorldPath(input)) return 'WORLD';
+  if (hasWorldAccess && hasWorldIntent(input)) return 'WORLD';
+  return 'ARTIFACT';
+}
+
 // P0 13/10: Tool execution timeout (ms)
 const TOOL_TIMEOUT_MS = (() => {
   const isTestEnv = typeof process !== 'undefined' && process.env.NODE_ENV === 'test';
