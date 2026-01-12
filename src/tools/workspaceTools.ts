@@ -3,19 +3,21 @@ import {
   downloadLibraryDocumentText,
   findLibraryDocumentByName,
   getLibraryChunkByIndex,
+  listLibraryChunks,
   searchLibraryChunks
 } from '../services/LibraryService';
 import { MemoryService, getCurrentAgentId, getCurrentAgentName } from '../services/supabase';
 import { AgentType, PacketType } from '../types';
 import { withTimeout } from './toolRuntime';
 import { useArtifactStore } from '../stores/artifactStore';
+import { getCognitiveState } from '../stores/cognitiveStore';
 import { eventBus } from '../core/EventBus';
 import { evidenceLedger } from '../core/systems/EvidenceLedger';
 import { DEFAULT_AGENT_ID, WORLD_ROOT, getAgentFolderName, getAgentWorldRoot, isPathAllowed, normalizePath } from '../core/systems/WorldAccess';
 import { generateUUID } from '../utils/uuid';
 import { getWorldDirectoryHandle, getWorldDirectorySelection } from './worldDirectoryAccess';
 
-export const WORKSPACE_TAG_REGEX = /\[(SEARCH_LIBRARY|READ_LIBRARY_CHUNK|READ_LIBRARY_DOC|READ_LIBRARY_RANGE|SEARCH_IN_REPO|READ_FILE|READ_FILE_CHUNK|READ_FILE_RANGE|LIST_DIR|LIST_FILES|READ_WORLD_FILE|READ_WORLD|WRITE_WORLD_FILE|APPEND_WORLD_FILE):\s*([^\]]+?)\]/i;
+export const WORKSPACE_TAG_REGEX = /\[(SEARCH_LIBRARY|LIST_LIBRARY_CHUNKS|READ_LIBRARY_CHUNK|READ_LIBRARY_DOC|READ_LIBRARY_RANGE|SEARCH_IN_REPO|READ_FILE|READ_FILE_CHUNK|READ_FILE_RANGE|LIST_DIR|LIST_FILES|READ_WORLD_FILE|READ_WORLD|WRITE_WORLD_FILE|APPEND_WORLD_FILE):\s*([^\]]+?)\]/i;
 
 export type WorldToolName = 'LIST_DIR' | 'READ_FILE' | 'WRITE_FILE' | 'APPEND_FILE';
 
@@ -57,6 +59,60 @@ const dirname = (value: string) => {
 };
 const splitRelativePath = (value: string) => normalizeFsPath(value).split('/').filter(Boolean);
 const WORLD_ROOT_PATH = normalizeFsPath(WORLD_ROOT);
+
+const ROOT_ALIASES = ['', '/', '.', 'root', 'world root', 'glowny katalog', 'home', 'start'];
+const KNOWN_SHORT_FOLDERS = [
+  'src',
+  'app',
+  'bin',
+  'tmp',
+  'log',
+  'doc',
+  'img',
+  'docs',
+  'code',
+  'public',
+  'dist',
+  'build',
+  'data',
+  'logs',
+  'test',
+  'tests',
+  'lib',
+  'pkg',
+  'api'
+];
+
+type NormalizePathResult =
+  | { ok: true; path: string }
+  | { ok: false; error: string };
+
+const normalizeWorldPath = (input: string): NormalizePathResult => {
+  const trimmed = String(input || '').trim();
+  const lower = trimmed.toLowerCase();
+
+  if (ROOT_ALIASES.includes(lower)) {
+    return { ok: true, path: '' };
+  }
+
+  if (trimmed.includes('/') || trimmed.includes('.') || trimmed.includes('\\')) {
+    return { ok: true, path: trimmed };
+  }
+
+  if (KNOWN_SHORT_FOLDERS.includes(lower)) {
+    return { ok: true, path: trimmed };
+  }
+
+  const hasSpaces = /\s/.test(trimmed);
+  const hasPolish = /[ąćęłńóśźżĄĆĘŁŃÓŚŹŻ]/.test(trimmed);
+  const tooShort = trimmed.length <= 2;
+
+  if (hasSpaces || hasPolish || tooShort) {
+    return { ok: false, error: `PATH_AMBIGUOUS: "${trimmed}"` };
+  }
+
+  return { ok: true, path: trimmed };
+};
 const resolveDirectoryHandle = async (
   root: FileSystemDirectoryHandle,
   segments: string[],
@@ -113,7 +169,9 @@ const executeWorldToolWithFsAccess = async (params: {
 }): Promise<WorldToolResult> => {
   const { input, agentId } = params;
   const selection = getWorldDirectorySelection(agentId);
-  let rawPath = normalizeFsPath(input.path);
+  const normalizedPath = normalizeWorldPath(input.path);
+  const rawInputPath = normalizedPath.ok ? normalizedPath.path : String(input.path || '').trim();
+  let rawPath = normalizeFsPath(rawInputPath);
   if (selection) {
     const TOP_LEVEL_ALIASES = ['code', 'docs', 'notes', 'engineering', 'research', 'vision', 'todolist'];
     for (const alias of TOP_LEVEL_ALIASES) {
@@ -150,6 +208,39 @@ const executeWorldToolWithFsAccess = async (params: {
     priority: 0.7
   });
 
+  const errorReturn = (tool: string, path: string, error: string): WorldToolResult => {
+    eventBus.publish({
+      id: generateUUID(),
+      timestamp: Date.now(),
+      source: AgentType.CORTEX_FLOW,
+      type: PacketType.TOOL_ERROR,
+      payload: { tool, path, intentId, error },
+      priority: 0.8
+    });
+    return { ok: false, path, error };
+  };
+
+  const successReturn = (
+    tool: string,
+    path: string,
+    result: Partial<WorldToolResult>,
+    payloadExtra: Record<string, unknown> = {}
+  ): WorldToolResult => {
+    eventBus.publish({
+      id: generateUUID(),
+      timestamp: Date.now(),
+      source: AgentType.CORTEX_FLOW,
+      type: PacketType.TOOL_RESULT,
+      payload: { tool, path, intentId, ...payloadExtra },
+      priority: 0.7
+    });
+    return { ok: true, path, ...result };
+  };
+
+  if (!normalizedPath.ok) {
+    return errorReturn(input.tool, resolved, normalizedPath.error);
+  }
+
   const writeOp = input.tool === 'WRITE_FILE' || input.tool === 'APPEND_FILE';
   const rootHandle = await getWorldDirectoryHandle({
     agentId: handleAgentId,
@@ -158,43 +249,26 @@ const executeWorldToolWithFsAccess = async (params: {
     mode: writeOp ? 'readwrite' : 'read'
   });
   if (!rootHandle) {
-    const message = 'WORLD_ROOT_NOT_SELECTED';
-    eventBus.publish({
-      id: generateUUID(),
-      timestamp: Date.now(),
-      source: AgentType.CORTEX_FLOW,
-      type: PacketType.TOOL_ERROR,
-      payload: { tool: input.tool, path: resolved, intentId, error: message },
-      priority: 0.8
-    });
-    return { ok: false, path: resolved, error: message };
+    return errorReturn(input.tool, resolved, 'WORLD_ROOT_NOT_SELECTED');
   }
 
   try {
     if (input.tool === 'LIST_DIR') {
       const dirSegments = splitRelativePath(relative);
       const dirHandle = await resolveDirectoryHandle(rootHandle, dirSegments, false);
-      if (!dirHandle) return { ok: false, path: resolved, error: 'NOT_FOUND' };
+      if (!dirHandle) return errorReturn(input.tool, resolved, 'NOT_FOUND');
       const entries: string[] = [];
       for await (const [name, handle] of dirHandle.entries()) {
         entries.push(handle.kind === 'directory' ? `${name}/` : name);
       }
       evidenceLedger.record('LOG_EVENT', `LIST_DIR:${resolved}`);
-      eventBus.publish({
-        id: generateUUID(),
-        timestamp: Date.now(),
-        source: AgentType.CORTEX_FLOW,
-        type: PacketType.TOOL_RESULT,
-        payload: { tool: input.tool, path: resolved, count: entries.length, intentId },
-        priority: 0.7
-      });
-      return { ok: true, path: resolved, entries };
+      return successReturn(input.tool, resolved, { entries }, { count: entries.length });
     }
 
     if (input.tool === 'READ_FILE') {
       const segments = splitRelativePath(relative);
       const fileName = segments.pop();
-      if (!fileName) return { ok: false, path: resolved, error: 'PATH_IS_DIRECTORY' };
+      if (!fileName) return errorReturn(input.tool, resolved, 'PATH_IS_DIRECTORY');
       const dirHandle = await resolveDirectoryHandle(rootHandle, segments, false);
       if (dirHandle) {
         const primary = await readFileViaHandle({
@@ -227,12 +301,12 @@ const executeWorldToolWithFsAccess = async (params: {
         }
       }
 
-      return { ok: false, path: resolved, error: 'NOT_FOUND' };
+      return errorReturn(input.tool, resolved, 'NOT_FOUND');
     }
 
     if (input.tool === 'WRITE_FILE') {
       if (!isWriteAllowed(resolved, agentId)) {
-        return { ok: false, path: resolved, error: 'WRITE_NOT_ALLOWED' };
+        return errorReturn(input.tool, resolved, 'WRITE_NOT_ALLOWED');
       }
       const content = String(input.content ?? '');
       if (shouldValidateNote(resolved) && !validateNoteFormat(content)) {
@@ -244,67 +318,43 @@ const executeWorldToolWithFsAccess = async (params: {
           payload: { path: resolved, reason: 'INVALID_NOTE_FORMAT' },
           priority: 0.7
         });
-        return { ok: false, path: resolved, error: 'INVALID_NOTE_FORMAT' };
+        return errorReturn(input.tool, resolved, 'INVALID_NOTE_FORMAT');
       }
       const segments = splitRelativePath(relative);
       const fileName = segments.pop();
-      if (!fileName) return { ok: false, path: resolved, error: 'PATH_IS_DIRECTORY' };
+      if (!fileName) return errorReturn(input.tool, resolved, 'PATH_IS_DIRECTORY');
       const dirHandle = await resolveDirectoryHandle(rootHandle, segments, true);
-      if (!dirHandle) return { ok: false, path: resolved, error: 'NOT_FOUND' };
+      if (!dirHandle) return errorReturn(input.tool, resolved, 'NOT_FOUND');
       const fileHandle = await dirHandle.getFileHandle(fileName, { create: true });
       const writable = await fileHandle.createWritable();
       await writable.write(content);
       await writable.close();
-      eventBus.publish({
-        id: generateUUID(),
-        timestamp: Date.now(),
-        source: AgentType.CORTEX_FLOW,
-        type: PacketType.TOOL_RESULT,
-        payload: { tool: input.tool, path: resolved, intentId },
-        priority: 0.7
-      });
-      return { ok: true, path: resolved };
+      return successReturn(input.tool, resolved, {});
     }
 
     if (input.tool === 'APPEND_FILE') {
       if (!isWriteAllowed(resolved, agentId)) {
-        return { ok: false, path: resolved, error: 'WRITE_NOT_ALLOWED' };
+        return errorReturn(input.tool, resolved, 'WRITE_NOT_ALLOWED');
       }
       const content = String(input.content ?? '');
       const segments = splitRelativePath(relative);
       const fileName = segments.pop();
-      if (!fileName) return { ok: false, path: resolved, error: 'PATH_IS_DIRECTORY' };
+      if (!fileName) return errorReturn(input.tool, resolved, 'PATH_IS_DIRECTORY');
       const dirHandle = await resolveDirectoryHandle(rootHandle, segments, true);
-      if (!dirHandle) return { ok: false, path: resolved, error: 'NOT_FOUND' };
+      if (!dirHandle) return errorReturn(input.tool, resolved, 'NOT_FOUND');
       const fileHandle = await dirHandle.getFileHandle(fileName, { create: true });
       const file = await fileHandle.getFile();
       const writable = await fileHandle.createWritable();
       await writable.seek(file.size);
       await writable.write(content);
       await writable.close();
-      eventBus.publish({
-        id: generateUUID(),
-        timestamp: Date.now(),
-        source: AgentType.CORTEX_FLOW,
-        type: PacketType.TOOL_RESULT,
-        payload: { tool: input.tool, path: resolved, intentId },
-        priority: 0.7
-      });
-      return { ok: true, path: resolved };
+      return successReturn(input.tool, resolved, {});
     }
 
-    return { ok: false, path: resolved, error: 'UNKNOWN_TOOL' };
+    return errorReturn(input.tool, resolved, 'UNKNOWN_TOOL');
   } catch (error: any) {
     const message = error?.message || String(error);
-    eventBus.publish({
-      id: generateUUID(),
-      timestamp: Date.now(),
-      source: AgentType.CORTEX_FLOW,
-      type: PacketType.TOOL_ERROR,
-      payload: { tool: input.tool, path: resolved, intentId, error: message },
-      priority: 0.8
-    });
-    return { ok: false, path: resolved, error: message };
+    return errorReturn(input.tool, resolved, message);
   }
 };
 
@@ -349,10 +399,9 @@ export async function executeWorldTool(input: {
     return executeWorldToolWithFsAccess({ input, agentId });
   }
 
-  const resolved = resolveWorldPath(input.path, agentId);
-  if (!isPathAllowed(resolved, agentId, agentName)) {
-    return { ok: false, path: resolved, error: 'PATH_NOT_ALLOWED' };
-  }
+  const normalizedPath = normalizeWorldPath(input.path);
+  const inputPath = normalizedPath.ok ? normalizedPath.path : String(input.path || '').trim();
+  const resolved = resolveWorldPath(inputPath, agentId);
 
   const intentId = generateUUID();
   eventBus.publish({
@@ -364,39 +413,65 @@ export async function executeWorldTool(input: {
     priority: 0.7
   });
 
+  const errorReturn = (tool: string, path: string, error: string): WorldToolResult => {
+    eventBus.publish({
+      id: generateUUID(),
+      timestamp: Date.now(),
+      source: AgentType.CORTEX_FLOW,
+      type: PacketType.TOOL_ERROR,
+      payload: { tool, path, intentId, error },
+      priority: 0.8
+    });
+    return { ok: false, path, error };
+  };
+
+  const successReturn = (
+    tool: string,
+    path: string,
+    result: Partial<WorldToolResult>,
+    payloadExtra: Record<string, unknown> = {}
+  ): WorldToolResult => {
+    eventBus.publish({
+      id: generateUUID(),
+      timestamp: Date.now(),
+      source: AgentType.CORTEX_FLOW,
+      type: PacketType.TOOL_RESULT,
+      payload: { tool, path, intentId, ...payloadExtra },
+      priority: 0.7
+    });
+    return { ok: true, path, ...result };
+  };
+
+  if (!normalizedPath.ok) {
+    return errorReturn(input.tool, resolved, normalizedPath.error);
+  }
+
+  if (!isPathAllowed(resolved, agentId, agentName)) {
+    return errorReturn(input.tool, resolved, 'PATH_NOT_ALLOWED');
+  }
+
   try {
     if (input.tool === 'LIST_DIR') {
       const entries = await fs.readdir(resolved, { withFileTypes: true });
       const names = entries.map((e) => (e.isDirectory() ? `${e.name}/` : e.name));
       evidenceLedger.record('LOG_EVENT', `LIST_DIR:${resolved}`);
-      eventBus.publish({
-        id: generateUUID(),
-        timestamp: Date.now(),
-        source: AgentType.CORTEX_FLOW,
-        type: PacketType.TOOL_RESULT,
-        payload: { tool: input.tool, path: resolved, count: names.length, intentId },
-        priority: 0.7
-      });
-      return { ok: true, path: resolved, entries: names };
+      return successReturn(input.tool, resolved, { entries: names }, { count: names.length });
     }
 
     if (input.tool === 'READ_FILE') {
       const content = await fs.readFile(resolved, 'utf8');
       const evidenceId = evidenceLedger.record('READ_FILE', resolved);
-      eventBus.publish({
-        id: generateUUID(),
-        timestamp: Date.now(),
-        source: AgentType.CORTEX_FLOW,
-        type: PacketType.TOOL_RESULT,
-        payload: { tool: input.tool, path: resolved, length: content.length, intentId },
-        priority: 0.7
-      });
-      return { ok: true, path: resolved, content, evidenceId };
+      return successReturn(
+        input.tool,
+        resolved,
+        { content, evidenceId },
+        { length: content.length }
+      );
     }
 
     if (input.tool === 'WRITE_FILE') {
       if (!isWriteAllowed(resolved, agentId)) {
-        return { ok: false, path: resolved, error: 'WRITE_NOT_ALLOWED' };
+        return errorReturn(input.tool, resolved, 'WRITE_NOT_ALLOWED');
       }
       const content = String(input.content ?? '');
       if (shouldValidateNote(resolved) && !validateNoteFormat(content)) {
@@ -408,51 +483,27 @@ export async function executeWorldTool(input: {
           payload: { path: resolved, reason: 'INVALID_NOTE_FORMAT' },
           priority: 0.7
         });
-        return { ok: false, path: resolved, error: 'INVALID_NOTE_FORMAT' };
+        return errorReturn(input.tool, resolved, 'INVALID_NOTE_FORMAT');
       }
       await fs.mkdir(dirname(resolved), { recursive: true });
       await fs.writeFile(resolved, content);
-      eventBus.publish({
-        id: generateUUID(),
-        timestamp: Date.now(),
-        source: AgentType.CORTEX_FLOW,
-        type: PacketType.TOOL_RESULT,
-        payload: { tool: input.tool, path: resolved, intentId },
-        priority: 0.7
-      });
-      return { ok: true, path: resolved };
+      return successReturn(input.tool, resolved, {});
     }
 
     if (input.tool === 'APPEND_FILE') {
       if (!isWriteAllowed(resolved, agentId)) {
-        return { ok: false, path: resolved, error: 'WRITE_NOT_ALLOWED' };
+        return errorReturn(input.tool, resolved, 'WRITE_NOT_ALLOWED');
       }
       const content = String(input.content ?? '');
       await fs.mkdir(dirname(resolved), { recursive: true });
       await fs.appendFile(resolved, content);
-      eventBus.publish({
-        id: generateUUID(),
-        timestamp: Date.now(),
-        source: AgentType.CORTEX_FLOW,
-        type: PacketType.TOOL_RESULT,
-        payload: { tool: input.tool, path: resolved, intentId },
-        priority: 0.7
-      });
-      return { ok: true, path: resolved };
+      return successReturn(input.tool, resolved, {});
     }
 
-    return { ok: false, path: resolved, error: 'UNKNOWN_TOOL' };
+    return errorReturn(input.tool, resolved, 'UNKNOWN_TOOL');
   } catch (error: any) {
     const message = error?.message || String(error);
-    eventBus.publish({
-      id: generateUUID(),
-      timestamp: Date.now(),
-      source: AgentType.CORTEX_FLOW,
-      type: PacketType.TOOL_ERROR,
-      payload: { tool: input.tool, path: resolved, intentId, error: message },
-      priority: 0.8
-    });
-    return { ok: false, path: resolved, error: message };
+    return errorReturn(input.tool, resolved, message);
   }
 }
 
@@ -529,6 +580,32 @@ export async function consumeWorkspaceTags(params: {
     } catch {
       // ignore boost errors
     }
+  };
+
+  const updateLibraryAnchor = (documentId: string) => {
+    try {
+      const state = getCognitiveState();
+      if (state?.hydrate) state.hydrate({ lastLibraryDocId: documentId });
+    } catch {
+      // ignore state sync issues
+    }
+  };
+
+  const emitLibraryIngestMissing = (params: { documentId: string; name?: string; reason: string }) => {
+    publish({
+      id: makeId(),
+      timestamp: Date.now(),
+      source: AgentType.CORTEX_FLOW,
+      type: PacketType.SYSTEM_ALERT,
+      payload: {
+        event: 'LIBRARY_INGEST_MISSING',
+        docId: params.documentId,
+        name: params.name ?? null,
+        reason: params.reason
+      },
+      priority: 0.7
+    });
+    deps.addMessage('assistant', 'Ten dokument nie jest jeszcze zindeksowany (brak chunkow).', 'speech');
   };
 
   const executeWorkspaceTool = async (toolRaw: string, argRaw: string) => {
@@ -651,6 +728,76 @@ export async function consumeWorkspaceTags(params: {
         return;
       }
 
+      if (tool === 'LIST_LIBRARY_CHUNKS') {
+        const match = arg.match(/^(.+?)(?:#(\d+))?$/);
+        const docRef = String(match?.[1] || arg).trim();
+        const limit = Number(match?.[2] || 20);
+        if (!docRef) throw new Error('LIST_LIBRARY_CHUNKS arg must be <docIdOrName>#<limit?>');
+
+        let documentId = docRef;
+        if (!isUuidLike(documentId)) {
+          const found: any = await withTimeout<any>(
+            findLibraryDocumentByName({ name: documentId }) as any,
+            timeoutMs,
+            'FIND_LIBRARY_DOC'
+          );
+          if (found.ok === false) throw new Error(found.error);
+          if (!found.document) throw new Error(`DOC_NOT_FOUND_BY_NAME: ${documentId}`);
+          documentId = String(found.document.id);
+        }
+
+        deps.addMessage('assistant', `Invoking LIST_LIBRARY_CHUNKS for: ${documentId}`, 'action');
+        deps.setCurrentThought('Workspace list chunks...');
+
+        const res: any = await withTimeout<any>(
+          listLibraryChunks({ documentId, limit: limit + 1 }) as any,
+          timeoutMs,
+          tool
+        );
+        if (res.ok === false) throw new Error(res.error);
+
+        const chunks = Array.isArray(res.chunks) ? res.chunks : [];
+        const hasMore = chunks.length > limit;
+        const visible = chunks.slice(0, limit);
+
+        publish({
+          id: makeId(),
+          timestamp: Date.now(),
+          source: AgentType.CORTEX_FLOW,
+          type: PacketType.TOOL_RESULT,
+          payload: {
+            tool,
+            arg,
+            intentId,
+            docId: documentId,
+            shown: visible.length,
+            hasMore
+          },
+          priority: 0.8
+        });
+
+        if (visible.length === 0) {
+          emitLibraryIngestMissing({ documentId, reason: 'chunks_missing' });
+          deps.addMessage('assistant', 'Brak chunkow dla tego dokumentu.', 'tool_result');
+          updateLibraryAnchor(documentId);
+          return;
+        }
+
+        const summaries = visible.map((chunk: any) => {
+          const preview = String(chunk.content || '').replace(/\s+/g, ' ').slice(0, 100);
+          return `#${chunk.chunk_index}: ${preview}...`;
+        });
+
+        const countInfo = hasMore
+          ? `Pokazuje pierwsze ${limit} chunkow (jest wiecej):`
+          : `Dokument ma ${visible.length} chunkow:`;
+
+        const text = `${countInfo}\n${summaries.join('\n')}\n\nKtory chunk? [READ_LIBRARY_CHUNK: ${documentId}#N]`;
+        deps.addMessage('assistant', text, 'tool_result');
+        updateLibraryAnchor(documentId);
+        return;
+      }
+
       if (tool === 'READ_LIBRARY_RANGE') {
         const MAX_RANGE_CHARS = 20000;
         const m = arg.match(/^(.+?)\s*#\s*(\d+)\s*:\s*(\d+)$/);
@@ -688,6 +835,13 @@ export async function consumeWorkspaceTags(params: {
 
         const raw = String(res.text || '');
         const originalName = String(res.doc?.original_name || '').trim();
+        if (!res.doc?.ingested_at) {
+          emitLibraryIngestMissing({
+            documentId,
+            name: originalName,
+            reason: 'ingested_at_missing'
+          });
+        }
         const totalLength = raw.length;
         const end = Math.min(endRequested, totalLength);
         if (end <= start) throw new Error('RANGE_OUT_OF_BOUNDS');
@@ -747,6 +901,7 @@ export async function consumeWorkspaceTags(params: {
         });
 
         deps.addMessage('assistant', text, 'tool_result');
+        updateLibraryAnchor(documentId);
         await boostReadMemory({
           tool,
           documentId,
@@ -766,7 +921,14 @@ export async function consumeWorkspaceTags(params: {
 
         const res: any = await withTimeout<any>(getLibraryChunkByIndex({ documentId, chunkIndex }) as any, timeoutMs, tool);
         if (res.ok === false) throw new Error(res.error);
-        if (!res.chunk) throw new Error('CHUNK_NOT_FOUND');
+        if (!res.chunk) {
+          const listRes: any = await withTimeout<any>(listLibraryChunks({ documentId, limit: 1 }) as any, timeoutMs, 'LIST_LIBRARY_CHUNKS');
+          if (listRes.ok && listRes.chunks.length === 0) {
+            emitLibraryIngestMissing({ documentId, reason: 'chunks_missing' });
+            return;
+          }
+          throw new Error('CHUNK_NOT_FOUND');
+        }
 
         const chunkText = String(res.chunk.content || '').trim();
         evidenceLedger.record('READ_FILE', `${documentId}#${chunkIndex}`);
@@ -785,6 +947,7 @@ export async function consumeWorkspaceTags(params: {
         });
 
         deps.addMessage('assistant', text, 'tool_result');
+        updateLibraryAnchor(documentId);
         await boostReadMemory({
           tool,
           documentId,
@@ -812,6 +975,13 @@ export async function consumeWorkspaceTags(params: {
 
         const raw = String(res.text || '');
         const originalName = String(res.doc?.original_name || '').trim();
+        if (!res.doc?.ingested_at) {
+          emitLibraryIngestMissing({
+            documentId,
+            name: originalName,
+            reason: 'ingested_at_missing'
+          });
+        }
 
         const looksLikeJson = originalName.toLowerCase().endsWith('.json') || raw.trim().startsWith('{') || raw.trim().startsWith('[');
         let summaryBlock = '';
@@ -867,11 +1037,20 @@ export async function consumeWorkspaceTags(params: {
           timestamp: Date.now(),
           source: AgentType.CORTEX_FLOW,
           type: PacketType.TOOL_RESULT,
-          payload: { tool, arg, intentId, length: raw.length, summarized: !!summaryBlock },
+          payload: {
+            tool,
+            arg,
+            intentId,
+            docId: documentId,
+            name: originalName,
+            length: raw.length,
+            summarized: !!summaryBlock
+          },
           priority: 0.8
         });
 
         deps.addMessage('assistant', text, 'tool_result');
+        updateLibraryAnchor(documentId);
         await boostReadMemory({
           tool,
           documentId,
