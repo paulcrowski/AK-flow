@@ -1,6 +1,6 @@
 # AK-FLOW: Cognitive Agent Architecture Manifest
-**System Version:** 6.10.6 (Autonomy Bio Loop + World Routing)  
-**Last Updated:** 2026-01-09  
+**System Version:** 6.10.7 (Tool Contract + Library Routing)  
+**Last Updated:** 2026-01-12  
 **Architecture Type:** Active Inference (Friston) + Global Workspace Theory + Multi-Modal RAG + **Stateless Inference Engine**  
 **Status:** Autonomous / Stateful / Modular / Self-Aware / Goal-Driven / Personality-Driven / **Emergent Identity**
 
@@ -28,6 +28,23 @@ We embrace the artificial nature as a feature, not a bug.
 - **Measurable Soul:** Emotions and "vibes" are allowed, but they must map to system metrics (Energy, Dopamine), not just literary roleplay.
 
 ---
+
+## What's New in V6.10.7 (2026-01-12)
+
+### Tool contract + library routing anchors
+
+**Goal:** ensure tool executions always resolve and library reads route deterministically with autonomy driving action.
+
+**Key changes:**
+- Enforced TOOL_INTENT -> TOOL_RESULT/TOOL_ERROR contract with path normalization and unknown tool tagging.
+- Added LIBRARY routing and lastLibraryDocId anchor; autonomy override maps autonomy actions to ActionType.
+- Honest chunk summary listing plus memory injection listener for library reads; artifact UUID regex hardened.
+
+**Configuration (Single Source):**
+- No config changes.
+
+**Tests:**
+`npm test -- __tests__/unit/routingDecisionTelemetry.test.ts __tests__/unit/tools/toolParser.routing.test.ts` (targeted); full suite not rerun.
 
 ## What's New in V6.10.6 (2026-01-09)
 

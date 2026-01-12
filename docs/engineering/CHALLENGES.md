@@ -17,13 +17,43 @@
 
 | Metryka | Wartość |
 |---------|---------|
-| Rozwiązanych problemów | 19 |
+| Rozwiązanych problemów | 20 |
 | Całkowity czas | ~48 godzin |
 | Średnia trudność | 3.9/5 |
 | Największy przełom | FactEcho Guard (FAZA 6.0) |
 | Najdłuższy problem | Monolityczny Kernel (8h) |
 
 ---
+
+## Problem #28: Missing TOOL_RESULT/TOOL_ERROR i niejednoznaczne sciezki world
+
+**Data:** 2026-01-12
+**Trudnosc:** 4/5
+**Status:** ROZWIAZANY (Tool contract + path normalization)
+
+### Objawy
+- TOOL_INTENT bez TOOL_RESULT/TOOL_ERROR, agent "czeka na wynik".
+- LIST_DIR/READ_FILE na tokenach typu "i" albo "Wej" (to nie sciezki).
+
+### Diagnoza
+- Narzedzia world nie emitowaly rezultatu w kazdej sciezce.
+- Brak normalizacji sciezek i guardow na niejednoznaczne tokeny.
+
+### Rozwiazanie
+- Wymuszony kontrakt TOOL_INTENT -> TOOL_RESULT/TOOL_ERROR dla narzedzi world.
+- normalizeWorldPath zwraca PATH_AMBIGUOUS zamiast throw.
+- Unknown tool tag gating dla LIST_LIBRARY_CHUNKS.
+
+### Pliki
+- src/tools/workspaceTools.ts
+- src/core/systems/eventloop/ReactiveStep.ts
+- src/utils/toolParser.ts
+
+### Testy
+`npm test -- __tests__/unit/routingDecisionTelemetry.test.ts __tests__/unit/tools/toolParser.routing.test.ts`
+
+### Lekcja
+- Brak TOOL_RESULT jest gorszy niz error; kazdy intent musi zamknac sie wynikiem.
 
 ## Problem #27: Pending Action payload/target pollution (APPEND)
 

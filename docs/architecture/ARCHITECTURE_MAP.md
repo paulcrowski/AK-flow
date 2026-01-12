@@ -1,6 +1,6 @@
 # 🧠 AK-FLOW Architecture Map
 
-> **Wersja:** 6.10.6 (2026-01-09)
+> **Wersja:** 6.10.7 (2026-01-12)
 > **Cel:** Prosta mapa jak działa agent i jaki ma flow
 
 ## Archive policy
@@ -9,6 +9,15 @@
 Ten katalog jest wykluczony z kompilacji TypeScript i służy wyłącznie jako referencja do poprzednich iteracji.
 
 ---
+
+## FAZA 6.10.7: Tool Contract + Library Routing (2026-01-12)
+
+**Cel:** domknac kontrakt narzedzi i routing library tak, by czytanie i autonomia byly deterministyczne.
+
+**Mechanika:**
+- TOOL_INTENT -> TOOL_RESULT/TOOL_ERROR kontrakt + normalizacja sciezek i UNKNOWN_TOOL_TAG.
+- Routing WORLD/LIBRARY/ARTIFACT (art-uuid) + lastLibraryDocId anchor dla "tam/te chunki".
+- Autonomy override mapuje akcje na ActionType; chunk summaries z uczciwym countem; memory injection listener.
 
 ## FAZA 6.10.6: Autonomia Bio Loop + World Routing (2026-01-09)
 
