@@ -19,7 +19,19 @@ import { consumeVisualizeTag } from './visualizeTag';
 // Routing helpers: world vs artifact
 export const FILE_EXTENSIONS = /\.(md|txt|ts|js|jsx|tsx|json|yaml|yml|py|log|csv|html|css|sql)$/i;
 export const TOP_DIRS = ['code', 'docs', 'notes', 'engineering', 'research', 'vision', 'todolist', 'src'];
-export const WORLD_VERBS = ['przeczytaj', 'pokaz', 'lista', 'otworz', 'sprawdz', 'read', 'list', 'open', 'show', 'check'];
+export const WORLD_VERBS = ['lista', 'list', 'dir', 'folder', 'katalog', 'directory', 'ls', 'list files', 'list dir'];
+export const READ_VERBS = ['przeczytaj', 'pokaz', 'otworz', 'wyswietl', 'read', 'show', 'open', 'display'];
+export const LIBRARY_STEMS = ['ksiazk', 'dokument', 'raport', 'pdf', 'book', 'document', 'report', 'bibliotek', 'library'];
+
+export function normalizeRoutingInput(input: string): string {
+  return String(input || '')
+    .trim()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\u0142/g, 'l')
+    .replace(/\u0141/g, 'l')
+    .toLowerCase();
+}
 
 export function looksLikeWorldPath(input: string): boolean {
   const x = String(input || '').trim();
@@ -34,20 +46,32 @@ export function looksLikeWorldPath(input: string): boolean {
 export function looksLikeArtifactRef(input: string): boolean {
   const x = String(input || '').trim().toLowerCase();
   if (x.includes('artefakt') || x.includes('artifact')) return true;
-  return /(^|\s)art-\d+(\s|$)/i.test(x);
+  return /(^|\s)art-[0-9a-f-]+(\s|$)/i.test(x);
 }
 
 export function hasWorldIntent(input: string): boolean {
-  const lower = String(input || '')
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase();
+  const lower = normalizeRoutingInput(input);
   return WORLD_VERBS.some((v) => lower.includes(v));
 }
 
-export function routeDomain(input: string, hasWorldAccess: boolean): 'ARTIFACT' | 'WORLD' {
-  if (looksLikeArtifactRef(input)) return 'ARTIFACT';
-  if (looksLikeWorldPath(input)) return 'WORLD';
+export function hasReadIntent(input: string): boolean {
+  const lower = normalizeRoutingInput(input);
+  return READ_VERBS.some((v) => lower.includes(v));
+}
+
+export function looksLikeLibraryIntent(input: string): boolean {
+  const lower = normalizeRoutingInput(input);
+  return LIBRARY_STEMS.some((stem) => lower.includes(stem));
+}
+
+export function routeDomain(input: string, hasWorldAccess: boolean): 'ARTIFACT' | 'WORLD' | 'LIBRARY' {
+  const raw = String(input || '');
+  const hasLibraryHint = looksLikeLibraryIntent(raw);
+  if (looksLikeArtifactRef(raw)) return 'ARTIFACT';
+  if (hasLibraryHint && !raw.includes('/')) return 'LIBRARY';
+  if (looksLikeWorldPath(raw)) return 'WORLD';
+  if (hasLibraryHint) return 'LIBRARY';
+  if (hasReadIntent(input)) return 'LIBRARY';
   if (hasWorldAccess && hasWorldIntent(input)) return 'WORLD';
   return 'ARTIFACT';
 }
@@ -211,6 +235,26 @@ export const createProcessOutputForTools = (deps: ToolParserDeps) => {
         payload: { ...params.payload, tool: params.tool, intentId: params.intentId },
         priority: 0.8
       });
+    };
+
+    const emitSystemAlert = (event: string, payload: Record<string, unknown>, priority = 0.6) => {
+      eventBus.publish({
+        id: generateUUID(),
+        timestamp: Date.now(),
+        source: AgentType.CORTEX_FLOW,
+        type: PacketType.SYSTEM_ALERT,
+        payload: { event, ...payload },
+        priority
+      });
+    };
+
+    const setLastLibraryDocId = (documentId: string) => {
+      try {
+        const state = getCognitiveState();
+        if (state?.hydrate) state.hydrate({ lastLibraryDocId: documentId });
+      } catch {
+        // ignore state sync issues
+      }
     };
 
     const emitToolCommit = (params: {
@@ -566,6 +610,30 @@ export const createProcessOutputForTools = (deps: ToolParserDeps) => {
     // [SEARCH_IN_REPO: query] -> SEARCH_LIBRARY
     // [READ_FILE: <docId>] -> READ_LIBRARY_DOC
     // [READ_FILE_CHUNK: <docId>#<chunkIndex>] -> READ_LIBRARY_CHUNK
+    const emitToolIntent = (tool: string, arg: string) => {
+      const intentId = generateUUID();
+      eventBus.publish({
+        id: intentId,
+        timestamp: Date.now(),
+        source: AgentType.CORTEX_FLOW,
+        type: PacketType.TOOL_INTENT,
+        payload: { tool, arg },
+        priority: 0.8
+      });
+      return intentId;
+    };
+
+    const publishClarification = (question: string, options?: string[]) => {
+      const optionText = options && options.length > 0
+        ? ` ${options.map((opt, idx) => `${idx + 1}) ${opt}`).join(' ')}`
+        : '';
+      emitSystemAlert('USER_CLARIFICATION_QUESTION', {
+        question,
+        options: options ?? []
+      });
+      addMessage('assistant', `${question}${optionText}`, 'speech');
+    };
+
     cleanText = await consumeWorkspaceTags({
       cleanText,
       deps: { setCurrentThought, addMessage },
