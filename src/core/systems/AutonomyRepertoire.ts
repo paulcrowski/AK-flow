@@ -326,7 +326,7 @@ export function pickDrive(ctx: UnifiedContext): ActionDecision {
     },
     {
       action: 'REFLECT' as AutonomyAction,
-      score: desires.resolve + desires.create * 0.5,
+      score: clamp01(desires.resolve + desires.create * 0.5),
       need: 'resolve'
     },
     {
