@@ -14,9 +14,14 @@ import { generateUUID } from '../../../utils/uuid';
 import { detectIntent, getRetrievalLimit } from '../IntentDetector';
 import { getRememberedArtifactName, rememberArtifactName } from '../../utils/artifactNameCache';
 import { buildToolCommitDetails, formatToolCommitMessage } from '../../utils/toolCommit';
+import { downloadLibraryDocumentText, findLibraryDocumentByName, getLibraryChunkByIndex, listLibraryChunks, searchLibraryChunks } from '../../../services/LibraryService';
+import { getCurrentAgentId } from '../../../services/supabase';
+import { getCognitiveState } from '../../../stores/cognitiveStore';
 import type { PendingAction, PendingActionEvent, ResolveDependencies } from './pending';
 import { createPendingAction, setPendingAction, tryResolvePendingAction } from './pending';
-import { detectActionableIntent, isImplicitReference, isRecognizableTarget } from './reactiveStep.helpers';
+import { detectActionableIntent, isImplicitReference, isRecognizableTarget, looksLikeLibraryAnchor } from './reactiveStep.helpers';
+import { normalizeRoutingInput } from '../../../tools/toolParser';
+import { evidenceLedger } from '../EvidenceLedger';
 
 export { detectActionableIntentForTesting, detectFileIntentForTesting } from './reactiveStep.helpers';
 
@@ -191,8 +196,7 @@ export async function runReactiveStep(input: {
   // P0.1: Action-First - execute tool commands immediately without asking
   if (ACTION_FIRST_ENABLED) {
     const actionIntent = detectActionableIntent(userInput);
-    if (actionIntent.handled && actionIntent.action) {
-      const store = useArtifactStore.getState();
+    const store = useArtifactStore.getState();
       const resolveImplicitTarget = () => {
         const lastFocusedId = store.order?.[0] ?? null;
         const lastCreatedId = store.lastCreatedId ?? null;
@@ -208,42 +212,6 @@ export async function runReactiveStep(input: {
           : null;
       const target = actionIntent.target || implicitTarget?.id;
       const implicitNameHint = implicitTarget?.nameHint || '';
-
-      if (target) {
-        const resolveRef = (refRaw: string) => {
-          const traceId = getCurrentTraceId();
-          if (traceId) p0MetricAdd(traceId, { artifactResolveAttempt: 1 });
-          const resolved = normalizeArtifactRef(refRaw);
-          if (traceId) {
-            p0MetricAdd(traceId, resolved.ok ? { artifactResolveSuccess: 1 } : { artifactResolveFail: 1 });
-          }
-          return resolved;
-        };
-        const isInvalidToolTarget = (rawTarget: string) => {
-          const trimmed = String(rawTarget || '').trim();
-          if (!trimmed) return true;
-          if (isImplicitReference(trimmed)) return false;
-          if (trimmed.includes(' ') || trimmed.includes(':')) return true;
-          if (trimmed.startsWith('art-')) return false;
-          return !isRecognizableTarget(trimmed);
-        };
-        const getRecentArtifactNames = () => {
-          const ids = store.order.slice(0, 2);
-          return ids
-            .map((id) => store.get(id)?.name || getRememberedArtifactName(id) || id)
-            .filter(Boolean);
-        };
-        const respondUnknownTarget = () => {
-          const recent = getRecentArtifactNames();
-          const recentLabel = recent.length > 0 ? recent.join(', ') : 'brak';
-          publishReactiveSpeech({
-            ctx,
-            trace,
-            callbacks,
-            speechText: `Nie wiem do którego pliku. Ostatnie dwa: ${recentLabel}. Który?`,
-            internalThought: 'INVALID_TARGET'
-          });
-        };
 
       const emitToolIntent = (tool: string, arg: string, artifactName?: string) => {
         const intentId = generateUUID();
@@ -304,6 +272,378 @@ export async function runReactiveStep(input: {
           priority: 0.9
         });
       };
+
+      const emitSystemAlert = (event: string, payload: Record<string, unknown>, priority = 0.6) => {
+        eventBus.publish({
+          id: generateUUID(),
+          timestamp: Date.now(),
+          source: AgentType.CORTEX_FLOW,
+          type: PacketType.SYSTEM_ALERT,
+          payload: { event, ...payload },
+          priority
+        });
+      };
+
+      const updateLibraryAnchor = (documentId: string) => {
+        ctx.lastLibraryDocId = documentId;
+        try {
+          const state = getCognitiveState();
+          if (state?.hydrate) state.hydrate({ lastLibraryDocId: documentId });
+        } catch {
+          // ignore state sync issues
+        }
+      };
+
+      const wantsChunks = (inputText: string) => {
+        const normalized = normalizeRoutingInput(inputText);
+        return normalized.includes('chunk') || normalized.includes('chunki');
+      };
+
+      const isUuidLike = (value: string) =>
+        /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(value);
+
+      const normalizeLibraryQuery = (rawTarget: string) => {
+        const raw = String(rawTarget || '').replace(/["'`]/g, '').trim();
+        if (!raw) return '';
+        const parts = raw.split(/\s+/);
+        if (parts.length > 1) {
+          const first = normalizeRoutingInput(parts[0]);
+          if (first.startsWith('ksiazk') || first.startsWith('dokument') || first.startsWith('raport') || first.startsWith('pdf') || first.startsWith('book') || first.startsWith('document') || first.startsWith('report') || first.startsWith('bibliotek') || first.startsWith('library')) {
+            parts.shift();
+          }
+        }
+        const cleaned = parts.join(' ').replace(/[\s,;:.!?]+$/g, '').trim();
+        return cleaned.slice(0, 160);
+      };
+
+      const publishClarification = (question: string, options?: string[]) => {
+        const optionText = options && options.length > 0
+          ? ` ${options.map((opt, idx) => `${idx + 1}) ${opt}`).join(' ')}`
+          : '';
+        emitSystemAlert('USER_CLARIFICATION_QUESTION', {
+          input: userInput,
+          question,
+          options: options ?? []
+        });
+        publishReactiveSpeech({
+          ctx,
+          trace,
+          callbacks,
+          speechText: `${question}${optionText}`,
+          internalThought: 'USER_CLARIFICATION_QUESTION'
+        });
+        updateContextAfterAction(ctx);
+      };
+
+      const publishIngestMissing = (doc: { id?: string; original_name?: string } | null, reason: string) => {
+        emitSystemAlert('LIBRARY_INGEST_MISSING', {
+          docId: doc?.id ?? null,
+          name: doc?.original_name ?? null,
+          reason
+        });
+        publishReactiveSpeech({
+          ctx,
+          trace,
+          callbacks,
+          speechText: 'Ten dokument nie jest jeszcze zindeksowany (brak chunkow).',
+          internalThought: 'LIBRARY_INGEST_MISSING'
+        });
+        updateContextAfterAction(ctx);
+      };
+
+      const readLibraryDoc = async (documentId: string, docHint?: { original_name?: string; ingested_at?: string | null }) => {
+        const intentId = emitToolIntent('READ_LIBRARY_DOC', documentId);
+        const res: any = await downloadLibraryDocumentText({ documentId });
+        if (res.ok === false) {
+          emitToolError('READ_LIBRARY_DOC', intentId, { arg: documentId }, res.error || 'READ_LIBRARY_DOC_FAILED');
+          return;
+        }
+
+        const doc = res.doc || docHint || {};
+        const originalName = String(doc?.original_name || '').trim() || 'unknown';
+        if (!doc?.ingested_at) {
+          emitSystemAlert('LIBRARY_INGEST_MISSING', {
+            docId: documentId,
+            name: originalName,
+            reason: 'ingested_at_missing'
+          });
+        }
+
+        const raw = String(res.text || '');
+        const excerpt = raw.slice(0, 8000);
+        evidenceLedger.record('READ_FILE', originalName || documentId);
+        emitToolResult('READ_LIBRARY_DOC', intentId, { docId: documentId, name: originalName, length: raw.length });
+        updateLibraryAnchor(documentId);
+
+        publishReactiveSpeech({
+          ctx,
+          trace,
+          callbacks,
+          speechText: `READ_LIBRARY_DOC ${documentId} (${originalName}):\n${excerpt || '(empty)'}`,
+          internalThought: ''
+        });
+        updateContextAfterAction(ctx);
+      };
+
+      const readLibraryChunk = async (documentId: string, chunkIndex: number, docHint?: { original_name?: string; ingested_at?: string | null }) => {
+        const intentId = emitToolIntent('READ_LIBRARY_CHUNK', `${documentId}#${chunkIndex}`);
+        const res: any = await getLibraryChunkByIndex({ documentId, chunkIndex });
+        if (res.ok === false) {
+          emitToolError('READ_LIBRARY_CHUNK', intentId, { arg: `${documentId}#${chunkIndex}` }, res.error || 'READ_LIBRARY_CHUNK_FAILED');
+          return;
+        }
+        if (!res.chunk) {
+          const listRes: any = await listLibraryChunks({ documentId, limit: 1 });
+          if (listRes.ok && listRes.chunks.length === 0) {
+            publishIngestMissing({ id: documentId, original_name: docHint?.original_name }, 'chunks_missing');
+            return;
+          }
+          emitToolError('READ_LIBRARY_CHUNK', intentId, { arg: `${documentId}#${chunkIndex}` }, 'CHUNK_NOT_FOUND');
+          return;
+        }
+
+        const chunkText = String(res.chunk.content || '').trim();
+        evidenceLedger.record('READ_FILE', `${documentId}#${chunkIndex}`);
+        emitToolResult('READ_LIBRARY_CHUNK', intentId, { docId: documentId, chunkIndex, length: chunkText.length });
+        updateLibraryAnchor(documentId);
+        publishReactiveSpeech({
+          ctx,
+          trace,
+          callbacks,
+          speechText: `READ_LIBRARY_CHUNK ${documentId}#${chunkIndex}:\n${chunkText || '(empty)'}`,
+          internalThought: ''
+        });
+        updateContextAfterAction(ctx);
+      };
+
+      const listLibraryChunkSummaries = async (documentId: string, limit = 20) => {
+        const intentId = emitToolIntent('LIST_LIBRARY_CHUNKS', documentId);
+        const res: any = await listLibraryChunks({ documentId, limit: limit + 1 });
+        if (res.ok === false) {
+          emitToolError('LIST_LIBRARY_CHUNKS', intentId, { documentId }, res.error || 'LIST_LIBRARY_CHUNKS_FAILED');
+          return { text: 'Nie moge pobrac chunkow.', shownCount: 0, hasMore: false };
+        }
+
+        const chunks = Array.isArray(res.chunks) ? res.chunks : [];
+        if (chunks.length === 0) {
+          emitToolResult('LIST_LIBRARY_CHUNKS', intentId, { docId: documentId, shown: 0, hasMore: false });
+          return { text: 'Brak chunkow dla tego dokumentu.', shownCount: 0, hasMore: false };
+        }
+
+        const hasMore = chunks.length > limit;
+        const visible = chunks.slice(0, limit);
+        const summaries = visible.map((chunk: any) => {
+          const preview = String(chunk.content || '').replace(/\s+/g, ' ').slice(0, 100);
+          return `#${chunk.chunk_index}: ${preview}...`;
+        });
+
+        emitToolResult('LIST_LIBRARY_CHUNKS', intentId, {
+          docId: documentId,
+          shown: visible.length,
+          hasMore
+        });
+
+        const countInfo = hasMore
+          ? `Pokazuje pierwsze ${limit} chunkow (jest wiecej):`
+          : `Dokument ma ${visible.length} chunkow:`;
+
+        return {
+          text: `${countInfo}\n${summaries.join('\n')}\n\nKtory chunk? [READ_LIBRARY_CHUNK: ${documentId}#N]`,
+          shownCount: visible.length,
+          hasMore
+        };
+      };
+
+      const handleLibraryRead = async (rawTarget?: string, anchorOnly?: boolean) => {
+        const anchorRequested = Boolean(anchorOnly) || looksLikeLibraryAnchor(rawTarget || '');
+        const chunkRequest = wantsChunks(rawTarget || userInput);
+        if (anchorRequested) {
+          const anchorId = ctx.lastLibraryDocId || null;
+          if (!anchorId) {
+            emitSystemAlert('MISSING_LIBRARY_ANCHOR', {
+              input: userInput,
+              reason: 'no_last_library_doc'
+            });
+            publishClarification('Nie mam aktywnej ksiazki. Podaj tytul dokumentu.');
+            return;
+          }
+          if (chunkRequest) {
+            const { text } = await listLibraryChunkSummaries(anchorId);
+            publishReactiveSpeech({
+              ctx,
+              trace,
+              callbacks,
+              speechText: text,
+              internalThought: ''
+            });
+            updateContextAfterAction(ctx);
+            return;
+          }
+          await readLibraryDoc(anchorId);
+          return;
+        }
+
+        const raw = String(rawTarget || '').trim();
+        if (raw && isUuidLike(raw)) {
+          if (chunkRequest) {
+            const { text } = await listLibraryChunkSummaries(raw);
+            publishReactiveSpeech({
+              ctx,
+              trace,
+              callbacks,
+              speechText: text,
+              internalThought: ''
+            });
+            updateContextAfterAction(ctx);
+            return;
+          }
+          await readLibraryDoc(raw);
+          return;
+        }
+
+        const query = normalizeLibraryQuery(rawTarget || '');
+        if (!query) {
+          publishClarification('Podaj tytul lub fragment nazwy dokumentu.');
+          return;
+        }
+
+        if (isUuidLike(query)) {
+          if (chunkRequest) {
+            const { text } = await listLibraryChunkSummaries(query);
+            publishReactiveSpeech({
+              ctx,
+              trace,
+              callbacks,
+              speechText: text,
+              internalThought: ''
+            });
+            updateContextAfterAction(ctx);
+            return;
+          }
+          await readLibraryDoc(query);
+          return;
+        }
+
+        const agentId = trace.agentId || getCurrentAgentId() || null;
+        const found: any = await findLibraryDocumentByName({ name: query, agentId });
+        if (found.ok === false) {
+          publishClarification('Nie moge sprawdzic biblioteki. Podaj tytul jeszcze raz.');
+          return;
+        }
+        if (found.document) {
+          const doc = found.document as any;
+          if (chunkRequest && !doc?.ingested_at) {
+            publishIngestMissing(doc, 'ingested_at_missing');
+            return;
+          }
+          if (chunkRequest) {
+            const { text } = await listLibraryChunkSummaries(String(doc.id));
+            publishReactiveSpeech({
+              ctx,
+              trace,
+              callbacks,
+              speechText: text,
+              internalThought: ''
+            });
+            updateContextAfterAction(ctx);
+            return;
+          }
+          await readLibraryDoc(String(doc.id), doc);
+          return;
+        }
+
+        const searchIntentId = emitToolIntent('SEARCH_LIBRARY', query);
+        const searchRes: any = await searchLibraryChunks({ query, limit: 6 });
+        if (searchRes.ok === false) {
+          emitToolError('SEARCH_LIBRARY', searchIntentId, { arg: query }, searchRes.error || 'SEARCH_LIBRARY_FAILED');
+          return;
+        }
+        if (searchRes.hits.length > 0) {
+          evidenceLedger.record('SEARCH_HIT', query);
+        }
+        emitToolResult('SEARCH_LIBRARY', searchIntentId, { arg: query, hitsCount: searchRes.hits.length });
+
+        if (searchRes.hits.length === 1) {
+          const hit = searchRes.hits[0];
+          if (chunkRequest) {
+            const { text } = await listLibraryChunkSummaries(String(hit.document_id));
+            publishReactiveSpeech({
+              ctx,
+              trace,
+              callbacks,
+              speechText: text,
+              internalThought: ''
+            });
+            updateContextAfterAction(ctx);
+            return;
+          }
+          await readLibraryDoc(String(hit.document_id));
+          return;
+        }
+
+        if (searchRes.hits.length > 1) {
+          const seen = new Set<string>();
+          const options: string[] = [];
+          for (const hit of searchRes.hits) {
+            const docId = String(hit.document_id);
+            if (seen.has(docId)) continue;
+            seen.add(docId);
+            const snippet = String(hit.snippet || '').replace(/\s+/g, ' ').slice(0, 80);
+            options.push(`${docId} :: ${snippet || '...'}`);
+            if (options.length >= 3) break;
+          }
+          publishClarification('Znalazlem kilka pasujacych dokumentow. Ktory mam otworzyc?', options);
+          return;
+        }
+
+        publishClarification('Nie znalazlem dokumentu. Podaj dokladny tytul.');
+      };
+
+      if (!actionIntent.handled && looksLikeLibraryAnchor(userInput)) {
+        await handleLibraryRead(userInput, true);
+        return;
+      }
+
+      if (actionIntent.action === 'READ' && actionIntent.domain === 'LIBRARY') {
+        await handleLibraryRead(target || userInput, false);
+        return;
+      }
+
+      if (actionIntent.handled && actionIntent.action && target) {
+        const resolveRef = (refRaw: string) => {
+          const traceId = getCurrentTraceId();
+          if (traceId) p0MetricAdd(traceId, { artifactResolveAttempt: 1 });
+          const resolved = normalizeArtifactRef(refRaw);
+          if (traceId) {
+            p0MetricAdd(traceId, resolved.ok ? { artifactResolveSuccess: 1 } : { artifactResolveFail: 1 });
+          }
+          return resolved;
+        };
+        const isInvalidToolTarget = (rawTarget: string) => {
+          const trimmed = String(rawTarget || '').trim();
+          if (!trimmed) return true;
+          if (isImplicitReference(trimmed)) return false;
+          if (trimmed.includes(' ') || trimmed.includes(':')) return true;
+          if (trimmed.startsWith('art-')) return false;
+          return !isRecognizableTarget(trimmed);
+        };
+        const getRecentArtifactNames = () => {
+          const ids = store.order.slice(0, 2);
+          return ids
+            .map((id) => store.get(id)?.name || getRememberedArtifactName(id) || id)
+            .filter(Boolean);
+        };
+        const respondUnknownTarget = () => {
+          const recent = getRecentArtifactNames();
+          const recentLabel = recent.length > 0 ? recent.join(', ') : 'brak';
+          publishReactiveSpeech({
+            ctx,
+            trace,
+            callbacks,
+            speechText: `Nie wiem do którego pliku. Ostatnie dwa: ${recentLabel}. Który?`,
+            internalThought: 'INVALID_TARGET'
+          });
+        };
 
       try {
         if (actionIntent.action === 'CREATE') {
@@ -569,7 +909,6 @@ export async function runReactiveStep(input: {
       } catch (e) {
         // Action failed, fall through to normal processing
         callbacks.onThought(`[ACTION_FIRST_ERROR] ${(e as Error)?.message || 'unknown'}`);
-      }
       }
     }
   }
