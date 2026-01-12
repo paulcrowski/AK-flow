@@ -318,6 +318,7 @@ export class KernelEngineRunner<TIdentity> {
       limbic: state.limbic,
       neuro: state.neuro,
       conversation: baseConversation,
+      lastLibraryDocId: state.lastLibraryDocId ?? null,
       autonomousMode: opts.autonomousMode,
       lastSpeakTimestamp: state.lastSpeakTimestamp,
       silenceStart: state.silenceStart,
@@ -356,6 +357,7 @@ export class KernelEngineRunner<TIdentity> {
     if (typeof nextCtx.consecutiveAgentSpeeches === 'number') patch.consecutiveAgentSpeeches = nextCtx.consecutiveAgentSpeeches;
     if (typeof nextCtx.ticksSinceLastReward === 'number') patch.ticksSinceLastReward = nextCtx.ticksSinceLastReward;
     if (Array.isArray(nextCtx.thoughtHistory)) patch.thoughtHistory = nextCtx.thoughtHistory;
+    if ('lastLibraryDocId' in nextCtx) patch.lastLibraryDocId = nextCtx.lastLibraryDocId ?? null;
 
     if (Object.keys(patch).length > 0) {
       this.deps.actions.hydrate(patch);

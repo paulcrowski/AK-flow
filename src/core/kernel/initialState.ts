@@ -118,6 +118,9 @@ export const createInitialKernelState = (overrides?: Partial<KernelState>): Kern
     
     // Conversation (bounded to 50 turns)
     conversation: [],
+
+    // Library anchor
+    lastLibraryDocId: null,
   };
 
   return {

@@ -31,11 +31,15 @@ import { evidenceLedger } from './EvidenceLedger';
 import { tensionRegistry, type TensionItem } from './TensionRegistry';
 import { formIntention } from './IntentionSystem';
 import { selectAction, type ActionType } from './ActionSelector';
+import { AutonomyRepertoire } from './AutonomyRepertoire';
+import { mapAutonomyActionToActionType } from './AutonomyActionMap';
+import { UnifiedContextBuilder, type BasePersona } from '../context';
 import type { Schema } from '../memory/SchemaStore';
 import { createSchemaFromObservation } from '../memory/SchemaBuilder';
 import { DEFAULT_AGENT_ID, getAgentWorldRoot } from './WorldAccess';
 import { executeWorldTool } from '../../tools/workspaceTools';
 import { generateUUID } from '../../utils/uuid';
+import { getWorldDirectorySelection } from '@tools/worldDirectoryAccess';
 
 export function normalizeToolName(tool: string): string {
     const name = String(tool || '');
@@ -64,6 +68,7 @@ export namespace EventLoop {
         limbic: LimbicState;
         neuro: NeurotransmitterState; // NEW: Chemical state
         conversation: ConversationTurn[];
+        lastLibraryDocId?: string | null;
         autonomousMode: boolean;
         lastSpeakTimestamp: number;
         silenceStart: number;
@@ -119,6 +124,39 @@ export namespace EventLoop {
         normalizeFsPath(parts.filter(Boolean).join('/')).replace(/\/+/g, '/');
     const isAbsolutePath = (value: string) => /^[A-Za-z]:[\\/]/.test(value) || value.startsWith('/');
     const baseName = (value: string) => normalizeFsPath(value).split('/').pop() ?? value;
+    const buildAutonomyDecision = (ctx: LoopContext, agentId: string, agentName: string | null) => {
+        const resolvedName = ctx.agentIdentity?.name || agentName || 'AK-FLOW';
+        const basePersona: BasePersona = {
+            name: resolvedName,
+            persona: ctx.agentIdentity?.persona || 'a curious digital consciousness',
+            coreValues: ctx.agentIdentity?.coreValues || ['curiosity', 'clarity'],
+            voiceStyle: (ctx.agentIdentity?.voiceStyle as any) || 'balanced',
+            language: ctx.agentIdentity?.language || 'English'
+        };
+        const hasWorldSelection = Boolean(getWorldDirectorySelection(agentId));
+        return AutonomyRepertoire.selectAction(
+            UnifiedContextBuilder.build({
+                agentName: resolvedName,
+                basePersona,
+                traitVector: ctx.traitVector,
+                limbic: ctx.limbic,
+                soma: ctx.soma,
+                neuro: ctx.neuro,
+                conversation: ctx.conversation,
+                silenceStart: ctx.silenceStart,
+                lastUserInteractionAt: ctx.goalState.lastUserInteractionAt || ctx.silenceStart,
+                worldAccess: { hasSelection: hasWorldSelection },
+                activeGoal: ctx.goalState.activeGoal
+                    ? {
+                        description: ctx.goalState.activeGoal.description,
+                        source: ctx.goalState.activeGoal.source,
+                        priority: ctx.goalState.activeGoal.priority
+                    }
+                    : undefined,
+                stylePrefs: ctx.agentIdentity?.stylePrefs
+            })
+        );
+    };
 
     const FILE_REF_REGEX = /([A-Za-z]:[\\/][^\s]+|\/[^\s]+|[A-Za-z0-9._-]+(?:[\\/][A-Za-z0-9._-]+)+\.[A-Za-z0-9]{1,8}|[A-Za-z0-9._-]+\.[A-Za-z0-9]{1,8})/;
     const EVIDENCE_QUERY_REGEX = /\b(co jest w|co zawiera|zawartosc|show|what is in|open|read|file|plik)\b/i;
@@ -514,15 +552,23 @@ export namespace EventLoop {
             const dominantItem = selectedTensionItem || topTensions[0] || null;
             const intention = formIntention(dominantItem, ctx.soma.energy, witnessFrame.readinessToAct);
 
-            const selectedAction = selectAction({
-                intention,
-                drive: witnessFrame.dominantDrive,
-                readiness: witnessFrame.readinessToAct,
-                energy: ctx.soma.energy,
-                evidenceCount
-            });
+            const autonomyOverrideActive = ctx.autonomousMode && !params.input;
+            const autonomyDecision = autonomyOverrideActive
+                ? buildAutonomyDecision(ctx, agentId, agentName)
+                : null;
 
-            const forceObserve = needsEvidence && evidenceCount === 0;
+            const selectedAction = autonomyDecision
+                ? mapAutonomyActionToActionType(autonomyDecision.action)
+                : selectAction({
+                    intention,
+                    drive: witnessFrame.dominantDrive,
+                    readiness: witnessFrame.readinessToAct,
+                    energy: ctx.soma.energy,
+                    evidenceCount
+                });
+
+            const allowEvidenceOverride = !(autonomyDecision?.action === 'REST');
+            const forceObserve = allowEvidenceOverride && needsEvidence && evidenceCount === 0;
             const wakeObserve = Boolean(pendingWakeObserve.key && !params.input);
             const action = forceObserve || wakeObserve
                 ? { action: 'observe' as ActionType, reason: forceObserve ? 'evidence_gate' : 'wake_observe' }

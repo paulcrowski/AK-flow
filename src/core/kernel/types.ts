@@ -88,6 +88,9 @@ export interface KernelState {
 
   // Conversation history (bounded, persists in state machine)
   conversation: ConversationTurn[];
+
+  // Library anchor (last accessed document)
+  lastLibraryDocId: string | null;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════

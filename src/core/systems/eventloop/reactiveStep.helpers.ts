@@ -4,7 +4,14 @@ import { generateUUID } from '../../../utils/uuid';
 import { detectFuzzyMismatch } from '../../utils/fuzzyMatch';
 import { getCurrentAgentId } from '@services/supabase';
 import { getWorldDirectorySelection } from '@tools/worldDirectoryAccess';
-import { hasWorldIntent, looksLikeArtifactRef, looksLikeWorldPath, routeDomain } from '@tools/toolParser';
+import {
+  hasWorldIntent,
+  looksLikeArtifactRef,
+  looksLikeLibraryIntent,
+  looksLikeWorldPath,
+  normalizeRoutingInput,
+  routeDomain
+} from '@tools/toolParser';
 
 type ActionFirstResult = {
   // No intent uses null at the detector level (not { handled: false }).
@@ -13,6 +20,7 @@ type ActionFirstResult = {
   target?: string;
   payload?: string;
   assumption?: string;
+  domain?: 'ARTIFACT' | 'WORLD' | 'LIBRARY';
 };
 
 type IntentInput = {
@@ -80,15 +88,12 @@ const EDIT_REPLACE_REGEX = new RegExp(
   'i'
 );
 const REPLACE_REGEX = /(?:zamien|zamie\u0144|zastap|zast\u0105p|replace)\s+(?:w|w\s+pliku|in|in\s+file)\s+(.+)/i;
-const READ_REGEX = new RegExp(`${READ_VERBS}\\s+([^\\s,]+)`, 'i');
+const READ_REGEX = new RegExp(`${READ_VERBS}\\s+(.+)$`, 'i');
 
 function normalizeIntentInput(input: string): IntentInput {
   const raw = String(input || '');
   const trimmed = raw.trim();
-  const normalized = trimmed
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase();
+  const normalized = normalizeRoutingInput(trimmed);
   return { raw, trimmed, normalized };
 }
 
@@ -304,19 +309,40 @@ function detectReplaceIntent(ctx: IntentInput): ActionFirstResult | null {
   return null;
 }
 
+function normalizeReadTarget(raw: string): string {
+  let target = String(raw || '').trim();
+  if ((target.startsWith('<') && target.endsWith('>')) || (target.startsWith('"') && target.endsWith('"')) || (target.startsWith("'") && target.endsWith("'")) || (target.startsWith('`') && target.endsWith('`'))) {
+    target = target.slice(1, -1).trim();
+  }
+  target = target.replace(/[\s,;:.!?]+$/g, '').trim();
+  return target;
+}
+
+export function looksLikeLibraryAnchor(input: string): boolean {
+  const normalized = normalizeRoutingInput(input);
+  if (!normalized) return false;
+  if (/\btam\b/.test(normalized)) return true;
+  if (/\bw tej ksiazk/.test(normalized)) return true;
+  if (/\bte chunki\b/.test(normalized)) return true;
+  return false;
+}
+
 function detectReadIntent(ctx: IntentInput, hasWorldAccess: boolean): ActionFirstResult | null {
-  const readMatch = ctx.normalized.match(READ_REGEX);
+  const readMatch = ctx.raw.match(READ_REGEX);
   if (!readMatch) return null;
 
-  const target = String(readMatch[1] || '').trim();
-  const domain = routeDomain(target, hasWorldAccess);
+  const target = normalizeReadTarget(readMatch[1]);
+  const domain = routeDomain(ctx.raw, hasWorldAccess);
+  const libraryIntent = looksLikeLibraryIntent(ctx.raw);
   const reason = looksLikeArtifactRef(target)
     ? 'artifact_ref'
     : looksLikeWorldPath(target)
       ? 'world_path'
-      : hasWorldAccess && hasWorldIntent(ctx.raw)
-        ? 'world_verb'
-        : 'default_artifact';
+      : libraryIntent
+        ? 'library_keyword'
+        : hasWorldAccess && hasWorldIntent(ctx.raw)
+          ? 'world_verb'
+          : 'library_default';
 
   eventBus.publish({
     id: generateUUID(),
@@ -329,13 +355,30 @@ function detectReadIntent(ctx: IntentInput, hasWorldAccess: boolean): ActionFirs
       domain,
       reason,
       parsedTarget: target,
-      tool: domain === 'WORLD' ? 'READ_FILE' : 'READ_ARTIFACT'
+      tool: domain === 'WORLD' ? 'READ_FILE' : domain === 'LIBRARY' ? 'READ_LIBRARY_DOC' : 'READ_ARTIFACT'
     },
     priority: 0.4
   });
 
+  if (domain === 'WORLD' && libraryIntent && !looksLikeWorldPath(target)) {
+    eventBus.publish({
+      id: generateUUID(),
+      timestamp: Date.now(),
+      source: AgentType.CORTEX_FLOW,
+      type: PacketType.SYSTEM_ALERT,
+      payload: {
+        event: 'ROUTING_WRONG_DOMAIN',
+        input: ctx.raw,
+        domain,
+        reason,
+        parsedTarget: target
+      },
+      priority: 0.6
+    });
+  }
+
   if (domain === 'WORLD') return null;
-  return { handled: true, action: 'READ', target };
+  return { handled: true, action: 'READ', target, domain };
 }
 
 function detectFileIntent(text: string): ActionFirstResult | null {
