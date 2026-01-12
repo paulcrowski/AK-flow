@@ -13,6 +13,7 @@ import { evidenceLedger } from '@core/systems/EvidenceLedger';
 import { TickCommitter } from '@core/systems/TickCommitter';
 import { DEFAULT_AGENT_ID, getAgentWorldRoot } from '@core/systems/WorldAccess';
 import { PacketType } from '@/types';
+import { getWorldDirectorySelection } from '@tools/worldDirectoryAccess';
 
 // Mock dependencies
 vi.mock('@core/systems/LimbicSystem', () => ({
@@ -98,6 +99,10 @@ vi.mock('@core/systems/VolitionSystem', () => ({
     calculatePoeticScore: vi.fn().mockReturnValue(0)
 }));
 
+vi.mock('@tools/worldDirectoryAccess', () => ({
+    getWorldDirectorySelection: vi.fn().mockReturnValue(null)
+}));
+
 describe('EventLoop', () => {
     let mockCtx: EventLoop.LoopContext;
     let mockCallbacks: EventLoop.LoopCallbacks;
@@ -112,6 +117,7 @@ describe('EventLoop', () => {
         eventBus.clear();
         budgetState.count = 0;
         vi.mocked(getCurrentAgentId).mockReturnValue('test-agent');
+        vi.mocked(getWorldDirectorySelection).mockReturnValue(null);
 
         const longAgo = Date.now() - 1_000_000;
 
@@ -367,6 +373,46 @@ describe('EventLoop', () => {
         await EventLoop.runSingleStep(mockCtx, null, mockCallbacks);
         const afterThird = volition.mock.calls.length;
         expect(afterThird).toBe(beforeThird);
+    });
+
+    it('autonomy drives action selection in silence', async () => {
+        vi.mocked(getWorldDirectorySelection).mockReturnValue({ mode: 'world', name: '_world' } as any);
+        mockCtx.soma = { energy: 80, cognitiveLoad: 10, isSleeping: false };
+        mockCtx.limbic = { fear: 0.05, curiosity: 0.95, frustration: 0.05, satisfaction: 0.05 };
+        mockCtx.neuro = { dopamine: 20, serotonin: 50, norepinephrine: 50 };
+
+        await EventLoop.runSingleStep(mockCtx, null, mockCallbacks);
+
+        const history = eventBus.getHistory();
+        const autonomyEvent = history.find((p) => (p as any)?.payload?.event === 'AUTONOMY_ACTION_SELECTED');
+        const actionEvent = history.find((p) => p.type === PacketType.ACTION_SELECTED);
+
+        expect((autonomyEvent as any)?.payload?.action).toBe('EXPLORE_WORLD');
+        expect((actionEvent as any)?.payload?.action).toBe('observe');
+        expect((actionEvent as any)?.payload?.reason).toBe('autonomy_explore_world');
+        expect((actionEvent as any)?.payload?.reason).not.toBe('intention_requires_evidence');
+    });
+
+    it('autonomy REST avoids observe and world tools', async () => {
+        mockCtx.soma = { energy: 10, cognitiveLoad: 90, isSleeping: false };
+        mockCtx.limbic = { fear: 0.1, curiosity: 0.1, frustration: 0.1, satisfaction: 0.2 };
+        mockCtx.neuro = { dopamine: 50, serotonin: 50, norepinephrine: 50 };
+
+        await EventLoop.runSingleStep(mockCtx, null, mockCallbacks);
+
+        const history = eventBus.getHistory();
+        const autonomyEvent = history.find((p) => (p as any)?.payload?.event === 'AUTONOMY_ACTION_SELECTED');
+        const actionEvent = history.find((p) => p.type === PacketType.ACTION_SELECTED);
+        const toolIntents = history.filter(
+            (p) =>
+                p.type === PacketType.TOOL_INTENT &&
+                ['LIST_DIR', 'READ_FILE'].includes(String((p as any)?.payload?.tool || ''))
+        );
+
+        expect((autonomyEvent as any)?.payload?.action).toBe('REST');
+        expect((actionEvent as any)?.payload?.action).toBe('rest');
+        expect((actionEvent as any)?.payload?.reason).toBe('autonomy_rest');
+        expect(toolIntents.length).toBe(0);
     });
 
     it.skip('should run autonomous step without chemistry when disabled', async () => {

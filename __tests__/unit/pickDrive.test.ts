@@ -67,4 +67,15 @@ describe('pickDrive', () => {
     const result = pickDrive(ctx);
     expect(result.action).not.toBe('EXPLORE_WORLD');
   });
+
+  it('high resolve selects REFLECT', () => {
+    const ctx = buildContext({
+      soma: { energy: 90, cognitiveLoad: 20, isSleeping: false },
+      limbic: { curiosity: 0.1, satisfaction: 0.6, frustration: 0.9, fear: 0.2 },
+      neuro: { dopamine: 50, serotonin: 50, norepinephrine: 50 },
+      worldAccess: { hasSelection: true }
+    });
+    const result = pickDrive(ctx);
+    expect(result.action).toBe('REFLECT');
+  });
 });

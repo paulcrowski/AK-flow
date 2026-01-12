@@ -26,9 +26,13 @@ describe('computeDesires', () => {
       { curiosity: 1, satisfaction: 0, frustration: 0, fear: 0 },
       { dopamine: 0, serotonin: 50, norepinephrine: 50 }
     );
+    expect(d.explore).toBeGreaterThanOrEqual(0);
     expect(d.explore).toBeLessThanOrEqual(1);
+    expect(d.resolve).toBeGreaterThanOrEqual(0);
     expect(d.resolve).toBeLessThanOrEqual(1);
+    expect(d.create).toBeGreaterThanOrEqual(0);
     expect(d.create).toBeLessThanOrEqual(1);
+    expect(d.rest).toBeGreaterThanOrEqual(0);
     expect(d.rest).toBeLessThanOrEqual(1);
   });
 });

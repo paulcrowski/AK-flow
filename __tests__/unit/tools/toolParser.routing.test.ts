@@ -10,6 +10,10 @@ describe('toolParser routing', () => {
     expect(routeDomain('przeczytaj README.md', true)).toBe('WORLD');
   });
 
+  it('book-like requests go to LIBRARY', () => {
+    expect(routeDomain('przeczytaj ksiazke Reinforcement Learning', true)).toBe('LIBRARY');
+  });
+
   it('art-123 goes to ARTIFACT', () => {
     expect(routeDomain('pokaz art-123', true)).toBe('ARTIFACT');
   });
