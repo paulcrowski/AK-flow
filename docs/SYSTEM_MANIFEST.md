@@ -44,7 +44,7 @@ We embrace the artificial nature as a feature, not a bug.
 - No config changes.
 
 **Tests:**
-`npm test -- __tests__/unit/routingDecisionTelemetry.test.ts __tests__/unit/tools/toolParser.routing.test.ts` (targeted); full suite not rerun.
+`npm test` PASS (reported); targeted: `npm test -- __tests__/unit/routingDecisionTelemetry.test.ts __tests__/unit/tools/toolParser.routing.test.ts`; npm run build not rerun.
 
 ## What's New in V6.10.6 (2026-01-09)
 
