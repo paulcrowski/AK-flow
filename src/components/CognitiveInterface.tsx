@@ -6,6 +6,7 @@ import { useCognitiveKernelLite, AgentIdentity } from '../hooks/useCognitiveKern
 import { useSession } from '../contexts/SessionContext';
 import { AgentSelector } from './AgentSelector';
 import { initLimbicConfessionListener } from '../core/listeners/LimbicConfessionListener';
+import { registerLibraryMemoryListener } from '../core/listeners/LibraryMemoryListener';
 import { useTraceAnalytics } from '../hooks/useTraceAnalytics';
 import { Loader2, Zap, Power, Moon, EyeOff, FileText, Copy, X } from 'lucide-react';
 import { LeftSidebar } from './layout/LeftSidebar';
@@ -236,6 +237,12 @@ export function CognitiveInterface() {
         return cleanup;
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []); // Empty deps - singleton, only init once
+
+    useEffect(() => {
+        const cleanup = registerLibraryMemoryListener();
+        console.log('[CognitiveInterface] Library memory listener initialized');
+        return cleanup;
+    }, []);
 
 
     useEffect(() => {
