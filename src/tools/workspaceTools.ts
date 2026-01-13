@@ -60,6 +60,32 @@ const dirname = (value: string) => {
 const splitRelativePath = (value: string) => normalizeFsPath(value).split('/').filter(Boolean);
 const WORLD_ROOT_PATH = normalizeFsPath(WORLD_ROOT);
 
+const updateWorldAnchor = (path: string) => {
+  try {
+    const state = getCognitiveState();
+    if (state?.hydrate) state.hydrate({ lastWorldPath: path });
+  } catch {
+    // ignore state sync issues
+  }
+};
+
+const updateLibraryAnchor = (documentId: string, documentName?: string | null) => {
+  try {
+    const state = getCognitiveState();
+    if (state?.hydrate) {
+      state.hydrate({
+        lastLibraryDocId: documentId,
+        ...(documentName !== undefined ? { lastLibraryDocName: documentName } : {})
+      });
+    }
+  } catch {
+    // ignore state sync issues
+  }
+};
+
+const toWorldAnchorPath = (tool: string, path: string) =>
+  tool === 'READ_FILE' ? dirname(path) : path;
+
 const ROOT_ALIASES = ['', '/', '.', 'root', 'world root', 'glowny katalog', 'home', 'start'];
 const KNOWN_SHORT_FOLDERS = [
   'src',
@@ -157,6 +183,7 @@ const readFileViaHandle = async (params: {
       },
       priority: 0.7
     });
+    updateWorldAnchor(toWorldAnchorPath('READ_FILE', resolvedPath));
     return { ok: true, path: resolvedPath, content, evidenceId };
   } catch {
     return { ok: false, path: resolvedPath, error: 'FILE_READ_ERROR' };
@@ -226,6 +253,9 @@ const executeWorldToolWithFsAccess = async (params: {
     result: Partial<WorldToolResult>,
     payloadExtra: Record<string, unknown> = {}
   ): WorldToolResult => {
+    if (tool === 'LIST_DIR' || tool === 'READ_FILE') {
+      updateWorldAnchor(toWorldAnchorPath(tool, path));
+    }
     eventBus.publish({
       id: generateUUID(),
       timestamp: Date.now(),
@@ -431,6 +461,9 @@ export async function executeWorldTool(input: {
     result: Partial<WorldToolResult>,
     payloadExtra: Record<string, unknown> = {}
   ): WorldToolResult => {
+    if (tool === 'LIST_DIR' || tool === 'READ_FILE') {
+      updateWorldAnchor(toWorldAnchorPath(tool, path));
+    }
     eventBus.publish({
       id: generateUUID(),
       timestamp: Date.now(),
@@ -582,15 +615,6 @@ export async function consumeWorkspaceTags(params: {
     }
   };
 
-  const updateLibraryAnchor = (documentId: string) => {
-    try {
-      const state = getCognitiveState();
-      if (state?.hydrate) state.hydrate({ lastLibraryDocId: documentId });
-    } catch {
-      // ignore state sync issues
-    }
-  };
-
   const emitLibraryIngestMissing = (params: { documentId: string; name?: string; reason: string }) => {
     publish({
       id: makeId(),
@@ -735,6 +759,7 @@ export async function consumeWorkspaceTags(params: {
         if (!docRef) throw new Error('LIST_LIBRARY_CHUNKS arg must be <docIdOrName>#<limit?>');
 
         let documentId = docRef;
+        let documentName: string | null = null;
         if (!isUuidLike(documentId)) {
           const found: any = await withTimeout<any>(
             findLibraryDocumentByName({ name: documentId }) as any,
@@ -744,6 +769,8 @@ export async function consumeWorkspaceTags(params: {
           if (found.ok === false) throw new Error(found.error);
           if (!found.document) throw new Error(`DOC_NOT_FOUND_BY_NAME: ${documentId}`);
           documentId = String(found.document.id);
+          const nameCandidate = String(found.document.original_name || '').trim();
+          documentName = nameCandidate || null;
         }
 
         deps.addMessage('assistant', `Invoking LIST_LIBRARY_CHUNKS for: ${documentId}`, 'action');
@@ -779,7 +806,7 @@ export async function consumeWorkspaceTags(params: {
         if (visible.length === 0) {
           emitLibraryIngestMissing({ documentId, reason: 'chunks_missing' });
           deps.addMessage('assistant', 'Brak chunkow dla tego dokumentu.', 'tool_result');
-          updateLibraryAnchor(documentId);
+          updateLibraryAnchor(documentId, documentName ?? undefined);
           return;
         }
 
@@ -794,7 +821,7 @@ export async function consumeWorkspaceTags(params: {
 
         const text = `${countInfo}\n${summaries.join('\n')}\n\nKtory chunk? [READ_LIBRARY_CHUNK: ${documentId}#N]`;
         deps.addMessage('assistant', text, 'tool_result');
-        updateLibraryAnchor(documentId);
+        updateLibraryAnchor(documentId, documentName ?? undefined);
         return;
       }
 
@@ -947,7 +974,7 @@ export async function consumeWorkspaceTags(params: {
         });
 
         deps.addMessage('assistant', text, 'tool_result');
-        updateLibraryAnchor(documentId);
+        updateLibraryAnchor(documentId, originalName || undefined);
         await boostReadMemory({
           tool,
           documentId,
@@ -1050,7 +1077,7 @@ export async function consumeWorkspaceTags(params: {
         });
 
         deps.addMessage('assistant', text, 'tool_result');
-        updateLibraryAnchor(documentId);
+        updateLibraryAnchor(documentId, originalName || undefined);
         await boostReadMemory({
           tool,
           documentId,

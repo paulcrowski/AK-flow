@@ -69,6 +69,10 @@ export namespace EventLoop {
         neuro: NeurotransmitterState; // NEW: Chemical state
         conversation: ConversationTurn[];
         lastLibraryDocId?: string | null;
+        lastLibraryDocName?: string | null;
+        lastWorldPath?: string | null;
+        lastArtifactId?: string | null;
+        lastArtifactName?: string | null;
         autonomousMode: boolean;
         lastSpeakTimestamp: number;
         silenceStart: number;
@@ -145,6 +149,13 @@ export namespace EventLoop {
                 conversation: ctx.conversation,
                 silenceStart: ctx.silenceStart,
                 lastUserInteractionAt: ctx.goalState.lastUserInteractionAt || ctx.silenceStart,
+                workingMemory: {
+                    lastLibraryDocId: ctx.lastLibraryDocId ?? null,
+                    lastLibraryDocName: ctx.lastLibraryDocName ?? null,
+                    lastWorldPath: ctx.lastWorldPath ?? null,
+                    lastArtifactId: ctx.lastArtifactId ?? null,
+                    lastArtifactName: ctx.lastArtifactName ?? null
+                },
                 worldAccess: { hasSelection: hasWorldSelection },
                 activeGoal: ctx.goalState.activeGoal
                     ? {

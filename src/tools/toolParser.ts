@@ -257,6 +257,20 @@ export const createProcessOutputForTools = (deps: ToolParserDeps) => {
       }
     };
 
+    const setLastArtifact = (artifactId: string, artifactName?: string | null) => {
+      try {
+        const state = getCognitiveState();
+        if (state?.hydrate) {
+          state.hydrate({
+            lastArtifactId: artifactId,
+            ...(artifactName !== undefined ? { lastArtifactName: artifactName } : {})
+          });
+        }
+      } catch {
+        // ignore state sync issues
+      }
+    };
+
     const emitToolCommit = (params: {
       action: 'CREATE' | 'APPEND' | 'REPLACE';
       artifactId: string;
@@ -371,6 +385,7 @@ export const createProcessOutputForTools = (deps: ToolParserDeps) => {
           const created = store.get(id);
           const artifactName = rememberArtifactName(id, created?.name || headerForCreate) || headerForCreate;
           emitToolResult({ tool, intentId, payload: { id, name: artifactName } });
+          setLastArtifact(id, artifactName);
           emitToolCommit({
             action: 'CREATE',
             artifactId: id,
@@ -402,6 +417,7 @@ export const createProcessOutputForTools = (deps: ToolParserDeps) => {
             updated?.name || resolved.nameHint || getRememberedArtifactName(id) || ''
           ) || resolved.nameHint || id;
           emitToolResult({ tool, intentId, payload: { id, name: artifactName } });
+          setLastArtifact(id, artifactName);
           emitToolCommit({
             action: 'APPEND',
             artifactId: id,
@@ -422,6 +438,7 @@ export const createProcessOutputForTools = (deps: ToolParserDeps) => {
           updated?.name || resolved.nameHint || getRememberedArtifactName(id) || ''
         ) || resolved.nameHint || id;
         emitToolResult({ tool, intentId, payload: { id, name: artifactName } });
+        setLastArtifact(id, artifactName);
         emitToolCommit({
           action: 'REPLACE',
           artifactId: id,
@@ -460,6 +477,7 @@ export const createProcessOutputForTools = (deps: ToolParserDeps) => {
         const hash = hashArtifactContent(art.content);
         store.addEvidence({ kind: 'artifact', ts: Date.now(), artifactId: art.id, name: art.name, hash });
         emitToolResult({ tool, intentId, payload: { id: art.id, name: art.name, length: art.content.length, hash } });
+        setLastArtifact(art.id, art.name);
         addMessage('assistant', `READ_ARTIFACT ${art.id} (${art.name}) hash=${hash}\n\n${art.content}`, 'tool_result');
       } catch (e: any) {
         emitToolError({ tool, intentId, payload: { arg: artifactId }, error: e?.message || String(e) });
@@ -686,6 +704,7 @@ export const createProcessOutputForTools = (deps: ToolParserDeps) => {
         const artifactName = `snapshot_${snapshot.exportedAt}.json`;
         const store = useArtifactStore.getState();
         const artifactId = store.create(artifactName, JSON.stringify(snapshot, null, 2));
+        setLastArtifact(artifactId, artifactName);
 
         let snapshotId: string | null = null;
         try {

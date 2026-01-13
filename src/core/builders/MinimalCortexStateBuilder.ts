@@ -7,7 +7,7 @@
  * @module core/builders/MinimalCortexStateBuilder
  */
 
-import type { CortexState, SessionMemorySnapshot } from '../types/CortexState';
+import type { CortexState, SessionMemorySnapshot, WorkingMemorySnapshot } from '../types/CortexState';
 import type { MetaStates } from '../types/MetaStates';
 import { DEFAULT_INTERACTION_MODE } from '../types/InteractionMode';
 import { DEFAULT_RELATIONSHIP } from '../types/Relationship';
@@ -118,6 +118,7 @@ export interface MinimalBuilderInput {
   lastAgentOutput?: string;
   /** Session-level memory (from SessionMemoryService) */
   sessionMemory?: SessionMemorySnapshot;
+  workingMemory?: WorkingMemorySnapshot;
 }
 
 /**
@@ -200,7 +201,8 @@ export function buildMinimalCortexState(
       }
       // Note: soma/neuro not available here, will be added by caller if needed
     }),
-    session_memory: input.sessionMemory
+    session_memory: input.sessionMemory,
+    working_memory: input.workingMemory
   };
 }
 

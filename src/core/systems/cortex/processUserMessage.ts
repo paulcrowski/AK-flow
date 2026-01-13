@@ -22,6 +22,7 @@ import type { AgentIdentityContext, ConversationTurn, ProcessInputParams, Proces
 import { recallMemories } from './memoryRecall';
 import { computeNeuralStrength } from '../../../utils/memoryStrength';
 import { detectIntent, formatHistoryRange } from '../IntentDetector';
+import type { WorkingMemorySnapshot } from '../../types/CortexState';
 
 function buildStructuredPrompt(params: {
   text: string;
@@ -31,8 +32,51 @@ function buildStructuredPrompt(params: {
   conversationHistory: ConversationTurn[];
   identity?: AgentIdentityContext;
   sessionOverlay?: SessionOverlay;
+  workingMemory?: WorkingMemorySnapshot;
 }): string {
-  const { text, currentLimbic, currentSoma, memories, conversationHistory, identity, sessionOverlay } = params;
+  const { text, currentLimbic, currentSoma, memories, conversationHistory, identity, sessionOverlay, workingMemory } = params;
+
+  const formatWorkingMemory = (memory?: WorkingMemorySnapshot) => {
+    const lines: string[] = [];
+    const libId = memory?.last_library_doc_id ?? null;
+    const libName = memory?.last_library_doc_name ?? null;
+    const worldPath = memory?.last_world_path ?? null;
+    const artId = memory?.last_artifact_id ?? null;
+    const artName = memory?.last_artifact_name ?? null;
+
+    if (libId) {
+      const display = libName || libId;
+      lines.push(`- Active library doc: "${display}" (id=${libId})`);
+      lines.push('  Use this id for "this book"/"that document"/"ta ksiazka"/"ten dokument". Do not SEARCH_LIBRARY.');
+    } else {
+      lines.push('- Active library doc: none');
+    }
+
+    if (worldPath) {
+      lines.push(`- Last world path: ${worldPath}`);
+      lines.push('  Use for "here/there"/"tutaj/tam"/"this folder".');
+    } else {
+      lines.push('- Last world path: none');
+    }
+
+    if (artId) {
+      const display = artName || artId;
+      lines.push(`- Last artifact: "${display}" (id=${artId})`);
+      lines.push('  Use for "this file"/"this artifact"/"ten plik".');
+    } else {
+      lines.push('- Last artifact: none');
+    }
+
+    lines.push('CAPABILITIES:');
+    lines.push('- WORLD: LIST_DIR, READ_FILE, WRITE_FILE, APPEND_FILE');
+    lines.push('- LIBRARY: READ_LIBRARY_DOC, LIST_LIBRARY_CHUNKS, READ_LIBRARY_CHUNK, READ_LIBRARY_RANGE');
+    lines.push('- ARTIFACTS: CREATE, READ_ARTIFACT, APPEND, REPLACE');
+    lines.push('RULES:');
+    lines.push('- You have WORLD access. Do not claim you cannot access local files.');
+    lines.push('- If an active library doc is set, use its id instead of SEARCH_LIBRARY.');
+
+    return lines.join('\\n');
+  };
 
   const agentIdentity = identity || DEFAULT_IDENTITY;
   const recentChat = conversationHistory
@@ -50,6 +94,9 @@ function buildStructuredPrompt(params: {
             - Limbic: Fear=${currentLimbic.fear.toFixed(2)}, Curiosity=${currentLimbic.curiosity.toFixed(2)}, Satisfaction=${currentLimbic.satisfaction.toFixed(2)}
             - Soma: Energy=${currentSoma.energy}, Load=${currentSoma.cognitiveLoad}
             
+            WORKING MEMORY:
+            ${formatWorkingMemory(workingMemory)}
+
             CONTEXT:
             ${memoryContext}
             
@@ -157,7 +204,8 @@ export async function processUserMessage(params: ProcessInputParams): Promise<Pr
     identity,
     sessionOverlay,
     memorySpace,
-    prefetchedMemories
+    prefetchedMemories,
+    workingMemory
   } = params;
 
   const recentHistory = conversationHistory.slice(-12);
@@ -219,7 +267,8 @@ export async function processUserMessage(params: ProcessInputParams): Promise<Pr
           confidence: currentLimbic.satisfaction * 100,
           stress: currentLimbic.fear * 100
         },
-        sessionMemory
+        sessionMemory,
+        workingMemory
       });
 
       const rawOutput = await generateFromCortexState(state);
@@ -391,7 +440,8 @@ export async function processUserMessage(params: ProcessInputParams): Promise<Pr
     memories,
     conversationHistory: recentHistory,
     identity,
-    sessionOverlay
+    sessionOverlay,
+    workingMemory
   });
 
   const cortexResult = await CortexService.structuredDialogue(prompt);

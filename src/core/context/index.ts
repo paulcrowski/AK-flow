@@ -16,5 +16,6 @@ export {
   type SocialFrame,
   type HardFacts,
   type SessionMemory,
+  type WorkingMemory,
   type MinimalConversationTurn
 } from './UnifiedContextBuilder';

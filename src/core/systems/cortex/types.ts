@@ -1,4 +1,5 @@
 import type { LimbicState, SomaState, Goal, TraitVector, NeurotransmitterState } from '../../../types';
+import type { WorkingMemorySnapshot } from '../../types/CortexState';
 import type { MemorySpace } from '../MemorySpace';
 import type { MemoryTrace } from '../../../types';
 
@@ -38,6 +39,7 @@ export interface ProcessInputParams {
   sessionOverlay?: SessionOverlay;
   memorySpace?: MemorySpace;
   prefetchedMemories?: MemoryTrace[];
+  workingMemory?: WorkingMemorySnapshot;
 }
 
 export interface ProcessResult {

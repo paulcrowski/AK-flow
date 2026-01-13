@@ -222,6 +222,7 @@ describe('UnifiedContextBuilder', () => {
       expect(prompt).toContain('TestAgent');
       expect(prompt).toContain('IDENTITY');
       expect(prompt).toContain('STYLE CONSTRAINTS');
+      expect(prompt).toContain('WORKING MEMORY');
       expect(prompt).toContain('TASK');
       expect(prompt).toContain('Respond to the user');
     });
@@ -246,6 +247,7 @@ describe('UnifiedContextBuilder', () => {
       
       expect(prompt).toContain('HARD FACTS');
       expect(prompt).toContain('TASK');
+      expect(prompt).toContain('WORKING MEMORY');
       expect(prompt).toContain('decide if you want to speak');
       expect(prompt).toContain('voice_pressure');
     });

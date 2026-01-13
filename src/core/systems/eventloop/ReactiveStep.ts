@@ -284,11 +284,47 @@ export async function runReactiveStep(input: {
         });
       };
 
-      const updateLibraryAnchor = (documentId: string) => {
+      const updateLibraryAnchor = (documentId: string, documentName?: string | null) => {
         ctx.lastLibraryDocId = documentId;
+        if (documentName !== undefined) {
+          ctx.lastLibraryDocName = documentName;
+        }
         try {
           const state = getCognitiveState();
-          if (state?.hydrate) state.hydrate({ lastLibraryDocId: documentId });
+          if (state?.hydrate) {
+            state.hydrate({
+              lastLibraryDocId: documentId,
+              ...(documentName !== undefined ? { lastLibraryDocName: documentName } : {})
+            });
+          }
+        } catch {
+          // ignore state sync issues
+        }
+      };
+
+      const updateWorldAnchor = (path: string) => {
+        ctx.lastWorldPath = path;
+        try {
+          const state = getCognitiveState();
+          if (state?.hydrate) state.hydrate({ lastWorldPath: path });
+        } catch {
+          // ignore state sync issues
+        }
+      };
+
+      const updateArtifactAnchor = (artifactId: string, artifactName?: string | null) => {
+        ctx.lastArtifactId = artifactId;
+        if (artifactName !== undefined) {
+          ctx.lastArtifactName = artifactName;
+        }
+        try {
+          const state = getCognitiveState();
+          if (state?.hydrate) {
+            state.hydrate({
+              lastArtifactId: artifactId,
+              ...(artifactName !== undefined ? { lastArtifactName: artifactName } : {})
+            });
+          }
         } catch {
           // ignore state sync issues
         }
@@ -373,7 +409,7 @@ export async function runReactiveStep(input: {
         const excerpt = raw.slice(0, 8000);
         evidenceLedger.record('READ_FILE', originalName || documentId);
         emitToolResult('READ_LIBRARY_DOC', intentId, { docId: documentId, name: originalName, length: raw.length });
-        updateLibraryAnchor(documentId);
+        updateLibraryAnchor(documentId, originalName);
 
         publishReactiveSpeech({
           ctx,
@@ -405,7 +441,7 @@ export async function runReactiveStep(input: {
         const chunkText = String(res.chunk.content || '').trim();
         evidenceLedger.record('READ_FILE', `${documentId}#${chunkIndex}`);
         emitToolResult('READ_LIBRARY_CHUNK', intentId, { docId: documentId, chunkIndex, length: chunkText.length });
-        updateLibraryAnchor(documentId);
+        updateLibraryAnchor(documentId, docHint?.original_name);
         publishReactiveSpeech({
           ctx,
           trace,
@@ -442,6 +478,7 @@ export async function runReactiveStep(input: {
           shown: visible.length,
           hasMore
         });
+        updateLibraryAnchor(documentId);
 
         const countInfo = hasMore
           ? `Pokazuje pierwsze ${limit} chunkow (jest wiecej):`
@@ -662,6 +699,7 @@ export async function runReactiveStep(input: {
             const created = store.get(id);
             const artifactName = rememberArtifactName(id, created?.name || target) || target;
             emitToolResult('CREATE', intentId, { id, name: artifactName });
+            updateArtifactAnchor(id, artifactName);
             emitToolCommit({
               action: 'CREATE',
               artifactId: id,
@@ -697,6 +735,7 @@ export async function runReactiveStep(input: {
           }
           if (traceId) p0MetricAdd(traceId, { actionFirstExecuted: 1 });
           emitToolResult('READ_ARTIFACT', intentId, { id: art.id, name: art.name, length: art.content.length });
+          updateArtifactAnchor(art.id, art.name);
           publishReactiveSpeech({ ctx, trace, callbacks, speechText: `${art.name}\n\n${art.content || '(pusty)'}`, internalThought: '' });
           updateContextAfterAction(ctx);
           return;
@@ -783,6 +822,7 @@ export async function runReactiveStep(input: {
               updated?.name || resolved.nameHint || getRememberedArtifactName(resolved.id) || ''
             ) || resolved.nameHint || resolved.id;
             emitToolResult('APPEND', intentId, { id: resolved.id, name: artifactName });
+            updateArtifactAnchor(resolved.id, artifactName);
             emitToolCommit({
               action: 'APPEND',
               artifactId: resolved.id,
@@ -884,6 +924,7 @@ export async function runReactiveStep(input: {
               updated?.name || resolved.nameHint || getRememberedArtifactName(resolved.id) || ''
             ) || resolved.nameHint || resolved.id;
             emitToolResult('REPLACE', intentId, { id: resolved.id, name: artifactName });
+            updateArtifactAnchor(resolved.id, artifactName);
             emitToolCommit({
               action: 'REPLACE',
               artifactId: resolved.id,
@@ -927,7 +968,14 @@ export async function runReactiveStep(input: {
     identity: ctx.agentIdentity,
     sessionOverlay: ctx.sessionOverlay,
     memorySpace,
-    prefetchedMemories
+    prefetchedMemories,
+    workingMemory: {
+      last_library_doc_id: ctx.lastLibraryDocId ?? null,
+      last_library_doc_name: ctx.lastLibraryDocName ?? null,
+      last_world_path: ctx.lastWorldPath ?? null,
+      last_artifact_id: ctx.lastArtifactId ?? null,
+      last_artifact_name: ctx.lastArtifactName ?? null
+    }
   });
 
   const intent = await CortexService.detectIntent(userInput);

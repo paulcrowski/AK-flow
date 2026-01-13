@@ -53,6 +53,7 @@ describe('UnifiedContextPromptBuilder', () => {
     expect(prompt).toContain('HARD FACTS');
     expect(prompt).toContain('IDENTITY');
     expect(prompt).toContain('STYLE CONSTRAINTS');
+    expect(prompt).toContain('WORKING MEMORY');
     expect(prompt).toContain('CURRENT STATE');
     expect(prompt).toContain('SESSION HISTORY');
     expect(prompt).toContain('CONTEXT');

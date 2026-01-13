@@ -110,6 +110,17 @@ export interface SessionMemory {
 }
 
 /**
+ * Working memory anchors - short-lived references.
+ */
+export interface WorkingMemory {
+  lastLibraryDocId?: string | null;
+  lastLibraryDocName?: string | null;
+  lastWorldPath?: string | null;
+  lastArtifactId?: string | null;
+  lastArtifactName?: string | null;
+}
+
+/**
  * Full unified context for LLM.
  */
 export interface UnifiedContext {
@@ -126,6 +137,7 @@ export interface UnifiedContext {
   sessionMemory?: SessionMemory;
   activeGoal?: { description: string; source: string; priority: number };
   worldAccess?: { hasSelection: boolean };
+  workingMemory?: WorkingMemory;
   /** Action-specific prompt from AutonomyRepertoire (for autonomous mode) */
   actionPrompt?: string;
 }
@@ -169,6 +181,7 @@ export interface ContextBuilderInput {
   silenceStart: number;
   lastUserInteractionAt: number;
   worldAccess?: { hasSelection: boolean };
+  workingMemory?: WorkingMemory;
   
   // Goal (optional)
   activeGoal?: { description: string; source: string; priority: number };
@@ -263,7 +276,8 @@ export const UnifiedContextBuilder = {
       socialFrame,
       sessionMemory: input.sessionMemory,
       activeGoal: input.activeGoal,
-      worldAccess: input.worldAccess
+      worldAccess: input.worldAccess,
+      workingMemory: input.workingMemory
     };
   },
   
@@ -337,6 +351,9 @@ ${styleConstraints}
 CURRENT STATE:
 - Limbic: Fear=${limbic.fear.toFixed(2)}, Curiosity=${limbic.curiosity.toFixed(2)}, Satisfaction=${limbic.satisfaction.toFixed(2)}
 - Social: User presence=${socialFrame.userPresenceScore.toFixed(2)}, Silence=${socialFrame.silenceDurationSec.toFixed(0)}s
+
+WORKING MEMORY (anchors):
+${this.formatWorkingMemory(ctx.workingMemory)}
 
 SESSION HISTORY (source of truth):
 ${this.formatSessionMemory(sessionMemory)}
@@ -433,6 +450,51 @@ ACTIVE GOAL (${activeGoal.source.toUpperCase()}):
     }
     
     return lines.length > 0 ? lines.join('\n') : '- No prior session data';
+  },
+
+  /**
+   * Format working memory anchors for prompt.
+   */
+  formatWorkingMemory(memory?: WorkingMemory): string {
+    const lines: string[] = [];
+    const libId = memory?.lastLibraryDocId ?? null;
+    const libName = memory?.lastLibraryDocName ?? null;
+    const worldPath = memory?.lastWorldPath ?? null;
+    const artId = memory?.lastArtifactId ?? null;
+    const artName = memory?.lastArtifactName ?? null;
+
+    if (libId) {
+      const display = libName || libId;
+      lines.push(`- Active library doc: "${display}" (id=${libId})`);
+      lines.push('  Use this id for "this book"/"that document"/"ta ksiazka"/"ten dokument". Do not SEARCH_LIBRARY.');
+    } else {
+      lines.push('- Active library doc: none');
+    }
+
+    if (worldPath) {
+      lines.push(`- Last world path: ${worldPath}`);
+      lines.push('  Use for "here/there"/"tutaj/tam"/"this folder".');
+    } else {
+      lines.push('- Last world path: none');
+    }
+
+    if (artId) {
+      const display = artName || artId;
+      lines.push(`- Last artifact: "${display}" (id=${artId})`);
+      lines.push('  Use for "this file"/"this artifact"/"ten plik".');
+    } else {
+      lines.push('- Last artifact: none');
+    }
+
+    lines.push('CAPABILITIES:');
+    lines.push('- WORLD: LIST_DIR, READ_FILE, WRITE_FILE, APPEND_FILE');
+    lines.push('- LIBRARY: READ_LIBRARY_DOC, LIST_LIBRARY_CHUNKS, READ_LIBRARY_CHUNK, READ_LIBRARY_RANGE');
+    lines.push('- ARTIFACTS: CREATE, READ_ARTIFACT, APPEND, REPLACE');
+    lines.push('RULES:');
+    lines.push('- You have WORLD access. Do not claim you cannot access local files.');
+    lines.push('- If an active library doc is set, use its id instead of SEARCH_LIBRARY.');
+
+    return lines.join('\n');
   },
   
   /**

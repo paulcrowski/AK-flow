@@ -56,6 +56,11 @@ export type AutonomousVolitionLoopContext = {
   silenceStart: number;
   lastSpeakTimestamp: number;
   thoughtHistory: string[];
+  lastLibraryDocId?: string | null;
+  lastLibraryDocName?: string | null;
+  lastWorldPath?: string | null;
+  lastArtifactId?: string | null;
+  lastArtifactName?: string | null;
   poeticMode: boolean;
   autonomousLimitPerMinute: number;
   chemistryEnabled?: boolean;
@@ -315,6 +320,13 @@ export async function runAutonomousVolitionStep(input: {
     socialDynamics: ctx.socialDynamics,
     silenceStart: ctx.silenceStart,
     lastUserInteractionAt: ctx.goalState.lastUserInteractionAt || ctx.silenceStart,
+    workingMemory: {
+      lastLibraryDocId: ctx.lastLibraryDocId ?? null,
+      lastLibraryDocName: ctx.lastLibraryDocName ?? null,
+      lastWorldPath: ctx.lastWorldPath ?? null,
+      lastArtifactId: ctx.lastArtifactId ?? null,
+      lastArtifactName: ctx.lastArtifactName ?? null
+    },
     sessionChunks,
     identityShards,
     semanticMatches,

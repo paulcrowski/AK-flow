@@ -91,6 +91,10 @@ export interface KernelState {
 
   // Library anchor (last accessed document)
   lastLibraryDocId: string | null;
+  lastLibraryDocName?: string | null;
+  lastWorldPath?: string | null;
+  lastArtifactId?: string | null;
+  lastArtifactName?: string | null;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════

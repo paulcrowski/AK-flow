@@ -26,6 +26,14 @@ export interface SessionMemorySnapshot {
   recentTopics: string[];
 }
 
+export interface WorkingMemorySnapshot {
+  last_library_doc_id?: string | null;
+  last_library_doc_name?: string | null;
+  last_world_path?: string | null;
+  last_artifact_id?: string | null;
+  last_artifact_name?: string | null;
+}
+
 /**
  * Główny kontrakt - to idzie do LLM jako JSON
  */
@@ -75,6 +83,9 @@ export interface CortexState {
 
   /** Session-level memory facts (yesterday/today counts, topics, last interaction) */
   session_memory?: SessionMemorySnapshot;
+
+  /** Working memory anchors (last library doc, world path, artifact) */
+  working_memory?: WorkingMemorySnapshot;
 }
 
 /** Maksymalny rozmiar payload w znakach (safety limit) */
