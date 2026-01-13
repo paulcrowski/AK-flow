@@ -327,6 +327,80 @@ export function looksLikeLibraryAnchor(input: string): boolean {
   return false;
 }
 
+export interface ResolvedReference {
+  type: 'library_doc' | 'library_chunk' | 'world_path' | 'artifact' | null;
+  id: string | null;
+  confidence: number;
+}
+
+export function resolveImplicitReference(
+  userInput: string,
+  state: {
+    lastLibraryDocId?: string | null;
+    lastWorldPath?: string | null;
+    lastArtifactId?: string | null;
+  }
+): ResolvedReference {
+  const raw = String(userInput || '');
+  const normalized = normalizeRoutingInput(raw);
+
+  const hasExplicitName =
+    /["'`].+["'`]/.test(raw) ||
+    /\b[\w.-]+\.(txt|pdf|md|docx?|json|csv|xlsx?)\b/i.test(raw) ||
+    raw.split(/\s+/).length > 8;
+
+  if (hasExplicitName) {
+    return { type: null, id: null, confidence: 0 };
+  }
+
+  const libraryPatterns = [
+    /\b(ta|tej|tego|tamtej)\s*(ksiazka|dokument)\b/,
+    /\b(ksiazka|dokument)\s*$/,
+    /\bchunk(ow|y)?(\s+z)?\s*(ksiazki|dokumentu)?\b/,
+    /\bfragment(ow|y)?(\s+z)?\s*(ksiazki|dokumentu)?\b/,
+    /\bpokaz\s+(mi\s+)?(chunk|fragment|tresc)\b/,
+    /\bco\s+(jest\s+)?(w\s+)?(tej|tamtej)?\s*(ksiazce|dokumencie)\b/,
+    /\bo\s+czym\s+(jest|mowi)\s+(ta|ten)\b/
+  ];
+
+  const worldPatterns = [
+    /\b(tam|tutaj|tu)\b/,
+    /\b(w\s+)?tym\s+(folderze|katalogu|miejscu)\b/,
+    /\bco\s+(jest\s+)?(w\s+)?(tym\s+)?(folderze|katalogu)\b/
+  ];
+
+  const artifactPatterns = [
+    /\b(ten|ta|to)\s+(plik|artefakt|notatka)\b/,
+    /\bw\s+tym\s+(pliku|artefakcie)\b/
+  ];
+
+  if (state.lastLibraryDocId) {
+    for (const pattern of libraryPatterns) {
+      if (pattern.test(normalized)) {
+        return { type: 'library_doc', id: state.lastLibraryDocId, confidence: 0.9 };
+      }
+    }
+  }
+
+  if (state.lastWorldPath) {
+    for (const pattern of worldPatterns) {
+      if (pattern.test(normalized)) {
+        return { type: 'world_path', id: state.lastWorldPath, confidence: 0.85 };
+      }
+    }
+  }
+
+  if (state.lastArtifactId) {
+    for (const pattern of artifactPatterns) {
+      if (pattern.test(normalized)) {
+        return { type: 'artifact', id: state.lastArtifactId, confidence: 0.85 };
+      }
+    }
+  }
+
+  return { type: null, id: null, confidence: 0 };
+}
+
 function detectReadIntent(ctx: IntentInput, hasWorldAccess: boolean): ActionFirstResult | null {
   const readMatch = ctx.raw.match(READ_REGEX);
   if (!readMatch) return null;

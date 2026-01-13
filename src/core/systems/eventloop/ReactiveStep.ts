@@ -19,7 +19,7 @@ import { getCurrentAgentId } from '../../../services/supabase';
 import { getCognitiveState } from '../../../stores/cognitiveStore';
 import type { PendingAction, PendingActionEvent, ResolveDependencies } from './pending';
 import { createPendingAction, setPendingAction, tryResolvePendingAction } from './pending';
-import { detectActionableIntent, isImplicitReference, isRecognizableTarget, looksLikeLibraryAnchor } from './reactiveStep.helpers';
+import { detectActionableIntent, isImplicitReference, isRecognizableTarget, looksLikeLibraryAnchor, resolveImplicitReference } from './reactiveStep.helpers';
 import { normalizeRoutingInput } from '../../../tools/toolParser';
 import { evidenceLedger } from '../EvidenceLedger';
 
@@ -492,8 +492,34 @@ export async function runReactiveStep(input: {
       };
 
       const handleLibraryRead = async (rawTarget?: string, anchorOnly?: boolean) => {
-        const anchorRequested = Boolean(anchorOnly) || looksLikeLibraryAnchor(rawTarget || '');
         const chunkRequest = wantsChunks(rawTarget || userInput);
+        const resolved = resolveImplicitReference(userInput, {
+          lastLibraryDocId: ctx.lastLibraryDocId,
+          lastWorldPath: ctx.lastWorldPath,
+          lastArtifactId: ctx.lastArtifactId
+        });
+
+        if (resolved.type === 'library_doc' && resolved.id && resolved.confidence > 0.7) {
+          if (isDev) {
+            console.log(`[ANCHOR_RESOLVER] Using library anchor: ${resolved.id} (confidence: ${resolved.confidence})`);
+          }
+          if (chunkRequest) {
+            const { text } = await listLibraryChunkSummaries(resolved.id);
+            publishReactiveSpeech({
+              ctx,
+              trace,
+              callbacks,
+              speechText: text,
+              internalThought: ''
+            });
+            updateContextAfterAction(ctx);
+            return;
+          }
+          await readLibraryDoc(resolved.id);
+          return;
+        }
+
+        const anchorRequested = Boolean(anchorOnly) || looksLikeLibraryAnchor(rawTarget || '');
         if (anchorRequested) {
           const anchorId = ctx.lastLibraryDocId || null;
           if (!anchorId) {
