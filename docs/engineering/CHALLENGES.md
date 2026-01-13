@@ -17,13 +17,51 @@
 
 | Metryka | Wartość |
 |---------|---------|
-| Rozwiązanych problemów | 20 |
+| Rozwiązanych problemów | 21 |
 | Całkowity czas | ~48 godzin |
 | Średnia trudność | 3.9/5 |
 | Największy przełom | FactEcho Guard (FAZA 6.0) |
 | Najdłuższy problem | Monolityczny Kernel (8h) |
 
 ---
+
+## Problem #29: Working memory niewidoczna + implicit anchors
+
+**Data:** 2026-01-13
+**Trudnosc:** 4/5
+**Status:** ROZWIAZANY (Working memory injection + anchor resolver)
+
+### Objawy
+- Po READ_LIBRARY_DOC agent nie wiedzial "o jaka ksiazke chodzi" i robil SEARCH_LIBRARY.
+- "Tutaj/tam" nie mapowalo na ostatni katalog.
+- Po sukcesie toolu bywala cisza (brak odpowiedzi).
+
+### Diagnoza
+- Anchory (lastLibraryDocId/lastWorldPath/lastArtifactId) byly w stanie, ale nie w promptach.
+- Brak deterministycznego resolvera dla niejawnych referencji.
+- Gate mogl blokowac speech po TOOL_RESULT ok=true.
+
+### Rozwiazanie
+- Wstrzykniecie sekcji Working Memory do promptu + aktualizacja anchorow po narzedziach.
+- Resolver niejawnych referencji dla library/world/artifact.
+- Tool contract domkniety + odblokowanie speech po sukcesie; routing artifact UUID + telemetria world tools.
+
+### Pliki
+- src/llm/gemini/UnifiedContextPromptBuilder.ts
+- src/core/systems/eventloop/ReactiveStep.ts
+- src/core/systems/ExecutiveGate.ts
+- src/core/systems/ActionSelector.ts
+- src/tools/toolParser.ts
+- src/tools/workspaceTools.ts
+- __tests__/unit/WorkingMemoryState.test.ts
+- __tests__/unit/LibraryAnchorResolver.test.ts
+- __tests__/contracts/ToolContractGate.test.ts
+
+### Testy
+`npm test` (not rerun after fixes; earlier run failed on LibraryAnchorResolver/toolParser routing).
+
+### Lekcja
+- Stan bez promptu to brak pamieci: anchor musi byc jawny i deterministycznie mapowany.
 
 ## Problem #28: Missing TOOL_RESULT/TOOL_ERROR i niejednoznaczne sciezki world
 

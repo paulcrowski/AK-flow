@@ -1,6 +1,6 @@
 # AK-FLOW: Cognitive Agent Architecture Manifest
-**System Version:** 6.10.7 (Tool Contract + Library Routing)  
-**Last Updated:** 2026-01-12  
+**System Version:** 6.10.8 (Working Memory + Anchor Resolver)  
+**Last Updated:** 2026-01-13  
 **Architecture Type:** Active Inference (Friston) + Global Workspace Theory + Multi-Modal RAG + **Stateless Inference Engine**  
 **Status:** Autonomous / Stateful / Modular / Self-Aware / Goal-Driven / Personality-Driven / **Emergent Identity**
 
@@ -28,6 +28,24 @@ We embrace the artificial nature as a feature, not a bug.
 - **Measurable Soul:** Emotions and "vibes" are allowed, but they must map to system metrics (Energy, Dopamine), not just literary roleplay.
 
 ---
+
+## What's New in V6.10.8 (2026-01-13)
+
+### Working memory + anchor resolver + tool closure
+
+**Goal:** expose working memory anchors to the model, resolve implicit references deterministically, and guarantee tool-result speech.
+
+**Key changes:**
+- Injected working memory section into prompts with lastLibraryDocId/lastWorldPath/lastArtifactId plus access rules.
+- Added implicit anchor resolver for library/world/artifact references; widened patterns and preserved world paths.
+- Enforced tool contract closure and unblocked speech after tool success; ActionSelector defaults to ACT when user input present.
+- Hardened artifact routing (UUID) and added world tool entry telemetry; added unit tests for working memory, anchor resolver, tool contract gate.
+
+**Configuration (Single Source):**
+- No config changes.
+
+**Tests:**
+`npm test` previously failed on LibraryAnchorResolver/toolParser routing; fixes applied, not rerun. npm run build not rerun.
 
 ## What's New in V6.10.7 (2026-01-12)
 

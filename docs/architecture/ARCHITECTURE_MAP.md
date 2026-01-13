@@ -1,6 +1,6 @@
 # 🧠 AK-FLOW Architecture Map
 
-> **Wersja:** 6.10.7 (2026-01-12)
+> **Wersja:** 6.10.8 (2026-01-13)
 > **Cel:** Prosta mapa jak działa agent i jaki ma flow
 
 ## Archive policy
@@ -9,6 +9,16 @@
 Ten katalog jest wykluczony z kompilacji TypeScript i służy wyłącznie jako referencja do poprzednich iteracji.
 
 ---
+
+## FAZA 6.10.8: Working Memory + Anchor Resolver (2026-01-13)
+
+**Cel:** pokazac modelowi aktywne anchory i deterministycznie rozpoznawac "ta ksiazka/tutaj" bez SEARCH.
+
+**Mechanika:**
+- Working memory section w promptach: lastLibraryDocId/lastWorldPath/lastArtifactId + zasady dostepu.
+- Resolver niejawnych referencji dla library/world/artifact; poszerzone wzorce fraz.
+- Tool contract domkniety + odblokowanie mowy po sukcesie; ActionSelector domyslnie ACT przy user input.
+- Routing artefaktow (art-uuid) utwardzony + telemetria entry dla world tools.
 
 ## FAZA 6.10.7: Tool Contract + Library Routing (2026-01-12)
 
