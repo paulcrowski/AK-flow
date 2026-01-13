@@ -268,6 +268,7 @@ const executeWorldToolWithFsAccess = async (params: {
   agentId: string;
 }): Promise<WorldToolResult> => {
   const { input, agentId } = params;
+  console.log(`[WORLD_TOOL] Entry: ${input.tool} path="${input.path}" via=fsAccess`);
   const selection = getWorldDirectorySelection(agentId);
   const normalizedPath = normalizeWorldPath(input.path);
   const rawInputPath = normalizedPath.ok ? normalizedPath.path : String(input.path || '').trim();
@@ -492,6 +493,7 @@ export async function executeWorldTool(input: {
   content?: string;
   agentId?: string | null;
 }): Promise<WorldToolResult> {
+  console.log(`[WORLD_TOOL] Wrapper called: ${input.tool} path="${input.path}"`);
   const agentId = input.agentId || getCurrentAgentId() || DEFAULT_AGENT_ID;
   const agentName = getCurrentAgentName();
   if (normalizePath(input.path).includes('..')) {
