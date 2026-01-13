@@ -389,106 +389,115 @@ export async function runReactiveStep(input: {
 
       const readLibraryDoc = async (documentId: string, docHint?: { original_name?: string; ingested_at?: string | null }) => {
         const intentId = emitToolIntent('READ_LIBRARY_DOC', documentId);
-        const res: any = await downloadLibraryDocumentText({ documentId });
-        if (res.ok === false) {
-          emitToolError('READ_LIBRARY_DOC', intentId, { arg: documentId }, res.error || 'READ_LIBRARY_DOC_FAILED');
-          return;
-        }
+        try {
+          const res: any = await downloadLibraryDocumentText({ documentId });
+          if (res.ok === false) {
+            throw new Error(res.error || 'READ_LIBRARY_DOC_FAILED');
+          }
 
-        const doc = res.doc || docHint || {};
-        const originalName = String(doc?.original_name || '').trim() || 'unknown';
-        if (!doc?.ingested_at) {
-          emitSystemAlert('LIBRARY_INGEST_MISSING', {
-            docId: documentId,
-            name: originalName,
-            reason: 'ingested_at_missing'
+          const doc = res.doc || docHint || {};
+          const originalName = String(doc?.original_name || '').trim() || 'unknown';
+          if (!doc?.ingested_at) {
+            emitSystemAlert('LIBRARY_INGEST_MISSING', {
+              docId: documentId,
+              name: originalName,
+              reason: 'ingested_at_missing'
+            });
+          }
+
+          const raw = String(res.text || '');
+          const excerpt = raw.slice(0, 8000);
+          evidenceLedger.record('READ_FILE', originalName || documentId);
+          emitToolResult('READ_LIBRARY_DOC', intentId, { docId: documentId, name: originalName, length: raw.length });
+          updateLibraryAnchor(documentId, originalName);
+
+          publishReactiveSpeech({
+            ctx,
+            trace,
+            callbacks,
+            speechText: `READ_LIBRARY_DOC ${documentId} (${originalName}):\n${excerpt || '(empty)'}`,
+            internalThought: ''
           });
+          updateContextAfterAction(ctx);
+        } catch (error: any) {
+          emitToolError('READ_LIBRARY_DOC', intentId, { arg: documentId }, error?.message || 'READ_LIBRARY_DOC_FAILED');
         }
-
-        const raw = String(res.text || '');
-        const excerpt = raw.slice(0, 8000);
-        evidenceLedger.record('READ_FILE', originalName || documentId);
-        emitToolResult('READ_LIBRARY_DOC', intentId, { docId: documentId, name: originalName, length: raw.length });
-        updateLibraryAnchor(documentId, originalName);
-
-        publishReactiveSpeech({
-          ctx,
-          trace,
-          callbacks,
-          speechText: `READ_LIBRARY_DOC ${documentId} (${originalName}):\n${excerpt || '(empty)'}`,
-          internalThought: ''
-        });
-        updateContextAfterAction(ctx);
       };
 
       const readLibraryChunk = async (documentId: string, chunkIndex: number, docHint?: { original_name?: string; ingested_at?: string | null }) => {
         const intentId = emitToolIntent('READ_LIBRARY_CHUNK', `${documentId}#${chunkIndex}`);
-        const res: any = await getLibraryChunkByIndex({ documentId, chunkIndex });
-        if (res.ok === false) {
-          emitToolError('READ_LIBRARY_CHUNK', intentId, { arg: `${documentId}#${chunkIndex}` }, res.error || 'READ_LIBRARY_CHUNK_FAILED');
-          return;
-        }
-        if (!res.chunk) {
-          const listRes: any = await listLibraryChunks({ documentId, limit: 1 });
-          if (listRes.ok && listRes.chunks.length === 0) {
-            publishIngestMissing({ id: documentId, original_name: docHint?.original_name }, 'chunks_missing');
-            return;
+        try {
+          const res: any = await getLibraryChunkByIndex({ documentId, chunkIndex });
+          if (res.ok === false) {
+            throw new Error(res.error || 'READ_LIBRARY_CHUNK_FAILED');
           }
-          emitToolError('READ_LIBRARY_CHUNK', intentId, { arg: `${documentId}#${chunkIndex}` }, 'CHUNK_NOT_FOUND');
-          return;
-        }
+          if (!res.chunk) {
+            const listRes: any = await listLibraryChunks({ documentId, limit: 1 });
+            if (listRes.ok && listRes.chunks.length === 0) {
+              publishIngestMissing({ id: documentId, original_name: docHint?.original_name }, 'chunks_missing');
+              throw new Error('CHUNKS_MISSING');
+            }
+            throw new Error('CHUNK_NOT_FOUND');
+          }
 
-        const chunkText = String(res.chunk.content || '').trim();
-        evidenceLedger.record('READ_FILE', `${documentId}#${chunkIndex}`);
-        emitToolResult('READ_LIBRARY_CHUNK', intentId, { docId: documentId, chunkIndex, length: chunkText.length });
-        updateLibraryAnchor(documentId, docHint?.original_name);
-        publishReactiveSpeech({
-          ctx,
-          trace,
-          callbacks,
-          speechText: `READ_LIBRARY_CHUNK ${documentId}#${chunkIndex}:\n${chunkText || '(empty)'}`,
-          internalThought: ''
-        });
-        updateContextAfterAction(ctx);
+          const chunkText = String(res.chunk.content || '').trim();
+          evidenceLedger.record('READ_FILE', `${documentId}#${chunkIndex}`);
+          emitToolResult('READ_LIBRARY_CHUNK', intentId, { docId: documentId, chunkIndex, length: chunkText.length });
+          updateLibraryAnchor(documentId, docHint?.original_name);
+          publishReactiveSpeech({
+            ctx,
+            trace,
+            callbacks,
+            speechText: `READ_LIBRARY_CHUNK ${documentId}#${chunkIndex}:\n${chunkText || '(empty)'}`,
+            internalThought: ''
+          });
+          updateContextAfterAction(ctx);
+        } catch (error: any) {
+          emitToolError('READ_LIBRARY_CHUNK', intentId, { arg: `${documentId}#${chunkIndex}` }, error?.message || 'READ_LIBRARY_CHUNK_FAILED');
+        }
       };
 
       const listLibraryChunkSummaries = async (documentId: string, limit = 20) => {
         const intentId = emitToolIntent('LIST_LIBRARY_CHUNKS', documentId);
-        const res: any = await listLibraryChunks({ documentId, limit: limit + 1 });
-        if (res.ok === false) {
-          emitToolError('LIST_LIBRARY_CHUNKS', intentId, { documentId }, res.error || 'LIST_LIBRARY_CHUNKS_FAILED');
+        try {
+          const res: any = await listLibraryChunks({ documentId, limit: limit + 1 });
+          if (res.ok === false) {
+            throw new Error(res.error || 'LIST_LIBRARY_CHUNKS_FAILED');
+          }
+
+          const chunks = Array.isArray(res.chunks) ? res.chunks : [];
+          if (chunks.length === 0) {
+            emitToolResult('LIST_LIBRARY_CHUNKS', intentId, { docId: documentId, shown: 0, hasMore: false });
+            return { text: 'Brak chunkow dla tego dokumentu.', shownCount: 0, hasMore: false };
+          }
+
+          const hasMore = chunks.length > limit;
+          const visible = chunks.slice(0, limit);
+          const summaries = visible.map((chunk: any) => {
+            const preview = String(chunk.content || '').replace(/\s+/g, ' ').slice(0, 100);
+            return `#${chunk.chunk_index}: ${preview}...`;
+          });
+
+          emitToolResult('LIST_LIBRARY_CHUNKS', intentId, {
+            docId: documentId,
+            shown: visible.length,
+            hasMore
+          });
+          updateLibraryAnchor(documentId);
+
+          const countInfo = hasMore
+            ? `Pokazuje pierwsze ${limit} chunkow (jest wiecej):`
+            : `Dokument ma ${visible.length} chunkow:`;
+
+          return {
+            text: `${countInfo}\n${summaries.join('\n')}\n\nKtory chunk? [READ_LIBRARY_CHUNK: ${documentId}#N]`,
+            shownCount: visible.length,
+            hasMore
+          };
+        } catch (error: any) {
+          emitToolError('LIST_LIBRARY_CHUNKS', intentId, { documentId }, error?.message || 'LIST_LIBRARY_CHUNKS_FAILED');
           return { text: 'Nie moge pobrac chunkow.', shownCount: 0, hasMore: false };
         }
-
-        const chunks = Array.isArray(res.chunks) ? res.chunks : [];
-        if (chunks.length === 0) {
-          emitToolResult('LIST_LIBRARY_CHUNKS', intentId, { docId: documentId, shown: 0, hasMore: false });
-          return { text: 'Brak chunkow dla tego dokumentu.', shownCount: 0, hasMore: false };
-        }
-
-        const hasMore = chunks.length > limit;
-        const visible = chunks.slice(0, limit);
-        const summaries = visible.map((chunk: any) => {
-          const preview = String(chunk.content || '').replace(/\s+/g, ' ').slice(0, 100);
-          return `#${chunk.chunk_index}: ${preview}...`;
-        });
-
-        emitToolResult('LIST_LIBRARY_CHUNKS', intentId, {
-          docId: documentId,
-          shown: visible.length,
-          hasMore
-        });
-        updateLibraryAnchor(documentId);
-
-        const countInfo = hasMore
-          ? `Pokazuje pierwsze ${limit} chunkow (jest wiecej):`
-          : `Dokument ma ${visible.length} chunkow:`;
-
-        return {
-          text: `${countInfo}\n${summaries.join('\n')}\n\nKtory chunk? [READ_LIBRARY_CHUNK: ${documentId}#N]`,
-          shownCount: visible.length,
-          hasMore
-        };
       };
 
       const handleLibraryRead = async (rawTarget?: string, anchorOnly?: boolean) => {
@@ -616,9 +625,14 @@ export async function runReactiveStep(input: {
         }
 
         const searchIntentId = emitToolIntent('SEARCH_LIBRARY', query);
-        const searchRes: any = await searchLibraryChunks({ query, limit: 6 });
-        if (searchRes.ok === false) {
-          emitToolError('SEARCH_LIBRARY', searchIntentId, { arg: query }, searchRes.error || 'SEARCH_LIBRARY_FAILED');
+        let searchRes: any;
+        try {
+          searchRes = await searchLibraryChunks({ query, limit: 6 });
+          if (searchRes.ok === false) {
+            throw new Error(searchRes.error || 'SEARCH_LIBRARY_FAILED');
+          }
+        } catch (error: any) {
+          emitToolError('SEARCH_LIBRARY', searchIntentId, { arg: query }, error?.message || 'SEARCH_LIBRARY_FAILED');
           return;
         }
         if (searchRes.hits.length > 0) {

@@ -30,6 +30,79 @@ export type WorldToolResult = {
   evidenceId?: string;
 };
 
+// ============================================
+// TOOL CONTRACT HELPERS
+// ============================================
+type ToolPublishFn = (packet: any) => void;
+type ToolMakeIdFn = () => string;
+
+const emitToolIntent = (publish: ToolPublishFn, makeId: ToolMakeIdFn, tool: string, arg: string) => {
+  const intentId = makeId();
+  publish({
+    id: intentId,
+    timestamp: Date.now(),
+    source: AgentType.CORTEX_FLOW,
+    type: PacketType.TOOL_INTENT,
+    payload: { tool, arg, intentId },
+    priority: 0.8
+  });
+  return intentId;
+};
+
+const emitToolResult = (
+  publish: ToolPublishFn,
+  makeId: ToolMakeIdFn,
+  tool: string,
+  intentId: string,
+  payload: Record<string, unknown>
+) => {
+  publish({
+    id: makeId(),
+    timestamp: Date.now(),
+    source: AgentType.CORTEX_FLOW,
+    type: PacketType.TOOL_RESULT,
+    payload: { tool, intentId, ...payload },
+    priority: 0.7
+  });
+};
+
+const emitToolError = (
+  publish: ToolPublishFn,
+  makeId: ToolMakeIdFn,
+  tool: string,
+  intentId: string,
+  arg: unknown,
+  error: string
+) => {
+  publish({
+    id: makeId(),
+    timestamp: Date.now(),
+    source: AgentType.CORTEX_FLOW,
+    type: PacketType.TOOL_ERROR,
+    payload: { tool, intentId, arg, error },
+    priority: 0.8
+  });
+};
+
+async function executeWithContract<T>(
+  publish: ToolPublishFn,
+  makeId: ToolMakeIdFn,
+  tool: string,
+  arg: string,
+  fn: () => Promise<T>
+): Promise<{ ok: true; result: T } | { ok: false; error: string }> {
+  const intentId = emitToolIntent(publish, makeId, tool, arg);
+  try {
+    const result = await fn();
+    emitToolResult(publish, makeId, tool, intentId, { result });
+    return { ok: true, result };
+  } catch (error: any) {
+    const errorMsg = error?.message || 'UNKNOWN_ERROR';
+    emitToolError(publish, makeId, tool, intentId, arg, errorMsg);
+    return { ok: false, error: errorMsg };
+  }
+}
+
 type FsModule = typeof import('fs/promises');
 let fsModule: FsModule | null = null;
 const IS_NODE =
@@ -708,15 +781,7 @@ export async function consumeWorkspaceTags(params: {
 
     const arg = normalizeArg(argRaw);
 
-    const intentId = makeId();
-    publish({
-      id: intentId,
-      timestamp: Date.now(),
-      source: AgentType.CORTEX_FLOW,
-      type: PacketType.TOOL_INTENT,
-      payload: { tool, arg },
-      priority: 0.8
-    });
+    const intentId = emitToolIntent(publish, makeId, tool, arg);
 
     try {
       if (tool === 'SEARCH_LIBRARY') {
@@ -739,14 +804,7 @@ export async function consumeWorkspaceTags(params: {
           evidenceLedger.record('SEARCH_HIT', arg);
         }
 
-        publish({
-          id: makeId(),
-          timestamp: Date.now(),
-          source: AgentType.CORTEX_FLOW,
-          type: PacketType.TOOL_RESULT,
-          payload: { tool, arg, intentId, hitsCount: res.hits.length },
-          priority: 0.8
-        });
+        emitToolResult(publish, makeId, tool, intentId, { arg, hitsCount: res.hits.length });
 
         deps.addMessage('assistant', text, 'tool_result');
         return;
@@ -787,20 +845,11 @@ export async function consumeWorkspaceTags(params: {
         const hasMore = chunks.length > limit;
         const visible = chunks.slice(0, limit);
 
-        publish({
-          id: makeId(),
-          timestamp: Date.now(),
-          source: AgentType.CORTEX_FLOW,
-          type: PacketType.TOOL_RESULT,
-          payload: {
-            tool,
-            arg,
-            intentId,
-            docId: documentId,
-            shown: visible.length,
-            hasMore
-          },
-          priority: 0.8
+        emitToolResult(publish, makeId, tool, intentId, {
+          arg,
+          docId: documentId,
+          shown: visible.length,
+          hasMore
         });
 
         if (visible.length === 0) {
@@ -908,23 +957,14 @@ export async function consumeWorkspaceTags(params: {
           textChunk
         ].join('\n');
 
-        publish({
-          id: makeId(),
-          timestamp: Date.now(),
-          source: AgentType.CORTEX_FLOW,
-          type: PacketType.TOOL_RESULT,
-          payload: {
-            tool,
-            arg,
-            intentId,
-            docId: documentId,
-            name: originalName,
-            range: { start, end },
-            totalLength,
-            hash,
-            nextRangeHint
-          },
-          priority: 0.8
+        emitToolResult(publish, makeId, tool, intentId, {
+          arg,
+          docId: documentId,
+          name: originalName,
+          range: { start, end },
+          totalLength,
+          hash,
+          nextRangeHint
         });
 
         deps.addMessage('assistant', text, 'tool_result');
@@ -952,7 +992,7 @@ export async function consumeWorkspaceTags(params: {
           const listRes: any = await withTimeout<any>(listLibraryChunks({ documentId, limit: 1 }) as any, timeoutMs, 'LIST_LIBRARY_CHUNKS');
           if (listRes.ok && listRes.chunks.length === 0) {
             emitLibraryIngestMissing({ documentId, reason: 'chunks_missing' });
-            return;
+            throw new Error('CHUNKS_MISSING');
           }
           throw new Error('CHUNK_NOT_FOUND');
         }
@@ -964,14 +1004,7 @@ export async function consumeWorkspaceTags(params: {
           chunkText.slice(0, 8000)
         ].join('\n');
 
-        publish({
-          id: makeId(),
-          timestamp: Date.now(),
-          source: AgentType.CORTEX_FLOW,
-          type: PacketType.TOOL_RESULT,
-          payload: { tool, arg, intentId, length: chunkText.length },
-          priority: 0.8
-        });
+        emitToolResult(publish, makeId, tool, intentId, { arg, length: chunkText.length });
 
         deps.addMessage('assistant', text, 'tool_result');
         updateLibraryAnchor(documentId, originalName || undefined);
@@ -1059,21 +1092,12 @@ export async function consumeWorkspaceTags(params: {
 
         evidenceLedger.record('READ_FILE', originalName || documentId);
 
-        publish({
-          id: makeId(),
-          timestamp: Date.now(),
-          source: AgentType.CORTEX_FLOW,
-          type: PacketType.TOOL_RESULT,
-          payload: {
-            tool,
-            arg,
-            intentId,
-            docId: documentId,
-            name: originalName,
-            length: raw.length,
-            summarized: !!summaryBlock
-          },
-          priority: 0.8
+        emitToolResult(publish, makeId, tool, intentId, {
+          arg,
+          docId: documentId,
+          name: originalName,
+          length: raw.length,
+          summarized: !!summaryBlock
         });
 
         deps.addMessage('assistant', text, 'tool_result');
@@ -1092,14 +1116,18 @@ export async function consumeWorkspaceTags(params: {
       const msg = error?.message || String(error);
       const isTimeout = typeof msg === 'string' && msg.startsWith('TOOL_TIMEOUT:');
 
-      publish({
-        id: makeId(),
-        timestamp: Date.now(),
-        source: AgentType.CORTEX_FLOW,
-        type: isTimeout ? PacketType.TOOL_TIMEOUT : PacketType.TOOL_ERROR,
-        payload: { tool, arg, intentId, error: msg },
-        priority: 0.9
-      });
+      if (isTimeout) {
+        publish({
+          id: makeId(),
+          timestamp: Date.now(),
+          source: AgentType.CORTEX_FLOW,
+          type: PacketType.TOOL_TIMEOUT,
+          payload: { tool, arg, intentId, error: msg },
+          priority: 0.9
+        });
+      } else {
+        emitToolError(publish, makeId, tool, intentId, arg, msg);
+      }
 
       deps.addMessage(
         'assistant',
