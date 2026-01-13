@@ -46,6 +46,7 @@ export function looksLikeWorldPath(input: string): boolean {
 
 export function looksLikeArtifactRef(input: string): boolean {
   const x = String(input || '').trim().toLowerCase();
+  if (looksLikeWorldPath(x)) return false;
   if (x.includes('artefakt') || x.includes('artifact')) return true;
   return ARTIFACT_ID_PATTERN.test(x);
 }

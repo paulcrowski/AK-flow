@@ -354,11 +354,11 @@ export function resolveImplicitReference(
   }
 
   const libraryPatterns = [
-    /\b(ta|tej|tego|tamtej)\s*(ksiazka|dokument)\b/,
-    /\b(ksiazka|dokument)\s*$/,
-    /\bchunk(ow|y)?(\s+z)?\s*(ksiazki|dokumentu)?\b/,
-    /\bfragment(ow|y)?(\s+z)?\s*(ksiazki|dokumentu)?\b/,
-    /\bpokaz\s+(mi\s+)?(chunk|fragment|tresc)\b/,
+    /\b(ta|tej|tego|tamtej)\s*(ksiazka|ksiazki|ksiazce|dokument|dokumentu|dokumencie)\b/,
+    /\b(ksiazka|ksiazki|dokument|dokumentu)\s*$/,
+    /\bchunk(i|y|ow)?(\s+z)?\s*(ksiazki|ksiazce|dokumentu|dokumencie)?\b/,
+    /\bfragment(ow|y)?(\s+z)?\s*(ksiazki|ksiazce|dokumentu|dokumencie)?\b/,
+    /\bpokaz\s+(mi\s+)?(chunki?|fragment|tresc)\b/,
     /\bco\s+(jest\s+)?(w\s+)?(tej|tamtej)?\s*(ksiazce|dokumencie)\b/,
     /\bo\s+czym\s+(jest|mowi)\s+(ta|ten)\b/
   ];
