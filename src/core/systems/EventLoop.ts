@@ -575,7 +575,8 @@ export namespace EventLoop {
                     drive: witnessFrame.dominantDrive,
                     readiness: witnessFrame.readinessToAct,
                     energy: ctx.soma.energy,
-                    evidenceCount
+                    evidenceCount,
+                    hasUserInput: Boolean(params.input)
                 });
 
             const allowEvidenceOverride = !(autonomyDecision?.action === 'REST');
@@ -772,16 +773,23 @@ export namespace EventLoop {
             };
 
             let skipEvidenceGate = false;
+            let observed = false;
             if (action.action === 'observe') {
                 try {
                     const observeResult = await executeObserve({ allowScanFallback: forceObserve });
                     skipEvidenceGate = observeResult.skipEvidenceGate;
+                    observed = observeResult.observed;
                 } catch (error: any) {
                     callbacks.onThought(`[OBSERVE_ERROR] ${error?.message || String(error)}`);
                 }
             }
 
             const updatedEvidenceCount = getEvidenceCount();
+            const toolSuccessUnblocks = Boolean(params.input) && observed && updatedEvidenceCount === 0;
+            if (toolSuccessUnblocks && !skipEvidenceGate) {
+                skipEvidenceGate = true;
+                console.log('[GATE] Unblocking cortex after successful tool execution.');
+            }
             if (needsEvidence && updatedEvidenceCount === 0 && !skipEvidenceGate) {
                 eventBus.publish({
                     id: generateUUID(),

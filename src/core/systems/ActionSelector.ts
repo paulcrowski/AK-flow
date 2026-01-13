@@ -9,9 +9,19 @@ export function selectAction(input: {
   readiness: number;
   energy: number;
   evidenceCount: number;
+  hasUserInput?: boolean;
+  pendingToolIntent?: boolean;
 }): { action: ActionType; reason: string } {
   if (input.energy < 30) {
     return { action: 'rest', reason: 'energy_critical' };
+  }
+
+  if (input.hasUserInput) {
+    return { action: 'suggest', reason: 'user_input_priority' };
+  }
+
+  if (input.pendingToolIntent) {
+    return { action: 'suggest', reason: 'pending_tool_intent' };
   }
 
   if (input.intention) {
