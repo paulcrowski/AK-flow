@@ -22,6 +22,7 @@ export const TOP_DIRS = ['code', 'docs', 'notes', 'engineering', 'research', 'vi
 export const WORLD_VERBS = ['lista', 'list', 'dir', 'folder', 'katalog', 'directory', 'ls', 'list files', 'list dir'];
 export const READ_VERBS = ['przeczytaj', 'pokaz', 'otworz', 'wyswietl', 'read', 'show', 'open', 'display'];
 export const LIBRARY_STEMS = ['ksiazk', 'dokument', 'raport', 'pdf', 'book', 'document', 'report', 'bibliotek', 'library'];
+const ARTIFACT_ID_PATTERN = /art-(?:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|\d+)/i;
 
 export function normalizeRoutingInput(input: string): string {
   return String(input || '')
@@ -46,7 +47,7 @@ export function looksLikeWorldPath(input: string): boolean {
 export function looksLikeArtifactRef(input: string): boolean {
   const x = String(input || '').trim().toLowerCase();
   if (x.includes('artefakt') || x.includes('artifact')) return true;
-  return /(^|\s)art-[0-9a-f-]+(\s|$)/i.test(x);
+  return ARTIFACT_ID_PATTERN.test(x);
 }
 
 export function hasWorldIntent(input: string): boolean {
