@@ -172,6 +172,56 @@ const updateLibraryAnchor = (
   }
 };
 
+const shouldClearAnchorForError = (error: string) => {
+  const message = String(error || '').toUpperCase();
+  return (
+    message.includes('NOT_FOUND') ||
+    message.includes('NO_DOC') ||
+    message.includes('NO_CHUNKS') ||
+    message.includes('MISSING_DOC') ||
+    message.includes('CHUNK_NOT_FOUND') ||
+    message.includes('CHUNKS_MISSING')
+  );
+};
+
+const clearWorldAnchorIfMatches = (path: string, error: string) => {
+  if (!shouldClearAnchorForError(error)) return;
+  try {
+    const state = getCognitiveState();
+    if (!state?.hydrate) return;
+    const current = state.lastWorldPath ?? null;
+    if (!current) return;
+    if (normalizeFsPath(current) !== normalizeFsPath(path)) return;
+    const patch: Record<string, unknown> = { lastWorldPath: null };
+    if (state.activeDomain === 'WORLD') {
+      patch.activeDomain = null;
+    }
+    state.hydrate(patch);
+  } catch {
+    // ignore state sync issues
+  }
+};
+
+const clearLibraryAnchorIfMatches = (documentId: string, error: string) => {
+  if (!shouldClearAnchorForError(error)) return;
+  try {
+    const state = getCognitiveState();
+    if (!state?.hydrate) return;
+    if (state.lastLibraryDocId !== documentId) return;
+    const patch: Record<string, unknown> = {
+      lastLibraryDocId: null,
+      lastLibraryDocName: null,
+      lastLibraryDocChunkCount: null
+    };
+    if (state.activeDomain === 'LIBRARY') {
+      patch.activeDomain = null;
+    }
+    state.hydrate(patch);
+  } catch {
+    // ignore state sync issues
+  }
+};
+
 const toWorldAnchorPath = (tool: string, path: string) =>
   tool === 'READ_FILE' ? dirname(path) : path;
 
@@ -334,6 +384,7 @@ const executeWorldToolWithFsAccess = async (params: {
       payload: { tool, path, intentId, error },
       priority: 0.8
     });
+    clearWorldAnchorIfMatches(path, error);
     return { ok: false, path, error };
   };
 
@@ -543,6 +594,7 @@ export async function executeWorldTool(input: {
       payload: { tool, path, intentId, error },
       priority: 0.8
     });
+    clearWorldAnchorIfMatches(path, error);
     return { ok: false, path, error };
   };
 
@@ -798,6 +850,7 @@ export async function consumeWorkspaceTags(params: {
           : tool0;
 
     const arg = normalizeArg(argRaw);
+    let docIdForError: string | null = null;
 
     const intentId = emitToolIntent(publish, makeId, tool, arg);
 
@@ -848,6 +901,7 @@ export async function consumeWorkspaceTags(params: {
           const nameCandidate = String(found.document.original_name || '').trim();
           documentName = nameCandidate || null;
         }
+        docIdForError = documentId;
 
         deps.addMessage('assistant', `Invoking LIST_LIBRARY_CHUNKS for: ${documentId}`, 'action');
         deps.setCurrentThought('Workspace list chunks...');
@@ -917,6 +971,7 @@ export async function consumeWorkspaceTags(params: {
           if (!found.document) throw new Error(`DOC_NOT_FOUND_BY_NAME: ${documentId}`);
           documentId = String(found.document.id);
         }
+        docIdForError = documentId;
 
         deps.addMessage(
           'assistant',
@@ -1002,6 +1057,7 @@ export async function consumeWorkspaceTags(params: {
         if (!m) throw new Error('READ_LIBRARY_CHUNK arg must be <docId>#<chunkIndex>');
         const documentId = m[1];
         const chunkIndex = Number(m[2]);
+        docIdForError = documentId;
         deps.addMessage('assistant', `Invoking READ_LIBRARY_CHUNK for: ${documentId}#${chunkIndex}`, 'action');
         deps.setCurrentThought(`Workspace read chunk: ${chunkIndex}...`);
 
@@ -1045,6 +1101,7 @@ export async function consumeWorkspaceTags(params: {
           if (!found.document) throw new Error(`DOC_NOT_FOUND_BY_NAME: ${documentId}`);
           documentId = String(found.document.id);
         }
+        docIdForError = documentId;
 
         deps.addMessage('assistant', `Invoking READ_LIBRARY_DOC for: ${documentId}`, 'action');
         deps.setCurrentThought('Workspace read document...');
@@ -1146,6 +1203,9 @@ export async function consumeWorkspaceTags(params: {
         });
       } else {
         emitToolError(publish, makeId, tool, intentId, arg, msg);
+        if (docIdForError) {
+          clearLibraryAnchorIfMatches(docIdForError, msg);
+        }
       }
 
       deps.addMessage(

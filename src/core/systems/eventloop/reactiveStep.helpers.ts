@@ -321,9 +321,12 @@ function normalizeReadTarget(raw: string): string {
 export function looksLikeLibraryAnchor(input: string): boolean {
   const normalized = normalizeRoutingInput(input);
   if (!normalized) return false;
-  if (/\btam\b/.test(normalized)) return true;
+  if (/\b(tam|tutaj|tu)\b/.test(normalized)) return true;
+  if (/\b(ta|tej|tego|tamtej)\s*(ksiazk|dokument)/.test(normalized)) return true;
   if (/\bw tej ksiazk/.test(normalized)) return true;
   if (/\bte chunki\b/.test(normalized)) return true;
+  if (/\bchunki?\b/.test(normalized)) return true;
+  if (/\bfragment/.test(normalized) || /\btresc\b/.test(normalized)) return true;
   return false;
 }
 
@@ -344,10 +347,22 @@ export function resolveImplicitReference(
   const raw = String(userInput || '');
   const normalized = normalizeRoutingInput(raw);
 
-  const hasExplicitName =
+  const hasQuotedName =
     /["'`].+["'`]/.test(raw) ||
-    /\b[\w.-]+\.(txt|pdf|md|docx?|json|csv|xlsx?)\b/i.test(raw) ||
-    raw.split(/\s+/).length > 8;
+    /[\u201e\u201c].+[\u201d\u201c]/.test(raw);
+  const hasFileExtension = /\b[\w.-]+\.(txt|md|pdf|docx?|json|csv|xlsx?)\b/i.test(raw);
+  const hasExplicitPath = /[\\/]/.test(raw);
+  const hasUuid = /\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/i.test(raw);
+  const hasArtifactUuid = /\bart-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/i.test(raw);
+  const hasExplicitId = /\b(?:docid|id)\s*[:=]\s*[0-9a-f-]{6,}\b/i.test(raw);
+
+  const hasExplicitName =
+    hasQuotedName ||
+    hasFileExtension ||
+    hasExplicitPath ||
+    hasUuid ||
+    hasArtifactUuid ||
+    hasExplicitId;
 
   if (hasExplicitName) {
     return { type: null, id: null, confidence: 0 };

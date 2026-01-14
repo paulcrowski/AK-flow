@@ -356,6 +356,45 @@ export async function runReactiveStep(input: {
         }
       };
 
+      const shouldClearAnchorForError = (error: unknown) => {
+        const message = String(error || '').toUpperCase();
+        return (
+          message.includes('NOT_FOUND') ||
+          message.includes('NO_DOC') ||
+          message.includes('NO_CHUNKS') ||
+          message.includes('MISSING_DOC') ||
+          message.includes('CHUNK_NOT_FOUND') ||
+          message.includes('CHUNKS_MISSING')
+        );
+      };
+
+      const clearLibraryAnchorIfMatches = (documentId: string, error: unknown) => {
+        if (!shouldClearAnchorForError(error)) return;
+        if (!documentId || ctx.lastLibraryDocId !== documentId) return;
+        ctx.lastLibraryDocId = null;
+        ctx.lastLibraryDocName = null;
+        ctx.lastLibraryDocChunkCount = null;
+        if (ctx.activeDomain === 'LIBRARY') {
+          ctx.activeDomain = null;
+        }
+        try {
+          const state = getCognitiveState();
+          if (state?.hydrate) {
+            const patch: Record<string, unknown> = {
+              lastLibraryDocId: null,
+              lastLibraryDocName: null,
+              lastLibraryDocChunkCount: null
+            };
+            if (state.activeDomain === 'LIBRARY') {
+              patch.activeDomain = null;
+            }
+            state.hydrate(patch);
+          }
+        } catch {
+          // ignore state sync issues
+        }
+      };
+
       const wantsChunks = (inputText: string) => {
         const normalized = normalizeRoutingInput(inputText);
         return normalized.includes('chunk') || normalized.includes('chunki');
@@ -447,6 +486,7 @@ export async function runReactiveStep(input: {
           updateContextAfterAction(ctx);
         } catch (error: any) {
           emitToolError('READ_LIBRARY_DOC', intentId, { arg: documentId }, error?.message || 'READ_LIBRARY_DOC_FAILED');
+          clearLibraryAnchorIfMatches(documentId, error?.message || error);
         }
       };
 
@@ -480,6 +520,7 @@ export async function runReactiveStep(input: {
           updateContextAfterAction(ctx);
         } catch (error: any) {
           emitToolError('READ_LIBRARY_CHUNK', intentId, { arg: `${documentId}#${chunkIndex}` }, error?.message || 'READ_LIBRARY_CHUNK_FAILED');
+          clearLibraryAnchorIfMatches(documentId, error?.message || error);
         }
       };
 
@@ -523,6 +564,7 @@ export async function runReactiveStep(input: {
           };
         } catch (error: any) {
           emitToolError('LIST_LIBRARY_CHUNKS', intentId, { documentId }, error?.message || 'LIST_LIBRARY_CHUNKS_FAILED');
+          clearLibraryAnchorIfMatches(documentId, error?.message || error);
           return { text: 'Nie moge pobrac chunkow.', shownCount: 0, hasMore: false };
         }
       };

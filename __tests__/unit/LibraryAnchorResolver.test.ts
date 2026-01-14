@@ -39,6 +39,12 @@ describe('Library Anchor Resolver', () => {
       expect(result.id).toBeNull();
     });
 
+    test('explicit path does not use anchor', () => {
+      const result = resolveImplicitReference('/code/docs/plan.md', stateWithAnchor);
+      expect(result.type).toBeNull();
+      expect(result.id).toBeNull();
+    });
+
     test('no anchor returns null', () => {
       const result = resolveImplicitReference('ta ksiazka', stateEmpty);
       expect(result.type).toBeNull();
