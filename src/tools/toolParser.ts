@@ -15,6 +15,11 @@ import { consumeWorkspaceTags } from './workspaceTools';
 import { withTimeout } from './toolRuntime';
 import { consumeSearchTag } from './searchTag';
 import { consumeVisualizeTag } from './visualizeTag';
+import {
+  emitToolError as emitToolErrorContract,
+  emitToolIntent as emitToolIntentContract,
+  emitToolResult as emitToolResultContract
+} from '../core/telemetry/toolContract';
 
 // Routing helpers: world vs artifact
 export const FILE_EXTENSIONS = /\.(md|txt|ts|js|jsx|tsx|json|yaml|yml|py|log|csv|html|css|sql)$/i;
@@ -187,14 +192,7 @@ export const createProcessOutputForTools = (deps: ToolParserDeps) => {
     };
 
     const emitToolError = (params: { tool: string; payload: any; error: string; intentId: string }) => {
-      eventBus.publish({
-        id: generateUUID(),
-        timestamp: Date.now(),
-        source: AgentType.CORTEX_FLOW,
-        type: PacketType.TOOL_ERROR,
-        payload: { ...params.payload, tool: params.tool, intentId: params.intentId, error: params.error },
-        priority: 0.9
-      });
+      emitToolErrorContract(params.tool, params.intentId, params.payload, params.error, { priority: 0.9 });
       addMessage('assistant', `TOOL_ERROR: ${params.tool} :: ${params.error}`, 'thought');
     };
 
@@ -229,14 +227,7 @@ export const createProcessOutputForTools = (deps: ToolParserDeps) => {
     };
 
     const emitToolResult = (params: { tool: string; payload: any; intentId: string }) => {
-      eventBus.publish({
-        id: generateUUID(),
-        timestamp: Date.now(),
-        source: AgentType.CORTEX_FLOW,
-        type: PacketType.TOOL_RESULT,
-        payload: { ...params.payload, tool: params.tool, intentId: params.intentId },
-        priority: 0.8
-      });
+      emitToolResultContract(params.tool, params.intentId, params.payload, { priority: 0.8 });
     };
 
     const emitSystemAlert = (event: string, payload: Record<string, unknown>, priority = 0.6) => {
@@ -300,17 +291,9 @@ export const createProcessOutputForTools = (deps: ToolParserDeps) => {
 
     const handlePublishArtifact = async (artifactIdRaw: string) => {
       const tool = 'PUBLISH';
-      const intentId = generateUUID();
       const resolved = normalizeArtifactRef(artifactIdRaw);
       const argForIntent = isArtifactRefError(resolved) ? String(artifactIdRaw || '') : resolved.id;
-      eventBus.publish({
-        id: intentId,
-        timestamp: Date.now(),
-        source: AgentType.CORTEX_FLOW,
-        type: PacketType.TOOL_INTENT,
-        payload: { tool, arg: argForIntent },
-        priority: 0.8
-      });
+      const intentId = emitToolIntentContract(tool, argForIntent, undefined, { priority: 0.8 });
       if (isArtifactRefError(resolved)) {
         emitToolError({ tool, intentId, payload: { arg: artifactIdRaw }, error: resolved.userMessage });
         return;
@@ -361,7 +344,6 @@ export const createProcessOutputForTools = (deps: ToolParserDeps) => {
 
     const handleArtifactBlock = async (params: { kind: 'CREATE' | 'APPEND' | 'REPLACE'; header: string; body: string; raw: string; fallbackBody?: string }) => {
       const tool = params.kind;
-      const intentId = generateUUID();
       const isArtifactId = params.header.startsWith('art-');
       const headerNameHint = isArtifactId
         ? getRememberedArtifactName(params.header) || ''
@@ -371,14 +353,12 @@ export const createProcessOutputForTools = (deps: ToolParserDeps) => {
         params.kind === 'CREATE' && !params.body.trim() && !isExplicitEmptyCreate(params.header)
           ? params.fallbackBody?.trim() || `TODO: add content for ${headerNameHint || headerForCreate}.`
           : params.body;
-      eventBus.publish({
-        id: intentId,
-        timestamp: Date.now(),
-        source: AgentType.CORTEX_FLOW,
-        type: PacketType.TOOL_INTENT,
-        payload: { tool, arg: headerForCreate, ...(headerNameHint ? { artifactName: headerNameHint } : {}) },
-        priority: 0.8
-      });
+      const intentId = emitToolIntentContract(
+        tool,
+        headerForCreate,
+        headerNameHint ? { artifactName: headerNameHint } : undefined,
+        { priority: 0.8 }
+      );
 
       try {
         const store = useArtifactStore.getState();
@@ -456,16 +436,8 @@ export const createProcessOutputForTools = (deps: ToolParserDeps) => {
 
     const handleReadArtifact = async (artifactIdRaw: string, rawTag: string) => {
       const tool = 'READ_ARTIFACT';
-      const intentId = generateUUID();
       const artifactId = String(artifactIdRaw || '').trim();
-      eventBus.publish({
-        id: intentId,
-        timestamp: Date.now(),
-        source: AgentType.CORTEX_FLOW,
-        type: PacketType.TOOL_INTENT,
-        payload: { tool, arg: artifactId },
-        priority: 0.8
-      });
+      const intentId = emitToolIntentContract(tool, artifactId, undefined, { priority: 0.8 });
 
       try {
         const store = useArtifactStore.getState();
@@ -538,15 +510,7 @@ export const createProcessOutputForTools = (deps: ToolParserDeps) => {
 
       if (String(blockMatch[1] || '').toUpperCase() !== String(blockMatch[4] || '').toUpperCase()) {
         const tool = 'ARTIFACT_BLOCK';
-        const intentId = generateUUID();
-        eventBus.publish({
-          id: intentId,
-          timestamp: Date.now(),
-          source: AgentType.CORTEX_FLOW,
-          type: PacketType.TOOL_INTENT,
-          payload: { tool, arg: kind },
-          priority: 0.8
-        });
+        const intentId = emitToolIntentContract(tool, kind, undefined, { priority: 0.8 });
         emitToolError({ tool, intentId, payload: { arg: kind }, error: 'TAG_MISMATCH' });
         continue;
       }
@@ -562,15 +526,7 @@ export const createProcessOutputForTools = (deps: ToolParserDeps) => {
       cleanText = cleanText.replace(splitMatch[0], '').trim();
 
       const tool = 'SPLIT_TODO3';
-      const intentId = generateUUID();
-      eventBus.publish({
-        id: intentId,
-        timestamp: Date.now(),
-        source: AgentType.CORTEX_FLOW,
-        type: PacketType.TOOL_INTENT,
-        payload: { tool, arg: documentId },
-        priority: 0.8
-      });
+      const intentId = emitToolIntentContract(tool, documentId, { arg: documentId }, { priority: 0.8 });
 
       try {
         addMessage('assistant', `Invoking SPLIT_TODO3 for: ${documentId}`, 'action');
@@ -597,27 +553,23 @@ export const createProcessOutputForTools = (deps: ToolParserDeps) => {
           ...result.later.slice(0, 50).map((t: any, i: number) => `- ${String(t?.content || t?.id || i)}`)
         ].join('\n');
 
-        eventBus.publish({
-          id: generateUUID(),
-          timestamp: Date.now(),
-          source: AgentType.CORTEX_FLOW,
-          type: PacketType.TOOL_RESULT,
-          payload: { tool, arg: documentId, intentId },
-          priority: 0.8
-        });
+        emitToolResultContract(tool, intentId, { arg: documentId }, { priority: 0.8 });
 
         addMessage('assistant', text, 'tool_result');
       } catch (error: any) {
         const msg = error?.message || String(error);
         const isTimeout = typeof msg === 'string' && msg.startsWith('TOOL_TIMEOUT:');
-        eventBus.publish({
-          id: generateUUID(),
-          timestamp: Date.now(),
-          source: AgentType.CORTEX_FLOW,
-          type: isTimeout ? PacketType.TOOL_TIMEOUT : PacketType.TOOL_ERROR,
-          payload: { tool, arg: documentId, intentId, error: msg },
-          priority: 0.9
-        });
+        if (isTimeout) {
+          eventBus.publish({
+            id: generateUUID(),
+            timestamp: Date.now(),
+            source: AgentType.CORTEX_FLOW,
+            type: PacketType.TOOL_TIMEOUT,
+            payload: { tool, arg: documentId, intentId, error: msg },
+            priority: 0.9
+          });
+        }
+        emitToolErrorContract(tool, intentId, { arg: documentId }, msg, { priority: 0.9 });
         addMessage('assistant', `SPLIT_TODO3_${isTimeout ? 'TIMEOUT' : 'ERROR'}: ${documentId} :: ${msg}`, 'thought');
       }
     }
@@ -630,19 +582,6 @@ export const createProcessOutputForTools = (deps: ToolParserDeps) => {
     // [SEARCH_IN_REPO: query] -> SEARCH_LIBRARY
     // [READ_FILE: <docId>] -> READ_LIBRARY_DOC
     // [READ_FILE_CHUNK: <docId>#<chunkIndex>] -> READ_LIBRARY_CHUNK
-    const emitToolIntent = (tool: string, arg: string) => {
-      const intentId = generateUUID();
-      eventBus.publish({
-        id: intentId,
-        timestamp: Date.now(),
-        source: AgentType.CORTEX_FLOW,
-        type: PacketType.TOOL_INTENT,
-        payload: { tool, arg },
-        priority: 0.8
-      });
-      return intentId;
-    };
-
     const publishClarification = (question: string, options?: string[]) => {
       const optionText = options && options.length > 0
         ? ` ${options.map((opt, idx) => `${idx + 1}) ${opt}`).join(' ')}`
@@ -668,16 +607,7 @@ export const createProcessOutputForTools = (deps: ToolParserDeps) => {
     if (snapshotMatch) {
       cleanText = cleanText.replace(snapshotMatch[0], '').trim();
       const tool = 'SNAPSHOT';
-      const intentId = generateUUID();
-
-      eventBus.publish({
-        id: intentId,
-        timestamp: Date.now(),
-        source: AgentType.CORTEX_FLOW,
-        type: PacketType.TOOL_INTENT,
-        payload: { tool },
-        priority: 0.8
-      });
+      const intentId = emitToolIntentContract(tool, '', undefined, { priority: 0.8 });
 
       addMessage('assistant', 'Invoking SNAPSHOT', 'action');
       setCurrentThought('Generating snapshot...');

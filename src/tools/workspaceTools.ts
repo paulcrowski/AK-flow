@@ -12,6 +12,7 @@ import { withTimeout } from './toolRuntime';
 import { useArtifactStore } from '../stores/artifactStore';
 import { getCognitiveState } from '../stores/cognitiveStore';
 import { eventBus } from '../core/EventBus';
+import { emitToolError, emitToolIntent, emitToolResult } from '../core/telemetry/toolContract';
 import { evidenceLedger } from '../core/systems/EvidenceLedger';
 import { DEFAULT_AGENT_ID, WORLD_ROOT, getAgentFolderName, getAgentWorldRoot, isPathAllowed, normalizePath } from '../core/systems/WorldAccess';
 import { generateUUID } from '../utils/uuid';
@@ -29,79 +30,6 @@ export type WorldToolResult = {
   error?: string;
   evidenceId?: string;
 };
-
-// ============================================
-// TOOL CONTRACT HELPERS
-// ============================================
-type ToolPublishFn = (packet: any) => void;
-type ToolMakeIdFn = () => string;
-
-const emitToolIntent = (publish: ToolPublishFn, makeId: ToolMakeIdFn, tool: string, arg: string) => {
-  const intentId = makeId();
-  publish({
-    id: intentId,
-    timestamp: Date.now(),
-    source: AgentType.CORTEX_FLOW,
-    type: PacketType.TOOL_INTENT,
-    payload: { tool, arg, intentId },
-    priority: 0.8
-  });
-  return intentId;
-};
-
-const emitToolResult = (
-  publish: ToolPublishFn,
-  makeId: ToolMakeIdFn,
-  tool: string,
-  intentId: string,
-  payload: Record<string, unknown>
-) => {
-  publish({
-    id: makeId(),
-    timestamp: Date.now(),
-    source: AgentType.CORTEX_FLOW,
-    type: PacketType.TOOL_RESULT,
-    payload: { tool, intentId, ...payload },
-    priority: 0.7
-  });
-};
-
-const emitToolError = (
-  publish: ToolPublishFn,
-  makeId: ToolMakeIdFn,
-  tool: string,
-  intentId: string,
-  arg: unknown,
-  error: string
-) => {
-  publish({
-    id: makeId(),
-    timestamp: Date.now(),
-    source: AgentType.CORTEX_FLOW,
-    type: PacketType.TOOL_ERROR,
-    payload: { tool, intentId, arg, error },
-    priority: 0.8
-  });
-};
-
-async function executeWithContract<T>(
-  publish: ToolPublishFn,
-  makeId: ToolMakeIdFn,
-  tool: string,
-  arg: string,
-  fn: () => Promise<T>
-): Promise<{ ok: true; result: T } | { ok: false; error: string }> {
-  const intentId = emitToolIntent(publish, makeId, tool, arg);
-  try {
-    const result = await fn();
-    emitToolResult(publish, makeId, tool, intentId, { result });
-    return { ok: true, result };
-  } catch (error: any) {
-    const errorMsg = error?.message || 'UNKNOWN_ERROR';
-    emitToolError(publish, makeId, tool, intentId, arg, errorMsg);
-    return { ok: false, error: errorMsg };
-  }
-}
 
 type FsModule = typeof import('fs/promises');
 let fsModule: FsModule | null = null;
@@ -308,19 +236,10 @@ const readFileViaHandle = async (params: {
     const file = await fileHandle.getFile();
     const content = await file.text();
     const evidenceId = evidenceLedger.record('READ_FILE', resolvedPath);
-    eventBus.publish({
-      id: generateUUID(),
-      timestamp: Date.now(),
-      source: AgentType.CORTEX_FLOW,
-      type: PacketType.TOOL_RESULT,
-      payload: {
-        tool: 'READ_FILE',
-        path: resolvedPath,
-        length: content.length,
-        intentId,
-        ...(foundIn ? { foundIn } : {})
-      },
-      priority: 0.7
+    emitToolResult('READ_FILE', intentId, {
+      path: resolvedPath,
+      length: content.length,
+      ...(foundIn ? { foundIn } : {})
     });
     updateWorldAnchor(toWorldAnchorPath('READ_FILE', resolvedPath));
     return { ok: true, path: resolvedPath, content, evidenceId };
@@ -365,25 +284,10 @@ const executeWorldToolWithFsAccess = async (params: {
   }
   const relative = resolved.slice(basePath.length).replace(/^\/+/, '');
 
-  const intentId = generateUUID();
-  eventBus.publish({
-    id: intentId,
-    timestamp: Date.now(),
-    source: AgentType.CORTEX_FLOW,
-    type: PacketType.TOOL_INTENT,
-    payload: { tool: input.tool, path: resolved },
-    priority: 0.7
-  });
+  const intentId = emitToolIntent(input.tool, resolved, { path: resolved });
 
   const errorReturn = (tool: string, path: string, error: string): WorldToolResult => {
-    eventBus.publish({
-      id: generateUUID(),
-      timestamp: Date.now(),
-      source: AgentType.CORTEX_FLOW,
-      type: PacketType.TOOL_ERROR,
-      payload: { tool, path, intentId, error },
-      priority: 0.8
-    });
+    emitToolError(tool, intentId, { path }, error);
     clearWorldAnchorIfMatches(path, error);
     return { ok: false, path, error };
   };
@@ -397,14 +301,7 @@ const executeWorldToolWithFsAccess = async (params: {
     if (tool === 'LIST_DIR' || tool === 'READ_FILE') {
       updateWorldAnchor(toWorldAnchorPath(tool, path));
     }
-    eventBus.publish({
-      id: generateUUID(),
-      timestamp: Date.now(),
-      source: AgentType.CORTEX_FLOW,
-      type: PacketType.TOOL_RESULT,
-      payload: { tool, path, intentId, ...payloadExtra },
-      priority: 0.7
-    });
+    emitToolResult(tool, intentId, { path, ...payloadExtra });
     return { ok: true, path, ...result };
   };
 
@@ -575,25 +472,10 @@ export async function executeWorldTool(input: {
   const inputPath = normalizedPath.ok ? normalizedPath.path : String(input.path || '').trim();
   const resolved = resolveWorldPath(inputPath, agentId);
 
-  const intentId = generateUUID();
-  eventBus.publish({
-    id: intentId,
-    timestamp: Date.now(),
-    source: AgentType.CORTEX_FLOW,
-    type: PacketType.TOOL_INTENT,
-    payload: { tool: input.tool, path: resolved },
-    priority: 0.7
-  });
+  const intentId = emitToolIntent(input.tool, resolved, { path: resolved });
 
   const errorReturn = (tool: string, path: string, error: string): WorldToolResult => {
-    eventBus.publish({
-      id: generateUUID(),
-      timestamp: Date.now(),
-      source: AgentType.CORTEX_FLOW,
-      type: PacketType.TOOL_ERROR,
-      payload: { tool, path, intentId, error },
-      priority: 0.8
-    });
+    emitToolError(tool, intentId, { path }, error);
     clearWorldAnchorIfMatches(path, error);
     return { ok: false, path, error };
   };
@@ -607,14 +489,7 @@ export async function executeWorldTool(input: {
     if (tool === 'LIST_DIR' || tool === 'READ_FILE') {
       updateWorldAnchor(toWorldAnchorPath(tool, path));
     }
-    eventBus.publish({
-      id: generateUUID(),
-      timestamp: Date.now(),
-      source: AgentType.CORTEX_FLOW,
-      type: PacketType.TOOL_RESULT,
-      payload: { tool, path, intentId, ...payloadExtra },
-      priority: 0.7
-    });
+    emitToolResult(tool, intentId, { path, ...payloadExtra });
     return { ok: true, path, ...result };
   };
 
@@ -852,7 +727,7 @@ export async function consumeWorkspaceTags(params: {
     const arg = normalizeArg(argRaw);
     let docIdForError: string | null = null;
 
-    const intentId = emitToolIntent(publish, makeId, tool, arg);
+    const intentId = emitToolIntent(tool, arg, undefined, { publish, makeId });
 
     try {
       if (tool === 'SEARCH_LIBRARY') {
@@ -875,7 +750,7 @@ export async function consumeWorkspaceTags(params: {
           evidenceLedger.record('SEARCH_HIT', arg);
         }
 
-        emitToolResult(publish, makeId, tool, intentId, { arg, hitsCount: res.hits.length });
+        emitToolResult(tool, intentId, { arg, hitsCount: res.hits.length }, { publish, makeId });
 
         deps.addMessage('assistant', text, 'tool_result');
         return;
@@ -918,12 +793,12 @@ export async function consumeWorkspaceTags(params: {
         const visible = chunks.slice(0, limit);
         const knownCount = hasMore ? undefined : visible.length;
 
-        emitToolResult(publish, makeId, tool, intentId, {
+        emitToolResult(tool, intentId, {
           arg,
           docId: documentId,
           shown: visible.length,
           hasMore
-        });
+        }, { publish, makeId });
 
         if (visible.length === 0) {
           emitLibraryIngestMissing({ documentId, reason: 'chunks_missing' });
@@ -1031,7 +906,7 @@ export async function consumeWorkspaceTags(params: {
           textChunk
         ].join('\n');
 
-        emitToolResult(publish, makeId, tool, intentId, {
+        emitToolResult(tool, intentId, {
           arg,
           docId: documentId,
           name: originalName,
@@ -1039,7 +914,7 @@ export async function consumeWorkspaceTags(params: {
           totalLength,
           hash,
           nextRangeHint
-        });
+        }, { publish, makeId });
 
         deps.addMessage('assistant', text, 'tool_result');
         updateLibraryAnchor(documentId);
@@ -1079,7 +954,7 @@ export async function consumeWorkspaceTags(params: {
           chunkText.slice(0, 8000)
         ].join('\n');
 
-        emitToolResult(publish, makeId, tool, intentId, { arg, length: chunkText.length });
+        emitToolResult(tool, intentId, { arg, length: chunkText.length }, { publish, makeId });
 
         deps.addMessage('assistant', text, 'tool_result');
         updateLibraryAnchor(documentId, originalName || undefined);
@@ -1168,13 +1043,13 @@ export async function consumeWorkspaceTags(params: {
 
         evidenceLedger.record('READ_FILE', originalName || documentId);
 
-        emitToolResult(publish, makeId, tool, intentId, {
+        emitToolResult(tool, intentId, {
           arg,
           docId: documentId,
           name: originalName,
           length: raw.length,
           summarized: !!summaryBlock
-        });
+        }, { publish, makeId });
 
         deps.addMessage('assistant', text, 'tool_result');
         updateLibraryAnchor(documentId, originalName || undefined);
@@ -1201,11 +1076,10 @@ export async function consumeWorkspaceTags(params: {
           payload: { tool, arg, intentId, error: msg },
           priority: 0.9
         });
-      } else {
-        emitToolError(publish, makeId, tool, intentId, arg, msg);
-        if (docIdForError) {
-          clearLibraryAnchorIfMatches(docIdForError, msg);
-        }
+      }
+      emitToolError(tool, intentId, { arg }, msg, { publish, makeId });
+      if (docIdForError) {
+        clearLibraryAnchorIfMatches(docIdForError, msg);
       }
 
       deps.addMessage(

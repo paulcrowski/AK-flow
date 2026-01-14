@@ -1,10 +1,10 @@
 import { CortexService } from '../llm/gemini';
 import { persistSearchKnowledgeChunk } from '../services/SearchKnowledgeChunker';
-import { AgentType, PacketType } from '../types';
 import { getCurrentTraceId } from '../core/trace/TraceContext';
 import type { ToolParserDeps } from './toolParser';
 import { searchInFlight, scheduleSoftTimeout } from './toolRuntime';
 import { evidenceLedger } from '../core/systems/EvidenceLedger';
+import { emitToolError, emitToolIntent, emitToolResult } from '../core/telemetry/toolContract';
 
 type InFlightSearchOp = {
   promise: Promise<any>;
@@ -36,21 +36,17 @@ function publishSearchResult(params: {
   synthesisLength: number;
   late: boolean;
 }) {
-  params.publish({
-    id: params.makeId(),
-    timestamp: Date.now(),
-    source: AgentType.CORTEX_FLOW,
-    type: PacketType.TOOL_RESULT,
-    payload: {
-      tool: 'SEARCH',
+  emitToolResult(
+    'SEARCH',
+    params.intentId,
+    {
       query: params.query,
-      intentId: params.intentId,
       sourcesCount: params.sourcesCount,
       synthesisLength: params.synthesisLength,
       late: params.late
     },
-    priority: 0.8
-  });
+    { publish: params.publish, makeId: params.makeId, priority: 0.8 }
+  );
 }
 
 function publishSearchError(params: {
@@ -60,14 +56,13 @@ function publishSearchError(params: {
   intentId: string;
   error: string;
 }) {
-  params.publish({
-    id: params.makeId(),
-    timestamp: Date.now(),
-    source: AgentType.CORTEX_FLOW,
-    type: PacketType.TOOL_ERROR,
-    payload: { tool: 'SEARCH', query: params.query, intentId: params.intentId, error: params.error },
-    priority: 0.9
-  });
+  emitToolError(
+    'SEARCH',
+    params.intentId,
+    { query: params.query },
+    params.error,
+    { publish: params.publish, makeId: params.makeId, priority: 0.9 }
+  );
 }
 
 function startSearchOp(params: {
@@ -184,15 +179,7 @@ export async function consumeSearchTag(params: {
   const query = found.query;
   const cleanText = params.cleanText.replace(found.raw, '').trim();
 
-  const intentId = params.makeId();
-  params.publish({
-    id: intentId,
-    timestamp: Date.now(),
-    source: AgentType.CORTEX_FLOW,
-    type: PacketType.TOOL_INTENT,
-    payload: { tool: 'SEARCH', query },
-    priority: 0.8
-  });
+  const intentId = emitToolIntent('SEARCH', query, { query }, { publish: params.publish, makeId: params.makeId, priority: 0.8 });
 
   let op = searchInFlight.get(query.toLowerCase()) as any;
   if (!op) {

@@ -23,6 +23,7 @@ import { detectIntent, getIntentType, getRetrievalLimit, type IntentResult, type
 import { SessionChunkService } from '../../../services/SessionChunkService';
 import { fetchIdentityShards } from '../../services/IdentityDataService';
 import { getWorldDirectorySelection } from '@tools/worldDirectoryAccess';
+import { emitToolIntent } from '../../telemetry/toolContract';
 
 export type BudgetTracker = {
   checkBudget: (limit: number) => boolean;
@@ -451,17 +452,9 @@ export async function runAutonomousVolitionStep(input: {
     const lastUserMsg = unifiedContext.dialogueAnchor?.lastUserMessage;
     if (isMainFeatureEnabled('GROUNDED_MODE') && lastUserMsg) {
       const searchQuery = lastUserMsg.slice(0, 100);
-      eventBus.publish({
-        id: `grounding-auto-search-${Date.now()}`,
-        timestamp: Date.now(),
-        source: AgentType.CORTEX_FLOW,
-        type: PacketType.TOOL_INTENT,
-        payload: {
-          tool: 'SEARCH',
-          query: searchQuery,
-          reason: 'AUTO_SEARCH: Grounding validation failed, triggering search for factual data'
-        },
-        priority: 0.8
+      emitToolIntent('SEARCH', searchQuery, {
+        query: searchQuery,
+        reason: 'AUTO_SEARCH: Grounding validation failed, triggering search for factual data'
       });
       callbacks.onThought(`[GROUNDING_AUTO_SEARCH] Triggering search for: "${searchQuery}"`);
     }

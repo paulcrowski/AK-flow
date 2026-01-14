@@ -22,6 +22,7 @@ import { createPendingAction, setPendingAction, tryResolvePendingAction } from '
 import { detectActionableIntent, isImplicitReference, isRecognizableTarget, looksLikeLibraryAnchor, resolveImplicitReference } from './reactiveStep.helpers';
 import { normalizeRoutingInput } from '../../../tools/toolParser';
 import { evidenceLedger } from '../EvidenceLedger';
+import { emitToolError, emitToolIntent, emitToolResult } from '../../telemetry/toolContract';
 
 export { detectActionableIntentForTesting, detectFileIntentForTesting } from './reactiveStep.helpers';
 
@@ -213,30 +214,6 @@ export async function runReactiveStep(input: {
       const target = actionIntent.target || implicitTarget?.id;
       const implicitNameHint = implicitTarget?.nameHint || '';
 
-      const emitToolIntent = (tool: string, arg: string, artifactName?: string) => {
-        const intentId = generateUUID();
-        eventBus.publish({
-          id: intentId,
-          timestamp: Date.now(),
-          source: AgentType.CORTEX_FLOW,
-          type: PacketType.TOOL_INTENT,
-          payload: { tool, arg, ...(artifactName ? { artifactName } : {}) },
-          priority: 0.8
-        });
-        return intentId;
-      };
-
-      const emitToolResult = (tool: string, intentId: string, payload: Record<string, unknown>) => {
-        eventBus.publish({
-          id: generateUUID(),
-          timestamp: Date.now(),
-          source: AgentType.CORTEX_FLOW,
-          type: PacketType.TOOL_RESULT,
-          payload: { tool, intentId, ...payload },
-          priority: 0.8
-        });
-      };
-
       const emitToolCommit = (params: {
         action: 'CREATE' | 'APPEND' | 'REPLACE';
         artifactId: string;
@@ -262,17 +239,6 @@ export async function runReactiveStep(input: {
         });
       };
 
-      const emitToolError = (tool: string, intentId: string, payload: Record<string, unknown>, error: string) => {
-        eventBus.publish({
-          id: generateUUID(),
-          timestamp: Date.now(),
-          source: AgentType.CORTEX_FLOW,
-          type: PacketType.TOOL_ERROR,
-          payload: { tool, intentId, ...payload, error },
-          priority: 0.9
-        });
-      };
-
       const emitSystemAlert = (event: string, payload: Record<string, unknown>, priority = 0.6) => {
         eventBus.publish({
           id: generateUUID(),
@@ -283,6 +249,8 @@ export async function runReactiveStep(input: {
           priority
         });
       };
+      const toolResultOptions = { priority: 0.8 };
+      const toolErrorOptions = { priority: 0.9 };
 
       const updateLibraryAnchor = (
         documentId: string,
@@ -473,7 +441,12 @@ export async function runReactiveStep(input: {
           const raw = String(res.text || '');
           const excerpt = raw.slice(0, 8000);
           evidenceLedger.record('READ_FILE', originalName || documentId);
-          emitToolResult('READ_LIBRARY_DOC', intentId, { docId: documentId, name: originalName, length: raw.length });
+          emitToolResult(
+            'READ_LIBRARY_DOC',
+            intentId,
+            { docId: documentId, name: originalName, length: raw.length },
+            toolResultOptions
+          );
           updateLibraryAnchor(documentId, originalName);
 
           publishReactiveSpeech({
@@ -485,7 +458,13 @@ export async function runReactiveStep(input: {
           });
           updateContextAfterAction(ctx);
         } catch (error: any) {
-          emitToolError('READ_LIBRARY_DOC', intentId, { arg: documentId }, error?.message || 'READ_LIBRARY_DOC_FAILED');
+          emitToolError(
+            'READ_LIBRARY_DOC',
+            intentId,
+            { arg: documentId },
+            error?.message || 'READ_LIBRARY_DOC_FAILED',
+            toolErrorOptions
+          );
           clearLibraryAnchorIfMatches(documentId, error?.message || error);
         }
       };
@@ -508,7 +487,12 @@ export async function runReactiveStep(input: {
 
           const chunkText = String(res.chunk.content || '').trim();
           evidenceLedger.record('READ_FILE', `${documentId}#${chunkIndex}`);
-          emitToolResult('READ_LIBRARY_CHUNK', intentId, { docId: documentId, chunkIndex, length: chunkText.length });
+          emitToolResult(
+            'READ_LIBRARY_CHUNK',
+            intentId,
+            { docId: documentId, chunkIndex, length: chunkText.length },
+            toolResultOptions
+          );
           updateLibraryAnchor(documentId, docHint?.original_name);
           publishReactiveSpeech({
             ctx,
@@ -519,7 +503,13 @@ export async function runReactiveStep(input: {
           });
           updateContextAfterAction(ctx);
         } catch (error: any) {
-          emitToolError('READ_LIBRARY_CHUNK', intentId, { arg: `${documentId}#${chunkIndex}` }, error?.message || 'READ_LIBRARY_CHUNK_FAILED');
+          emitToolError(
+            'READ_LIBRARY_CHUNK',
+            intentId,
+            { arg: `${documentId}#${chunkIndex}` },
+            error?.message || 'READ_LIBRARY_CHUNK_FAILED',
+            toolErrorOptions
+          );
           clearLibraryAnchorIfMatches(documentId, error?.message || error);
         }
       };
@@ -534,7 +524,12 @@ export async function runReactiveStep(input: {
 
           const chunks = Array.isArray(res.chunks) ? res.chunks : [];
           if (chunks.length === 0) {
-            emitToolResult('LIST_LIBRARY_CHUNKS', intentId, { docId: documentId, shown: 0, hasMore: false });
+            emitToolResult(
+              'LIST_LIBRARY_CHUNKS',
+              intentId,
+              { docId: documentId, shown: 0, hasMore: false },
+              toolResultOptions
+            );
             return { text: 'Brak chunkow dla tego dokumentu.', shownCount: 0, hasMore: false };
           }
 
@@ -545,11 +540,16 @@ export async function runReactiveStep(input: {
             return `#${chunk.chunk_index}: ${preview}...`;
           });
 
-          emitToolResult('LIST_LIBRARY_CHUNKS', intentId, {
-            docId: documentId,
-            shown: visible.length,
-            hasMore
-          });
+          emitToolResult(
+            'LIST_LIBRARY_CHUNKS',
+            intentId,
+            {
+              docId: documentId,
+              shown: visible.length,
+              hasMore
+            },
+            toolResultOptions
+          );
           const knownCount = hasMore ? undefined : visible.length;
           updateLibraryAnchor(documentId, undefined, knownCount);
 
@@ -563,7 +563,13 @@ export async function runReactiveStep(input: {
             hasMore
           };
         } catch (error: any) {
-          emitToolError('LIST_LIBRARY_CHUNKS', intentId, { documentId }, error?.message || 'LIST_LIBRARY_CHUNKS_FAILED');
+          emitToolError(
+            'LIST_LIBRARY_CHUNKS',
+            intentId,
+            { documentId },
+            error?.message || 'LIST_LIBRARY_CHUNKS_FAILED',
+            toolErrorOptions
+          );
           clearLibraryAnchorIfMatches(documentId, error?.message || error);
           return { text: 'Nie moge pobrac chunkow.', shownCount: 0, hasMore: false };
         }
@@ -701,13 +707,24 @@ export async function runReactiveStep(input: {
             throw new Error(searchRes.error || 'SEARCH_LIBRARY_FAILED');
           }
         } catch (error: any) {
-          emitToolError('SEARCH_LIBRARY', searchIntentId, { arg: query }, error?.message || 'SEARCH_LIBRARY_FAILED');
+          emitToolError(
+            'SEARCH_LIBRARY',
+            searchIntentId,
+            { arg: query },
+            error?.message || 'SEARCH_LIBRARY_FAILED',
+            toolErrorOptions
+          );
           return;
         }
         if (searchRes.hits.length > 0) {
           evidenceLedger.record('SEARCH_HIT', query);
         }
-        emitToolResult('SEARCH_LIBRARY', searchIntentId, { arg: query, hitsCount: searchRes.hits.length });
+        emitToolResult(
+          'SEARCH_LIBRARY',
+          searchIntentId,
+          { arg: query, hitsCount: searchRes.hits.length },
+          toolResultOptions
+        );
 
         if (searchRes.hits.length === 1) {
           const hit = searchRes.hits[0];
@@ -793,7 +810,7 @@ export async function runReactiveStep(input: {
 
       try {
         if (actionIntent.action === 'CREATE') {
-          const intentId = emitToolIntent('CREATE', target, target);
+          const intentId = emitToolIntent('CREATE', target, { artifactName: target });
           const traceId = getCurrentTraceId();
           if (traceId) p0MetricAdd(traceId, { actionFirstTriggered: 1, actionType: 'CREATE' });
           try {
@@ -807,7 +824,7 @@ export async function runReactiveStep(input: {
             if (traceId) p0MetricAdd(traceId, { actionFirstExecuted: 1, actionFirstContentChars: content.length });
             const created = store.get(id);
             const artifactName = rememberArtifactName(id, created?.name || target) || target;
-            emitToolResult('CREATE', intentId, { id, name: artifactName });
+            emitToolResult('CREATE', intentId, { id, name: artifactName }, toolResultOptions);
             updateArtifactAnchor(id, artifactName);
             emitToolCommit({
               action: 'CREATE',
@@ -819,7 +836,13 @@ export async function runReactiveStep(input: {
             updateContextAfterAction(ctx);
             return;
           } catch (e) {
-            emitToolError('CREATE', intentId, { arg: target }, (e as Error)?.message || 'unknown');
+            emitToolError(
+              'CREATE',
+              intentId,
+              { arg: target },
+              (e as Error)?.message || 'unknown',
+              toolErrorOptions
+            );
             return;
           }
         }
@@ -829,21 +852,30 @@ export async function runReactiveStep(input: {
           const nameHint = resolved.ok
             ? rememberArtifactName(resolved.id, resolved.nameHint || getRememberedArtifactName(resolved.id) || '')
             : '';
-          const intentId = emitToolIntent('READ_ARTIFACT', resolved.ok ? resolved.id : target, nameHint || undefined);
+          const intentId = emitToolIntent(
+            'READ_ARTIFACT',
+            resolved.ok ? resolved.id : target,
+            nameHint ? { artifactName: nameHint } : undefined
+          );
           const traceId = getCurrentTraceId();
           if (traceId) p0MetricAdd(traceId, { actionFirstTriggered: 1, actionType: 'READ' });
           if (!resolved.ok) {
-            emitToolError('READ_ARTIFACT', intentId, { arg: target }, resolved.userMessage);
+            emitToolError('READ_ARTIFACT', intentId, { arg: target }, resolved.userMessage, toolErrorOptions);
             publishReactiveSpeech({ ctx, trace, callbacks, speechText: resolved.userMessage, internalThought: '' });
             return;
           }
           const art = store.get(resolved.id);
           if (!art) {
-            emitToolError('READ_ARTIFACT', intentId, { arg: resolved.id }, 'ARTIFACT_NOT_FOUND');
+            emitToolError('READ_ARTIFACT', intentId, { arg: resolved.id }, 'ARTIFACT_NOT_FOUND', toolErrorOptions);
             return;
           }
           if (traceId) p0MetricAdd(traceId, { actionFirstExecuted: 1 });
-          emitToolResult('READ_ARTIFACT', intentId, { id: art.id, name: art.name, length: art.content.length });
+          emitToolResult(
+            'READ_ARTIFACT',
+            intentId,
+            { id: art.id, name: art.name, length: art.content.length },
+            toolResultOptions
+          );
           updateArtifactAnchor(art.id, art.name);
           publishReactiveSpeech({ ctx, trace, callbacks, speechText: `${art.name}\n\n${art.content || '(pusty)'}`, internalThought: '' });
           updateContextAfterAction(ctx);
@@ -914,10 +946,14 @@ export async function runReactiveStep(input: {
           }
 
           // Normal flow with payload
-          const intentId = emitToolIntent('APPEND', resolved.ok ? resolved.id : target, nameHint || undefined);
+          const intentId = emitToolIntent(
+            'APPEND',
+            resolved.ok ? resolved.id : target,
+            nameHint ? { artifactName: nameHint } : undefined
+          );
           if (traceId) p0MetricAdd(traceId, { actionFirstTriggered: 1, actionType: 'APPEND' });
           if (!resolved.ok) {
-            emitToolError('APPEND', intentId, { arg: target }, resolved.userMessage);
+            emitToolError('APPEND', intentId, { arg: target }, resolved.userMessage, toolErrorOptions);
             publishReactiveSpeech({ ctx, trace, callbacks, speechText: resolved.userMessage, internalThought: '' });
             return;
           }
@@ -930,7 +966,7 @@ export async function runReactiveStep(input: {
               resolved.id,
               updated?.name || resolved.nameHint || getRememberedArtifactName(resolved.id) || ''
             ) || resolved.nameHint || resolved.id;
-            emitToolResult('APPEND', intentId, { id: resolved.id, name: artifactName });
+            emitToolResult('APPEND', intentId, { id: resolved.id, name: artifactName }, toolResultOptions);
             updateArtifactAnchor(resolved.id, artifactName);
             emitToolCommit({
               action: 'APPEND',
@@ -950,7 +986,13 @@ export async function runReactiveStep(input: {
             updateContextAfterAction(ctx);
             return;
           } catch (e) {
-            emitToolError('APPEND', intentId, { arg: resolved.id }, (e as Error)?.message || 'unknown');
+            emitToolError(
+              'APPEND',
+              intentId,
+              { arg: resolved.id },
+              (e as Error)?.message || 'unknown',
+              toolErrorOptions
+            );
             return;
           }
         }
@@ -1016,10 +1058,14 @@ export async function runReactiveStep(input: {
             return;
           }
 
-          const intentId = emitToolIntent('REPLACE', resolved.ok ? resolved.id : target, nameHint || undefined);
+          const intentId = emitToolIntent(
+            'REPLACE',
+            resolved.ok ? resolved.id : target,
+            nameHint ? { artifactName: nameHint } : undefined
+          );
           if (traceId) p0MetricAdd(traceId, { actionFirstTriggered: 1, actionType: 'REPLACE' });
           if (!resolved.ok) {
-            emitToolError('REPLACE', intentId, { arg: target }, resolved.userMessage);
+            emitToolError('REPLACE', intentId, { arg: target }, resolved.userMessage, toolErrorOptions);
             publishReactiveSpeech({ ctx, trace, callbacks, speechText: resolved.userMessage, internalThought: '' });
             return;
           }
@@ -1032,7 +1078,7 @@ export async function runReactiveStep(input: {
               resolved.id,
               updated?.name || resolved.nameHint || getRememberedArtifactName(resolved.id) || ''
             ) || resolved.nameHint || resolved.id;
-            emitToolResult('REPLACE', intentId, { id: resolved.id, name: artifactName });
+            emitToolResult('REPLACE', intentId, { id: resolved.id, name: artifactName }, toolResultOptions);
             updateArtifactAnchor(resolved.id, artifactName);
             emitToolCommit({
               action: 'REPLACE',
@@ -1052,7 +1098,13 @@ export async function runReactiveStep(input: {
             updateContextAfterAction(ctx);
             return;
           } catch (e) {
-            emitToolError('REPLACE', intentId, { arg: resolved.id }, (e as Error)?.message || 'unknown');
+            emitToolError(
+              'REPLACE',
+              intentId,
+              { arg: resolved.id },
+              (e as Error)?.message || 'unknown',
+              toolErrorOptions
+            );
             return;
           }
         }

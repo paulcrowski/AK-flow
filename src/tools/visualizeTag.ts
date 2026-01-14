@@ -6,6 +6,7 @@ import { visualInFlight, scheduleSoftTimeout } from './toolRuntime';
 import * as SomaSystem from '../core/systems/SomaSystem';
 import * as LimbicSystem from '../core/systems/LimbicSystem';
 import { VISUAL_BASE_COOLDOWN_MS } from '../core/constants';
+import { emitToolError, emitToolIntent, emitToolResult } from '../core/telemetry/toolContract';
 
 function findVisualizeMatch(cleanText: string): { raw: string; prompt: string } | null {
   const direct = cleanText.match(/\[VISUALIZE:\s*([\s\S]*?)\]/i);
@@ -26,14 +27,13 @@ function publishVisualError(params: {
   intentId: string;
   error: string;
 }) {
-  params.publish({
-    id: params.makeId(),
-    timestamp: Date.now(),
-    source: AgentType.VISUAL_CORTEX,
-    type: PacketType.TOOL_ERROR,
-    payload: { tool: 'VISUALIZE', intentId: params.intentId, error: params.error },
-    priority: 0.9
-  });
+  emitToolError(
+    'VISUALIZE',
+    params.intentId,
+    {},
+    params.error,
+    { publish: params.publish, makeId: params.makeId, source: AgentType.VISUAL_CORTEX, priority: 0.9 }
+  );
 }
 
 function publishVisualResult(params: {
@@ -44,20 +44,16 @@ function publishVisualResult(params: {
   perceptionLength: number;
   late: boolean;
 }) {
-  params.publish({
-    id: params.makeId(),
-    timestamp: Date.now(),
-    source: AgentType.VISUAL_CORTEX,
-    type: PacketType.TOOL_RESULT,
-    payload: {
-      tool: 'VISUALIZE',
-      intentId: params.intentId,
+  emitToolResult(
+    'VISUALIZE',
+    params.intentId,
+    {
       hasImage: params.hasImage,
       perceptionLength: params.perceptionLength,
       late: params.late
     },
-    priority: 0.8
-  });
+    { publish: params.publish, makeId: params.makeId, source: AgentType.VISUAL_CORTEX, priority: 0.8 }
+  );
 }
 
 function startVisualOp(params: {
@@ -211,15 +207,12 @@ export async function consumeVisualizeTag(params: {
     return cleanText;
   }
 
-  const intentId = params.makeId();
-  params.publish({
-    id: intentId,
-    timestamp: Date.now(),
-    source: AgentType.VISUAL_CORTEX,
-    type: PacketType.TOOL_INTENT,
-    payload: { tool: 'VISUALIZE', prompt: prompt.substring(0, 100) },
-    priority: 0.8
-  });
+  const intentId = emitToolIntent(
+    'VISUALIZE',
+    prompt.substring(0, 100),
+    { prompt: prompt.substring(0, 100) },
+    { publish: params.publish, makeId: params.makeId, source: AgentType.VISUAL_CORTEX, priority: 0.8 }
+  );
 
   const key = prompt.toLowerCase();
   let op = visualInFlight.get(key) as any;
