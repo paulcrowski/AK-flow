@@ -27,7 +27,8 @@ export const TOP_DIRS = ['code', 'docs', 'notes', 'engineering', 'research', 'vi
 export const WORLD_VERBS = ['lista', 'list', 'dir', 'folder', 'katalog', 'directory', 'ls', 'list files', 'list dir'];
 export const READ_VERBS = ['przeczytaj', 'pokaz', 'otworz', 'wyswietl', 'read', 'show', 'open', 'display'];
 export const LIBRARY_STEMS = ['ksiazk', 'dokument', 'raport', 'pdf', 'book', 'document', 'report', 'bibliotek', 'library'];
-const ARTIFACT_ID_PATTERN = /art-(?:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|\d+)/i;
+const ARTIFACT_ID_PATTERN = /art-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
+const UUID_PATTERN = /\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/i;
 
 export function normalizeRoutingInput(input: string): string {
   return String(input || '')
@@ -72,9 +73,11 @@ export function looksLikeLibraryIntent(input: string): boolean {
 }
 
 export function routeDomain(input: string, hasWorldAccess: boolean): 'ARTIFACT' | 'WORLD' | 'LIBRARY' {
-  const raw = String(input || '');
+  const raw = String(input || '').trim();
+  if (/[\\/]/.test(raw)) return 'WORLD';
+  if (ARTIFACT_ID_PATTERN.test(raw)) return 'ARTIFACT';
+  if (UUID_PATTERN.test(raw)) return 'LIBRARY';
   const hasLibraryHint = looksLikeLibraryIntent(raw);
-  if (looksLikeArtifactRef(raw)) return 'ARTIFACT';
   if (hasLibraryHint && !raw.includes('/')) return 'LIBRARY';
   if (looksLikeWorldPath(raw)) return 'WORLD';
   if (hasLibraryHint) return 'LIBRARY';

@@ -17,6 +17,8 @@ vi.mock('@tools/worldDirectoryAccess', () => ({
 }));
 
 describe('routing decision telemetry', () => {
+  const artUuid = 'art-123e4567-e89b-12d3-a456-426614174000';
+
   beforeEach(() => {
     eventBus.clear();
     vi.mocked(getWorldDirectorySelection).mockReturnValue({ mode: 'world', name: '_world' } as any);
@@ -56,7 +58,7 @@ describe('routing decision telemetry', () => {
   });
 
   it('emits ROUTING_DECISION for artifact reads', () => {
-    const result = detectFileIntentForTesting('pokaz art-123');
+    const result = detectFileIntentForTesting(`pokaz ${artUuid}`);
 
     expect(result?.action).toBe('READ');
 
@@ -67,7 +69,7 @@ describe('routing decision telemetry', () => {
     expect(decision?.type).toBe(PacketType.SYSTEM_ALERT);
     expect((decision as any)?.payload?.domain).toBe('ARTIFACT');
     expect((decision as any)?.payload?.reason).toBe('artifact_ref');
-    expect((decision as any)?.payload?.parsedTarget).toBe('art-123');
+    expect((decision as any)?.payload?.parsedTarget).toBe(artUuid);
     expect((decision as any)?.payload?.tool).toBe('READ_ARTIFACT');
   });
 });
