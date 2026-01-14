@@ -30,6 +30,7 @@ dist-ssr
 
 # Workspace files
 *.code-workspace
+AGENTS.md
 PLAN_PRZYZIEMNY.md
 PROPOZYCJE_ULEPSZEN.md
 
