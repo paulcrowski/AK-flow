@@ -122,9 +122,12 @@ export const createInitialKernelState = (overrides?: Partial<KernelState>): Kern
     // Library anchor
     lastLibraryDocId: null,
     lastLibraryDocName: null,
+    lastLibraryDocChunkCount: null,
     lastWorldPath: null,
     lastArtifactId: null,
     lastArtifactName: null,
+    activeDomain: null,
+    lastTool: null,
   };
 
   return {

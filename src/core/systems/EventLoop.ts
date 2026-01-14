@@ -70,9 +70,12 @@ export namespace EventLoop {
         conversation: ConversationTurn[];
         lastLibraryDocId?: string | null;
         lastLibraryDocName?: string | null;
+        lastLibraryDocChunkCount?: number | null;
         lastWorldPath?: string | null;
         lastArtifactId?: string | null;
         lastArtifactName?: string | null;
+        activeDomain?: 'WORLD' | 'LIBRARY' | 'ARTIFACT' | null;
+        lastTool?: { tool: string; ok: boolean; at: number } | null;
         autonomousMode: boolean;
         lastSpeakTimestamp: number;
         silenceStart: number;
@@ -152,9 +155,12 @@ export namespace EventLoop {
                 workingMemory: {
                     lastLibraryDocId: ctx.lastLibraryDocId ?? null,
                     lastLibraryDocName: ctx.lastLibraryDocName ?? null,
+                    lastLibraryDocChunkCount: ctx.lastLibraryDocChunkCount ?? null,
                     lastWorldPath: ctx.lastWorldPath ?? null,
                     lastArtifactId: ctx.lastArtifactId ?? null,
-                    lastArtifactName: ctx.lastArtifactName ?? null
+                    lastArtifactName: ctx.lastArtifactName ?? null,
+                    activeDomain: ctx.activeDomain ?? null,
+                    lastTool: ctx.lastTool ?? null
                 },
                 worldAccess: { hasSelection: hasWorldSelection },
                 activeGoal: ctx.goalState.activeGoal

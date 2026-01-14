@@ -29,9 +29,12 @@ export interface SessionMemorySnapshot {
 export interface WorkingMemorySnapshot {
   last_library_doc_id?: string | null;
   last_library_doc_name?: string | null;
+  last_library_doc_chunk_count?: number | null;
   last_world_path?: string | null;
   last_artifact_id?: string | null;
   last_artifact_name?: string | null;
+  active_domain?: 'WORLD' | 'LIBRARY' | 'ARTIFACT' | null;
+  last_tool?: { tool: string; ok: boolean; at: number } | null;
 }
 
 /**

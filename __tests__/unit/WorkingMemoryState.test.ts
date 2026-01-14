@@ -15,18 +15,24 @@ describe('Working memory in minimal cortex state', () => {
       workingMemory: {
         last_library_doc_id: 'doc-123',
         last_library_doc_name: 'Test Doc',
+        last_library_doc_chunk_count: 12,
         last_world_path: '/code',
         last_artifact_id: 'art-456',
-        last_artifact_name: 'notes.md'
+        last_artifact_name: 'notes.md',
+        active_domain: 'LIBRARY',
+        last_tool: { tool: 'READ_LIBRARY_DOC', ok: true, at: 1700000000000 }
       }
     });
 
     expect(state.working_memory).toEqual({
       last_library_doc_id: 'doc-123',
       last_library_doc_name: 'Test Doc',
+      last_library_doc_chunk_count: 12,
       last_world_path: '/code',
       last_artifact_id: 'art-456',
-      last_artifact_name: 'notes.md'
+      last_artifact_name: 'notes.md',
+      active_domain: 'LIBRARY',
+      last_tool: { tool: 'READ_LIBRARY_DOC', ok: true, at: 1700000000000 }
     });
   });
 });

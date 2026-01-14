@@ -115,9 +115,12 @@ export interface SessionMemory {
 export interface WorkingMemory {
   lastLibraryDocId?: string | null;
   lastLibraryDocName?: string | null;
+  lastLibraryDocChunkCount?: number | null;
   lastWorldPath?: string | null;
   lastArtifactId?: string | null;
   lastArtifactName?: string | null;
+  activeDomain?: 'WORLD' | 'LIBRARY' | 'ARTIFACT' | null;
+  lastTool?: { tool: string; ok: boolean; at: number } | null;
 }
 
 /**
@@ -312,6 +315,8 @@ export const UnifiedContextBuilder = {
     
     // Build style constraints (HIGHEST PRIORITY)
     const styleConstraints = this.formatStyleConstraints(stylePrefs);
+
+    const workingMemoryBlock = this.formatWorkingMemory(ctx.workingMemory);
     
     // Format recent conversation
     const recentChat = dialogueAnchor.recentTurns
@@ -352,9 +357,6 @@ CURRENT STATE:
 - Limbic: Fear=${limbic.fear.toFixed(2)}, Curiosity=${limbic.curiosity.toFixed(2)}, Satisfaction=${limbic.satisfaction.toFixed(2)}
 - Social: User presence=${socialFrame.userPresenceScore.toFixed(2)}, Silence=${socialFrame.silenceDurationSec.toFixed(0)}s
 
-WORKING MEMORY (anchors):
-${this.formatWorkingMemory(ctx.workingMemory)}
-
 SESSION HISTORY (source of truth):
 ${this.formatSessionMemory(sessionMemory)}
 
@@ -364,6 +366,13 @@ ${memories}
 RECENT CONVERSATION:
 ${recentChat || 'No prior conversation'}
 `;
+
+    if (workingMemoryBlock) {
+      prompt += `
+WORKING MEMORY:
+${workingMemoryBlock}
+`;
+    }
 
     // Add goal if present
     if (activeGoal) {
@@ -456,43 +465,44 @@ ACTIVE GOAL (${activeGoal.source.toUpperCase()}):
    * Format working memory anchors for prompt.
    */
   formatWorkingMemory(memory?: WorkingMemory): string {
+    if (!memory) return '';
+
     const lines: string[] = [];
-    const libId = memory?.lastLibraryDocId ?? null;
-    const libName = memory?.lastLibraryDocName ?? null;
-    const worldPath = memory?.lastWorldPath ?? null;
-    const artId = memory?.lastArtifactId ?? null;
-    const artName = memory?.lastArtifactName ?? null;
+    const libId = memory.lastLibraryDocId ?? null;
+    const libName = memory.lastLibraryDocName ?? null;
+    const libCount = memory.lastLibraryDocChunkCount ?? null;
+    const worldPath = memory.lastWorldPath ?? null;
+    const artId = memory.lastArtifactId ?? null;
+    const artName = memory.lastArtifactName ?? null;
+    const activeDomain = memory.activeDomain ?? null;
+    const lastTool = memory.lastTool ?? null;
+
+    if (activeDomain) {
+      lines.push(`Domain: ${activeDomain}`);
+    }
 
     if (libId) {
       const display = libName || libId;
-      lines.push(`- Active library doc: "${display}" (id=${libId})`);
-      lines.push('  Use this id for "this book"/"that document"/"ta ksiazka"/"ten dokument". Do not SEARCH_LIBRARY.');
-    } else {
-      lines.push('- Active library doc: none');
+      const countSuffix = typeof libCount === 'number' ? `, chunks=${libCount}` : '';
+      lines.push(`Library: "${display}" (id=${libId}${countSuffix})`);
     }
 
     if (worldPath) {
-      lines.push(`- Last world path: ${worldPath}`);
-      lines.push('  Use for "here/there"/"tutaj/tam"/"this folder".');
-    } else {
-      lines.push('- Last world path: none');
+      lines.push(`World path: ${worldPath}`);
     }
 
     if (artId) {
       const display = artName || artId;
-      lines.push(`- Last artifact: "${display}" (id=${artId})`);
-      lines.push('  Use for "this file"/"this artifact"/"ten plik".');
-    } else {
-      lines.push('- Last artifact: none');
+      lines.push(`Artifact: "${display}" (id=${artId})`);
     }
 
-    lines.push('CAPABILITIES:');
-    lines.push('- WORLD: LIST_DIR, READ_FILE, WRITE_FILE, APPEND_FILE');
-    lines.push('- LIBRARY: READ_LIBRARY_DOC, LIST_LIBRARY_CHUNKS, READ_LIBRARY_CHUNK, READ_LIBRARY_RANGE');
-    lines.push('- ARTIFACTS: CREATE, READ_ARTIFACT, APPEND, REPLACE');
-    lines.push('RULES:');
-    lines.push('- You have WORLD access. Do not claim you cannot access local files.');
-    lines.push('- If an active library doc is set, use its id instead of SEARCH_LIBRARY.');
+    if (lastTool?.tool) {
+      lines.push(`Last tool: ${lastTool.tool} ${lastTool.ok ? 'ok' : 'fail'}`);
+    }
+
+    if (lines.length === 0) return '';
+
+    lines.push('Capabilities: WORLD/LIBRARY/ARTIFACTS');
 
     return lines.join('\n');
   },

@@ -37,43 +37,44 @@ function buildStructuredPrompt(params: {
   const { text, currentLimbic, currentSoma, memories, conversationHistory, identity, sessionOverlay, workingMemory } = params;
 
   const formatWorkingMemory = (memory?: WorkingMemorySnapshot) => {
+    if (!memory) return '';
+
     const lines: string[] = [];
-    const libId = memory?.last_library_doc_id ?? null;
-    const libName = memory?.last_library_doc_name ?? null;
-    const worldPath = memory?.last_world_path ?? null;
-    const artId = memory?.last_artifact_id ?? null;
-    const artName = memory?.last_artifact_name ?? null;
+    const libId = memory.last_library_doc_id ?? null;
+    const libName = memory.last_library_doc_name ?? null;
+    const libCount = memory.last_library_doc_chunk_count ?? null;
+    const worldPath = memory.last_world_path ?? null;
+    const artId = memory.last_artifact_id ?? null;
+    const artName = memory.last_artifact_name ?? null;
+    const activeDomain = memory.active_domain ?? null;
+    const lastTool = memory.last_tool ?? null;
+
+    if (activeDomain) {
+      lines.push(`Domain: ${activeDomain}`);
+    }
 
     if (libId) {
       const display = libName || libId;
-      lines.push(`- Active library doc: "${display}" (id=${libId})`);
-      lines.push('  Use this id for "this book"/"that document"/"ta ksiazka"/"ten dokument". Do not SEARCH_LIBRARY.');
-    } else {
-      lines.push('- Active library doc: none');
+      const countSuffix = typeof libCount === 'number' ? `, chunks=${libCount}` : '';
+      lines.push(`Library: "${display}" (id=${libId}${countSuffix})`);
     }
 
     if (worldPath) {
-      lines.push(`- Last world path: ${worldPath}`);
-      lines.push('  Use for "here/there"/"tutaj/tam"/"this folder".');
-    } else {
-      lines.push('- Last world path: none');
+      lines.push(`World path: ${worldPath}`);
     }
 
     if (artId) {
       const display = artName || artId;
-      lines.push(`- Last artifact: "${display}" (id=${artId})`);
-      lines.push('  Use for "this file"/"this artifact"/"ten plik".');
-    } else {
-      lines.push('- Last artifact: none');
+      lines.push(`Artifact: "${display}" (id=${artId})`);
     }
 
-    lines.push('CAPABILITIES:');
-    lines.push('- WORLD: LIST_DIR, READ_FILE, WRITE_FILE, APPEND_FILE');
-    lines.push('- LIBRARY: READ_LIBRARY_DOC, LIST_LIBRARY_CHUNKS, READ_LIBRARY_CHUNK, READ_LIBRARY_RANGE');
-    lines.push('- ARTIFACTS: CREATE, READ_ARTIFACT, APPEND, REPLACE');
-    lines.push('RULES:');
-    lines.push('- You have WORLD access. Do not claim you cannot access local files.');
-    lines.push('- If an active library doc is set, use its id instead of SEARCH_LIBRARY.');
+    if (lastTool?.tool) {
+      lines.push(`Last tool: ${lastTool.tool} ${lastTool.ok ? 'ok' : 'fail'}`);
+    }
+
+    if (lines.length === 0) return '';
+
+    lines.push('Capabilities: WORLD/LIBRARY/ARTIFACTS');
 
     return lines.join('\\n');
   };
@@ -86,6 +87,7 @@ function buildStructuredPrompt(params: {
 
   const memoryContext = memories.map((m) => `[MEMORY]: ${m.content}`).join('\n');
   const identityBlock = buildIdentityBlock(agentIdentity, sessionOverlay);
+  const workingMemoryBlock = formatWorkingMemory(workingMemory);
 
   return `
             ${identityBlock}
@@ -93,9 +95,8 @@ function buildStructuredPrompt(params: {
             CURRENT STATE:
             - Limbic: Fear=${currentLimbic.fear.toFixed(2)}, Curiosity=${currentLimbic.curiosity.toFixed(2)}, Satisfaction=${currentLimbic.satisfaction.toFixed(2)}
             - Soma: Energy=${currentSoma.energy}, Load=${currentSoma.cognitiveLoad}
-            
-            WORKING MEMORY:
-            ${formatWorkingMemory(workingMemory)}
+
+            ${workingMemoryBlock ? `WORKING MEMORY:\n${workingMemoryBlock}\n` : ''}
 
             CONTEXT:
             ${memoryContext}

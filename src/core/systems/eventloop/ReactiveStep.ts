@@ -284,18 +284,41 @@ export async function runReactiveStep(input: {
         });
       };
 
-      const updateLibraryAnchor = (documentId: string, documentName?: string | null) => {
+      const updateLibraryAnchor = (
+        documentId: string,
+        documentName?: string | null,
+        chunkCount?: number | null
+      ) => {
+        const previousDocId = ctx.lastLibraryDocId ?? null;
+        const shouldResetChunkCount =
+          Boolean(previousDocId) && previousDocId !== documentId && typeof chunkCount !== 'number';
+
         ctx.lastLibraryDocId = documentId;
+        ctx.activeDomain = 'LIBRARY';
         if (documentName !== undefined) {
           ctx.lastLibraryDocName = documentName;
+        }
+        if (typeof chunkCount === 'number') {
+          ctx.lastLibraryDocChunkCount = chunkCount;
+        } else if (shouldResetChunkCount) {
+          ctx.lastLibraryDocChunkCount = null;
         }
         try {
           const state = getCognitiveState();
           if (state?.hydrate) {
-            state.hydrate({
+            const patch: Record<string, unknown> = {
               lastLibraryDocId: documentId,
-              ...(documentName !== undefined ? { lastLibraryDocName: documentName } : {})
-            });
+              activeDomain: 'LIBRARY'
+            };
+            if (documentName !== undefined) {
+              patch.lastLibraryDocName = documentName;
+            }
+            if (typeof chunkCount === 'number') {
+              patch.lastLibraryDocChunkCount = chunkCount;
+            } else if (shouldResetChunkCount) {
+              patch.lastLibraryDocChunkCount = null;
+            }
+            state.hydrate(patch);
           }
         } catch {
           // ignore state sync issues
@@ -304,9 +327,10 @@ export async function runReactiveStep(input: {
 
       const updateWorldAnchor = (path: string) => {
         ctx.lastWorldPath = path;
+        ctx.activeDomain = 'WORLD';
         try {
           const state = getCognitiveState();
-          if (state?.hydrate) state.hydrate({ lastWorldPath: path });
+          if (state?.hydrate) state.hydrate({ lastWorldPath: path, activeDomain: 'WORLD' });
         } catch {
           // ignore state sync issues
         }
@@ -314,6 +338,7 @@ export async function runReactiveStep(input: {
 
       const updateArtifactAnchor = (artifactId: string, artifactName?: string | null) => {
         ctx.lastArtifactId = artifactId;
+        ctx.activeDomain = 'ARTIFACT';
         if (artifactName !== undefined) {
           ctx.lastArtifactName = artifactName;
         }
@@ -322,6 +347,7 @@ export async function runReactiveStep(input: {
           if (state?.hydrate) {
             state.hydrate({
               lastArtifactId: artifactId,
+              activeDomain: 'ARTIFACT',
               ...(artifactName !== undefined ? { lastArtifactName: artifactName } : {})
             });
           }
@@ -483,7 +509,8 @@ export async function runReactiveStep(input: {
             shown: visible.length,
             hasMore
           });
-          updateLibraryAnchor(documentId);
+          const knownCount = hasMore ? undefined : visible.length;
+          updateLibraryAnchor(documentId, undefined, knownCount);
 
           const countInfo = hasMore
             ? `Pokazuje pierwsze ${limit} chunkow (jest wiecej):`
@@ -1012,9 +1039,12 @@ export async function runReactiveStep(input: {
     workingMemory: {
       last_library_doc_id: ctx.lastLibraryDocId ?? null,
       last_library_doc_name: ctx.lastLibraryDocName ?? null,
+      last_library_doc_chunk_count: ctx.lastLibraryDocChunkCount ?? null,
       last_world_path: ctx.lastWorldPath ?? null,
       last_artifact_id: ctx.lastArtifactId ?? null,
-      last_artifact_name: ctx.lastArtifactName ?? null
+      last_artifact_name: ctx.lastArtifactName ?? null,
+      active_domain: ctx.activeDomain ?? null,
+      last_tool: ctx.lastTool ?? null
     }
   });
 

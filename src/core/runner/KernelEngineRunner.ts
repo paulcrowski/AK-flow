@@ -320,9 +320,12 @@ export class KernelEngineRunner<TIdentity> {
       conversation: baseConversation,
       lastLibraryDocId: state.lastLibraryDocId ?? null,
       lastLibraryDocName: state.lastLibraryDocName ?? null,
+      lastLibraryDocChunkCount: state.lastLibraryDocChunkCount ?? null,
       lastWorldPath: state.lastWorldPath ?? null,
       lastArtifactId: state.lastArtifactId ?? null,
       lastArtifactName: state.lastArtifactName ?? null,
+      activeDomain: state.activeDomain ?? null,
+      lastTool: state.lastTool ?? null,
       autonomousMode: opts.autonomousMode,
       lastSpeakTimestamp: state.lastSpeakTimestamp,
       silenceStart: state.silenceStart,
@@ -363,9 +366,12 @@ export class KernelEngineRunner<TIdentity> {
     if (Array.isArray(nextCtx.thoughtHistory)) patch.thoughtHistory = nextCtx.thoughtHistory;
     if ('lastLibraryDocId' in nextCtx) patch.lastLibraryDocId = nextCtx.lastLibraryDocId ?? null;
     if ('lastLibraryDocName' in nextCtx) patch.lastLibraryDocName = nextCtx.lastLibraryDocName ?? null;
+    if ('lastLibraryDocChunkCount' in nextCtx) patch.lastLibraryDocChunkCount = nextCtx.lastLibraryDocChunkCount ?? null;
     if ('lastWorldPath' in nextCtx) patch.lastWorldPath = nextCtx.lastWorldPath ?? null;
     if ('lastArtifactId' in nextCtx) patch.lastArtifactId = nextCtx.lastArtifactId ?? null;
     if ('lastArtifactName' in nextCtx) patch.lastArtifactName = nextCtx.lastArtifactName ?? null;
+    if ('activeDomain' in nextCtx) patch.activeDomain = nextCtx.activeDomain ?? null;
+    if ('lastTool' in nextCtx) patch.lastTool = nextCtx.lastTool ?? null;
 
     if (Object.keys(patch).length > 0) {
       this.deps.actions.hydrate(patch);

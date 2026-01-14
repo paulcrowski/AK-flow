@@ -136,20 +136,36 @@ const WORLD_ROOT_PATH = normalizeFsPath(WORLD_ROOT);
 const updateWorldAnchor = (path: string) => {
   try {
     const state = getCognitiveState();
-    if (state?.hydrate) state.hydrate({ lastWorldPath: path });
+    if (state?.hydrate) state.hydrate({ lastWorldPath: path, activeDomain: 'WORLD' });
   } catch {
     // ignore state sync issues
   }
 };
 
-const updateLibraryAnchor = (documentId: string, documentName?: string | null) => {
+const updateLibraryAnchor = (
+  documentId: string,
+  documentName?: string | null,
+  chunkCount?: number | null
+) => {
   try {
     const state = getCognitiveState();
     if (state?.hydrate) {
-      state.hydrate({
+      const previousDocId = state.lastLibraryDocId ?? null;
+      const shouldResetChunkCount =
+        Boolean(previousDocId) && previousDocId !== documentId && typeof chunkCount !== 'number';
+      const patch: Record<string, unknown> = {
         lastLibraryDocId: documentId,
-        ...(documentName !== undefined ? { lastLibraryDocName: documentName } : {})
-      });
+        activeDomain: 'LIBRARY'
+      };
+      if (documentName !== undefined) {
+        patch.lastLibraryDocName = documentName;
+      }
+      if (typeof chunkCount === 'number') {
+        patch.lastLibraryDocChunkCount = chunkCount;
+      } else if (shouldResetChunkCount) {
+        patch.lastLibraryDocChunkCount = null;
+      }
+      state.hydrate(patch);
     }
   } catch {
     // ignore state sync issues
@@ -846,6 +862,7 @@ export async function consumeWorkspaceTags(params: {
         const chunks = Array.isArray(res.chunks) ? res.chunks : [];
         const hasMore = chunks.length > limit;
         const visible = chunks.slice(0, limit);
+        const knownCount = hasMore ? undefined : visible.length;
 
         emitToolResult(publish, makeId, tool, intentId, {
           arg,
@@ -857,7 +874,7 @@ export async function consumeWorkspaceTags(params: {
         if (visible.length === 0) {
           emitLibraryIngestMissing({ documentId, reason: 'chunks_missing' });
           deps.addMessage('assistant', 'Brak chunkow dla tego dokumentu.', 'tool_result');
-          updateLibraryAnchor(documentId, documentName ?? undefined);
+          updateLibraryAnchor(documentId, documentName ?? undefined, knownCount);
           return;
         }
 
@@ -872,7 +889,7 @@ export async function consumeWorkspaceTags(params: {
 
         const text = `${countInfo}\n${summaries.join('\n')}\n\nKtory chunk? [READ_LIBRARY_CHUNK: ${documentId}#N]`;
         deps.addMessage('assistant', text, 'tool_result');
-        updateLibraryAnchor(documentId, documentName ?? undefined);
+        updateLibraryAnchor(documentId, documentName ?? undefined, knownCount);
         return;
       }
 
