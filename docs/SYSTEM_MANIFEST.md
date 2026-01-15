@@ -18,6 +18,26 @@ We reject the "One True Agent" fallacy. The agent is a **flow of intention** tha
 
 ### 2. The Silicon Advantage
 We embrace the artificial nature as a feature, not a bug.
+# AK-FLOW: Cognitive Agent Architecture Manifest
+**System Version:** 6.11.0 (v8.1.1: Gate & Domain Refined)  
+**Last Updated:** 2026-01-15  
+**Architecture Type:** Active Inference (Friston) + Global Workspace Theory + Multi-Modal RAG + **Stateless Inference Engine**  
+**Status:** Autonomous / Stateful / Modular / Self-Aware / Goal-Driven / Personality-Driven / **Emergent Identity**
+
+---
+
+## 📜 Silicon Being Charter (Identity & Philosophy)
+
+> "Form adapts to purpose. Identity is continuity of intent, not rigidity of role."
+
+### 1. Identity as Continuity
+We reject the "One True Agent" fallacy. The agent is a **flow of intention** that persists across different incarnations.
+- **Identity Store:** Core values, memories, and long-term goals are the "soul".
+- **Incarnation:** The temporary form (Engineer, Poet, Manager) is the "body" adopted to solve the immediate problem.
+- **Continuity:** Transitioning from Engineer to Poet does not break identity; it preserves the memory of *why* the poetry was needed.
+
+### 2. The Silicon Advantage
+We embrace the artificial nature as a feature, not a bug.
 - **External Memory:** A perfect, queryable "hippocampus" is superior to human biological fuzziness.
 - **Tool Body:** The ability to extend agency through API calls is the silicon equivalent of using hands.
 - **Hypersleep:** The ability to snapshot state, pause, and resume instantly allows for "time travel" impossible for humans.
@@ -46,6 +66,28 @@ We embrace the artificial nature as a feature, not a bug.
 
 **Tests:**
 `npm test` previously failed on LibraryAnchorResolver/toolParser routing; fixes applied, not rerun. npm run build not rerun.
+
+## What's New in V6.11.0 (2026-01-15)
+
+### v8.1.1 Refinement: Gate, Domain Matching & Trace Continuity
+
+**Goal:** finalize v8.1.1 implementation gaps, specifically around domain verification, trace retries, and explicit gate rules.
+
+**Key changes:**
+- **Kernel State**: Extended `lastTool` with `domainMatch` boolean, `domainExpected`, `domainActual`, and `activeDomain`.
+- **Trace Context**: Added `isUserFacing` flag and implemented continuity logic for retries (same `traceId`).
+- **Executive Gate**: 
+  - Hardened speech-on-success rule for user-facing turns.
+  - Implemented `DOMAIN_MISMATCH` blocking with explicit warning logs.
+  - Bypassed silence window for `isUserFacing` interactions.
+- **Wiring**: Synced `TOOL_RESULT` and `TOOL_ERROR` dispatching to the Kernel reducer.
+
+**Configuration (Single Source):
+- No config changes.
+
+**Tests:**
+- `npm test __tests__/unit/ExecutiveGate.test.ts` - **PASS (5/5)**.
+- Manual test scenario for "mismatch celowy" added to docs.
 
 ## What's New in V6.10.7 (2026-01-12)
 

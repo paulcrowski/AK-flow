@@ -65,6 +65,8 @@ export enum PacketType {
   LESSON_GOALS_PLACEHOLDER = 'LESSON_GOALS_PLACEHOLDER'
 }
 
+export type ToolDomain = 'WORLD' | 'LIBRARY' | 'ARTIFACT' | 'OTHER';
+
 // 2. Internal State Definitions
 export interface LimbicState {
   fear: number;      // 0-1

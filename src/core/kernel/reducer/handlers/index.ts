@@ -11,3 +11,4 @@ export { handleThoughtGenerated, handleHydrate } from './thoughtHydrate';
 export { handleAddMessage, handleClearConversation } from './conversation';
 export { handleWorkingSetSet, handleWorkingSetAdvance, handleWorkingSetClear } from './workingSet';
 export { handleSocialDynamicsUpdate } from './socialDynamics';
+export { handleRoutingDecision } from './routing';

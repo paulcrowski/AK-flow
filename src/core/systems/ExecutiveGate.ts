@@ -24,7 +24,7 @@
  */
 
 import type { LimbicState } from '../../types';
-import type { SocialDynamics } from '../kernel/types';
+import type { SocialDynamics, KernelState } from '../kernel/types';
 import { clamp01 } from '../../utils/math';
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -42,25 +42,25 @@ export type CandidateType = 'reactive' | 'autonomous' | 'goal_driven';
 export interface SpeechCandidate {
   /** Unikalny identyfikator */
   id: string;
-  
+
   /** Typ kandydata */
   type: CandidateType;
-  
+
   /** Treść do wypowiedzenia */
   speech_content: string;
-  
+
   /** Wewnętrzna myśl (do logów) */
   internal_thought: string;
-  
+
   /** Timestamp utworzenia */
   timestamp: number;
-  
+
   /** Siła kandydata (dla Competitive Inhibition) */
   strength: number;
-  
+
   /** Czy to odpowiedź na user input? */
   is_user_response: boolean;
-  
+
   /** Metadata dla debugowania */
   metadata?: {
     source?: string;
@@ -76,16 +76,16 @@ export interface SpeechCandidate {
 export interface GateDecision {
   /** Czy publikować jako speech? */
   should_speak: boolean;
-  
+
   /** Zwycięski kandydat (jeśli jest) */
   winner: SpeechCandidate | null;
-  
+
   /** Powód decyzji */
   reason: GateReason;
-  
+
   /** Kandydaci którzy przegrali (do logów) */
   losers: SpeechCandidate[];
-  
+
   /** Debug info */
   debug?: {
     reactive_count: number;
@@ -96,7 +96,7 @@ export interface GateDecision {
   };
 }
 
-export type GateReason = 
+export type GateReason =
   | 'REACTIVE_VETO'           // Reaktywna wygrała (absolutny priorytet)
   | 'AUTONOMOUS_WON'          // Autonomiczna wygrała konkurencję
   | 'VOICE_PRESSURE_LOW'      // Autonomiczna przegrała z voice_pressure
@@ -104,7 +104,8 @@ export type GateReason =
   | 'NO_CANDIDATES'           // Brak kandydatów
   | 'EMPTY_SPEECH'            // Kandydat ma pusty speech
   | 'SOCIAL_BUDGET_EXHAUSTED' // Autonomy budget wyczerpany
-  | 'SOCIAL_COST_TOO_HIGH';   // Effective pressure below dynamic threshold
+  | 'SOCIAL_COST_TOO_HIGH'    // Effective pressure below dynamic threshold
+  | 'DOMAIN_MISMATCH';        // Tool domain check failed (v8.1.1)
 
 /**
  * Kontekst dla bramki
@@ -112,18 +113,24 @@ export type GateReason =
 export interface GateContext {
   /** Aktualny stan limbiczny */
   limbic: LimbicState;
-  
+
   /** Czas od ostatniego user input (ms) */
   time_since_user_input: number;
-  
+
   /** Minimalne okno ciszy dla autonomicznych (ms) */
   silence_window: number;
-  
+
   /** Próg voice_pressure dla autonomicznych */
   voice_pressure_threshold: number;
-  
+
   /** Social dynamics state (optional, for unified gate) */
   socialDynamics?: SocialDynamics;
+
+  /** v8.1.1: Trace is user facing (input or retry) */
+  isUserFacing?: boolean;
+
+  /** v8.1.1: Last tool state for domain verification */
+  lastTool?: KernelState['lastTool'];
 }
 
 /**
@@ -145,10 +152,10 @@ const SOCIAL_CONFIG = {
 const DEFAULT_CONFIG = {
   /** Minimalne okno ciszy (ms) - autonomiczne nie mówią jeśli user pisał niedawno */
   SILENCE_WINDOW_MS: 5000,
-  
+
   /** Próg voice_pressure dla autonomicznych (0-1) */
   VOICE_PRESSURE_THRESHOLD: 0.6,
-  
+
   /** Wagi dla Competitive Inhibition */
   WEIGHTS: {
     novelty: 0.3,
@@ -163,7 +170,7 @@ const DEFAULT_CONFIG = {
 // ═══════════════════════════════════════════════════════════════════════════
 
 export const ExecutiveGate = {
-  
+
   /**
    * Główna funkcja decyzyjna - wybiera który kandydat (jeśli którykolwiek) 
    * ma prawo stać się mową.
@@ -178,15 +185,17 @@ export const ExecutiveGate = {
     context: GateContext
   ): GateDecision {
     const now = Date.now();
-    
+
     // Separuj kandydatów
-    const reactive = candidates.filter(c => c.type === 'reactive' || c.is_user_response);
-    const autonomous = candidates.filter(c => c.type === 'autonomous' && !c.is_user_response);
+    const isUserFacing = Boolean(context.isUserFacing);
+    // v8.1.1: If user facing, treat autonomous candidates (fallback) as reactive to bypass silence window
+    const reactive = candidates.filter(c => c.type === 'reactive' || c.is_user_response || (isUserFacing && c.type !== 'goal_driven'));
+    const autonomous = candidates.filter(c => c.type === 'autonomous' && !c.is_user_response && !isUserFacing);
     const goalDriven = candidates.filter(c => c.type === 'goal_driven' && !c.is_user_response);
-    
+
     // Oblicz voice_pressure deterministycznie
     const voicePressure = this.computeVoicePressure(context.limbic);
-    
+
     // Debug info
     const debug = {
       reactive_count: reactive.length,
@@ -194,14 +203,45 @@ export const ExecutiveGate = {
       voice_pressure: voicePressure,
       silence_window_ok: context.time_since_user_input >= context.silence_window
     };
-    
+
     // ═══════════════════════════════════════════════════════════════════════
     // RULE 1: Reaktywna ma TWARDE VETO
     // ═══════════════════════════════════════════════════════════════════════
     if (reactive.length > 0) {
       // Jeśli jest więcej niż jedna reaktywna, weź najnowszą
       const winner = reactive.sort((a, b) => b.timestamp - a.timestamp)[0];
-      
+
+      // v8.1.1: Domain Mismatch Check (Hard Block)
+      if (isUserFacing && context.lastTool?.ok && context.lastTool.domainExpected && context.lastTool.domainActual) {
+        if (context.lastTool.domainExpected !== context.lastTool.domainActual) {
+          // Log anomaly
+          console.warn('[GATE] DOMAIN_MISMATCH_BLOCKED_SPEECH', {
+            expected: context.lastTool.domainExpected,
+            actual: context.lastTool.domainActual
+          });
+
+          return {
+            should_speak: false,
+            winner: null,
+            reason: 'DOMAIN_MISMATCH',
+            losers: candidates,
+            debug
+          };
+        }
+      }
+
+      // v8.1.1: Speech Required After Tool Success
+      if (isUserFacing && context.lastTool?.ok) {
+        // We MUST speak to acknowledge tool result
+        // Log this enforcement
+        if (debug) {
+          console.log('[GATE] SPEECH_REQUIRED_AFTER_TOOL_SUCCESS', {
+            tool: context.lastTool.tool,
+            candidateId: winner.id
+          });
+        }
+      }
+
       // Walidacja - pusty speech = nie publikuj
       if (!winner.speech_content.trim()) {
         return {
@@ -212,7 +252,7 @@ export const ExecutiveGate = {
           debug
         };
       }
-      
+
       return {
         should_speak: true,
         winner,
@@ -221,11 +261,11 @@ export const ExecutiveGate = {
         debug
       };
     }
-    
+
     // ═══════════════════════════════════════════════════════════════════════
     // RULE 2: Sprawdź okno ciszy
     // ═══════════════════════════════════════════════════════════════════════
-    if (context.time_since_user_input < context.silence_window) {
+    if (!isUserFacing && context.time_since_user_input < context.silence_window) {
       // User pisał niedawno - autonomiczne milczą
       return {
         should_speak: false,
@@ -235,12 +275,12 @@ export const ExecutiveGate = {
         debug
       };
     }
-    
+
     // ═══════════════════════════════════════════════════════════════════════
     // RULE 3: Competitive Inhibition między autonomicznymi
     // ═══════════════════════════════════════════════════════════════════════
     const allAutonomous = [...autonomous, ...goalDriven];
-    
+
     if (allAutonomous.length === 0) {
       return {
         should_speak: false,
@@ -250,12 +290,12 @@ export const ExecutiveGate = {
         debug
       };
     }
-    
+
     // Konkurencja - najsilniejszy wygrywa
     const ranked = allAutonomous.sort((a, b) => b.strength - a.strength);
     const winner = ranked[0];
     const losers = ranked.slice(1);
-    
+
     // Walidacja - pusty speech = nie publikuj
     if (!winner.speech_content.trim()) {
       return {
@@ -266,7 +306,7 @@ export const ExecutiveGate = {
         debug
       };
     }
-    
+
     // ═══════════════════════════════════════════════════════════════════════
     // RULE 4: Bramka voice_pressure
     // ═══════════════════════════════════════════════════════════════════════
@@ -280,7 +320,7 @@ export const ExecutiveGate = {
         debug
       };
     }
-    
+
     // ═══════════════════════════════════════════════════════════════════════
     // RULE 5: Social Dynamics (unified - no separate check needed)
     // ═══════════════════════════════════════════════════════════════════════
@@ -294,7 +334,7 @@ export const ExecutiveGate = {
         debug: { ...debug, social_block_reason: socialResult.reason }
       };
     }
-    
+
     // Zwycięzca przeszedł wszystkie bramki
     return {
       should_speak: true,
@@ -304,7 +344,7 @@ export const ExecutiveGate = {
       debug
     };
   },
-  
+
   /**
    * Check social dynamics constraints.
    * UNIFIED: Called as part of gate decision, not separately.
@@ -314,31 +354,31 @@ export const ExecutiveGate = {
     voicePressure: number
   ): { allowed: boolean; reason: string } {
     const sd = context.socialDynamics;
-    
+
     // No social dynamics = allow (backwards compatibility)
     if (!sd) {
       return { allowed: true, reason: 'NO_SOCIAL_DYNAMICS' };
     }
-    
+
     // Hard block: autonomy budget exhausted
     if (sd.autonomyBudget < SOCIAL_CONFIG.MIN_BUDGET_TO_SPEAK) {
       return { allowed: false, reason: 'SOCIAL_BUDGET_EXHAUSTED' };
     }
-    
+
     // Compute effective pressure (reduced by social cost)
     const effectivePressure = Math.max(0, voicePressure - sd.socialCost);
-    
+
     // Dynamic threshold: higher when user absent
-    const dynamicThreshold = SOCIAL_CONFIG.BASE_THRESHOLD + 
+    const dynamicThreshold = SOCIAL_CONFIG.BASE_THRESHOLD +
       (1 - sd.userPresenceScore) * SOCIAL_CONFIG.ABSENCE_PENALTY;
-    
+
     if (effectivePressure < dynamicThreshold) {
       return { allowed: false, reason: 'SOCIAL_COST_TOO_HIGH' };
     }
-    
+
     return { allowed: true, reason: 'SOCIAL_ALLOWED' };
   },
-  
+
   /**
    * Oblicz voice_pressure deterministycznie z limbic state.
    * 
@@ -353,7 +393,7 @@ export const ExecutiveGate = {
     const raw = (limbic.curiosity + limbic.satisfaction - limbic.fear - limbic.frustration) / 2 + 0.5;
     return clamp01(raw);
   },
-  
+
   /**
    * Oblicz siłę kandydata dla Competitive Inhibition.
    * 
@@ -365,15 +405,15 @@ export const ExecutiveGate = {
     now: number = Date.now()
   ): number {
     const weights = DEFAULT_CONFIG.WEIGHTS;
-    
+
     const novelty = candidate.metadata?.novelty ?? 0.5;
     const salience = candidate.metadata?.salience ?? 0.5;
     const goalRelevance = candidate.type === 'goal_driven' ? 0.8 : 0.3;
-    
+
     // Recency: nowsze = silniejsze (decay over 30s)
     const age = now - (candidate.timestamp ?? now);
     const recency = Math.max(0, 1 - age / 30000);
-    
+
     return (
       novelty * weights.novelty +
       salience * weights.salience +
@@ -381,7 +421,7 @@ export const ExecutiveGate = {
       recency * weights.recency
     );
   },
-  
+
   /**
    * Stwórz kandydata reaktywnego (odpowiedź na usera).
    */
@@ -400,7 +440,7 @@ export const ExecutiveGate = {
       is_user_response: true
     };
   },
-  
+
   /**
    * Stwórz kandydata autonomicznego.
    */
@@ -420,11 +460,11 @@ export const ExecutiveGate = {
       is_user_response: false,
       metadata
     };
-    
+
     candidate.strength = this.computeCandidateStrength(candidate);
     return candidate;
   },
-  
+
   /**
    * Stwórz kandydata goal-driven.
    */
@@ -445,11 +485,11 @@ export const ExecutiveGate = {
       is_user_response: false,
       metadata: { ...metadata, goal_id }
     };
-    
+
     candidate.strength = this.computeCandidateStrength(candidate);
     return candidate;
   },
-  
+
   /**
    * Pobierz domyślny kontekst.
    */

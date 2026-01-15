@@ -24,6 +24,8 @@ export function createTickTraceScope(input: {
   agentId: string | null;
   tickNumber: number;
   startedAt: number;
+  /** True when this tick is responding to user input */
+  isUserFacing?: boolean;
   deps: TickTraceScopeDeps;
 }): TickTraceScope {
   const traceId = input.deps.generateTraceId(input.startedAt, input.tickNumber);
@@ -32,7 +34,8 @@ export function createTickTraceScope(input: {
     traceId,
     tickNumber: input.tickNumber,
     startedAt: input.startedAt,
-    agentId: input.agentId
+    agentId: input.agentId,
+    isUserFacing: input.isUserFacing ?? false
   };
 
   input.deps.pushTraceId(trace.traceId);

@@ -97,7 +97,17 @@ export interface KernelState {
   lastArtifactId?: string | null;
   lastArtifactName?: string | null;
   activeDomain?: 'WORLD' | 'LIBRARY' | 'ARTIFACT' | null;
-  lastTool?: { tool: string; ok: boolean; at: number } | null;
+  lastTool?: {
+    tool: string;
+    ok: boolean;
+    at: number;
+    /** Domain that was expected based on routing */
+    domainExpected?: 'WORLD' | 'LIBRARY' | 'ARTIFACT' | null;
+    /** Domain that was actually executed */
+    domainActual?: 'WORLD' | 'LIBRARY' | 'ARTIFACT' | null;
+    /** Whether expected and actual domains matched */
+    domainMatch?: boolean;
+  } | null;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -109,6 +119,7 @@ export type KernelEventType =
   | 'USER_INPUT'              // User sent message
   | 'AGENT_SPOKE'             // Agent produced speech
   | 'TOOL_RESULT'             // External tool returned result
+  | 'ROUTING_DECISION'        // Router decided domain
   | 'SLEEP_START'             // Enter sleep mode
   | 'SLEEP_END'               // Wake up
   | 'GOAL_FORMED'             // New goal created
@@ -144,6 +155,7 @@ export type KernelEventPayload =
   | UserInputPayload
   | AgentSpokePayload
   | ToolResultPayload
+  | RoutingDecisionPayload
   | MoodShiftPayload
   | NeuroUpdatePayload
   | StateOverridePayload
@@ -169,8 +181,20 @@ export interface AgentSpokePayload {
 }
 
 export interface ToolResultPayload {
-  toolType: 'SEARCH' | 'VISUALIZE';
+  toolType?: 'SEARCH' | 'VISUALIZE';
   success: boolean;
+  tool: string;
+  result?: any;
+  intentId?: string;
+  domainExpected?: 'WORLD' | 'LIBRARY' | 'ARTIFACT' | null;
+  domainActual?: 'WORLD' | 'LIBRARY' | 'ARTIFACT' | null;
+}
+
+export interface RoutingDecisionPayload {
+  domain: 'WORLD' | 'LIBRARY' | 'ARTIFACT';
+  tool: string;
+  reason: string;
+  input: string;
 }
 
 export interface MoodShiftPayload {

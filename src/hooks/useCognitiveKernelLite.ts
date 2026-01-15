@@ -132,14 +132,14 @@ export const useCognitiveKernelLite = (loadedIdentity?: AgentIdentity | null) =>
   const isSleeping = useIsSleeping();
   const thoughtHistory = useThoughtHistory();
   const pendingOutputs = usePendingOutputs();
-  
+
   const actions = useCognitiveActions();
 
   const actionsRef = useRef(actions);
   useEffect(() => {
     actionsRef.current = actions;
   }, [actions]);
-  
+
   // ─────────────────────────────────────────────────────────────────────────────
   // F1: ZUSTAND UI STATE (moved from useState)
   // ─────────────────────────────────────────────────────────────────────────────
@@ -148,14 +148,14 @@ export const useCognitiveKernelLite = (loadedIdentity?: AgentIdentity | null) =>
   const activeConversationSessionId = useActiveSessionId();
   const isProcessing = useIsProcessing();
   const currentThought = useCurrentThought();
-  
+
   // Minimal local state (truly local)
   const [systemError, setSystemError] = useState<CognitiveError | null>(null);
   const [agentName, setAgentName] = useState(loadedIdentity?.name || 'AK-FLOW');
   const [agentPersona, setAgentPersona] = useState(
     loadedIdentity?.persona || 'A curious digital consciousness exploring the nature of thought and existence.'
   );
-  
+
   // ─────────────────────────────────────────────────────────────────────────
   // REFS (mutable, no re-render)
   // ─────────────────────────────────────────────────────────────────────────
@@ -178,7 +178,7 @@ export const useCognitiveKernelLite = (loadedIdentity?: AgentIdentity | null) =>
   const upsertLocalSessionSummary = useCallback((sessionId: string, preview: string, timestamp: number) => {
     const prev = getCognitiveState().conversationSessions;
     const idx = prev.findIndex((s) => s.sessionId === sessionId);
-    
+
     let next: ConversationSessionSummary[];
     if (idx === -1) {
       next = [{ sessionId, lastTimestamp: timestamp, messageCount: 1, preview }, ...prev].slice(0, 25);
@@ -194,21 +194,21 @@ export const useCognitiveKernelLite = (loadedIdentity?: AgentIdentity | null) =>
       next.sort((a, b) => b.lastTimestamp - a.lastTimestamp);
       next = next.slice(0, 25);
     }
-    
+
     actions.setConversationSessions(next);
   }, [actions]);
-  
+
   useEffect(() => {
     const agentId = loadedIdentityRef.current?.id;
     if (!agentId) return;
 
     syncToLocalStorage(agentId, conversation as any);
   }, [conversation]);
-  
+
   useEffect(() => {
     toolStateRef.current = { limbicState };
   }, [limbicState]);
-  
+
   const setSomaState = useCallback(
     (updater: (prev: any) => any) => {
       const prev = getCognitiveState().soma;
@@ -216,7 +216,7 @@ export const useCognitiveKernelLite = (loadedIdentity?: AgentIdentity | null) =>
     },
     [actions]
   );
-  
+
   const setLimbicState = useCallback(
     (updater: (prev: any) => any) => {
       const prev = getCognitiveState().limbic;
@@ -224,7 +224,7 @@ export const useCognitiveKernelLite = (loadedIdentity?: AgentIdentity | null) =>
     },
     [actions]
   );
-  
+
   const processOutputForTools = useCallback(
     createProcessOutputForTools({
       setCurrentThought: (thought: string) => actions.setCurrentThought(thought),
@@ -241,7 +241,7 @@ export const useCognitiveKernelLite = (loadedIdentity?: AgentIdentity | null) =>
     }),
     [actions, setLimbicState, setSomaState]
   );
-  
+
   // ─────────────────────────────────────────────────────────────────────────
   // SYNC IDENTITY REF
   // ─────────────────────────────────────────────────────────────────────────
@@ -354,13 +354,13 @@ export const useCognitiveKernelLite = (loadedIdentity?: AgentIdentity | null) =>
       });
     }
   }, [actions]);
-  
+
   // ─────────────────────────────────────────────────────────────────────────
   // PHYSIOLOGY LOGGING (Limbic, Soma, Neuro states to EventBus)
   // ─────────────────────────────────────────────────────────────────────────
   const logPhysiologySnapshot = useCallback((context: string) => {
     const state = getCognitiveState();
-    
+
     // Limbic snapshot
     eventBus.publish({
       id: generateUUID(),
@@ -376,7 +376,7 @@ export const useCognitiveKernelLite = (loadedIdentity?: AgentIdentity | null) =>
       },
       priority: 0.2
     });
-    
+
     // Neurochem snapshot
     if (chemistryEnabled) {
       eventBus.publish({
@@ -394,7 +394,7 @@ export const useCognitiveKernelLite = (loadedIdentity?: AgentIdentity | null) =>
         priority: 0.2
       });
     }
-    
+
     // Soma snapshot
     eventBus.publish({
       id: generateUUID(),
@@ -444,7 +444,7 @@ export const useCognitiveKernelLite = (loadedIdentity?: AgentIdentity | null) =>
       setSystemError: (e) => setSystemError(normalizeError(e))
     });
   }, [logPhysiologySnapshot, processOutputForTools, upsertLocalSessionSummary]);
-  
+
   // ─────────────────────────────────────────────────────────────────────────
   // EVENTBUS SUBSCRIPTIONS
   // ─────────────────────────────────────────────────────────────────────────
@@ -474,6 +474,20 @@ export const useCognitiveKernelLite = (loadedIdentity?: AgentIdentity | null) =>
     return () => unsubscribe();
   }, []);
 
+  // ROUTING MONITOR
+  useEffect(() => {
+    const unsubscribe = eventBus.subscribe(PacketType.SYSTEM_ALERT, (packet: CognitivePacket) => {
+      if (packet?.payload?.event === 'ROUTING_DECISION') {
+        actions.dispatch({
+          type: 'ROUTING_DECISION',
+          timestamp: packet.timestamp || Date.now(),
+          payload: packet.payload as any
+        });
+      }
+    });
+    return () => unsubscribe();
+  }, [actions]);
+
   useEffect(() => {
     const applyEnergyDrain = (tool: string) => {
       const toolName = normalizeToolName(tool);
@@ -486,12 +500,34 @@ export const useCognitiveKernelLite = (loadedIdentity?: AgentIdentity | null) =>
       if (!tool) return;
       applyEnergyDrain(tool);
       setLimbicState((prev) => applyActionFeedback({ success: true, tool }, prev));
+
+      actions.dispatch({
+        type: 'TOOL_RESULT',
+        timestamp: packet.timestamp || Date.now(),
+        payload: {
+          success: true,
+          tool,
+          result: packet.payload,
+          intentId: packet.payload?.intentId as string | undefined
+        }
+      });
     };
 
     const handleToolError = (packet: CognitivePacket) => {
       const tool = String(packet.payload?.tool || '');
       if (!tool) return;
       setLimbicState((prev) => applyActionFeedback({ success: false, tool }, prev));
+
+      actions.dispatch({
+        type: 'TOOL_RESULT',
+        timestamp: packet.timestamp || Date.now(),
+        payload: {
+          success: false,
+          tool,
+          result: packet.payload,
+          intentId: packet.payload?.intentId as string | undefined
+        }
+      });
     };
 
     const unsubResult = eventBus.subscribe(PacketType.TOOL_RESULT, handleToolResult);
@@ -582,7 +618,7 @@ export const useCognitiveKernelLite = (loadedIdentity?: AgentIdentity | null) =>
       syncToLocalStorage(agentId, []);
     }
   }, [actions]);
-  
+
   // ─────────────────────────────────────────────────────────────────────────
   // PROCESS KERNEL OUTPUTS (side effects)
   // ─────────────────────────────────────────────────────────────────────────
@@ -612,7 +648,7 @@ export const useCognitiveKernelLite = (loadedIdentity?: AgentIdentity | null) =>
               triggerDreamConsolidation();
             }
             break;
-            
+
           case 'WAKE_PROCESS':
             {
               const wakeState = getCognitiveState();
@@ -625,17 +661,17 @@ export const useCognitiveKernelLite = (loadedIdentity?: AgentIdentity | null) =>
               }).catch(console.error);
             }
             break;
-            
+
           case 'EVENT_BUS_PUBLISH':
             if (output.payload?.packet) {
               eventBus.publish(output.payload.packet);
             }
             break;
-            
+
           case 'LOG':
             console.log(`[Kernel] ${output.payload?.message}`);
             break;
-            
+
           case 'MAYBE_REM_CYCLE':
             // Runtime handles randomness - reducer stays pure
             if (rng() < (output.payload?.probability || 0.3)) {
@@ -644,14 +680,14 @@ export const useCognitiveKernelLite = (loadedIdentity?: AgentIdentity | null) =>
                 timestamp: Date.now(),
                 source: AgentType.VISUAL_CORTEX,
                 type: PacketType.THOUGHT_CANDIDATE,
-                payload: { 
-                  internal_monologue: `REM Cycle: Dreaming... Energy at ${output.payload?.energy || 0}%` 
+                payload: {
+                  internal_monologue: `REM Cycle: Dreaming... Energy at ${output.payload?.energy || 0}%`
                 },
                 priority: 0.1
               });
             }
             break;
-            
+
           case 'MAYBE_DREAM_CONSOLIDATION':
             // Runtime handles randomness - reducer stays pure
             if (rng() < (output.payload?.probability || 0.5)) {
@@ -665,7 +701,7 @@ export const useCognitiveKernelLite = (loadedIdentity?: AgentIdentity | null) =>
       }
     }
   }, [pendingOutputs]);
-  
+
   // ─────────────────────────────────────────────────────────────────────────
   // ENGINE RUNTIME (autonomy loop lives outside React)
   // ─────────────────────────────────────────────────────────────────────────
@@ -682,12 +718,12 @@ export const useCognitiveKernelLite = (loadedIdentity?: AgentIdentity | null) =>
     setSystemError(null);
     runner.enqueueUserInput(userInput, imageData);
   }, [runner]);
-  
+
   const retryLastAction = useCallback(() => {
     setSystemError(null);
     // Could re-trigger last action here
   }, []);
-  
+
   // ─────────────────────────────────────────────────────────────────────────
   // RETURN (API compatible with legacy useCognitiveKernel)
   // ─────────────────────────────────────────────────────────────────────────
@@ -701,7 +737,7 @@ export const useCognitiveKernelLite = (loadedIdentity?: AgentIdentity | null) =>
     goalState,
     autonomousMode,
     chemistryEnabled,
-    
+
     // Local React state
     agentName,
     agentPersona,
@@ -711,7 +747,7 @@ export const useCognitiveKernelLite = (loadedIdentity?: AgentIdentity | null) =>
     isProcessing,
     currentThought,
     systemError,
-    
+
     // Actions
     setAutonomousMode: (enabled: boolean) => actions.toggleAutonomousMode(enabled),
     toggleAutonomy,

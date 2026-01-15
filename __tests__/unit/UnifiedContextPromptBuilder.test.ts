@@ -43,7 +43,12 @@ describe('UnifiedContextPromptBuilder', () => {
       { role: 'user', text: 'Tell me about testing' }
     ],
     silenceStart: Date.now() - 5000,
-    lastUserInteractionAt: Date.now() - 10000
+    lastUserInteractionAt: Date.now() - 10000,
+    workingMemory: {
+      activeDomain: 'LIBRARY' as const,
+      lastLibraryDocId: 'test-doc-id',
+      lastLibraryDocName: 'Test Document',
+    }
   };
 
   it('builds a prompt with core sections (reactive)', () => {

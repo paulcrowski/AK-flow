@@ -17,13 +17,48 @@
 
 | Metryka | Wartość |
 |---------|---------|
-| Rozwiązanych problemów | 21 |
-| Całkowity czas | ~48 godzin |
-| Średnia trudność | 3.9/5 |
+| Rozwiązanych problemów | 22 |
+| Całkowity czas | ~52 godzin |
+| Średnia trudność | 4.0/5 |
 | Największy przełom | FactEcho Guard (FAZA 6.0) |
 | Najdłuższy problem | Monolityczny Kernel (8h) |
 
 ---
+
+## Problem #30: Gate Desync & Domain Mismatch in User-Facing Turns
+
+**Data:** 2026-01-15
+**Trudność:** 4/5
+**Status:** ROZWIAZANY (v8.1.1 Refinement)
+
+### Objawy
+- Agent po wykonaniu narzędzia (np. READ_FILE) czasem milczał, mimo że powinien domknąć pętlę komentarzem.
+- Narzędzia world były wykonywane, ale kernel nie zawsze o tym wiedział w czasie rzeczywistym (desync `lastTool`).
+- Brak blokady przy "mismatchu" domeny (oczekiwany WORLD, wykonany LIBRARY).
+
+### Diagnoza
+- `isUserFacing` w `ExecutiveGate` nie brał pod uwagę świeżego wyniku narzędzia jako "interakcji z użytkownikiem".
+- `TOOL_ERROR` i `TOOL_RESULT` w `useCognitiveKernelLite` nie zawsze dispatchowały do kernela te same metadane co pakiety sukcesu.
+- Brak twardych reguł `DOMAIN_MISMATCH` w bramce mowy.
+
+### Rozwiązanie
+- **Refined isUserFacing**: teraz uwzględnia `Date.now() - ctx.lastTool.at < 2000` oraz `traceId` continuity.
+- **Kernel sync**: Dispatching `TOOL_RESULT` dla wszystkich stanów końcowych narzędzia (success, error, timeout).
+- **Executive Gate hardened**: 
+  - `SPEECH_REQUIRED_AFTER_TOOL_SUCCESS` dla ticków user-facing.
+  - `DOMAIN_MISMATCH` block z logowaniem `DOMAIN_MISMATCH_BLOCKED_SPEECH`.
+- **Domain Verification**: Kernel liczy `domainMatch` na podstawie `domainExpected` vs `domainActual`.
+
+### Pliki
+- src/core/kernel/reducer/handlers/toolResult.ts
+- src/core/systems/ExecutiveGate.ts
+- src/core/systems/EventLoop.ts
+- src/hooks/useCognitiveKernelLite.ts
+- src/core/trace/TraceContext.ts
+- __tests__/unit/ExecutiveGate.test.ts
+
+### Lekcja
+- Pętla użytkownika (Front-Loop) wymaga innych zasad niż pętla serwerowa (Back-Loop). Speech po narzędziu w trybie "frontowym" jest elementem kontraktu zaufania, a nie tylko mowy.
 
 ## Problem #29: Working memory niewidoczna + implicit anchors
 

@@ -35,7 +35,11 @@ export function buildWorkingMemoryBlock(ctx: UnifiedContext): string {
   }
 
   if (lastTool?.tool) {
-    lines.push(`Last tool: ${lastTool.tool} ${lastTool.ok ? 'ok' : 'fail'}`);
+    const okStr = lastTool.ok ? 'ok' : 'fail';
+    const domainMatch = lastTool.domainExpected && lastTool.domainActual
+      ? (lastTool.domainExpected === lastTool.domainActual ? ' domain-ok' : ' domain-mismatch')
+      : '';
+    lines.push(`Last tool: ${lastTool.tool} ${okStr}${domainMatch}`);
   }
 
   if (lines.length === 0) return '';

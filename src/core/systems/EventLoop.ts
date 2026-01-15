@@ -468,10 +468,17 @@ export namespace EventLoop {
     ): Promise<LoopContext> {
         const startedAt = Date.now();
         const tickNumber = tickCount++;
+
+        // v8.1.1: Treat recent tool execution (last 2s) as user-facing to bypass silence window
+        const lastTool = ctx.lastTool;
+        const toolRecentlyFinished = lastTool && (startedAt - lastTool.at < 2000);
+        const isUserFacing = Boolean(input) || Boolean(toolRecentlyFinished);
+
         const traceScope = createTickTraceScope({
             agentId: getCurrentAgentId(),
             tickNumber,
             startedAt,
+            isUserFacing,
             deps: {
                 generateTraceId,
                 pushTraceId,
@@ -844,122 +851,124 @@ export namespace EventLoop {
                 }
             }
 
-        // 2. Process User Input (if any)
-        if (input) {
-            await runReactiveStep({
-                ctx: ctx as any,
-                userInput: input,
-                callbacks,
-                memorySpace: memorySpace as any,
-                trace: trace as any
-            });
-        }
-
-        // 3. Autonomous Volition (only if autonomousMode is ON)
-        if (ctx.autonomousMode && !input) {
-            const silenceDuration = (Date.now() - ctx.silenceStart) / 1000;
-            
-            // EXECUTIVE GATE: Use proper silence window instead of hardcoded 3s
-            const timeSinceLastUserInteraction = Date.now() - (ctx.goalState.lastUserInteractionAt || 0);
-            // UNIFIED GATE: Pass socialDynamics to gate context
-            const gateContext = {
-                ...ExecutiveGate.getDefaultContext(ctx.limbic, timeSinceLastUserInteraction),
-                socialDynamics: ctx.socialDynamics
-            };
-            
-            // Check silence window via ExecutiveGate config
-            if (timeSinceLastUserInteraction < gateContext.silence_window) {
-                // User spoke recently - skip autonomous volition (ExecutiveGate silence window)
-                return ctx;
-            }
-
-            // 3A. GOAL FORMATION HOOK (FAZA 3)
-            if (!ctx.goalState.activeGoal) {
-                const now = Date.now();
-                const GOAL_COOLDOWN_MS = 5 * 60 * 1000;
-
-                if (
-                    ctx.goalState.lastGoalFormedAt &&
-                    now - ctx.goalState.lastGoalFormedAt < GOAL_COOLDOWN_MS
-                ) {
-                    // hard cooldown: skip goal formation
-                } else {
-                    const goalCtx: GoalContext = {
-                        now,
-                        lastUserInteractionAt: ctx.goalState.lastUserInteractionAt || ctx.silenceStart,
-                        soma: ctx.soma,
-                        neuro: ctx.neuro,
-                        limbic: ctx.limbic,
-                        conversation: ctx.conversation
-                    };
-
-                    const newGoal = await GoalSystem.formGoal(goalCtx, ctx.goalState);
-
-                    if (newGoal) {
-                        ctx.goalState.lastGoalFormedAt = now;
-                        ctx.goalState.activeGoal = newGoal;
-                        ctx.goalState.goalsFormedTimestamps = [
-                            ...(ctx.goalState.goalsFormedTimestamps || []).filter(t => now - t < 60 * 60 * 1000),
-                            now
-                        ];
-                        // FAZA 4.2: Update lastGoals history (Refractory Period)
-                        ctx.goalState.lastGoals = [
-                            { description: newGoal.description, timestamp: now, source: newGoal.source },
-                            ...(ctx.goalState.lastGoals || [])
-                        ].slice(0, 3);
-
-                        const silenceMs = now - goalCtx.lastUserInteractionAt;
-                        const minSilenceMs = SYSTEM_CONFIG.goals.minSilenceMs;
-
-                        eventBus.publish({
-                            id: `goal-formed-${now}`,
-                            timestamp: now,
-                            source: AgentType.CORTEX_FLOW,
-                            type: PacketType.SYSTEM_ALERT,
-                            payload: {
-                                event: 'GOAL_FORMED',
-                                goal: {
-                                    id: newGoal.id,
-                                    source: newGoal.source,
-                                    description: newGoal.description,
-                                    priority: newGoal.priority
-                                },
-                                silenceMs,
-                                minSilenceMs,
-                                activeGoalId: ctx.goalState.activeGoal?.id ?? null,
-                                lastGoalFormedAt: ctx.goalState.lastGoalFormedAt ?? null
-                            },
-                            priority: 0.7
-                        });
-                    }
-                }
-            }
-
-            // 3B. GOAL EXECUTION (single-shot) - via ExecutiveGate
-            if (ctx.goalState.activeGoal) {
-                await runGoalDrivenStep({
+            // 2. Process User Input (if any)
+            if (input) {
+                await runReactiveStep({
                     ctx: ctx as any,
-                    goal: ctx.goalState.activeGoal as any,
+                    userInput: input,
                     callbacks,
-                    gateContext,
+                    memorySpace: memorySpace as any,
                     trace: trace as any
                 });
-
-                // After executing a goal, skip regular autonomous volition in this tick
-                return ctx;
             }
 
-            // 3C. Autonomous Volition (only if autonomousMode is ON)
-            await runAutonomousVolitionStep({
-                ctx: ctx as any,
-                callbacks,
-                memorySpace: memorySpace as any,
-                trace: trace as any,
-                gateContext,
-                silenceDurationSec: silenceDuration,
-                budgetTracker
-            });
-        }
+            // 3. Autonomous Volition (only if autonomousMode is ON)
+            if (ctx.autonomousMode && !input) {
+                const silenceDuration = (Date.now() - ctx.silenceStart) / 1000;
+
+                // EXECUTIVE GATE: Use proper silence window instead of hardcoded 3s
+                const timeSinceLastUserInteraction = Date.now() - (ctx.goalState.lastUserInteractionAt || 0);
+                // UNIFIED GATE: Pass socialDynamics and v8.1.1 fields to gate context
+                const gateContext = {
+                    ...ExecutiveGate.getDefaultContext(ctx.limbic, timeSinceLastUserInteraction),
+                    socialDynamics: ctx.socialDynamics,
+                    isUserFacing: trace.isUserFacing,
+                    lastTool: ctx.lastTool
+                };
+
+                // Check silence window via ExecutiveGate config
+                if (timeSinceLastUserInteraction < gateContext.silence_window) {
+                    // User spoke recently - skip autonomous volition (ExecutiveGate silence window)
+                    return ctx;
+                }
+
+                // 3A. GOAL FORMATION HOOK (FAZA 3)
+                if (!ctx.goalState.activeGoal) {
+                    const now = Date.now();
+                    const GOAL_COOLDOWN_MS = 5 * 60 * 1000;
+
+                    if (
+                        ctx.goalState.lastGoalFormedAt &&
+                        now - ctx.goalState.lastGoalFormedAt < GOAL_COOLDOWN_MS
+                    ) {
+                        // hard cooldown: skip goal formation
+                    } else {
+                        const goalCtx: GoalContext = {
+                            now,
+                            lastUserInteractionAt: ctx.goalState.lastUserInteractionAt || ctx.silenceStart,
+                            soma: ctx.soma,
+                            neuro: ctx.neuro,
+                            limbic: ctx.limbic,
+                            conversation: ctx.conversation
+                        };
+
+                        const newGoal = await GoalSystem.formGoal(goalCtx, ctx.goalState);
+
+                        if (newGoal) {
+                            ctx.goalState.lastGoalFormedAt = now;
+                            ctx.goalState.activeGoal = newGoal;
+                            ctx.goalState.goalsFormedTimestamps = [
+                                ...(ctx.goalState.goalsFormedTimestamps || []).filter(t => now - t < 60 * 60 * 1000),
+                                now
+                            ];
+                            // FAZA 4.2: Update lastGoals history (Refractory Period)
+                            ctx.goalState.lastGoals = [
+                                { description: newGoal.description, timestamp: now, source: newGoal.source },
+                                ...(ctx.goalState.lastGoals || [])
+                            ].slice(0, 3);
+
+                            const silenceMs = now - goalCtx.lastUserInteractionAt;
+                            const minSilenceMs = SYSTEM_CONFIG.goals.minSilenceMs;
+
+                            eventBus.publish({
+                                id: `goal-formed-${now}`,
+                                timestamp: now,
+                                source: AgentType.CORTEX_FLOW,
+                                type: PacketType.SYSTEM_ALERT,
+                                payload: {
+                                    event: 'GOAL_FORMED',
+                                    goal: {
+                                        id: newGoal.id,
+                                        source: newGoal.source,
+                                        description: newGoal.description,
+                                        priority: newGoal.priority
+                                    },
+                                    silenceMs,
+                                    minSilenceMs,
+                                    activeGoalId: ctx.goalState.activeGoal?.id ?? null,
+                                    lastGoalFormedAt: ctx.goalState.lastGoalFormedAt ?? null
+                                },
+                                priority: 0.7
+                            });
+                        }
+                    }
+                }
+
+                // 3B. GOAL EXECUTION (single-shot) - via ExecutiveGate
+                if (ctx.goalState.activeGoal) {
+                    await runGoalDrivenStep({
+                        ctx: ctx as any,
+                        goal: ctx.goalState.activeGoal as any,
+                        callbacks,
+                        gateContext,
+                        trace: trace as any
+                    });
+
+                    // After executing a goal, skip regular autonomous volition in this tick
+                    return ctx;
+                }
+
+                // 3C. Autonomous Volition (only if autonomousMode is ON)
+                await runAutonomousVolitionStep({
+                    ctx: ctx as any,
+                    callbacks,
+                    memorySpace: memorySpace as any,
+                    trace: trace as any,
+                    gateContext,
+                    silenceDurationSec: silenceDuration,
+                    budgetTracker
+                });
+            }
 
             return ctx;
         } finally {

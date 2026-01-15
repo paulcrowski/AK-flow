@@ -3,6 +3,11 @@ export interface TraceContext {
   tickNumber: number;
   startedAt: number;
   agentId: string | null;
+  /** 
+   * True when tick is responding to user input (reactive) 
+   * OR continuing same traceId after retry/tool-execution (v8.1.1 continuity)
+   */
+  isUserFacing?: boolean;
 }
 
 export function generateTraceId(startedAt: number, tickNumber: number): string {

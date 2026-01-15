@@ -1,6 +1,6 @@
 # 🧠 AK-FLOW Architecture Map
 
-> **Wersja:** 6.10.8 (2026-01-13)
+> **Wersja:** 6.11.0 (2026-01-15)
 > **Cel:** Prosta mapa jak działa agent i jaki ma flow
 
 ## Archive policy
@@ -9,6 +9,16 @@
 Ten katalog jest wykluczony z kompilacji TypeScript i służy wyłącznie jako referencja do poprzednich iteracji.
 
 ---
+
+## FAZA 6.11.0: v8.1.1 Refinement - Gate & Domain (2026-01-15)
+
+**Cel:** uszczelnić Executive Gate dla interakcji z użytkownikiem i naprawić desync stanu domeny.
+
+**Mechanika:**
+- **isUserFacing**: tryb "frontowy" wymuszany przez input usera lub świeży wynik narzędzia (<2s).
+- **Domain Match**: Kernel weryfikuje czy domena z rutingu (expected) zgadza się z wykonaniem (actual).
+- **Hard Gate**: `DOMAIN_MISMATCH` blokuje mowę w trybie user-facing; `SPEECH_REQUIRED_AFTER_TOOL_SUCCESS` wymusza domknięcie pętli.
+- **Trace Continuity**: retrie i ponowne próby zachowują ten sam `traceId` dla spójności telemetrii.
 
 ## FAZA 6.10.8: Working Memory + Anchor Resolver (2026-01-13)
 
