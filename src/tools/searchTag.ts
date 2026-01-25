@@ -5,6 +5,7 @@ import type { ToolParserDeps } from './toolParser';
 import { searchInFlight, scheduleSoftTimeout } from './toolRuntime';
 import { evidenceLedger } from '../core/systems/EvidenceLedger';
 import { emitToolError, emitToolIntent, emitToolResult } from '../core/telemetry/toolContract';
+import { validateToolResult } from '../core/tools/validateToolResult';
 
 type InFlightSearchOp = {
   promise: Promise<any>;
@@ -36,15 +37,17 @@ function publishSearchResult(params: {
   synthesisLength: number;
   late: boolean;
 }) {
+  const payload = {
+    query: params.query,
+    sourcesCount: params.sourcesCount,
+    synthesisLength: params.synthesisLength,
+    late: params.late
+  };
+  validateToolResult('SEARCH', payload);
   emitToolResult(
     'SEARCH',
     params.intentId,
-    {
-      query: params.query,
-      sourcesCount: params.sourcesCount,
-      synthesisLength: params.synthesisLength,
-      late: params.late
-    },
+    payload,
     { publish: params.publish, makeId: params.makeId, priority: 0.8 }
   );
 }

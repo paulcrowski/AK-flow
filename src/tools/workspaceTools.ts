@@ -12,7 +12,8 @@ import { withTimeout } from './toolRuntime';
 import { useArtifactStore } from '../stores/artifactStore';
 import { getCognitiveState } from '../stores/cognitiveStore';
 import { eventBus } from '../core/EventBus';
-import { emitToolError, emitToolIntent, emitToolResult } from '../core/telemetry/toolContract';
+import { emitToolError, emitToolIntent, emitToolResult as emitToolResultContract } from '../core/telemetry/toolContract';
+import { validateToolResult } from '../core/tools/validateToolResult';
 import { evidenceLedger } from '../core/systems/EvidenceLedger';
 import { DEFAULT_AGENT_ID, WORLD_ROOT, getAgentFolderName, getAgentWorldRoot, isPathAllowed, normalizePath } from '../core/systems/WorldAccess';
 import { generateUUID } from '../utils/uuid';
@@ -29,6 +30,16 @@ export type WorldToolResult = {
   entries?: string[];
   error?: string;
   evidenceId?: string;
+};
+
+const emitToolResult = (
+  tool: string,
+  intentId: string,
+  payload?: Record<string, unknown>,
+  options?: { publish?: (packet: any) => void; makeId?: () => string; priority?: number }
+): void => {
+  validateToolResult(tool, payload ?? {});
+  emitToolResultContract(tool, intentId, payload, options);
 };
 
 type FsModule = typeof import('fs/promises');
@@ -791,11 +802,12 @@ export async function consumeWorkspaceTags(params: {
         const chunks = Array.isArray(res.chunks) ? res.chunks : [];
         const hasMore = chunks.length > limit;
         const visible = chunks.slice(0, limit);
-        const knownCount = hasMore ? undefined : visible.length;
+        const chunkCount = typeof res.chunkCount === 'number' ? res.chunkCount : chunks.length;
 
         emitToolResult(tool, intentId, {
           arg,
           docId: documentId,
+          chunkCount,
           shown: visible.length,
           hasMore
         }, { publish, makeId });
@@ -803,7 +815,7 @@ export async function consumeWorkspaceTags(params: {
         if (visible.length === 0) {
           emitLibraryIngestMissing({ documentId, reason: 'chunks_missing' });
           deps.addMessage('assistant', 'Brak chunkow dla tego dokumentu.', 'tool_result');
-          updateLibraryAnchor(documentId, documentName ?? undefined, knownCount);
+          updateLibraryAnchor(documentId, documentName ?? undefined, chunkCount);
           return;
         }
 
@@ -818,7 +830,7 @@ export async function consumeWorkspaceTags(params: {
 
         const text = `${countInfo}\n${summaries.join('\n')}\n\nKtory chunk? [READ_LIBRARY_CHUNK: ${documentId}#N]`;
         deps.addMessage('assistant', text, 'tool_result');
-        updateLibraryAnchor(documentId, documentName ?? undefined, knownCount);
+        updateLibraryAnchor(documentId, documentName ?? undefined, chunkCount);
         return;
       }
 
@@ -947,6 +959,10 @@ export async function consumeWorkspaceTags(params: {
           throw new Error('CHUNK_NOT_FOUND');
         }
 
+        const chunkId = String(res.chunk?.id || '').trim();
+        if (!chunkId) {
+          throw new Error('CHUNK_ID_MISSING');
+        }
         const chunkText = String(res.chunk.content || '').trim();
         evidenceLedger.record('READ_FILE', `${documentId}#${chunkIndex}`);
         const text = [
@@ -954,7 +970,13 @@ export async function consumeWorkspaceTags(params: {
           chunkText.slice(0, 8000)
         ].join('\n');
 
-        emitToolResult(tool, intentId, { arg, length: chunkText.length }, { publish, makeId });
+        emitToolResult(tool, intentId, {
+          arg,
+          docId: documentId,
+          chunkId,
+          chunkIndex,
+          length: chunkText.length
+        }, { publish, makeId });
 
         deps.addMessage('assistant', text, 'tool_result');
         updateLibraryAnchor(documentId, originalName || undefined);

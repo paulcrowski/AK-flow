@@ -163,18 +163,19 @@ export async function listLibraryDocuments(params?: {
 export async function listLibraryChunks(params: {
   documentId: string;
   limit?: number;
-}): Promise<{ ok: true; chunks: LibraryChunk[] } | { ok: false; error: string }> {
+}): Promise<{ ok: true; chunks: LibraryChunk[]; chunkCount: number | null } | { ok: false; error: string }> {
   const limit = params.limit ?? 50;
 
   const res = await supabase
     .from('library_chunks')
-    .select('id,document_id,chunk_index,start_offset,end_offset,content,summary,created_at')
+    .select('id,document_id,chunk_index,start_offset,end_offset,content,summary,created_at', { count: 'exact' })
     .eq('document_id', params.documentId)
     .order('chunk_index', { ascending: true })
     .limit(limit);
 
   if (res.error) return { ok: false, error: res.error.message };
-  return { ok: true, chunks: (res.data as LibraryChunk[]) || [] };
+  const chunkCount = typeof res.count === 'number' ? res.count : null;
+  return { ok: true, chunks: (res.data as LibraryChunk[]) || [], chunkCount };
 }
 
 export async function getLibraryChunkByIndex(params: {

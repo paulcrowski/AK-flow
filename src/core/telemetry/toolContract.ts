@@ -1,6 +1,8 @@
 import { eventBus } from '../EventBus';
 import { AgentType, PacketType } from '../../types';
 import { generateUUID } from '../../utils/uuid';
+import { SYSTEM_CONFIG } from '../config/systemConfig';
+import { validateToolResult } from '../tools/validateToolResult';
 
 export type ToolPublishFn = (packet: any) => void;
 export type ToolMakeIdFn = () => string;
@@ -10,6 +12,7 @@ export type ToolContractOptions = {
   makeId?: ToolMakeIdFn;
   source?: AgentType;
   priority?: number;
+  debugMode?: boolean;
 };
 
 export type ToolDomain = 'LIBRARY' | 'WORLD' | 'ARTIFACT';
@@ -87,6 +90,17 @@ export const emitToolResult = (
 ): void => {
   const publish = resolvePublish(options);
   const makeId = resolveMakeId(options);
+  const debugMode = options?.debugMode ?? SYSTEM_CONFIG.mainFeatures.DEBUG_MODE;
+  const candidate = payload && typeof payload === 'object' && 'result' in payload
+    ? (payload as Record<string, unknown>).result
+    : payload;
+
+  try {
+    validateToolResult(tool, candidate);
+  } catch (error) {
+    console.error(`[CONTRACT VIOLATION] ${tool}: ${(error as Error).message}`);
+    if (debugMode) throw error;
+  }
   publish({
     id: makeId(),
     timestamp: Date.now(),

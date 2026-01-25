@@ -20,6 +20,7 @@ import {
   emitToolIntent as emitToolIntentContract,
   emitToolResult as emitToolResultContract
 } from '../core/telemetry/toolContract';
+import { validateToolResult } from '../core/tools/validateToolResult';
 
 // Routing helpers: world vs artifact
 export const FILE_EXTENSIONS = /\.(md|txt|ts|js|jsx|tsx|json|yaml|yml|py|log|csv|html|css|sql)$/i;
@@ -229,8 +230,29 @@ export const createProcessOutputForTools = (deps: ToolParserDeps) => {
       return r as any;
     };
 
+    const normalizeToolPayload = (tool: string, payload: Record<string, unknown>) => {
+      const normalized = { ...payload };
+      if (typeof normalized.id === 'string' && typeof normalized.artifactId !== 'string') {
+        if (
+          tool === 'READ_ARTIFACT' ||
+          tool === 'CREATE' ||
+          tool === 'APPEND' ||
+          tool === 'REPLACE' ||
+          tool === 'PUBLISH'
+        ) {
+          normalized.artifactId = normalized.id;
+        }
+      }
+      if (typeof normalized.name === 'string' && typeof normalized.artifactName !== 'string') {
+        normalized.artifactName = normalized.name;
+      }
+      return normalized;
+    };
+
     const emitToolResult = (params: { tool: string; payload: any; intentId: string }) => {
-      emitToolResultContract(params.tool, params.intentId, params.payload, { priority: 0.8 });
+      const payload = normalizeToolPayload(params.tool, params.payload ?? {});
+      validateToolResult(params.tool, payload);
+      emitToolResultContract(params.tool, params.intentId, payload, { priority: 0.8 });
     };
 
     const emitSystemAlert = (event: string, payload: Record<string, unknown>, priority = 0.6) => {
@@ -556,7 +578,7 @@ export const createProcessOutputForTools = (deps: ToolParserDeps) => {
           ...result.later.slice(0, 50).map((t: any, i: number) => `- ${String(t?.content || t?.id || i)}`)
         ].join('\n');
 
-        emitToolResultContract(tool, intentId, { arg: documentId }, { priority: 0.8 });
+        emitToolResult({ tool, intentId, payload: { arg: documentId } });
 
         addMessage('assistant', text, 'tool_result');
       } catch (error: any) {

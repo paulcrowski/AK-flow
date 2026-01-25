@@ -7,6 +7,7 @@ import * as SomaSystem from '../core/systems/SomaSystem';
 import * as LimbicSystem from '../core/systems/LimbicSystem';
 import { VISUAL_BASE_COOLDOWN_MS } from '../core/constants';
 import { emitToolError, emitToolIntent, emitToolResult } from '../core/telemetry/toolContract';
+import { validateToolResult } from '../core/tools/validateToolResult';
 
 function findVisualizeMatch(cleanText: string): { raw: string; prompt: string } | null {
   const direct = cleanText.match(/\[VISUALIZE:\s*([\s\S]*?)\]/i);
@@ -44,14 +45,16 @@ function publishVisualResult(params: {
   perceptionLength: number;
   late: boolean;
 }) {
+  const payload = {
+    hasImage: params.hasImage,
+    perceptionLength: params.perceptionLength,
+    late: params.late
+  };
+  validateToolResult('VISUALIZE', payload);
   emitToolResult(
     'VISUALIZE',
     params.intentId,
-    {
-      hasImage: params.hasImage,
-      perceptionLength: params.perceptionLength,
-      late: params.late
-    },
+    payload,
     { publish: params.publish, makeId: params.makeId, source: AgentType.VISUAL_CORTEX, priority: 0.8 }
   );
 }

@@ -22,7 +22,8 @@ import { createPendingAction, setPendingAction, tryResolvePendingAction } from '
 import { detectActionableIntent, isImplicitReference, isRecognizableTarget, looksLikeLibraryAnchor, resolveImplicitReference } from './reactiveStep.helpers';
 import { normalizeRoutingInput } from '../../../tools/toolParser';
 import { evidenceLedger } from '../EvidenceLedger';
-import { emitToolError, emitToolIntent, emitToolResult } from '../../telemetry/toolContract';
+import { emitToolError, emitToolIntent, emitToolResult as emitToolResultContract } from '../../telemetry/toolContract';
+import { validateToolResult } from '../../tools/validateToolResult';
 
 export { detectActionableIntentForTesting, detectFileIntentForTesting } from './reactiveStep.helpers';
 
@@ -251,6 +252,24 @@ export async function runReactiveStep(input: {
       };
       const toolResultOptions = { priority: 0.8 };
       const toolErrorOptions = { priority: 0.9 };
+      const emitToolResult = (
+        tool: string,
+        intentId: string,
+        payload?: Record<string, unknown>,
+        options: { priority: number } = toolResultOptions
+      ) => {
+        const normalized: Record<string, unknown> = { ...(payload ?? {}) };
+        if (typeof normalized.id === 'string' && typeof normalized.artifactId !== 'string') {
+          if (tool === 'CREATE' || tool === 'APPEND' || tool === 'REPLACE' || tool === 'READ_ARTIFACT') {
+            normalized.artifactId = normalized.id;
+          }
+        }
+        if (typeof normalized.name === 'string' && typeof normalized.artifactName !== 'string') {
+          normalized.artifactName = normalized.name;
+        }
+        validateToolResult(tool, normalized);
+        emitToolResultContract(tool, intentId, normalized, options);
+      };
 
       const updateLibraryAnchor = (
         documentId: string,
@@ -485,12 +504,16 @@ export async function runReactiveStep(input: {
             throw new Error('CHUNK_NOT_FOUND');
           }
 
+          const chunkId = String(res.chunk?.id || '').trim();
+          if (!chunkId) {
+            throw new Error('CHUNK_ID_MISSING');
+          }
           const chunkText = String(res.chunk.content || '').trim();
           evidenceLedger.record('READ_FILE', `${documentId}#${chunkIndex}`);
           emitToolResult(
             'READ_LIBRARY_CHUNK',
             intentId,
-            { docId: documentId, chunkIndex, length: chunkText.length },
+            { docId: documentId, chunkId, chunkIndex, length: chunkText.length },
             toolResultOptions
           );
           updateLibraryAnchor(documentId, docHint?.original_name);
@@ -523,11 +546,12 @@ export async function runReactiveStep(input: {
           }
 
           const chunks = Array.isArray(res.chunks) ? res.chunks : [];
+          const chunkCount = typeof res.chunkCount === 'number' ? res.chunkCount : chunks.length;
           if (chunks.length === 0) {
             emitToolResult(
               'LIST_LIBRARY_CHUNKS',
               intentId,
-              { docId: documentId, shown: 0, hasMore: false },
+              { docId: documentId, chunkCount, shown: 0, hasMore: false },
               toolResultOptions
             );
             return { text: 'Brak chunkow dla tego dokumentu.', shownCount: 0, hasMore: false };
@@ -545,13 +569,13 @@ export async function runReactiveStep(input: {
             intentId,
             {
               docId: documentId,
+              chunkCount,
               shown: visible.length,
               hasMore
             },
             toolResultOptions
           );
-          const knownCount = hasMore ? undefined : visible.length;
-          updateLibraryAnchor(documentId, undefined, knownCount);
+          updateLibraryAnchor(documentId, undefined, chunkCount);
 
           const countInfo = hasMore
             ? `Pokazuje pierwsze ${limit} chunkow (jest wiecej):`
