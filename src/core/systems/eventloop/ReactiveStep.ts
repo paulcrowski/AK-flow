@@ -343,6 +343,50 @@ export async function runReactiveStep(input: {
         }
       };
 
+      const ensureCursor = () => {
+        if (!ctx.cursor) ctx.cursor = {};
+        return ctx.cursor;
+      };
+
+      const setLibraryFocus = (documentId: string, documentName?: string | null, chunkCount?: number | null) => {
+        ctx.focus = { domain: 'LIBRARY', id: documentId, label: documentName ?? null };
+        if (typeof chunkCount === 'number' && chunkCount > 0) {
+          ctx.cursor = { chunkCount, chunkIndex: 0 };
+        } else {
+          ctx.cursor = {};
+        }
+      };
+
+      const updateCursorForChunkList = (documentId: string, chunkCount?: number | null) => {
+        if (ctx.focus?.domain !== 'LIBRARY' || ctx.focus.id !== documentId) return;
+        const cursor = ensureCursor();
+        if (typeof chunkCount === 'number') {
+          cursor.chunkCount = chunkCount;
+          if (cursor.chunkIndex === undefined && chunkCount > 0) {
+            cursor.chunkIndex = 0;
+          }
+        }
+        cursor.chunksKnownForDocId = documentId;
+        ctx.cursor = cursor;
+      };
+
+      const updateCursorForChunk = (documentId: string, chunkId?: string | null, chunkIndex?: number) => {
+        if (ctx.focus?.domain !== 'LIBRARY') return;
+        if (documentId && ctx.focus.id !== documentId) return;
+        const cursor = ensureCursor();
+        if (chunkId) cursor.lastChunkId = chunkId;
+        if (typeof chunkIndex === 'number') cursor.chunkIndex = chunkIndex;
+        ctx.cursor = cursor;
+      };
+
+      const shouldFollowUpChunks = (documentId: string) => {
+        const cursor = ensureCursor();
+        return ctx.focus?.domain === 'LIBRARY' &&
+          ctx.focus.id === documentId &&
+          cursor.chunkCount === undefined &&
+          cursor.chunksKnownForDocId !== documentId;
+      };
+
       const shouldClearAnchorForError = (error: unknown) => {
         const message = String(error || '').toUpperCase();
         return (
@@ -364,6 +408,10 @@ export async function runReactiveStep(input: {
         if (ctx.activeDomain === 'LIBRARY') {
           ctx.activeDomain = null;
         }
+        if (ctx.focus?.domain === 'LIBRARY' && ctx.focus.id === documentId) {
+          ctx.focus = { domain: null, id: null, label: null };
+          ctx.cursor = {};
+        }
         try {
           const state = getCognitiveState();
           if (state?.hydrate) {
@@ -374,6 +422,10 @@ export async function runReactiveStep(input: {
             };
             if (state.activeDomain === 'LIBRARY') {
               patch.activeDomain = null;
+            }
+            if (state.focus?.domain === 'LIBRARY' && state.focus.id === documentId) {
+              patch.focus = { domain: null, id: null, label: null };
+              patch.cursor = {};
             }
             state.hydrate(patch);
           }
@@ -467,6 +519,14 @@ export async function runReactiveStep(input: {
             toolResultOptions
           );
           updateLibraryAnchor(documentId, originalName);
+          setLibraryFocus(documentId, originalName);
+
+          if (shouldFollowUpChunks(documentId)) {
+            const cursor = ensureCursor();
+            cursor.chunksKnownForDocId = documentId;
+            ctx.cursor = cursor;
+            await listLibraryChunkSummaries(documentId);
+          }
 
           publishReactiveSpeech({
             ctx,
@@ -517,6 +577,7 @@ export async function runReactiveStep(input: {
             toolResultOptions
           );
           updateLibraryAnchor(documentId, docHint?.original_name);
+          updateCursorForChunk(documentId, chunkId, chunkIndex);
           publishReactiveSpeech({
             ctx,
             trace,
@@ -554,6 +615,8 @@ export async function runReactiveStep(input: {
               { docId: documentId, chunkCount, shown: 0, hasMore: false },
               toolResultOptions
             );
+            updateLibraryAnchor(documentId, undefined, chunkCount);
+            updateCursorForChunkList(documentId, chunkCount);
             return { text: 'Brak chunkow dla tego dokumentu.', shownCount: 0, hasMore: false };
           }
 
@@ -576,6 +639,7 @@ export async function runReactiveStep(input: {
             toolResultOptions
           );
           updateLibraryAnchor(documentId, undefined, chunkCount);
+          updateCursorForChunkList(documentId, chunkCount);
 
           const countInfo = hasMore
             ? `Pokazuje pierwsze ${limit} chunkow (jest wiecej):`
