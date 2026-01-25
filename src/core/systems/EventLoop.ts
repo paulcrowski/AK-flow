@@ -161,6 +161,8 @@ export namespace EventLoop {
                     lastWorldPath: ctx.lastWorldPath ?? null,
                     lastArtifactId: ctx.lastArtifactId ?? null,
                     lastArtifactName: ctx.lastArtifactName ?? null,
+                    focus: ctx.focus ?? null,
+                    cursor: ctx.cursor ?? null,
                     activeDomain: ctx.activeDomain ?? null,
                     lastTool: ctx.lastTool ?? null
                 },

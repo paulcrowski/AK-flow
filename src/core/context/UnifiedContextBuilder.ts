@@ -14,7 +14,7 @@
  */
 
 import type { LimbicState, SomaState, NeurotransmitterState, TraitVector, GoalState } from '../../types';
-import type { SocialDynamics } from '../kernel/types';
+import type { SocialDynamics, Focus, Cursor } from '../kernel/types';
 
 /**
  * Minimal conversation turn - compatible with both CortexSystem and kernel types
@@ -119,6 +119,8 @@ export interface WorkingMemory {
   lastWorldPath?: string | null;
   lastArtifactId?: string | null;
   lastArtifactName?: string | null;
+  focus?: Focus | null;
+  cursor?: Cursor | null;
   activeDomain?: 'WORLD' | 'LIBRARY' | 'ARTIFACT' | null;
   lastTool?: {
     tool: string;

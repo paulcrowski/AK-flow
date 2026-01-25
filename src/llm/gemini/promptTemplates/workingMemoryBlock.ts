@@ -1,10 +1,39 @@
 import type { UnifiedContext } from '../../../core/context';
 import { PromptComposer } from '../PromptComposer';
+import { SYSTEM_CONFIG } from '../../../core/config/systemConfig';
+
+function buildFocusLine(memory?: UnifiedContext['workingMemory']): string {
+  const focus = memory?.focus;
+  const cursor = memory?.cursor;
+  if (!focus?.domain) return 'Focus: (none)';
+
+  const debugMode = SYSTEM_CONFIG.mainFeatures.DEBUG_MODE;
+  const idDisplay = debugMode ? focus.id : `${focus.id?.slice(0, 8)}...`;
+
+  let line = `Focus: ${focus.domain}`;
+  if (focus.label) line += ` "${focus.label}"`;
+  if (focus.id) line += ` (id=${idDisplay})`;
+
+  if (focus.domain === 'LIBRARY') {
+    if (cursor?.chunkCount !== undefined) line += ` chunks=${cursor.chunkCount}`;
+    if (cursor?.chunkIndex !== undefined) line += ` idx=${cursor.chunkIndex}`;
+    if (cursor?.lastChunkId) {
+      const chunkDisplay = debugMode
+        ? cursor.lastChunkId
+        : `${cursor.lastChunkId.slice(0, 8)}...`;
+      line += ` last=${chunkDisplay}`;
+    }
+  }
+
+  return line;
+}
 
 export function buildWorkingMemoryBlock(ctx: UnifiedContext): string {
   const memory = ctx.workingMemory;
   const lines: string[] = [];
   if (!memory) return '';
+
+  lines.push(buildFocusLine(memory));
 
   const libId = memory.lastLibraryDocId ?? null;
   const libName = memory.lastLibraryDocName ?? null;

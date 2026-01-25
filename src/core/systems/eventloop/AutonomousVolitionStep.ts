@@ -1,6 +1,6 @@
 import { AgentType, PacketType, type TraitVector } from '../../../types';
 import type { LimbicState, NeurotransmitterState, SomaState, GoalState } from '../../../types';
-import type { SocialDynamics } from '../../kernel/types';
+import type { SocialDynamics, Focus, Cursor } from '../../kernel/types';
 import { eventBus } from '../../EventBus';
 import { SYSTEM_CONFIG } from '../../config/systemConfig';
 import { isMainFeatureEnabled } from '../../config/featureFlags';
@@ -60,6 +60,8 @@ export type AutonomousVolitionLoopContext = {
   lastLibraryDocId?: string | null;
   lastLibraryDocName?: string | null;
   lastLibraryDocChunkCount?: number | null;
+  focus?: Focus | null;
+  cursor?: Cursor | null;
   lastWorldPath?: string | null;
   lastArtifactId?: string | null;
   lastArtifactName?: string | null;
@@ -331,6 +333,8 @@ export async function runAutonomousVolitionStep(input: {
       lastWorldPath: ctx.lastWorldPath ?? null,
       lastArtifactId: ctx.lastArtifactId ?? null,
       lastArtifactName: ctx.lastArtifactName ?? null,
+      focus: ctx.focus ?? null,
+      cursor: ctx.cursor ?? null,
       activeDomain: ctx.activeDomain ?? null,
       lastTool: ctx.lastTool ?? null
     },
