@@ -522,9 +522,6 @@ export async function runReactiveStep(input: {
           setLibraryFocus(documentId, originalName);
 
           if (shouldFollowUpChunks(documentId)) {
-            const cursor = ensureCursor();
-            cursor.chunksKnownForDocId = documentId;
-            ctx.cursor = cursor;
             await listLibraryChunkSummaries(documentId);
           }
 
