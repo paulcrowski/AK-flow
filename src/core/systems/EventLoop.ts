@@ -6,7 +6,7 @@
  */
 
 import { LimbicState, SomaState, NeurotransmitterState, AgentType, PacketType, GoalState, Goal, TraitVector } from '../../types';
-import type { SocialDynamics } from '../kernel/types';
+import type { SocialDynamics, Focus, Cursor } from '../kernel/types';
 import { LimbicSystem } from './LimbicSystem';
 import { CortexSystem, ConversationTurn } from './CortexSystem';
 import type { CortexSystem as CortexSystemNS } from './CortexSystem';
@@ -68,11 +68,13 @@ export namespace EventLoop {
         limbic: LimbicState;
         neuro: NeurotransmitterState; // NEW: Chemical state
         conversation: ConversationTurn[];
-        lastLibraryDocId?: string | null;
-        lastLibraryDocName?: string | null;
-        lastLibraryDocChunkCount?: number | null;
-        lastWorldPath?: string | null;
-        lastArtifactId?: string | null;
+    lastLibraryDocId?: string | null;
+    lastLibraryDocName?: string | null;
+    lastLibraryDocChunkCount?: number | null;
+    focus?: Focus;
+    cursor?: Cursor;
+    lastWorldPath?: string | null;
+    lastArtifactId?: string | null;
         lastArtifactName?: string | null;
         activeDomain?: 'WORLD' | 'LIBRARY' | 'ARTIFACT' | null;
         lastTool?: { tool: string; ok: boolean; at: number } | null;

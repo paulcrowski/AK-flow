@@ -49,6 +49,19 @@ export interface WorkingSet {
   updatedAt: number;
 }
 
+export interface Focus {
+  domain: 'LIBRARY' | 'WORLD' | 'ARTIFACT' | null;
+  id: string | null;
+  label: string | null;
+}
+
+export interface Cursor {
+  chunkCount?: number;
+  chunkIndex?: number;
+  lastChunkId?: string;
+  chunksKnownForDocId?: string;
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // KERNEL STATE - Immutable snapshot of cognitive system
 // ═══════════════════════════════════════════════════════════════════════════
@@ -88,6 +101,10 @@ export interface KernelState {
 
   // Conversation history (bounded, persists in state machine)
   conversation: ConversationTurn[];
+
+  // Focus & cursor (primary anchors)
+  focus: Focus;
+  cursor: Cursor;
 
   // Library anchor (last accessed document)
   lastLibraryDocId: string | null;

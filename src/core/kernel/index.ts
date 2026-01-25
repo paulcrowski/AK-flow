@@ -13,6 +13,8 @@ export type {
   KernelOutput,
   KernelOutputType,
   KernelReducerResult,
+  Focus,
+  Cursor,
   WorkingSet,
   WorkingSetStep,
   TickPayload,

@@ -31,6 +31,8 @@ describe('KernelEngine', () => {
       expect(state.autonomousMode).toBe(false);
       expect(state.poeticMode).toBe(false);
       expect(state.chemistryEnabled).toBe(true);
+      expect(state.focus).toEqual({ domain: null, id: null, label: null });
+      expect(state.cursor).toEqual({});
     });
     
     it('should accept partial initial state overrides', () => {

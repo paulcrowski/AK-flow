@@ -119,6 +119,10 @@ export const createInitialKernelState = (overrides?: Partial<KernelState>): Kern
     // Conversation (bounded to 50 turns)
     conversation: [],
 
+    // Focus & cursor (primary anchors)
+    focus: { domain: null, id: null, label: null },
+    cursor: {},
+
     // Library anchor
     lastLibraryDocId: null,
     lastLibraryDocName: null,
