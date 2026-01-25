@@ -19,7 +19,7 @@ import { getCurrentAgentId } from '../../../services/supabase';
 import { getCognitiveState } from '../../../stores/cognitiveStore';
 import type { PendingAction, PendingActionEvent, ResolveDependencies } from './pending';
 import { createPendingAction, setPendingAction, tryResolvePendingAction } from './pending';
-import { detectActionableIntent, isImplicitReference, isRecognizableTarget, looksLikeLibraryAnchor, resolveImplicitReference } from './reactiveStep.helpers';
+import { detectActionableIntent, isImplicitReference, isRecognizableTarget, looksLikeLibraryAnchor, needsLibraryChunks, resolveImplicitReference } from './reactiveStep.helpers';
 import { normalizeRoutingInput } from '../../../tools/toolParser';
 import { evidenceLedger } from '../EvidenceLedger';
 import { emitToolError, emitToolIntent, emitToolResult as emitToolResultContract } from '../../telemetry/toolContract';
@@ -379,14 +379,6 @@ export async function runReactiveStep(input: {
         ctx.cursor = cursor;
       };
 
-      const shouldFollowUpChunks = (documentId: string) => {
-        const cursor = ensureCursor();
-        return ctx.focus?.domain === 'LIBRARY' &&
-          ctx.focus.id === documentId &&
-          cursor.chunkCount === undefined &&
-          cursor.chunksKnownForDocId !== documentId;
-      };
-
       const shouldClearAnchorForError = (error: unknown) => {
         const message = String(error || '').toUpperCase();
         return (
@@ -521,7 +513,7 @@ export async function runReactiveStep(input: {
           updateLibraryAnchor(documentId, originalName);
           setLibraryFocus(documentId, originalName);
 
-          if (shouldFollowUpChunks(documentId)) {
+          if (needsLibraryChunks({ focus: ctx.focus, cursor: ctx.cursor, docId: documentId })) {
             await listLibraryChunkSummaries(documentId);
           }
 

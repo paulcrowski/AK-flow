@@ -4,7 +4,7 @@ import { generateUUID } from '../../../utils/uuid';
 import { detectFuzzyMismatch } from '../../utils/fuzzyMatch';
 import { getCurrentAgentId } from '@services/supabase';
 import { getWorldDirectorySelection } from '@tools/worldDirectoryAccess';
-import type { Focus } from '../../kernel/types';
+import type { Focus, Cursor } from '../../kernel/types';
 import {
   hasWorldIntent,
   looksLikeArtifactRef,
@@ -438,6 +438,18 @@ export function resolveImplicitReference(
   }
 
   return { type: null, id: null, confidence: 0 };
+}
+
+export function needsLibraryChunks(params: {
+  focus?: Focus | null;
+  cursor?: Cursor | null;
+  docId: string;
+}): boolean {
+  const cursor = params.cursor ?? {};
+  return params.focus?.domain === 'LIBRARY' &&
+    params.focus.id === params.docId &&
+    cursor.chunkCount === undefined &&
+    cursor.chunksKnownForDocId !== params.docId;
 }
 
 function detectReadIntent(ctx: IntentInput, hasWorldAccess: boolean): ActionFirstResult | null {
