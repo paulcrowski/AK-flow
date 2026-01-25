@@ -1,6 +1,6 @@
 # AK-FLOW: Cognitive Agent Architecture Manifest
-**System Version:** 6.10.8 (Working Memory + Anchor Resolver)  
-**Last Updated:** 2026-01-13  
+**System Version:** 6.11.1 (v8.2: Focus + Tool Contracts + Deterministic Follow-ups)  
+**Last Updated:** 2026-01-25  
 **Architecture Type:** Active Inference (Friston) + Global Workspace Theory + Multi-Modal RAG + **Stateless Inference Engine**  
 **Status:** Autonomous / Stateful / Modular / Self-Aware / Goal-Driven / Personality-Driven / **Emergent Identity**
 
@@ -19,8 +19,8 @@ We reject the "One True Agent" fallacy. The agent is a **flow of intention** tha
 ### 2. The Silicon Advantage
 We embrace the artificial nature as a feature, not a bug.
 # AK-FLOW: Cognitive Agent Architecture Manifest
-**System Version:** 6.11.0 (v8.1.1: Gate & Domain Refined)  
-**Last Updated:** 2026-01-15  
+**System Version:** 6.11.1 (v8.2: Focus + Tool Contracts + Deterministic Follow-ups)  
+**Last Updated:** 2026-01-25  
 **Architecture Type:** Active Inference (Friston) + Global Workspace Theory + Multi-Modal RAG + **Stateless Inference Engine**  
 **Status:** Autonomous / Stateful / Modular / Self-Aware / Goal-Driven / Personality-Driven / **Emergent Identity**
 
@@ -48,6 +48,29 @@ We embrace the artificial nature as a feature, not a bug.
 - **Measurable Soul:** Emotions and "vibes" are allowed, but they must map to system metrics (Energy, Dopamine), not just literary roleplay.
 
 ---
+
+## What's New in V6.11.1 (2026-01-25)
+
+### v8.2 Focus + Tool Contracts + Deterministic Follow-ups
+
+**Goal:** make library focus deterministic, enforce tool contracts centrally, and prevent duplicate follow-ups.
+
+**Key changes:**
+- Tool contract validation moved to a map with forward-compatible warnings; emitter keeps safety-net logs.
+- Kernel now owns focus/cursor updates for library/world/artifact tool results and clears on matched tool errors.
+- Library reference resolver uses focus; deterministic needsChunks guard (AND) prevents double follow-ups.
+- Working memory prints focus and cursor details for library reads.
+
+**Configuration (Single Source):**
+- No config changes.
+
+**Tests:**
+- `npm test -- __tests__/unit/ToolContractValidation.test.ts`
+- `npm test -- __tests__/kernel-engine.test.ts`
+- `npm test -- __tests__/unit/LibraryAnchorResolver.test.ts`
+- `npm test -- __tests__/unit/decisionEngine.test.ts`
+- `npm test -- __tests__/unit/focus.unit.test.ts __tests__/unit/needsLibraryChunks.test.ts`
+- `npm run build` not rerun.
 
 ## What's New in V6.10.8 (2026-01-13)
 

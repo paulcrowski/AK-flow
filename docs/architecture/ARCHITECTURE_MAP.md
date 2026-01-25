@@ -1,6 +1,6 @@
 # 🧠 AK-FLOW Architecture Map
 
-> **Wersja:** 6.11.0 (2026-01-15)
+> **Wersja:** 6.11.1 (2026-01-25)
 > **Cel:** Prosta mapa jak działa agent i jaki ma flow
 
 ## Archive policy
@@ -9,6 +9,15 @@
 Ten katalog jest wykluczony z kompilacji TypeScript i służy wyłącznie jako referencja do poprzednich iteracji.
 
 ---
+
+## FAZA 6.11.1: v8.2 Focus + Tool Contracts + Deterministic Follow-ups (2026-01-25)
+
+**Cel:** ustabilizowac focus/cursor w kernelu i deterministyczne follow-upy dla biblioteki.
+
+**Mechanika:**
+- Tool contract validation jako mapa + warning dla nieznanych tooli.
+- Focus/cursor w KernelState, match checks dla LIST/READ chunk i czyszczenie po errorach.
+- Resolver uzywa focus; needsChunks guard (AND) z backstopem chunksKnownForDocId; focus widoczny w working memory.
 
 ## FAZA 6.11.0: v8.1.1 Refinement - Gate & Domain (2026-01-15)
 

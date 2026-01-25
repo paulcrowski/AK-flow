@@ -1,6 +1,7 @@
 {
   "version": "1.1.0",
-  "lastModified": "2026-01-15T13:45:00.000Z",
+  "lastUpdated": "2026-01-25T20:50:27.000Z",
+  "lastModified": "2026-01-25T20:50:27.000Z",
   "modifiedBy": "CODEX",
   "tasks": [
     {
@@ -740,6 +741,17 @@
     }
   ],
   "notes": [
+    {
+      "id": "note-20260125-205027",
+      "title": "Daily Close: 2026-01-25",
+      "content": "DONE: v8.2 focus/cursor in kernel, tool contract map validation, deterministic library follow-ups, focus line in working memory. VERIFY: targeted npm test runs for tool contracts, kernel-engine, library anchor resolver, decisionEngine, focus/needsChunks. BUILD: not rerun. NEXT: run full npm test/build, wiring tests, and manual UI check for library focus flow.",
+      "category": "INSIGHT",
+      "tags": [
+        "daily_close"
+      ],
+      "createdAt": "2026-01-25T20:50:27.000Z",
+      "updatedAt": "2026-01-25T20:50:27.000Z"
+    },
     {
       "id": "note-1768307053864-7063eu2ny",
       "title": "Istota 2026",
