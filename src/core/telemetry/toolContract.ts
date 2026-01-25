@@ -12,6 +12,46 @@ export type ToolContractOptions = {
   priority?: number;
 };
 
+export type ToolDomain = 'LIBRARY' | 'WORLD' | 'ARTIFACT';
+
+export interface ToolResultNormalized {
+  type: 'TOOL_RESULT';
+  intentId: string;
+  traceId?: string;
+  tool: string;
+  ok: true;
+  domainActual: ToolDomain | 'UNKNOWN';
+  domainExpected: ToolDomain | 'UNKNOWN';
+  result: {
+    docId?: string;
+    docName?: string;
+    chunkCount?: number;
+    chunkId?: string;
+    chunkIndex?: number;
+    path?: string;
+    artifactId?: string;
+    artifactName?: string;
+  };
+}
+
+export interface ToolErrorNormalized {
+  type: 'TOOL_ERROR';
+  intentId: string;
+  traceId?: string;
+  tool: string;
+  ok: false;
+  domainActual: ToolDomain | 'UNKNOWN';
+  domainExpected: ToolDomain | 'UNKNOWN';
+  error: {
+    code: string;
+    message?: string;
+    docId?: string;
+    path?: string;
+    artifactId?: string;
+  };
+  echoArgs?: Record<string, unknown>;
+}
+
 const defaultPublish = (packet: any) => eventBus.publish(packet);
 const defaultMakeId = () => generateUUID();
 
