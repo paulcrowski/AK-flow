@@ -519,12 +519,12 @@ export const useCognitiveKernelLite = (loadedIdentity?: AgentIdentity | null) =>
       setLimbicState((prev) => applyActionFeedback({ success: false, tool }, prev));
 
       actions.dispatch({
-        type: 'TOOL_RESULT',
+        type: 'TOOL_ERROR',
         timestamp: packet.timestamp || Date.now(),
         payload: {
-          success: false,
           tool,
-          result: packet.payload,
+          error: String(packet.payload?.error || ''),
+          payload: packet.payload,
           intentId: packet.payload?.intentId as string | undefined
         }
       });

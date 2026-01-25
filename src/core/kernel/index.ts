@@ -21,6 +21,7 @@ export type {
   UserInputPayload,
   AgentSpokePayload,
   ToolResultPayload,
+  ToolErrorPayload,
   MoodShiftPayload,
   NeuroUpdatePayload,
   StateOverridePayload,

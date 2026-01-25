@@ -136,6 +136,7 @@ export type KernelEventType =
   | 'USER_INPUT'              // User sent message
   | 'AGENT_SPOKE'             // Agent produced speech
   | 'TOOL_RESULT'             // External tool returned result
+  | 'TOOL_ERROR'              // External tool returned error
   | 'ROUTING_DECISION'        // Router decided domain
   | 'SLEEP_START'             // Enter sleep mode
   | 'SLEEP_END'               // Wake up
@@ -172,6 +173,7 @@ export type KernelEventPayload =
   | UserInputPayload
   | AgentSpokePayload
   | ToolResultPayload
+  | ToolErrorPayload
   | RoutingDecisionPayload
   | MoodShiftPayload
   | NeuroUpdatePayload
@@ -203,6 +205,15 @@ export interface ToolResultPayload {
   tool: string;
   result?: any;
   intentId?: string;
+  domainExpected?: 'WORLD' | 'LIBRARY' | 'ARTIFACT' | null;
+  domainActual?: 'WORLD' | 'LIBRARY' | 'ARTIFACT' | null;
+}
+
+export interface ToolErrorPayload {
+  tool: string;
+  error?: string;
+  intentId?: string;
+  payload?: Record<string, unknown>;
   domainExpected?: 'WORLD' | 'LIBRARY' | 'ARTIFACT' | null;
   domainActual?: 'WORLD' | 'LIBRARY' | 'ARTIFACT' | null;
 }

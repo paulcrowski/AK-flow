@@ -21,6 +21,7 @@ import {
   handleToggleChemistry,
   handleTogglePoetic,
   handleToolResult,
+  handleToolError,
   handleUserInput,
   handleWorkingSetAdvance,
   handleWorkingSetClear,
@@ -42,6 +43,9 @@ export function kernelReducer(state: KernelState, event: KernelEvent): KernelRed
 
     case 'TOOL_RESULT':
       return handleToolResult(state, event, outputs);
+
+    case 'TOOL_ERROR':
+      return handleToolError(state, event, outputs);
 
     case 'SLEEP_START':
       return handleSleepStart(state, event, outputs);

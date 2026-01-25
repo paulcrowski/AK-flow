@@ -2,6 +2,7 @@ import { describe, expect, test } from 'vitest';
 import type { KernelEvent, KernelOutput } from '@core/kernel';
 import { createInitialKernelState } from '@core/kernel';
 import { handleToolResult } from '@core/kernel/reducer/handlers/toolResult';
+import { handleToolError } from '@core/kernel/reducer/handlers/toolError';
 
 describe('Focus reducer - unit', () => {
   test('READ_LIBRARY_DOC sets focus and resets cursor', () => {
@@ -68,5 +69,35 @@ describe('Focus reducer - unit', () => {
 
     expect(nextState.cursor.lastChunkId).toBe('chunk-3');
     expect(nextState.cursor.chunkIndex).toBe(3);
+  });
+
+  test('TOOL_ERROR clears library focus on NOT_FOUND', () => {
+    const state = createInitialKernelState({
+      focus: { domain: 'LIBRARY', id: 'doc-1', label: 'Book A' },
+      cursor: { chunkCount: 4, chunkIndex: 1, lastChunkId: 'chunk-1', chunksKnownForDocId: 'doc-1' },
+      lastLibraryDocId: 'doc-1',
+      lastLibraryDocName: 'Book A',
+      lastLibraryDocChunkCount: 4,
+      activeDomain: 'LIBRARY'
+    });
+    const outputs: KernelOutput[] = [];
+    const event: KernelEvent = {
+      type: 'TOOL_ERROR',
+      timestamp: Date.now(),
+      payload: {
+        tool: 'READ_LIBRARY_DOC',
+        error: 'NOT_FOUND',
+        payload: { arg: 'doc-1' }
+      }
+    };
+
+    const { nextState } = handleToolError(state, event, outputs);
+
+    expect(nextState.focus).toEqual({ domain: null, id: null, label: null });
+    expect(nextState.cursor).toEqual({});
+    expect(nextState.lastLibraryDocId).toBeNull();
+    expect(nextState.lastLibraryDocName).toBeNull();
+    expect(nextState.lastLibraryDocChunkCount).toBeNull();
+    expect(nextState.activeDomain).toBeNull();
   });
 });

@@ -2,6 +2,7 @@ export { handleTick } from './tick';
 export { handleUserInput } from './userInput';
 export { handleAgentSpoke } from './agentSpoke';
 export { handleToolResult } from './toolResult';
+export { handleToolError } from './toolError';
 export { handleSleepStart, handleSleepEnd } from './sleep';
 export { handleMoodShift, handleNeuroUpdate } from './moodNeuro';
 export { handleToggleAutonomy, handleToggleChemistry, handleTogglePoetic } from './toggles';
