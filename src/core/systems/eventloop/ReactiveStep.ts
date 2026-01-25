@@ -602,6 +602,7 @@ export async function runReactiveStep(input: {
       const handleLibraryRead = async (rawTarget?: string, anchorOnly?: boolean) => {
         const chunkRequest = wantsChunks(rawTarget || userInput);
         const resolved = resolveImplicitReference(userInput, {
+          focus: ctx.focus,
           lastLibraryDocId: ctx.lastLibraryDocId,
           lastWorldPath: ctx.lastWorldPath,
           lastArtifactId: ctx.lastArtifactId

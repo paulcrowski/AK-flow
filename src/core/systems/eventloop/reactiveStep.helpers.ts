@@ -4,6 +4,7 @@ import { generateUUID } from '../../../utils/uuid';
 import { detectFuzzyMismatch } from '../../utils/fuzzyMatch';
 import { getCurrentAgentId } from '@services/supabase';
 import { getWorldDirectorySelection } from '@tools/worldDirectoryAccess';
+import type { Focus } from '../../kernel/types';
 import {
   hasWorldIntent,
   looksLikeArtifactRef,
@@ -12,6 +13,7 @@ import {
   normalizeRoutingInput,
   routeDomain
 } from '@tools/toolParser';
+import { resolveLibraryReference } from '../resolver/libraryResolver';
 
 type ActionFirstResult = {
   // No intent uses null at the detector level (not { handled: false }).
@@ -342,6 +344,7 @@ export function resolveImplicitReference(
     lastLibraryDocId?: string | null;
     lastWorldPath?: string | null;
     lastArtifactId?: string | null;
+    focus?: Focus | null;
   }
 ): ResolvedReference {
   const raw = String(userInput || '');
@@ -389,26 +392,47 @@ export function resolveImplicitReference(
     /\bw\s+tym\s+(pliku|artefakcie)\b/
   ];
 
-  if (state.lastLibraryDocId) {
+  const focusDomain = state.focus?.domain ?? null;
+  const libraryAnchorId =
+    focusDomain === 'LIBRARY'
+      ? state.focus?.id ?? null
+      : focusDomain
+        ? null
+        : state.lastLibraryDocId ?? null;
+  const worldAnchorId =
+    focusDomain === 'WORLD'
+      ? state.focus?.id ?? null
+      : state.lastWorldPath ?? null;
+  const artifactAnchorId =
+    focusDomain === 'ARTIFACT'
+      ? state.focus?.id ?? null
+      : state.lastArtifactId ?? null;
+
+  const libraryResolution = resolveLibraryReference({ focus: state.focus ?? null }, raw);
+  if (libraryResolution.resolved) {
+    return { type: 'library_doc', id: libraryResolution.docId, confidence: 0.95 };
+  }
+
+  if (libraryAnchorId) {
     for (const pattern of libraryPatterns) {
       if (pattern.test(normalized)) {
-        return { type: 'library_doc', id: state.lastLibraryDocId, confidence: 0.9 };
+        return { type: 'library_doc', id: libraryAnchorId, confidence: 0.9 };
       }
     }
   }
 
-  if (state.lastWorldPath) {
+  if (worldAnchorId) {
     for (const pattern of worldPatterns) {
       if (pattern.test(normalized)) {
-        return { type: 'world_path', id: state.lastWorldPath, confidence: 0.85 };
+        return { type: 'world_path', id: worldAnchorId, confidence: 0.85 };
       }
     }
   }
 
-  if (state.lastArtifactId) {
+  if (artifactAnchorId) {
     for (const pattern of artifactPatterns) {
       if (pattern.test(normalized)) {
-        return { type: 'artifact', id: state.lastArtifactId, confidence: 0.85 };
+        return { type: 'artifact', id: artifactAnchorId, confidence: 0.85 };
       }
     }
   }

@@ -2,16 +2,25 @@ import { describe, expect, test } from 'vitest';
 import { resolveImplicitReference } from '../../src/core/systems/eventloop/reactiveStep.helpers';
 
 describe('Library Anchor Resolver', () => {
-  const stateWithAnchor = {
+  const stateWithLibraryFocus = {
     lastLibraryDocId: 'b4df0a54-97da-43c7-ad71-f2161e2ac8f6',
     lastWorldPath: '/code',
-    lastArtifactId: 'art-123'
+    lastArtifactId: 'art-123',
+    focus: { domain: 'LIBRARY', id: 'b4df0a54-97da-43c7-ad71-f2161e2ac8f6', label: 'Book A' }
+  };
+
+  const stateWithWorldFocus = {
+    lastLibraryDocId: 'b4df0a54-97da-43c7-ad71-f2161e2ac8f6',
+    lastWorldPath: '/code',
+    lastArtifactId: 'art-123',
+    focus: { domain: 'WORLD', id: '/code', label: 'code' }
   };
 
   const stateEmpty = {
     lastLibraryDocId: null,
     lastWorldPath: null,
-    lastArtifactId: null
+    lastArtifactId: null,
+    focus: { domain: null, id: null, label: null }
   };
 
   describe('Library references', () => {
@@ -24,23 +33,29 @@ describe('Library Anchor Resolver', () => {
       'ta ksiazka',
       'tego dokumentu'
     ])('"%s" resolves to library anchor', (input) => {
-      const result = resolveImplicitReference(input, stateWithAnchor);
+      const result = resolveImplicitReference(input, stateWithLibraryFocus);
       expect(result.type).toBe('library_doc');
-      expect(result.id).toBe(stateWithAnchor.lastLibraryDocId);
+      expect(result.id).toBe(stateWithLibraryFocus.lastLibraryDocId);
       expect(result.confidence).toBeGreaterThan(0.7);
     });
 
     test('explicit name does not use anchor', () => {
       const result = resolveImplicitReference(
         'przeczytaj "Reinforcement Learning.txt"',
-        stateWithAnchor
+        stateWithLibraryFocus
       );
       expect(result.type).toBeNull();
       expect(result.id).toBeNull();
     });
 
     test('explicit path does not use anchor', () => {
-      const result = resolveImplicitReference('/code/docs/plan.md', stateWithAnchor);
+      const result = resolveImplicitReference('/code/docs/plan.md', stateWithLibraryFocus);
+      expect(result.type).toBeNull();
+      expect(result.id).toBeNull();
+    });
+
+    test('world focus does not resolve library anchor', () => {
+      const result = resolveImplicitReference('ta ksiazka', stateWithWorldFocus);
       expect(result.type).toBeNull();
       expect(result.id).toBeNull();
     });
@@ -58,9 +73,9 @@ describe('Library Anchor Resolver', () => {
       'pokaz co jest w tym folderze',
       'pliki tutaj'
     ])('"%s" resolves to world anchor', (input) => {
-      const result = resolveImplicitReference(input, stateWithAnchor);
+      const result = resolveImplicitReference(input, stateWithLibraryFocus);
       expect(result.type).toBe('world_path');
-      expect(result.id).toBe(stateWithAnchor.lastWorldPath);
+      expect(result.id).toBe(stateWithLibraryFocus.lastWorldPath);
     });
   });
 
@@ -70,9 +85,9 @@ describe('Library Anchor Resolver', () => {
       'w tym pliku',
       'ten artefakt'
     ])('"%s" resolves to artifact anchor', (input) => {
-      const result = resolveImplicitReference(input, stateWithAnchor);
+      const result = resolveImplicitReference(input, stateWithLibraryFocus);
       expect(result.type).toBe('artifact');
-      expect(result.id).toBe(stateWithAnchor.lastArtifactId);
+      expect(result.id).toBe(stateWithLibraryFocus.lastArtifactId);
     });
   });
 });
