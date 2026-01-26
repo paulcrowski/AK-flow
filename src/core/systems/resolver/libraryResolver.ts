@@ -1,5 +1,5 @@
 import type { Focus } from '../../kernel/types';
-import { normalizeRoutingInput } from '../../../tools/toolParser';
+import { normalizeRoutingInput } from '../../../tools/toolRouting';
 
 type LibraryResolution =
   | { resolved: true; docId: string }

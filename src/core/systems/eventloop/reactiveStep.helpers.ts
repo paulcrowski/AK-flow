@@ -12,7 +12,7 @@ import {
   looksLikeWorldPath,
   normalizeRoutingInput,
   routeDomain
-} from '@tools/toolParser';
+} from '@tools/toolRouting';
 import { resolveLibraryReference } from '../resolver/libraryResolver';
 
 type ActionFirstResult = {
