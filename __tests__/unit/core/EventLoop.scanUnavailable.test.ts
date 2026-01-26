@@ -33,10 +33,21 @@ vi.mock('@core/systems/eventloop/index', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@core/systems/eventloop/index')>();
   return {
     ...actual,
-    createAutonomyBudgetTracker: vi.fn(() => ({
-      checkBudget: () => true,
-      consume: () => {},
-      peekCount: () => 0
+    createAutonomyRuntime: vi.fn(() => ({
+      lastActionSignature: null,
+      lastActionLogAt: null,
+      failureState: {
+        lastAttemptAt: 0,
+        consecutiveFailures: 0,
+        baseCooldownMs: 25_000,
+        maxCooldownMs: 300_000
+      },
+      tickCount: 0,
+      budgetTracker: {
+        checkBudget: () => true,
+        consume: () => {},
+        peekCount: () => 0
+      }
     }))
   };
 });

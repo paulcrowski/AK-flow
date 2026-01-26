@@ -1,5 +1,7 @@
 import { AgentType, PacketType } from '../../types';
 import type { PendingAction } from '../systems/eventloop/pending';
+import { createAutonomyRuntime, type AutonomyRuntime } from '../systems/eventloop/AutonomyRuntime';
+import type { AutonomyConfig } from '../config/systemConfig';
 
 export type KernelRunnerInput = {
   clientMessageId: string;
@@ -36,7 +38,7 @@ export type KernelEngineRunnerDeps<TIdentity> = {
 
   runEventLoopStep: (ctx: any, input: string | null, callbacks: any) => Promise<any>;
 
-  getAutonomyConfig: () => { exploreMinSilenceSec: number };
+  getAutonomyConfig: () => AutonomyConfig;
   computeTickIntervalMs: (energy: number) => number;
 
   getIdentity: () => TIdentity | null | undefined;
@@ -52,6 +54,7 @@ export class KernelEngineRunner<TIdentity> {
   private deps: KernelEngineRunnerDeps<TIdentity>;
   private timeoutRef: ReturnType<typeof setTimeout> | null = null;
   private isLoopRunning = false;
+  private autonomyRuntime: AutonomyRuntime;
 
   private inputQueue: KernelRunnerInput[] = [];
   private drainingQueue = false;
@@ -59,6 +62,11 @@ export class KernelEngineRunner<TIdentity> {
 
   constructor(deps: KernelEngineRunnerDeps<TIdentity>) {
     this.deps = deps;
+    this.autonomyRuntime = createAutonomyRuntime({
+      onBudgetExhausted: () => {
+        console.warn('Autonomy budget exhausted for this minute, skipping.');
+      }
+    });
   }
 
   private isUserFacingError(text: string): boolean {
@@ -345,6 +353,7 @@ export class KernelEngineRunner<TIdentity> {
       ticksSinceLastReward: state.ticksSinceLastReward,
       hadExternalRewardThisTick: false,
       pendingAction: state.pendingAction ?? null,
+      autonomyRuntime: this.autonomyRuntime,
       agentIdentity: identity
         ? {
           name: (identity as any).name,

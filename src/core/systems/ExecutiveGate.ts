@@ -25,6 +25,7 @@
 
 import type { LimbicState } from '../../types';
 import type { SocialDynamics, KernelState } from '../kernel/types';
+import { SYSTEM_CONFIG } from '../config/systemConfig';
 import { clamp01 } from '../../utils/math';
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -164,6 +165,22 @@ const DEFAULT_CONFIG = {
     recency: 0.1
   }
 } as const;
+
+const DEFAULT_GOAL_RELEVANCE = {
+  goalDriven: 0.8,
+  autonomous: 0.3
+} as const;
+
+const DEFAULT_RECENCY_DECAY_MS = 30_000;
+
+const getGateConfig = () => {
+  const cfg = (SYSTEM_CONFIG as any).executiveGate ?? {};
+  const weights = cfg.goalRelevanceWeights ?? DEFAULT_GOAL_RELEVANCE;
+  const goalDriven = Number.isFinite(weights.goalDriven) ? Number(weights.goalDriven) : DEFAULT_GOAL_RELEVANCE.goalDriven;
+  const autonomous = Number.isFinite(weights.autonomous) ? Number(weights.autonomous) : DEFAULT_GOAL_RELEVANCE.autonomous;
+  const recencyDecayMs = Number.isFinite(cfg.recencyDecayMs) ? Number(cfg.recencyDecayMs) : DEFAULT_RECENCY_DECAY_MS;
+  return { goalRelevanceWeights: { goalDriven, autonomous }, recencyDecayMs };
+};
 
 // ═══════════════════════════════════════════════════════════════════════════
 // EXECUTIVE GATE
@@ -405,14 +422,17 @@ export const ExecutiveGate = {
     now: number = Date.now()
   ): number {
     const weights = DEFAULT_CONFIG.WEIGHTS;
+    const gateCfg = getGateConfig();
 
     const novelty = candidate.metadata?.novelty ?? 0.5;
     const salience = candidate.metadata?.salience ?? 0.5;
-    const goalRelevance = candidate.type === 'goal_driven' ? 0.8 : 0.3;
+    const goalRelevance = candidate.type === 'goal_driven'
+      ? gateCfg.goalRelevanceWeights.goalDriven
+      : gateCfg.goalRelevanceWeights.autonomous;
 
     // Recency: nowsze = silniejsze (decay over 30s)
     const age = now - (candidate.timestamp ?? now);
-    const recency = Math.max(0, 1 - age / 30000);
+    const recency = Math.max(0, 1 - age / gateCfg.recencyDecayMs);
 
     return (
       novelty * weights.novelty +

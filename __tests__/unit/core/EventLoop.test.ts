@@ -6,6 +6,7 @@ import { eventBus } from '@core/EventBus';
 import { getCurrentAgentId } from '@services/supabase';
 import { ThinkModeSelector } from '@core/systems/eventloop/ThinkModeSelector';
 import { resetAutonomyBackoff } from '@core/systems/eventloop/AutonomousVolitionStep';
+import { createAutonomyRuntime } from '@core/systems/eventloop/AutonomyRuntime';
 import * as GoalSystem from '@core/systems/GoalSystem';
 import { SYSTEM_CONFIG } from '@core/config/systemConfig';
 import { CortexService } from '@llm/gemini';
@@ -44,11 +45,6 @@ vi.mock('@core/systems/GoalSystem', async (importOriginal) => {
 });
 
 const budgetState = vi.hoisted(() => ({ count: 0 }));
-const mockCreateAutonomyBudgetTracker = vi.hoisted(() => vi.fn(() => ({
-    checkBudget: (limit: number) => budgetState.count < limit,
-    consume: () => { budgetState.count += 1; },
-    peekCount: () => budgetState.count
-})));
 
 const mockRunGoalDrivenStep = vi.hoisted(() => vi.fn().mockImplementation(async () => ({
     executedAt: Date.now(),
@@ -59,7 +55,6 @@ vi.mock('@core/systems/eventloop/index', async (importOriginal) => {
     const actual = await importOriginal<typeof import('@core/systems/eventloop/index')>();
     return {
         ...actual,
-        createAutonomyBudgetTracker: mockCreateAutonomyBudgetTracker,
         runGoalDrivenStep: mockRunGoalDrivenStep
     };
 });
@@ -112,7 +107,6 @@ describe('EventLoop', () => {
         vi.useFakeTimers();
         vi.setSystemTime(baseNow + 3_600_000);
 
-        resetAutonomyBackoff();
         TickCommitter.resetForTesting();
         eventBus.clear();
         budgetState.count = 0;
@@ -153,6 +147,15 @@ describe('EventLoop', () => {
             ticksSinceLastReward: 0,
             hadExternalRewardThisTick: false
         };
+
+        mockCtx.autonomyRuntime = createAutonomyRuntime({
+            budgetTracker: {
+                checkBudget: (limit: number) => budgetState.count < limit,
+                consume: () => { budgetState.count += 1; },
+                peekCount: () => budgetState.count
+            }
+        });
+        resetAutonomyBackoff(mockCtx.autonomyRuntime);
 
         mockCallbacks = {
             onMessage: vi.fn(),

@@ -3,6 +3,7 @@ import { eventBus } from '@core/EventBus';
 import { PacketType } from '@/types';
 import { getAutonomyConfig } from '@core/config/systemConfig';
 import { runAutonomousVolitionStep, resetAutonomyBackoff } from '@core/systems/eventloop/AutonomousVolitionStep';
+import { createAutonomyRuntime } from '@core/systems/eventloop/AutonomyRuntime';
 import { ExecutiveGate } from '@core/systems/ExecutiveGate';
 import { CortexService } from '@llm/gemini';
 import { AutonomyRepertoire } from '@core/systems/AutonomyRepertoire';
@@ -36,10 +37,13 @@ vi.mock('@services/SessionMemoryService', () => {
 });
 
 describe('Grounding auto-search', () => {
+  let runtime = createAutonomyRuntime();
+
   beforeEach(() => {
+    runtime = createAutonomyRuntime();
     vi.clearAllMocks();
     eventBus.clear();
-    resetAutonomyBackoff();
+    resetAutonomyBackoff(runtime);
   });
 
   afterEach(() => {
@@ -100,7 +104,8 @@ describe('Grounding auto-search', () => {
       },
       consecutiveAgentSpeeches: 0,
       ticksSinceLastReward: 0,
-      hadExternalRewardThisTick: false
+      hadExternalRewardThisTick: false,
+      autonomyRuntime: runtime
     };
 
     const callbacks = {
@@ -127,11 +132,7 @@ describe('Grounding auto-search', () => {
       },
       trace: { traceId: 'trace-auto-search', tickNumber: 1, agentId: 'agent_1' },
       gateContext,
-      silenceDurationSec: autonomyCfg.exploreMinSilenceSec + 1,
-      budgetTracker: {
-        checkBudget: () => true,
-        consume: () => undefined
-      }
+      silenceDurationSec: autonomyCfg.exploreMinSilenceSec + 1
     });
 
     const intentEvent = eventBus.getHistory().find(

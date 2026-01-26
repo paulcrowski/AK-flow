@@ -23,7 +23,7 @@ import { TickCommitter } from './TickCommitter';
 import { publishTickStart, publishTickSkipped, publishThinkModeSelected, publishTickEnd, p0MetricStartTick, publishP0Metric } from './TickLifecycleTelemetry';
 import { isMainFeatureEnabled } from '../config/featureFlags';
 import { SYSTEM_CONFIG } from '../config/systemConfig';
-import { ThinkModeSelector, createAutonomyBudgetTracker, createTickTraceScope, runAutonomousVolitionStep, runReactiveStep, runGoalDrivenStep } from './eventloop/index';
+import { ThinkModeSelector, createAutonomyRuntime, createTickTraceScope, runAutonomousVolitionStep, runReactiveStep, runGoalDrivenStep, type AutonomyRuntime } from './eventloop/index';
 import type { ChunkRef, Tension as WitnessTension } from '../types/WitnessTypes';
 import { buildWitnessFrame } from './WitnessSystem';
 import { detectBeliefViolation } from './CoreBeliefs';
@@ -92,15 +92,19 @@ export namespace EventLoop {
         socialDynamics?: SocialDynamics;
         // FAZA 6: User Style Preferences (Style Contract)
         userStylePrefs?: UserStylePrefs;
+        autonomyRuntime?: AutonomyRuntime;
     }
 
-    // Module-level Budget Tracking (counters only, limit is in context)
-    const budgetTracker = createAutonomyBudgetTracker({
-        onExhausted: () => {
-            console.warn("Autonomy budget exhausted for this minute, skipping.");
+    const ensureAutonomyRuntime = (ctx: LoopContext): AutonomyRuntime => {
+        if (!ctx.autonomyRuntime) {
+            ctx.autonomyRuntime = createAutonomyRuntime({
+                onBudgetExhausted: () => {
+                    console.warn("Autonomy budget exhausted for this minute, skipping.");
+                }
+            });
         }
-    });
-    let tickCount = 0;
+        return ctx.autonomyRuntime;
+    };
     type SchemaStoreLike = {
         load(id: string): Promise<Schema | null>;
         save(schema: Schema): Promise<void>;
@@ -118,13 +122,18 @@ export namespace EventLoop {
 
     const eventLoopConfig = (SYSTEM_CONFIG as any).eventLoop ?? {};
     const DEFAULT_CHUNK_RELEVANCE =
-        Number.isFinite(eventLoopConfig.defaultChunkRelevance) ? eventLoopConfig.defaultChunkRelevance : 0.6;
+        Number.isFinite(eventLoopConfig.defaultChunkRelevance)
+            ? eventLoopConfig.defaultChunkRelevance
+            : SYSTEM_CONFIG.eventLoop.defaultChunkRelevance;
     const READINESS_BOOST_PER_TICK =
-        Number.isFinite(eventLoopConfig.readinessBoostPerTick) ? eventLoopConfig.readinessBoostPerTick : 0.01;
+        Number.isFinite(eventLoopConfig.readinessBoostPerTick)
+            ? eventLoopConfig.readinessBoostPerTick
+            : SYSTEM_CONFIG.eventLoop.readinessBoostPerTick;
     const FILE_CONTENT_TRUNCATE_LIMIT = Number.isFinite(eventLoopConfig.fileContentPreviewLimit)
         ? Math.max(0, Math.floor(eventLoopConfig.fileContentPreviewLimit))
-        : 8000;
-    const EVIDENCE_TYPES = ['READ_FILE', 'TEST_OUTPUT', 'SEARCH_HIT'] as const;
+        : SYSTEM_CONFIG.eventLoop.fileContentPreviewLimit;
+    const EVIDENCE_TYPES = ['READ_FILE', 'TEST_OUTPUT', 'SEARCH_HIT'] as const;
+
     const buildAutonomyDecision = (ctx: LoopContext, agentId: string, agentName: string | null) => {
         const resolvedName = ctx.agentIdentity?.name || agentName || 'AK-FLOW';
         const basePersona: BasePersona = {
@@ -244,7 +253,8 @@ export namespace EventLoop {
         callbacks: LoopCallbacks
     ): Promise<LoopContext> {
         const startedAt = Date.now();
-        const tickNumber = tickCount++;
+        const runtime = ensureAutonomyRuntime(ctx);
+        const tickNumber = runtime.tickCount++;
 
         // v8.1.1: Treat recent tool execution (last 2s) as user-facing to bypass silence window
         const lastTool = ctx.lastTool;
@@ -742,8 +752,7 @@ export namespace EventLoop {
                     memorySpace: memorySpace as any,
                     trace: trace as any,
                     gateContext,
-                    silenceDurationSec: silenceDuration,
-                    budgetTracker
+                    silenceDurationSec: silenceDuration
                 });
             }
 

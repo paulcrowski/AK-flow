@@ -31,7 +31,27 @@ export interface ModuleConfig {
 export interface AutonomyConfig {
   exploreMinSilenceSec: number;
   actionLogDedupeMs: number;
+  autoSearchTimeoutMs: number;
+  backoffBaseMs: number;
+  backoffMaxMs: number;
 }
+
+export interface ExecutiveGateConfig {
+  goalRelevanceWeights: {
+    goalDriven: number;
+    autonomous: number;
+  };
+  recencyDecayMs: number;
+}
+
+const AUTO_SEARCH_TIMEOUT_MS = (() => {
+  const isTestEnv = typeof process !== 'undefined' && process.env.NODE_ENV === 'test';
+  const defaultMs = isTestEnv ? 10000 : 20000;
+  const raw = (import.meta as any)?.env?.VITE_TOOL_TIMEOUT_MS;
+  const n = Number(raw);
+  return Number.isFinite(n) && n > 0 ? n : defaultMs;
+})();
+
 
 // ═══════════════════════════════════════════════════════════════════════════
 // MASTER CONFIG - JEDYNE MIEJSCE DO EDYCJI PRZEŁĄCZNIKÓW
@@ -238,6 +258,17 @@ export const SYSTEM_CONFIG = {
   autonomy: {
     exploreMinSilenceSec: 25,
     actionLogDedupeMs: 5000,
+    autoSearchTimeoutMs: AUTO_SEARCH_TIMEOUT_MS,
+    backoffBaseMs: 25_000,
+    backoffMaxMs: 300_000
+  },
+
+  executiveGate: {
+    goalRelevanceWeights: {
+      goalDriven: 0.8,
+      autonomous: 0.3
+    },
+    recencyDecayMs: 30_000
   },
 
   // TICK COMMITTER (staleness guard for autonomous speech)

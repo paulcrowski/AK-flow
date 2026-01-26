@@ -25,11 +25,7 @@ import { fetchIdentityShards } from '../../services/IdentityDataService';
 import { getWorldDirectorySelection } from '@tools/worldDirectoryAccess';
 import { emitToolIntent } from '../../telemetry/toolContract';
 import { runSearchAndPersist } from '../../../tools/searchExecutor';
-
-export type BudgetTracker = {
-  checkBudget: (limit: number) => boolean;
-  consume: () => void;
-};
+import { createAutonomyRuntime, type AutonomyRuntime } from './AutonomyRuntime';
 
 export type TraceLike = {
   traceId: string;
@@ -88,28 +84,11 @@ export type AutonomousVolitionLoopContext = {
   hadExternalRewardThisTick: boolean;
   socialDynamics?: SocialDynamics;
   userStylePrefs?: UserStylePrefs;
+  autonomyRuntime?: AutonomyRuntime;
 };
-
-let lastAutonomyActionSignature: string | null = null;
-let lastAutonomyActionLogAt = 0;
 
 const WORK_FIRST_AUTONOMY_ENABLED =
   (SYSTEM_CONFIG.features as Record<string, boolean>).P011_WORK_FIRST_AUTONOMY_ENABLED ?? true;
-
-const AUTO_SEARCH_TIMEOUT_MS = (() => {
-  const isTestEnv = typeof process !== 'undefined' && process.env.NODE_ENV === 'test';
-  const defaultMs = isTestEnv ? 10000 : 20000;
-  const raw = (import.meta as any)?.env?.VITE_TOOL_TIMEOUT_MS;
-  const n = Number(raw);
-  return Number.isFinite(n) && n > 0 ? n : defaultMs;
-})();
-
-// P0.1 COMMIT 2: Autonomy Backoff State
-const autonomyFailureState = {
-  lastAttemptAt: 0,
-  consecutiveFailures: 0,
-  baseCooldownMs: 25_000
-};
 
 const normalizeToolName = (tool: string): string => {
   const name = String(tool || '');
@@ -145,13 +124,20 @@ export function applyActionFeedback(
   return limbic;
 }
 
-function shouldTriggerAutonomy(silenceMs: number, minSilenceMs: number): boolean {
+const ensureAutonomyRuntime = (ctx: AutonomousVolitionLoopContext): AutonomyRuntime => {
+  if (!ctx.autonomyRuntime) {
+    ctx.autonomyRuntime = createAutonomyRuntime();
+  }
+  return ctx.autonomyRuntime;
+};
+
+function shouldTriggerAutonomy(runtime: AutonomyRuntime, silenceMs: number, minSilenceMs: number): boolean {
   const now = Date.now();
-  const { lastAttemptAt, consecutiveFailures, baseCooldownMs } = autonomyFailureState;
+  const { lastAttemptAt, consecutiveFailures, baseCooldownMs, maxCooldownMs } = runtime.failureState;
   
   // Exponential backoff: 25s, 50s, 100s, then cap at 5 min
   const cooldown = consecutiveFailures >= 3 
-    ? 300_000 
+    ? maxCooldownMs 
     : baseCooldownMs * Math.pow(2, consecutiveFailures);
   
   if (now - lastAttemptAt < cooldown) {
@@ -161,27 +147,27 @@ function shouldTriggerAutonomy(silenceMs: number, minSilenceMs: number): boolean
   return silenceMs >= minSilenceMs;
 }
 
-function onAutonomyResult(success: boolean): void {
-  autonomyFailureState.lastAttemptAt = Date.now();
+function onAutonomyResult(runtime: AutonomyRuntime, success: boolean): void {
+  runtime.failureState.lastAttemptAt = Date.now();
   if (success) {
-    autonomyFailureState.consecutiveFailures = 0;
+    runtime.failureState.consecutiveFailures = 0;
   } else {
-    autonomyFailureState.consecutiveFailures++;
+    runtime.failureState.consecutiveFailures++;
   }
 }
 
-function onAutonomyNoop(): void {
-  autonomyFailureState.lastAttemptAt = Date.now();
+function onAutonomyNoop(runtime: AutonomyRuntime): void {
+  runtime.failureState.lastAttemptAt = Date.now();
 }
 
 // For testing
-export function resetAutonomyBackoff(): void {
-  autonomyFailureState.lastAttemptAt = 0;
-  autonomyFailureState.consecutiveFailures = 0;
+export function resetAutonomyBackoff(runtime: AutonomyRuntime): void {
+  runtime.failureState.lastAttemptAt = 0;
+  runtime.failureState.consecutiveFailures = 0;
 }
 
-export function getAutonomyBackoffState() {
-  return { ...autonomyFailureState };
+export function getAutonomyBackoffState(runtime: AutonomyRuntime) {
+  return { ...runtime.failureState };
 }
 
 function getSessionChunkLimit(intent: IntentType | IntentResult): number {
@@ -217,28 +203,28 @@ export async function runAutonomousVolitionStep(input: {
   trace: TraceLike;
   gateContext: any;
   silenceDurationSec: number;
-  budgetTracker: BudgetTracker;
 }): Promise<void> {
-  const { ctx, callbacks, memorySpace, trace, gateContext, silenceDurationSec, budgetTracker } = input;
+  const { ctx, callbacks, memorySpace, trace, gateContext, silenceDurationSec } = input;
 
   const autonomyCfg = getAutonomyConfig();
   const silenceMs = silenceDurationSec * 1000;
   const minSilenceMs = autonomyCfg.exploreMinSilenceSec * 1000;
+  const runtime = ensureAutonomyRuntime(ctx);
 
   const traceId = getCurrentTraceId();
   const nowForMetrics = Date.now();
-  const cooldownMs = autonomyFailureState.consecutiveFailures >= 3
-    ? 300_000
-    : autonomyFailureState.baseCooldownMs * Math.pow(2, autonomyFailureState.consecutiveFailures);
+  const cooldownMs = runtime.failureState.consecutiveFailures >= 3
+    ? runtime.failureState.maxCooldownMs
+    : runtime.failureState.baseCooldownMs * Math.pow(2, runtime.failureState.consecutiveFailures);
   if (traceId) {
     p0MetricAdd(traceId, {
       autonomyCooldownMs: cooldownMs,
-      autonomyConsecutiveFailures: autonomyFailureState.consecutiveFailures
+      autonomyConsecutiveFailures: runtime.failureState.consecutiveFailures
     });
   }
   
   // P0.1: Backoff check - skip if in cooldown
-  if (!shouldTriggerAutonomy(silenceMs, minSilenceMs)) {
+  if (!shouldTriggerAutonomy(runtime, silenceMs, minSilenceMs)) {
     if (traceId) {
       // Explicitly record that autonomy was considered but suppressed by cooldown/silence
       p0MetricAdd(traceId, { autonomyAttempt: 0 });
@@ -384,7 +370,7 @@ export async function runAutonomousVolitionStep(input: {
   }
 
   const now = Date.now();
-  const dedupeMs = SYSTEM_CONFIG.autonomy?.actionLogDedupeMs ?? 5000;
+  const dedupeMs = autonomyCfg.actionLogDedupeMs ?? 5000;
   const silenceSec = (now - ctx.silenceStart) / 1000;
   const silenceBucketSec = Math.floor(silenceSec / 5) * 5;
   const signature =
@@ -392,11 +378,12 @@ export async function runAutonomousVolitionStep(input: {
       ? `SILENCE|EXPLORE_BLOCKED|${silenceBucketSec}`
       : `${actionDecision.action}|${actionDecision.reason}`;
 
-  const shouldLog = signature !== lastAutonomyActionSignature || now - lastAutonomyActionLogAt > dedupeMs;
+  const lastLogAt = runtime.lastActionLogAt ?? 0;
+  const shouldLog = signature !== runtime.lastActionSignature || now - lastLogAt > dedupeMs;
 
   if (shouldLog) {
-    lastAutonomyActionSignature = signature;
-    lastAutonomyActionLogAt = now;
+    runtime.lastActionSignature = signature;
+    runtime.lastActionLogAt = now;
 
     eventBus.publish({
       id: `autonomy-action-${now}`,
@@ -416,14 +403,14 @@ export async function runAutonomousVolitionStep(input: {
 
   if (actionDecision.action === 'SILENCE') {
     if (shouldLog) callbacks.onThought(`[AUTONOMY_SILENCE] ${actionDecision.reason}`);
-    onAutonomyNoop();
+    onAutonomyNoop(runtime);
     return;
   }
 
-  if (!budgetTracker.checkBudget(ctx.autonomousLimitPerMinute)) {
+  if (!runtime.budgetTracker.checkBudget(ctx.autonomousLimitPerMinute)) {
     return;
   }
-  budgetTracker.consume();
+  runtime.budgetTracker.consume();
 
   unifiedContext.actionPrompt = actionDecision.suggestedPrompt || '';
 
@@ -441,7 +428,7 @@ export async function runAutonomousVolitionStep(input: {
 
   if (isParseFail) {
     callbacks.onThought(`[AUTONOMY_PARSE_FAIL] ${volition.internal_monologue}`);
-    onAutonomyResult(false);
+    onAutonomyResult(runtime, false);
     if (traceId) p0MetricAdd(traceId, { autonomyFail: 1 });
     return;
   }
@@ -476,7 +463,7 @@ export async function runAutonomousVolitionStep(input: {
           query: searchQuery,
           reason: 'Auto-search after grounding failure.',
           intentId,
-          timeoutMs: AUTO_SEARCH_TIMEOUT_MS,
+          timeoutMs: autonomyCfg.autoSearchTimeoutMs,
           deps: {
             addMessage: (role, text, type, _imageData, sources) => {
               callbacks.onMessage(role, text, type, { sources });
@@ -492,7 +479,7 @@ export async function runAutonomousVolitionStep(input: {
     volition.speech_content = '';
     volition.voice_pressure = 0;
     callbacks.onThought(`[GROUNDING_BLOCKED] ${groundingValidation.reason}`);
-    onAutonomyResult(false); // P0.1: Failure - grounding blocked
+    onAutonomyResult(runtime, false); // P0.1: Failure - grounding blocked
     if (traceId) p0MetricAdd(traceId, { autonomyFail: 1 });
   } else {
     callbacks.onThought(volition.internal_monologue);
@@ -634,7 +621,7 @@ export async function runAutonomousVolitionStep(input: {
   });
 
   if (gateDecision.reason === 'EMPTY_SPEECH') {
-    onAutonomyResult(false);
+    onAutonomyResult(runtime, false);
     if (traceId) p0MetricAdd(traceId, { autonomyFail: 1 });
     return;
   }
@@ -658,7 +645,7 @@ export async function runAutonomousVolitionStep(input: {
 
       if (commit.committed) {
         callbacks.onMessage('assistant', styleResult.text, 'speech');
-        onAutonomyResult(true); // P0.1: Success - reset backoff
+        onAutonomyResult(runtime, true); // P0.1: Success - reset backoff
         if (traceId) p0MetricAdd(traceId, { autonomySuccess: 1 });
       }
 
@@ -683,7 +670,7 @@ export async function runAutonomousVolitionStep(input: {
         });
       }
       callbacks.onThought(`[STYLE_FILTERED] ${gateDecision.winner.internal_thought}`);
-      onAutonomyResult(false); // P0.1: Failure - filtered too short
+      onAutonomyResult(runtime, false); // P0.1: Failure - filtered too short
       if (traceId) p0MetricAdd(traceId, { autonomyFail: 1 });
     }
   } else if (gateDecision.winner) {
@@ -691,7 +678,7 @@ export async function runAutonomousVolitionStep(input: {
       ? `[SOCIAL_BLOCK:${gateDecision.debug.social_block_reason}]`
       : `[${gateDecision.reason}]`;
     callbacks.onThought(`${suppressReason} ${gateDecision.winner.internal_thought}`);
-    onAutonomyResult(false); // P0.1: Failure - gate blocked
+    onAutonomyResult(runtime, false); // P0.1: Failure - gate blocked
     if (traceId) p0MetricAdd(traceId, { autonomyFail: 1 });
   }
 }

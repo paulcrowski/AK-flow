@@ -80,7 +80,6 @@ const ALLOWLIST: Array<{ file: string; kind?: Finding['kind']; contains?: string
   { file: 'src/core/systems/PrismMetrics.ts', kind: 'let', contains: 'dailyPenalty' },
   { file: 'src/core/systems/FactEchoPipeline.ts', kind: 'let', contains: 'consecutiveFailures' },
   { file: 'src/core/systems/evaluation/createEvaluationEvent.ts', kind: 'let', contains: 'eventIdCounter' },
-  { file: 'src/core/systems/eventloop/AutonomousVolitionStep.ts', kind: 'let' },
   { file: 'src/core/systems/ChemistryBridge.ts', kind: 'let', contains: 'activeSubscription' },
   { file: 'src/core/systems/MemorySpace.ts', kind: 'newMap', contains: 'coldCacheByAgentId' },
   { file: 'src/core/systems/IntentContract.ts', kind: 'newSet', contains: 'const STYLE' },
