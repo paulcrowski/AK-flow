@@ -23,7 +23,8 @@ import { detectIntent, getIntentType, getRetrievalLimit, type IntentResult, type
 import { SessionChunkService } from '../../../services/SessionChunkService';
 import { fetchIdentityShards } from '../../services/IdentityDataService';
 import { getWorldDirectorySelection } from '@tools/worldDirectoryAccess';
-import { emitToolIntent } from '../../telemetry/toolContract';
+import { emitToolError, emitToolIntent, emitToolResult } from '../../telemetry/toolContract';
+import { withTimeout } from '../../../tools/toolRuntime';
 
 export type BudgetTracker = {
   checkBudget: (limit: number) => boolean;
@@ -94,6 +95,14 @@ let lastAutonomyActionLogAt = 0;
 
 const WORK_FIRST_AUTONOMY_ENABLED =
   (SYSTEM_CONFIG.features as Record<string, boolean>).P011_WORK_FIRST_AUTONOMY_ENABLED ?? true;
+
+const AUTO_SEARCH_TIMEOUT_MS = (() => {
+  const isTestEnv = typeof process !== 'undefined' && process.env.NODE_ENV === 'test';
+  const defaultMs = isTestEnv ? 10000 : 20000;
+  const raw = (import.meta as any)?.env?.VITE_TOOL_TIMEOUT_MS;
+  const n = Number(raw);
+  return Number.isFinite(n) && n > 0 ? n : defaultMs;
+})();
 
 // P0.1 COMMIT 2: Autonomy Backoff State
 const autonomyFailureState = {
@@ -455,12 +464,40 @@ export async function runAutonomousVolitionStep(input: {
 
     const lastUserMsg = unifiedContext.dialogueAnchor?.lastUserMessage;
     if (isMainFeatureEnabled('GROUNDED_MODE') && lastUserMsg) {
-      const searchQuery = lastUserMsg.slice(0, 100);
-      emitToolIntent('SEARCH', searchQuery, {
-        query: searchQuery,
-        reason: 'AUTO_SEARCH: Grounding validation failed, triggering search for factual data'
-      });
-      callbacks.onThought(`[GROUNDING_AUTO_SEARCH] Triggering search for: "${searchQuery}"`);
+      const searchQuery = lastUserMsg.slice(0, 100).trim();
+      if (searchQuery) {
+        const intentId = emitToolIntent('SEARCH', searchQuery, {
+          query: searchQuery,
+          reason: 'AUTO_SEARCH: Grounding validation failed, triggering search for factual data'
+        });
+        callbacks.onThought(`[GROUNDING_AUTO_SEARCH] Triggering search for: "${searchQuery}"`);
+
+        try {
+          const research = await withTimeout(
+            CortexService.performDeepResearch(searchQuery, 'Auto-search after grounding failure.'),
+            AUTO_SEARCH_TIMEOUT_MS,
+            'SEARCH'
+          );
+          const synthesis = String(research?.synthesis || '').trim();
+          if (!synthesis) {
+            emitToolError('SEARCH', intentId, { query: searchQuery }, 'Empty result');
+          } else {
+            const sourcesCount = Array.isArray(research?.sources) ? research.sources.length : 0;
+            emitToolResult('SEARCH', intentId, {
+              query: searchQuery,
+              sourcesCount,
+              synthesisLength: synthesis.length,
+              late: false
+            });
+            callbacks.onMessage('assistant', synthesis, 'intel', undefined, research?.sources);
+          }
+        } catch (error: any) {
+          const msg = error?.message || String(error);
+          const isTimeout = typeof msg === 'string' && msg.startsWith('TOOL_TIMEOUT:');
+          emitToolError('SEARCH', intentId, { query: searchQuery }, isTimeout ? 'TIMEOUT' : msg);
+          callbacks.onThought(`[GROUNDING_AUTO_SEARCH_ERROR] ${isTimeout ? 'TIMEOUT' : msg}`);
+        }
+      }
     }
 
     volition.speech_content = '';
