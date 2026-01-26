@@ -44,11 +44,9 @@ const EVIDENCE_QUERY_REGEX = /\b(co jest w|co zawiera|zawartosc|show|what is in|
 const DIR_QUERY_REGEX = /\b(katalog|folder|directory|dir|lista plikow|list files?)\b/i;
 const DIR_TARGET_REGEX = /(?:katalog|folder|directory|dir|lista plikow|list files?(?: in)?)\s+["'`]?([A-Za-z]:[\\/][^\s"'`]+|\/[^\s"'`]+|[A-Za-z0-9._-]+(?:[\\/][A-Za-z0-9._-]+)*)/i;
 const DIR_TRAILING_REGEX = /([A-Za-z]:[\\/][^\s"'`]+[\\/]|\/[^\s"'`]+\/|[A-Za-z0-9._-]+(?:[\\/][A-Za-z0-9._-]+)*\/)/;
-const SKIP_DIRS = new Set(['node_modules', '.git', 'dist', 'ak-nexus', 'database', '_patches', '_workbench']);
+const SKIP_DIRS = ['node_modules', '.git', 'dist', 'ak-nexus', 'database', '_patches', '_workbench'];
 const safeCwd = typeof process !== 'undefined' && typeof process.cwd === 'function' ? process.cwd() : '';
 export const getSafeCwd = () => safeCwd;
-
-const fileLookupCache = new Map<string, string>();
 
 export const getFileScanLimits = (): FileScanLimits => {
   const config = (SYSTEM_CONFIG as any).siliconBeing ?? {};
@@ -60,14 +58,14 @@ export const getFileScanLimits = (): FileScanLimits => {
 };
 
 type FsModule = typeof import('fs/promises');
-let fsPromise: Promise<FsModule | null> | null = null;
 
 const loadFs = async (): Promise<FsModule | null> => {
   if (!isNode) return null;
-  if (!fsPromise) {
-    fsPromise = import('fs/promises').catch(() => null);
+  try {
+    return await import('fs/promises');
+  } catch {
+    return null;
   }
-  return fsPromise;
 };
 
 export const questionRequiresEvidence = (input: string) => {
@@ -126,7 +124,7 @@ const findFileByName = async (
     }
     state.visitedCount += 1;
     if (entry.isDirectory()) {
-      if (SKIP_DIRS.has(entry.name)) continue;
+      if (SKIP_DIRS.includes(entry.name)) continue;
       const found = await findFileByName(
         joinPaths(root, entry.name),
         target,
@@ -182,10 +180,6 @@ export const resolveObservationPath = async (
       summary: null
     };
   }
-  const cached = fileLookupCache.get(normalized);
-  if (cached) {
-    return { resolvedPath: cached, found: true, summary: null };
-  }
   const limits = options?.limits ?? getFileScanLimits();
   const state: FileScanState = {
     visitedCount: 0,
@@ -210,7 +204,6 @@ export const resolveObservationPath = async (
     };
     emitFileScanSummary(summary);
     const fallback = safeCwd ? joinPaths(safeCwd, normalized) : normalized;
-    fileLookupCache.set(normalized, fallback);
     return { resolvedPath: fallback, found: false, summary };
   }
   let foundPath: string | null = null;
@@ -234,6 +227,5 @@ export const resolveObservationPath = async (
   };
   emitFileScanSummary(summary);
   const resolvedPath = foundPath || (safeCwd ? joinPaths(safeCwd, normalized) : normalized);
-  fileLookupCache.set(normalized, resolvedPath);
   return { resolvedPath, found: Boolean(foundPath), summary };
 };
