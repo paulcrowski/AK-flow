@@ -1,5 +1,5 @@
 # AK-FLOW: Cognitive Agent Architecture Manifest
-**System Version:** 6.11.2 (v8.2: EventLoop refactor + auto-search wiring)
+**System Version:** 6.11.3 (Security gate + tooling hardening)
 **Last Updated:** 2026-01-26
 **Architecture Type:** Active Inference (Friston) + Global Workspace Theory + Multi-Modal RAG + **Stateless Inference Engine**  
 **Status:** Autonomous / Stateful / Modular / Self-Aware / Goal-Driven / Personality-Driven / **Emergent Identity**
@@ -19,7 +19,7 @@ We reject the "One True Agent" fallacy. The agent is a **flow of intention** tha
 ### 2. The Silicon Advantage
 We embrace the artificial nature as a feature, not a bug.
 # AK-FLOW: Cognitive Agent Architecture Manifest
-**System Version:** 6.11.2 (v8.2: EventLoop refactor + auto-search wiring)
+**System Version:** 6.11.3 (Security gate + tooling hardening)
 **Last Updated:** 2026-01-26
 **Architecture Type:** Active Inference (Friston) + Global Workspace Theory + Multi-Modal RAG + **Stateless Inference Engine**  
 **Status:** Autonomous / Stateful / Modular / Self-Aware / Goal-Driven / Personality-Driven / **Emergent Identity**
@@ -48,6 +48,31 @@ We embrace the artificial nature as a feature, not a bug.
 - **Measurable Soul:** Emotions and "vibes" are allowed, but they must map to system metrics (Energy, Dopamine), not just literary roleplay.
 
 ---
+
+## What's New in V6.11.3 (2026-01-26)
+
+### Security gate + tooling hardening
+
+**Goal:** enforce pre-task security checks, remove hardcoded secrets, and wire guardrails into CI/local hooks.
+
+**Key changes:**
+- Added `CODEX.md` guardrails and `.pre-commit-config.yaml` with security/test/type hooks.
+- Added GitHub `claude-code-action` workflow for PR reviews.
+- Supabase config now reads env vars; added File System Access typings; guarded `createWritable` in workspace tools.
+
+**Configuration (Single Source):**
+- No runtime config changes (docs/tooling only).
+
+**Tests:**
+- `npm test`
+- `npx tsc --noEmit`
+- `npm run build`
+- `semgrep scan` (findings pending triage)
+- `bandit -r .`
+- `ruff check . --fix` (no Python files)
+- `mypy . --strict` failed (policy block)
+- `npx snyk test` failed (auth required)
+- `gitleaks detect` not run (install requires admin)
 
 ## What's New in V6.11.2 (2026-01-26)
 

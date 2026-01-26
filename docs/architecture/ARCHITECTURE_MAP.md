@@ -1,6 +1,6 @@
 # 🧠 AK-FLOW Architecture Map
 
-> **Wersja:** 6.11.2 (2026-01-26)
+> **Wersja:** 6.11.3 (2026-01-26)
 > **Cel:** Prosta mapa jak działa agent i jaki ma flow
 
 ## Archive policy
@@ -9,6 +9,15 @@
 Ten katalog jest wykluczony z kompilacji TypeScript i służy wyłącznie jako referencja do poprzednich iteracji.
 
 ---
+
+## FAZA 6.11.3: Security gate + tooling hardening (2026-01-26)
+
+**Cel:** wprowadzic twarde guardrails security i przygotowac workflow narzedziowy pod CI/local hooks.
+
+**Mechanika:**
+- CODEX.md jako gate przed taskiem + pre-commit hooks dla skanerow/testow/typow.
+- Claude Code Action w PR jako automatyczny reviewer.
+- Supabase: env-only config (bez sekretow w kodzie), File System Access typings, guard `createWritable`.
 
 ## FAZA 6.11.2: EventLoop plumbing + auto-search reliability (2026-01-26)
 
