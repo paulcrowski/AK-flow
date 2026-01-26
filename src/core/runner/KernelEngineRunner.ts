@@ -143,6 +143,8 @@ export class KernelEngineRunner<TIdentity> {
                   void this.handleAssistantSpeechAutonomous(text, type, meta);
                 } else if (role === 'assistant' && type === 'thought') {
                   this.deps.actions.setCurrentThought(text);
+                } else if (role === 'assistant' && (type === 'intel' || type === 'tool_result')) {
+                  this.handleAssistantInfoMessage(text, type, meta);
                 }
               },
               onThought: (thought: string) => {
@@ -289,6 +291,8 @@ export class KernelEngineRunner<TIdentity> {
             void this.handleAssistantSpeechReactive(text, type, meta);
           } else if (role === 'assistant' && type === 'thought') {
             this.deps.actions.setCurrentThought(text);
+          } else if (role === 'assistant' && (type === 'intel' || type === 'tool_result')) {
+            this.handleAssistantInfoMessage(text, type, meta);
           }
         },
         onThought: (thought: string) => {
@@ -423,6 +427,26 @@ export class KernelEngineRunner<TIdentity> {
       const fallbackMsg = { role: 'assistant', text, type };
       this.deps.actions.addUiMessage(fallbackMsg as any);
     }
+  }
+
+  private handleAssistantInfoMessage(text: string, type: 'intel' | 'tool_result', meta?: any) {
+    const cleaned = String(text ?? '');
+    if (!cleaned.trim()) return;
+    const messageId = this.deps.generateUUID();
+    const msg = {
+      id: messageId,
+      role: 'assistant',
+      text: cleaned,
+      type,
+      ...(meta?.sources ? { sources: meta.sources } : {}),
+      ...(meta?.knowledgeSource ? { knowledgeSource: meta.knowledgeSource } : {}),
+      ...(meta?.evidenceSource ? { evidenceSource: meta.evidenceSource } : {}),
+      ...(meta?.evidenceDetail ? { evidenceDetail: meta.evidenceDetail } : {}),
+      ...(meta?.generator ? { generator: meta.generator } : {}),
+      ...(meta?.agentMemoryId ? { agentMemoryId: meta.agentMemoryId } : {})
+    };
+
+    this.deps.actions.addUiMessage(msg as any);
   }
 
   private async handleAssistantSpeechReactive(text: string, type: any, meta?: any) {

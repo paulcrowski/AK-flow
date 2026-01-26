@@ -10,7 +10,7 @@
  */
 
 import { useState, useCallback, useRef, type MutableRefObject } from 'react';
-import { EventLoop } from '../core/systems/EventLoop';
+import { EventLoop } from '@core/systems/EventLoop';
 import { getCognitiveState, useCognitiveActions } from '../stores/cognitiveStore';
 import type { CognitiveError } from '../types';
 import type { AgentIdentity } from './useCognitiveKernelLite';
@@ -109,12 +109,22 @@ export const useConversation = ({ identityRef }: UseConversationConfig) => {
       };
 
       await EventLoop.runSingleStep(ctx, userInput, {
-        onMessage: (role, text, type) => {
+        onMessage: (role, text, type, meta) => {
           if (role === 'assistant' && type === 'speech') {
             setConversation(prev => [...prev, { role, text, type: 'speech' }]);
             setCurrentThought(text.slice(0, 100) + '...');
           } else if (role === 'assistant' && type === 'thought') {
             setCurrentThought(text);
+          } else if (role === 'assistant' && (type === 'intel' || type === 'tool_result')) {
+            setConversation(prev => [
+              ...prev,
+              {
+                role,
+                text,
+                type,
+                ...(meta?.sources ? { sources: meta.sources } : {})
+              }
+            ]);
           }
         },
         onThought: (thought) => setCurrentThought(thought),

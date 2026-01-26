@@ -26,7 +26,7 @@ export default defineConfig({
     },
     
     // Test organization
-    include: ['__tests__/**/*.test.ts'],
+    include: ['__tests__/**/*.test.{ts,tsx}'],
     exclude: ['**/node_modules/**', '**/dist/**'],
     
     // Test execution settings
