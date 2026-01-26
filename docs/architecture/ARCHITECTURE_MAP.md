@@ -1,6 +1,6 @@
 # 🧠 AK-FLOW Architecture Map
 
-> **Wersja:** 6.11.3 (2026-01-26)
+> **Wersja:** 6.11.5 (2026-01-26)
 > **Cel:** Prosta mapa jak działa agent i jaki ma flow
 
 ## Archive policy
@@ -9,6 +9,25 @@
 Ten katalog jest wykluczony z kompilacji TypeScript i służy wyłącznie jako referencja do poprzednich iteracji.
 
 ---
+
+
+## FAZA 6.11.5: Cortex failure guards (2026-01-26)
+
+**Cel:** utrzymac petle przy awarii Cortex/LLM i zostawic telemetrie bledu.
+
+**Mechanika:**
+- ReactiveStep: try/catch dla CortexSystem.processUserMessage -> `CORTEX_REACTIVE_FAILURE`.
+- AutonomousVolitionStep: try/catch dla autonomousVolitionV2 -> `CORTEX_AUTONOMY_FAILURE`.
+
+
+## FAZA 6.11.4: Autonomy runtime isolation + gate config (2026-01-26)
+
+**Cel:** usunac modulowy stan autonomii i scentralizowac progi ExecutiveGate.
+
+**Mechanika:**
+- `AutonomyRuntime` w kontekscie per runner (backoff/budget/tick), brak cross-talk miedzy sesjami.
+- `ExecutiveGate` czyta wagi goal_relevance i recencyDecay z `systemConfig`.
+- Timeout/backoff autonomii przeniesione do `SYSTEM_CONFIG.autonomy`.
 
 ## FAZA 6.11.3: Security gate + tooling hardening (2026-01-26)
 

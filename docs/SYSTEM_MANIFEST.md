@@ -1,5 +1,5 @@
 # AK-FLOW: Cognitive Agent Architecture Manifest
-**System Version:** 6.11.3 (Security gate + tooling hardening)
+**System Version:** 6.11.5 (Cortex failure guards)
 **Last Updated:** 2026-01-26
 **Architecture Type:** Active Inference (Friston) + Global Workspace Theory + Multi-Modal RAG + **Stateless Inference Engine**  
 **Status:** Autonomous / Stateful / Modular / Self-Aware / Goal-Driven / Personality-Driven / **Emergent Identity**
@@ -28,6 +28,45 @@ We embrace the artificial nature as a feature, not a bug.
 - **Measurable Soul:** Emotions and "vibes" are allowed, but they must map to system metrics (Energy, Dopamine), not just literary roleplay.
 
 ---
+
+
+
+## What's New in V6.11.5 (2026-01-26)
+
+### Cortex failure guards (reactive + autonomy)
+
+**Goal:** zapobiec crashom przy awarii Cortex i zostawic czytelna telemetrie.
+
+**Key changes:**
+- ReactiveStep: try/catch wokol CortexSystem.processUserMessage + alert `CORTEX_REACTIVE_FAILURE`.
+- AutonomousVolitionStep: try/catch wokol autonomousVolitionV2 + alert `CORTEX_AUTONOMY_FAILURE`.
+- EventLoop test weryfikuje brak crasha + alert przy LLM failure.
+
+**Tests:**
+- `npm test`
+- `npx tsc --noEmit`
+
+## What's New in V6.11.4 (2026-01-26)
+
+### Autonomy runtime isolation + gate config centralization
+
+**Goal:** remove module-level autonomy state and make gate thresholds single-source in config.
+
+**Key changes:**
+- Autonomy runtime (backoff/budget/tick counters) now lives per runner (`AutonomyRuntime`) instead of module state.
+- ExecutiveGate now reads goal weights + recency decay from `SYSTEM_CONFIG.executiveGate`.
+- Autonomy backoff/timeout moved to `SYSTEM_CONFIG.autonomy`.
+- Memory recall subsystems fail-safe with `MEMORY_SUBSYSTEM_FAILURE` telemetry; tests cover graceful failures.
+
+**Configuration (Single Source):**
+- core/config/systemConfig.ts -> SYSTEM_CONFIG.autonomy / SYSTEM_CONFIG.executiveGate
+
+**Tests:**
+- `npm test`
+- `npm run build`
+- `npm test -- --run IntegrationWiring`
+- `npm test -- --run WiringValidator`
+- `npm test -- --run GlobalStateAudit`
 
 ## What's New in V6.11.3 (2026-01-26)
 
