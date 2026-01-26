@@ -23,8 +23,8 @@ import { detectIntent, getIntentType, getRetrievalLimit, type IntentResult, type
 import { SessionChunkService } from '../../../services/SessionChunkService';
 import { fetchIdentityShards } from '../../services/IdentityDataService';
 import { getWorldDirectorySelection } from '@tools/worldDirectoryAccess';
-import { emitToolError, emitToolIntent, emitToolResult } from '../../telemetry/toolContract';
-import { withTimeout } from '../../../tools/toolRuntime';
+import { emitToolIntent } from '../../telemetry/toolContract';
+import { runSearchAndPersist } from '../../../tools/searchExecutor';
 
 export type BudgetTracker = {
   checkBudget: (limit: number) => boolean;
@@ -472,30 +472,19 @@ export async function runAutonomousVolitionStep(input: {
         });
         callbacks.onThought(`[GROUNDING_AUTO_SEARCH] Triggering search for: "${searchQuery}"`);
 
-        try {
-          const research = await withTimeout(
-            CortexService.performDeepResearch(searchQuery, 'Auto-search after grounding failure.'),
-            AUTO_SEARCH_TIMEOUT_MS,
-            'SEARCH'
-          );
-          const synthesis = String(research?.synthesis || '').trim();
-          if (!synthesis) {
-            emitToolError('SEARCH', intentId, { query: searchQuery }, 'Empty result');
-          } else {
-            const sourcesCount = Array.isArray(research?.sources) ? research.sources.length : 0;
-            emitToolResult('SEARCH', intentId, {
-              query: searchQuery,
-              sourcesCount,
-              synthesisLength: synthesis.length,
-              late: false
-            });
-            callbacks.onMessage('assistant', synthesis, 'intel', undefined, research?.sources);
+        const outcome = await runSearchAndPersist({
+          query: searchQuery,
+          reason: 'Auto-search after grounding failure.',
+          intentId,
+          timeoutMs: AUTO_SEARCH_TIMEOUT_MS,
+          deps: {
+            addMessage: (role, text, type, _imageData, sources) => {
+              callbacks.onMessage(role, text, type, { sources });
+            }
           }
-        } catch (error: any) {
-          const msg = error?.message || String(error);
-          const isTimeout = typeof msg === 'string' && msg.startsWith('TOOL_TIMEOUT:');
-          emitToolError('SEARCH', intentId, { query: searchQuery }, isTimeout ? 'TIMEOUT' : msg);
-          callbacks.onThought(`[GROUNDING_AUTO_SEARCH_ERROR] ${isTimeout ? 'TIMEOUT' : msg}`);
+        });
+        if (!outcome.ok) {
+          callbacks.onThought(`[GROUNDING_AUTO_SEARCH_ERROR] ${outcome.error}`);
         }
       }
     }

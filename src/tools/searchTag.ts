@@ -1,11 +1,9 @@
 import { CortexService } from '../llm/gemini';
-import { persistSearchKnowledgeChunk } from '../services/SearchKnowledgeChunker';
 import { getCurrentTraceId } from '../core/trace/TraceContext';
 import type { ToolParserDeps } from './toolParser';
 import { searchInFlight, scheduleSoftTimeout } from './toolRuntime';
-import { evidenceLedger } from '../core/systems/EvidenceLedger';
-import { emitToolError, emitToolIntent, emitToolResult } from '../core/telemetry/toolContract';
-import { validateToolResult } from '../core/tools/validateToolResult';
+import { emitToolIntent } from '../core/telemetry/toolContract';
+import { emitSearchFailure, emitSearchSuccess } from './searchExecutor';
 
 type InFlightSearchOp = {
   promise: Promise<any>;
@@ -26,46 +24,6 @@ function findSearchMatch(cleanText: string): { raw: string; query: string } | nu
   if (legacy) return { raw: legacy[0], query: String(legacy[1] || '').trim() };
 
   return null;
-}
-
-function publishSearchResult(params: {
-  publish: (packet: any) => void;
-  makeId: () => string;
-  query: string;
-  intentId: string;
-  sourcesCount: number;
-  synthesisLength: number;
-  late: boolean;
-}) {
-  const payload = {
-    query: params.query,
-    sourcesCount: params.sourcesCount,
-    synthesisLength: params.synthesisLength,
-    late: params.late
-  };
-  validateToolResult('SEARCH', payload);
-  emitToolResult(
-    'SEARCH',
-    params.intentId,
-    payload,
-    { publish: params.publish, makeId: params.makeId, priority: 0.8 }
-  );
-}
-
-function publishSearchError(params: {
-  publish: (packet: any) => void;
-  makeId: () => string;
-  query: string;
-  intentId: string;
-  error: string;
-}) {
-  emitToolError(
-    'SEARCH',
-    params.intentId,
-    { query: params.query },
-    params.error,
-    { publish: params.publish, makeId: params.makeId, priority: 0.9 }
-  );
 }
 
 function startSearchOp(params: {
@@ -92,54 +50,32 @@ function startSearchOp(params: {
   };
   searchInFlight.set(params.query.toLowerCase(), op as any);
 
+  
+
+  const execDeps = { ...params.deps, publish: params.publish, makeId: params.makeId };
+
   void promise
     .then((research) => {
       op.settled = true;
 
-      if (!research || !research.synthesis) {
-        for (const id of op.intentIds) {
-          publishSearchError({
-            publish: params.publish,
-            makeId: params.makeId,
-            query: params.query,
-            intentId: id,
-            error: 'Empty result'
-          });
-        }
-        params.deps.addMessage('assistant', 'Mój moduł SEARCH jest teraz wyłączony.', 'thought');
+      const synthesis = String(research?.synthesis || '').trim();
+      if (!synthesis) {
+        emitSearchFailure({
+          query: params.query,
+          intentIds: op.intentIds,
+          error: 'Empty result',
+          deps: execDeps
+        });
         return;
       }
 
-      for (const id of op.intentIds) {
-        publishSearchResult({
-          publish: params.publish,
-          makeId: params.makeId,
-          query: params.query,
-          intentId: id,
-          sourcesCount: research.sources?.length || 0,
-          synthesisLength: research.synthesis.length,
-          late: op.timeoutEmitted.has(id)
-        });
-      }
-
-      if (research.sources && research.sources.length > 0) {
-        evidenceLedger.record('SEARCH_HIT', params.query);
-      }
-
-      if (op.timeoutEmitted.size > 0) {
-        params.deps.addMessage(
-          'assistant',
-          `SEARCH wynik dotarł po TIMEOUT (dołączony). query="${params.query}"`,
-          'thought'
-        );
-      }
-
-      params.deps.addMessage('assistant', research.synthesis, 'intel', undefined, research.sources);
-
-      void persistSearchKnowledgeChunk({
+      emitSearchSuccess({
         query: params.query,
-        synthesis: research.synthesis,
-        sources: research.sources,
+        synthesis,
+        sources: research?.sources,
+        intentIds: op.intentIds,
+        lateIntentIds: op.timeoutEmitted,
+        deps: execDeps,
         traceId: op.startedTraceId,
         sessionId: op.startedSessionId,
         toolIntentId: op.primaryIntentId
@@ -150,21 +86,17 @@ function startSearchOp(params: {
 
       console.warn('[ToolParser] Research failed:', error);
 
-      for (const id of op.intentIds) {
-        publishSearchError({
-          publish: params.publish,
-          makeId: params.makeId,
-          query: params.query,
-          intentId: id,
-          error: error?.message || 'Unknown error'
-        });
-      }
-
-      params.deps.addMessage('assistant', 'Mój moduł SEARCH jest teraz wyłączony.', 'thought');
+      emitSearchFailure({
+        query: params.query,
+        intentIds: op.intentIds,
+        error: error?.message || 'Unknown error',
+        deps: execDeps
+      });
     })
     .finally(() => {
       searchInFlight.delete(params.query.toLowerCase());
     });
+
 
   return op;
 }
