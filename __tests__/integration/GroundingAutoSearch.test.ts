@@ -3,6 +3,7 @@ import { eventBus } from '@core/EventBus';
 import { PacketType } from '@/types';
 import { getAutonomyConfig } from '@core/config/systemConfig';
 import { runAutonomousVolitionStep, resetAutonomyBackoff } from '@core/systems/eventloop/AutonomousVolitionStep';
+import { ExecutiveGate } from '@core/systems/ExecutiveGate';
 import { CortexService } from '@llm/gemini';
 import { AutonomyRepertoire } from '@core/systems/AutonomyRepertoire';
 
@@ -109,6 +110,11 @@ describe('Grounding auto-search', () => {
     };
 
     const autonomyCfg = getAutonomyConfig();
+    const gateContext = {
+      ...ExecutiveGate.getDefaultContext(ctx.limbic, now - ctx.goalState.lastUserInteractionAt),
+      isUserFacing: false,
+      lastTool: null
+    };
 
     await runAutonomousVolitionStep({
       ctx: ctx as any,
@@ -119,7 +125,7 @@ describe('Grounding auto-search', () => {
         }
       },
       trace: { traceId: 'trace-auto-search', tickNumber: 1, agentId: 'agent_1' },
-      gateContext: {},
+      gateContext,
       silenceDurationSec: autonomyCfg.exploreMinSilenceSec + 1,
       budgetTracker: {
         checkBudget: () => true,
