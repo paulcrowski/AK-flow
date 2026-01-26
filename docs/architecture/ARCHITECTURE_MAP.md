@@ -1,6 +1,6 @@
 # 🧠 AK-FLOW Architecture Map
 
-> **Wersja:** 6.11.1 (2026-01-25)
+> **Wersja:** 6.11.2 (2026-01-26)
 > **Cel:** Prosta mapa jak działa agent i jaki ma flow
 
 ## Archive policy
@@ -9,6 +9,15 @@
 Ten katalog jest wykluczony z kompilacji TypeScript i służy wyłącznie jako referencja do poprzednich iteracji.
 
 ---
+
+## FAZA 6.11.2: EventLoop plumbing + auto-search reliability (2026-01-26)
+
+**Cel:** poprawic obserwowalnosc auto-search i zmniejszyc coupling EventLoop bez zmiany zachowania.
+
+**Mechanika:**
+- Auto-search uzywa wspolnego executora; TOOL_INTENT zawsze konczy sie TOOL_RESULT/TOOL_ERROR; intel/tool_result widoczne w UI.
+- EventLoop rozbity na observation utils/tool cost helpers i library reactive handlers; tool routing helpers wydzielone.
+- EventLoop defaults przeniesione do systemConfig; usuniete module-level cache w core/systems.
 
 ## FAZA 6.11.1: v8.2 Focus + Tool Contracts + Deterministic Follow-ups (2026-01-25)
 

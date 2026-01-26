@@ -1,6 +1,6 @@
 # AK-FLOW: Cognitive Agent Architecture Manifest
-**System Version:** 6.11.1 (v8.2: Focus + Tool Contracts + Deterministic Follow-ups)  
-**Last Updated:** 2026-01-25  
+**System Version:** 6.11.2 (v8.2: EventLoop refactor + auto-search wiring)
+**Last Updated:** 2026-01-26
 **Architecture Type:** Active Inference (Friston) + Global Workspace Theory + Multi-Modal RAG + **Stateless Inference Engine**  
 **Status:** Autonomous / Stateful / Modular / Self-Aware / Goal-Driven / Personality-Driven / **Emergent Identity**
 
@@ -19,8 +19,8 @@ We reject the "One True Agent" fallacy. The agent is a **flow of intention** tha
 ### 2. The Silicon Advantage
 We embrace the artificial nature as a feature, not a bug.
 # AK-FLOW: Cognitive Agent Architecture Manifest
-**System Version:** 6.11.1 (v8.2: Focus + Tool Contracts + Deterministic Follow-ups)  
-**Last Updated:** 2026-01-25  
+**System Version:** 6.11.2 (v8.2: EventLoop refactor + auto-search wiring)
+**Last Updated:** 2026-01-26
 **Architecture Type:** Active Inference (Friston) + Global Workspace Theory + Multi-Modal RAG + **Stateless Inference Engine**  
 **Status:** Autonomous / Stateful / Modular / Self-Aware / Goal-Driven / Personality-Driven / **Emergent Identity**
 
@@ -48,6 +48,29 @@ We embrace the artificial nature as a feature, not a bug.
 - **Measurable Soul:** Emotions and "vibes" are allowed, but they must map to system metrics (Energy, Dopamine), not just literary roleplay.
 
 ---
+
+## What's New in V6.11.2 (2026-01-26)
+
+### EventLoop plumbing + auto-search reliability
+
+**Goal:** make auto-search fully observable and reduce EventLoop/tool routing coupling without behavior change.
+
+**Key changes:**
+- Auto-search uses shared executor; TOOL_INTENT always settles with TOOL_RESULT/TOOL_ERROR; intel/tool_result visible in UI.
+- EventLoop split into observation utils, tool cost helpers, and library reactive handlers; tool routing helpers extracted.
+- EventLoop defaults centralized in systemConfig; removed module-level caches to satisfy GlobalStateAudit.
+
+**Configuration (Single Source):**
+- core/config/systemConfig.ts -> SYSTEM_CONFIG.eventLoop
+
+**Tests:**
+- `npm test -- --run toolParser.routing`
+- `npm test -- --run ActionFirst`
+- `npm test -- --run PendingAction`
+- `npm test -- --run IntentContract`
+- `npm test -- --run ExecutiveGate`
+- `npm test -- --run GlobalStateAudit`
+- `npm run build` not rerun.
 
 ## What's New in V6.11.1 (2026-01-25)
 
