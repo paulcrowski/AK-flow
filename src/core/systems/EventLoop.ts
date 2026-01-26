@@ -40,25 +40,18 @@ import { DEFAULT_AGENT_ID, getAgentWorldRoot } from './WorldAccess';
 import { executeWorldTool } from '../../tools/workspaceTools';
 import { generateUUID } from '../../utils/uuid';
 import { getWorldDirectorySelection } from '@tools/worldDirectoryAccess';
+import {
+    baseName,
+    extractDirectoryTarget,
+    extractFileTarget,
+    getFileScanLimits,
+    getSafeCwd,
+    joinPaths,
+    questionRequiresEvidence,
+    resolveObservationPath
+} from './eventloop/observationUtils';
 
-export function normalizeToolName(tool: string): string {
-    const name = String(tool || '');
-    if (name.startsWith('READ_FILE')) return 'READ_FILE';
-    if (name.startsWith('LIST_')) return 'LIST_DIR';
-    if (name.startsWith('SEARCH')) return 'SEARCH';
-    if (name.startsWith('WRITE') || name.startsWith('APPEND')) return 'WRITE_FILE';
-    if (name.startsWith('READ_ARTIFACT')) return 'READ_ARTIFACT';
-    return 'OTHER';
-}
-
-export const TOOL_COST: Record<string, number> = {
-    LIST_DIR: 2,
-    READ_FILE: 3,
-    READ_ARTIFACT: 2,
-    SEARCH: 5,
-    WRITE_FILE: 4,
-    OTHER: 2
-};
+export { normalizeToolName, TOOL_COST } from './eventloop/toolCost';
 
 export namespace EventLoop {
     export type ThinkMode = 'reactive' | 'goal_driven' | 'autonomous' | 'idle';
@@ -88,7 +81,7 @@ export namespace EventLoop {
         goalState: GoalState;
         traitVector: TraitVector; // NEW: Temperament / personality vector (FAZA 4)
         lastSpeechNovelty?: number; // FAZA 4.5: Novelty of last speech for boredom detection
-        consecutiveAgentSpeeches: number; // FAZA 4.5: Narcissism Loop Fix - ile razy agent mówił bez odpowiedzi usera
+        consecutiveAgentSpeeches: number; // FAZA 4.5: Narcissism Loop Fix - ile razy agent m�wil bez odpowiedzi usera
         // FAZA 5: Dynamic Persona
         agentIdentity?: CortexSystemNS.AgentIdentityContext;
         sessionOverlay?: CortexSystemNS.SessionOverlay;
@@ -108,7 +101,6 @@ export namespace EventLoop {
         }
     });
     let tickCount = 0;
-    const fileLookupCache = new Map<string, string>();
     type SchemaStoreLike = {
         load(id: string): Promise<Schema | null>;
         save(schema: Schema): Promise<void>;
@@ -127,12 +119,7 @@ export namespace EventLoop {
     const DEFAULT_CHUNK_RELEVANCE = 0.6;
     const READINESS_BOOST_PER_TICK = 0.01;
     const FILE_CONTENT_TRUNCATE_LIMIT = 8000;
-    const EVIDENCE_TYPES = ['READ_FILE', 'TEST_OUTPUT', 'SEARCH_HIT'] as const;
-    const normalizeFsPath = (input: string) => String(input || '').replace(/\\/g, '/');
-    const joinPaths = (...parts: string[]) =>
-        normalizeFsPath(parts.filter(Boolean).join('/')).replace(/\/+/g, '/');
-    const isAbsolutePath = (value: string) => /^[A-Za-z]:[\\/]/.test(value) || value.startsWith('/');
-    const baseName = (value: string) => normalizeFsPath(value).split('/').pop() ?? value;
+    const EVIDENCE_TYPES = ['READ_FILE', 'TEST_OUTPUT', 'SEARCH_HIT'] as const;
     const buildAutonomyDecision = (ctx: LoopContext, agentId: string, agentName: string | null) => {
         const resolvedName = ctx.agentIdentity?.name || agentName || 'AK-FLOW';
         const basePersona: BasePersona = {
@@ -179,59 +166,8 @@ export namespace EventLoop {
         );
     };
 
-    const FILE_REF_REGEX = /([A-Za-z]:[\\/][^\s]+|\/[^\s]+|[A-Za-z0-9._-]+(?:[\\/][A-Za-z0-9._-]+)+\.[A-Za-z0-9]{1,8}|[A-Za-z0-9._-]+\.[A-Za-z0-9]{1,8})/;
-    const EVIDENCE_QUERY_REGEX = /\b(co jest w|co zawiera|zawartosc|show|what is in|open|read|file|plik)\b/i;
-    const DIR_QUERY_REGEX = /\b(katalog|folder|directory|dir|lista plikow|list files?)\b/i;
-    const DIR_TARGET_REGEX = /(?:katalog|folder|directory|dir|lista plikow|list files?(?: in)?)\s+["'`]?([A-Za-z]:[\\/][^\s"'`]+|\/[^\s"'`]+|[A-Za-z0-9._-]+(?:[\\/][A-Za-z0-9._-]+)*)/i;
-    const DIR_TRAILING_REGEX = /([A-Za-z]:[\\/][^\s"'`]+[\\/]|\/[^\s"'`]+\/|[A-Za-z0-9._-]+(?:[\\/][A-Za-z0-9._-]+)*\/)/;
-    const SKIP_DIRS = new Set(['node_modules', '.git', 'dist', 'ak-nexus', 'database', '_patches', '_workbench']);
-    const safeCwd = typeof process !== 'undefined' && typeof process.cwd === 'function' ? process.cwd() : '';
-
-    type FileScanLimits = { maxDepth: number; maxCount: number };
-    type FileScanState = {
-        visitedCount: number;
-        maxDepthReached: number;
-        hitCountLimit: boolean;
-        hitDepthLimit: boolean;
-    };
-    type FileScanSummary = {
-        requestedDepth: number;
-        requestedCount: number;
-        visitedCount: number;
-        maxDepthReached: number;
-        hitCountLimit: boolean;
-        hitDepthLimit: boolean;
-        foundCount: number;
-        query: string;
-        target: string;
-        scanAvailable?: boolean;
-    };
-    type FileScanResult = {
-        resolvedPath: string;
-        found: boolean;
-        summary: FileScanSummary | null;
-    };
-
-    const getFileScanLimits = (): FileScanLimits => {
-        const config = (SYSTEM_CONFIG as any).siliconBeing ?? {};
-        const depthRaw = Number(config.fileScanMaxDepth);
-        const countRaw = Number(config.fileScanMaxCount);
-        const maxDepth = Number.isFinite(depthRaw) ? Math.max(0, Math.floor(depthRaw)) : 6;
-        const maxCount = Number.isFinite(countRaw) ? Math.max(0, Math.floor(countRaw)) : 2000;
-        return { maxDepth, maxCount };
-    };
-
-    type FsModule = typeof import('fs/promises');
-    let fsPromise: Promise<FsModule | null> | null = null;
+    const safeCwd = getSafeCwd();
     let schemaStoreCtor: (new (worldRoot: string) => SchemaStoreLike) | null = null;
-
-    const loadFs = async (): Promise<FsModule | null> => {
-        if (!isNode) return null;
-        if (!fsPromise) {
-            fsPromise = import('fs/promises').catch(() => null);
-        }
-        return fsPromise;
-    };
 
     const getEvidenceCount = () => evidenceLedger.getCount(300000, [...EVIDENCE_TYPES]);
 
@@ -247,175 +183,6 @@ export namespace EventLoop {
         const store = new schemaStoreCtor(worldRoot);
         schemaStores.set(worldRoot, store);
         return store;
-    };
-
-    const questionRequiresEvidence = (input: string) => {
-        const normalized = String(input || '').toLowerCase();
-        if (FILE_REF_REGEX.test(normalized)) return true;
-        if (DIR_QUERY_REGEX.test(normalized)) return false;
-        return EVIDENCE_QUERY_REGEX.test(normalized);
-    };
-
-    const extractFileTarget = (input: string | null): string | null => {
-        if (!input) return null;
-        const match = String(input).match(FILE_REF_REGEX);
-        if (!match?.[1]) return null;
-        return match[1].replace(/[),.;:!?"']+$/, '');
-    };
-
-    const extractDirectoryTarget = (input: string | null): string | null => {
-        if (!input) return null;
-        const raw = String(input);
-        const keywordMatch = raw.match(DIR_TARGET_REGEX);
-        if (keywordMatch?.[1]) return keywordMatch[1].replace(/[),.;:!?"']+$/, '');
-        const trailingMatch = raw.match(DIR_TRAILING_REGEX);
-        if (trailingMatch?.[1]) {
-            const trimmed = raw.replace(/[),.;:!?"']+$/, '');
-            if (trimmed.endsWith(trailingMatch[1])) {
-                return trailingMatch[1].replace(/[),.;:!?"']+$/, '');
-            }
-        }
-        return null;
-    };
-
-    const findFileByName = async (
-        root: string,
-        target: string,
-        depth: number,
-        limits: FileScanLimits,
-        state: FileScanState,
-        fsModule: FsModule
-    ): Promise<string | null> => {
-        if (depth > limits.maxDepth) {
-            state.hitDepthLimit = true;
-            state.maxDepthReached = Math.max(state.maxDepthReached, depth);
-            return null;
-        }
-        state.maxDepthReached = Math.max(state.maxDepthReached, depth);
-        let entries: any[] = [];
-        try {
-            entries = await fsModule.readdir(root, { withFileTypes: true });
-        } catch {
-            return null;
-        }
-        for (const entry of entries) {
-            if (state.visitedCount >= limits.maxCount) {
-                state.hitCountLimit = true;
-                return null;
-            }
-            state.visitedCount += 1;
-            if (entry.isDirectory()) {
-                if (SKIP_DIRS.has(entry.name)) continue;
-                const found = await findFileByName(
-                    joinPaths(root, entry.name),
-                    target,
-                    depth + 1,
-                    limits,
-                    state,
-                    fsModule
-                );
-                if (found) return found;
-            } else if (entry.isFile() && entry.name.toLowerCase() === target.toLowerCase()) {
-                return joinPaths(root, entry.name);
-            }
-        }
-        return null;
-    };
-
-    const emitFileScanSummary = (summary: FileScanSummary) => {
-        eventBus.publish({
-            id: generateUUID(),
-            timestamp: Date.now(),
-            source: AgentType.CORTEX_FLOW,
-            type: PacketType.FILE_SCAN_SUMMARY,
-            payload: summary,
-            priority: 0.5
-        });
-        if (summary.hitCountLimit || summary.hitDepthLimit) {
-            eventBus.publish({
-                id: generateUUID(),
-                timestamp: Date.now(),
-                source: AgentType.CORTEX_FLOW,
-                type: PacketType.FILE_SCAN_LIMIT_REACHED,
-                payload: summary,
-                priority: 0.6
-            });
-        }
-    };
-
-    const resolveObservationPath = async (
-        rawTarget: string,
-        options?: { query?: string; candidateRoots?: string[]; limits?: FileScanLimits }
-    ): Promise<FileScanResult> => {
-        const normalized = String(rawTarget || '').trim();
-        if (!normalized) {
-            return { resolvedPath: normalized, found: false, summary: null };
-        }
-        if (isAbsolutePath(normalized)) {
-            return { resolvedPath: normalized, found: true, summary: null };
-        }
-        if (normalized.includes('/') || normalized.includes('\\')) {
-            return {
-                resolvedPath: safeCwd ? joinPaths(safeCwd, normalized) : normalized,
-                found: true,
-                summary: null
-            };
-        }
-        const cached = fileLookupCache.get(normalized);
-        if (cached) {
-            return { resolvedPath: cached, found: true, summary: null };
-        }
-        const limits = options?.limits ?? getFileScanLimits();
-        const state: FileScanState = {
-            visitedCount: 0,
-            maxDepthReached: 0,
-            hitCountLimit: false,
-            hitDepthLimit: false
-        };
-        const candidateRoots = options?.candidateRoots ?? (safeCwd ? [joinPaths(safeCwd, 'src'), safeCwd] : []);
-        const fsModule = await loadFs();
-        if (!fsModule) {
-            const summary: FileScanSummary = {
-                requestedDepth: limits.maxDepth,
-                requestedCount: limits.maxCount,
-                visitedCount: 0,
-                maxDepthReached: 0,
-                hitCountLimit: false,
-                hitDepthLimit: false,
-                foundCount: 0,
-                query: String(options?.query ?? ''),
-                target: normalized,
-                scanAvailable: false
-            };
-            emitFileScanSummary(summary);
-            const fallback = safeCwd ? joinPaths(safeCwd, normalized) : normalized;
-            fileLookupCache.set(normalized, fallback);
-            return { resolvedPath: fallback, found: false, summary };
-        }
-        let foundPath: string | null = null;
-        for (const root of candidateRoots) {
-            const found = await findFileByName(root, normalized, 0, limits, state, fsModule);
-            if (found) {
-                foundPath = found;
-                break;
-            }
-        }
-        const summary: FileScanSummary = {
-            requestedDepth: limits.maxDepth,
-            requestedCount: limits.maxCount,
-            visitedCount: state.visitedCount,
-            maxDepthReached: state.maxDepthReached,
-            hitCountLimit: state.hitCountLimit,
-            hitDepthLimit: state.hitDepthLimit,
-            foundCount: foundPath ? 1 : 0,
-            query: String(options?.query ?? ''),
-            target: normalized
-        };
-        emitFileScanSummary(summary);
-
-        const resolved = foundPath ?? (safeCwd ? joinPaths(safeCwd, normalized) : normalized);
-        fileLookupCache.set(normalized, resolved);
-        return { resolvedPath: resolved, found: Boolean(foundPath), summary };
     };
 
     const buildChunkCandidates = (input: string | null, ctx: LoopContext): ChunkRef[] => {
@@ -447,10 +214,10 @@ export namespace EventLoop {
         evidenceCount
     });
 
-    // ═══════════════════════════════════════════════════════════════════════════
+    // ---------------------------------------------------------------------------
     // SOCIAL DYNAMICS: Now unified in ExecutiveGate.checkSocialDynamics()
     // Legacy shouldSpeakToUser() removed - all checks in one gate
-    // ═══════════════════════════════════════════════════════════════════════════
+    // ---------------------------------------------------------------------------
 
     export interface LoopCallbacks {
         onMessage: (role: string, text: string, type: any, meta?: {
