@@ -405,6 +405,9 @@ const executeWorldToolWithFsAccess = async (params: {
       const dirHandle = await resolveDirectoryHandle(rootHandle, segments, true);
       if (!dirHandle) return errorReturn(input.tool, resolved, 'NOT_FOUND');
       const fileHandle = await dirHandle.getFileHandle(fileName, { create: true });
+      if (typeof fileHandle.createWritable !== 'function') {
+        return errorReturn(input.tool, resolved, 'WRITE_UNSUPPORTED');
+      }
       const writable = await fileHandle.createWritable();
       await writable.write(content);
       await writable.close();
@@ -423,6 +426,9 @@ const executeWorldToolWithFsAccess = async (params: {
       if (!dirHandle) return errorReturn(input.tool, resolved, 'NOT_FOUND');
       const fileHandle = await dirHandle.getFileHandle(fileName, { create: true });
       const file = await fileHandle.getFile();
+      if (typeof fileHandle.createWritable !== 'function') {
+        return errorReturn(input.tool, resolved, 'WRITE_UNSUPPORTED');
+      }
       const writable = await fileHandle.createWritable();
       await writable.seek(file.size);
       await writable.write(content);

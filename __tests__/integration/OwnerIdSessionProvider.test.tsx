@@ -11,7 +11,7 @@ type SupabaseMocks = {
   fromMock: ReturnType<typeof vi.fn>;
 };
 
-let supabaseMocks: SupabaseMocks;
+var supabaseMocks: SupabaseMocks;
 
 vi.mock('@services/supabase', () => {
   const setCurrentOwnerIdMock = vi.fn();
