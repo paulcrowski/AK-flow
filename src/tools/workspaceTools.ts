@@ -979,7 +979,7 @@ export async function consumeWorkspaceTags(params: {
         }, { publish, makeId });
 
         deps.addMessage('assistant', text, 'tool_result');
-        updateLibraryAnchor(documentId, originalName || undefined);
+        updateLibraryAnchor(documentId);
         await boostReadMemory({
           tool,
           documentId,

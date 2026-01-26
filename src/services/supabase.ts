@@ -9,9 +9,36 @@ import { thalamus } from '../core/systems/ThalamusFilter';
 import { contentHash } from '../utils/contentHash';
 import { computeNeuralStrength } from '../utils/memoryStrength';
 
-const getEnv = (key: string) => typeof process !== 'undefined' ? process.env[key] : undefined;
-const SUPABASE_URL = getEnv('SUPABASE_URL') || 'https://qgnpsfoauhvddbxsoikj.supabase.co';
-const SUPABASE_KEY = getEnv('SUPABASE_KEY') || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFnbnBzZm9hdWh2ZGRieHNvaWtqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjM2MjY5NDEsImV4cCI6MjA3OTIwMjk0MX0.ZuCrnI6cFb_lD8U3th5zkMAXeEj-iohnmjq0pEEGEfI';
+const getEnv = (key: string): string | undefined => {
+  if (typeof import.meta !== 'undefined') {
+    const metaEnv = (import.meta as { env?: Record<string, string | undefined> }).env;
+    if (metaEnv && typeof metaEnv[key] === 'string') return metaEnv[key];
+  }
+  if (typeof process !== 'undefined') {
+    const procEnv = (process as { env?: Record<string, string | undefined> }).env;
+    if (procEnv && typeof procEnv[key] === 'string') return procEnv[key];
+  }
+  return undefined;
+};
+const fallbackUrl = 'https://example.supabase.co';
+const fallbackKey = 'SUPABASE_KEY_MISSING';
+const resolvedUrl =
+  getEnv('VITE_SUPABASE_URL') ??
+  getEnv('SUPABASE_URL') ??
+  '';
+const resolvedKey =
+  getEnv('VITE_SUPABASE_KEY') ??
+  getEnv('VITE_SUPABASE_ANON_KEY') ??
+  getEnv('SUPABASE_KEY') ??
+  getEnv('SUPABASE_ANON_KEY') ??
+  '';
+const hasEnv = Boolean(resolvedUrl && resolvedKey);
+const SUPABASE_URL = hasEnv ? resolvedUrl : fallbackUrl;
+const SUPABASE_KEY = hasEnv ? resolvedKey : fallbackKey;
+
+if (!hasEnv) {
+  console.warn('[Supabase] Missing SUPABASE_URL or SUPABASE_KEY. Using placeholder client.');
+}
 
 export const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
