@@ -212,6 +212,12 @@ export const SYSTEM_CONFIG = {
     fileScanMaxCount: 2000
   },
 
+  eventLoop: {
+    defaultChunkRelevance: 0.6,
+    readinessBoostPerTick: 0.01,
+    fileContentPreviewLimit: 8000
+  },
+
   // ─────────────────────────────────────────────────────────────────────────
   // GOAL SYSTEM
   // ─────────────────────────────────────────────────────────────────────────

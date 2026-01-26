@@ -116,9 +116,14 @@ export namespace EventLoop {
         typeof process !== 'undefined' &&
         Boolean((process as { versions?: { node?: string } }).versions?.node);
 
-    const DEFAULT_CHUNK_RELEVANCE = 0.6;
-    const READINESS_BOOST_PER_TICK = 0.01;
-    const FILE_CONTENT_TRUNCATE_LIMIT = 8000;
+    const eventLoopConfig = (SYSTEM_CONFIG as any).eventLoop ?? {};
+    const DEFAULT_CHUNK_RELEVANCE =
+        Number.isFinite(eventLoopConfig.defaultChunkRelevance) ? eventLoopConfig.defaultChunkRelevance : 0.6;
+    const READINESS_BOOST_PER_TICK =
+        Number.isFinite(eventLoopConfig.readinessBoostPerTick) ? eventLoopConfig.readinessBoostPerTick : 0.01;
+    const FILE_CONTENT_TRUNCATE_LIMIT = Number.isFinite(eventLoopConfig.fileContentPreviewLimit)
+        ? Math.max(0, Math.floor(eventLoopConfig.fileContentPreviewLimit))
+        : 8000;
     const EVIDENCE_TYPES = ['READ_FILE', 'TEST_OUTPUT', 'SEARCH_HIT'] as const;
     const buildAutonomyDecision = (ctx: LoopContext, agentId: string, agentName: string | null) => {
         const resolvedName = ctx.agentIdentity?.name || agentName || 'AK-FLOW';
