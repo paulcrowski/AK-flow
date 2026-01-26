@@ -53,4 +53,20 @@ describe('searchExecutor', () => {
     expect(recordSpy).toHaveBeenCalledWith('SEARCH_HIT', 'beta');
     recordSpy.mockRestore();
   });
+
+  it('should handle search errors gracefully', async () => {
+    vi.mocked(CortexService.performDeepResearch).mockRejectedValue(new Error('API Failure'));
+
+    const outcome = await runSearchAndPersist({
+      query: 'gamma',
+      reason: 'failure test',
+      intentId: 'intent-3',
+      deps: {}
+    });
+
+    expect(outcome.ok).toBe(false);
+    if (!outcome.ok) { // TypeScript guard
+      expect(outcome.error).toBe('API Failure');
+    }
+  });
 });

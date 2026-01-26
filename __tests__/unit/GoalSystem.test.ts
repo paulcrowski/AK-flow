@@ -90,4 +90,39 @@ describe('GoalSystem formGoal', () => {
       'Wykonaj gleboka analize (Deep Research) lub wyszukaj nowe informacje na temat system overhaul.'
     );
   });
+  it('handles SessionChunkService failure gracefully (fallback to safe topic)', async () => {
+    const now = Date.now();
+    fetchRecentSessionChunks.mockRejectedValue(new Error('Session retrieval failed'));
+
+    const ctx = createContext(now, {
+      conversation: [], // Empty conversation triggers chunk fallback
+      neuro: { dopamine: 80, serotonin: 55, norepinephrine: 55 }
+    });
+    const goalState = createGoalState(ctx.lastUserInteractionAt);
+
+    const goal = await formGoal(ctx, goalState);
+
+    // Should fallback to default topic 'ostatni temat rozmowy' instead of crashing
+    expect(goal?.description).toContain('ostatni temat rozmowy');
+  });
+
+  it('handles GoalJournalService failure gracefully (fire and forget)', async () => {
+    const now = Date.now();
+    const ctx = createContext(now, {
+      conversation: [{ role: 'user', text: 'test' }],
+      neuro: { dopamine: 50, serotonin: 55, norepinephrine: 55 }
+    });
+    const goalState = createGoalState(ctx.lastUserInteractionAt);
+
+    // Journal fails, but goal should still be formed in memory
+    createGoal.mockRejectedValue(new Error('Journal write failed'));
+
+    const goal = await formGoal(ctx, goalState);
+
+    expect(goal).not.toBeNull();
+    expect(goal?.description).toBeTruthy();
+    expect(createGoal).toHaveBeenCalled();
+    // No crash
+  });
 });
+

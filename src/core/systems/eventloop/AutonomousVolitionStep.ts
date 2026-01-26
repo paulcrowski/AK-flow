@@ -134,16 +134,16 @@ const ensureAutonomyRuntime = (ctx: AutonomousVolitionLoopContext): AutonomyRunt
 function shouldTriggerAutonomy(runtime: AutonomyRuntime, silenceMs: number, minSilenceMs: number): boolean {
   const now = Date.now();
   const { lastAttemptAt, consecutiveFailures, baseCooldownMs, maxCooldownMs } = runtime.failureState;
-  
+
   // Exponential backoff: 25s, 50s, 100s, then cap at 5 min
-  const cooldown = consecutiveFailures >= 3 
-    ? maxCooldownMs 
+  const cooldown = consecutiveFailures >= 3
+    ? maxCooldownMs
     : baseCooldownMs * Math.pow(2, consecutiveFailures);
-  
+
   if (now - lastAttemptAt < cooldown) {
     return false;
   }
-  
+
   return silenceMs >= minSilenceMs;
 }
 
@@ -222,7 +222,7 @@ export async function runAutonomousVolitionStep(input: {
       autonomyConsecutiveFailures: runtime.failureState.consecutiveFailures
     });
   }
-  
+
   // P0.1: Backoff check - skip if in cooldown
   if (!shouldTriggerAutonomy(runtime, silenceMs, minSilenceMs)) {
     if (traceId) {
@@ -233,7 +233,7 @@ export async function runAutonomousVolitionStep(input: {
   }
 
   if (traceId) p0MetricAdd(traceId, { autonomyAttempt: 1 });
-  
+
   if (!VolitionSystem.shouldInitiateThought(silenceDurationSec, autonomyCfg.exploreMinSilenceSec)) {
     return;
   }
@@ -266,8 +266,8 @@ export async function runAutonomousVolitionStep(input: {
 
   const semanticMatches = memoryQuery
     ? (await memorySpace.hot.semanticSearch(memoryQuery, {
-        limit: getRetrievalLimit(memoryIntent)
-      })).map((m) => m.content)
+      limit: getRetrievalLimit(memoryIntent)
+    })).map((m) => m.content)
     : undefined;
 
   let sessionChunks: string[] | undefined;
@@ -339,10 +339,10 @@ export async function runAutonomousVolitionStep(input: {
     worldAccess: { hasSelection: hasWorldSelection },
     activeGoal: ctx.goalState.activeGoal
       ? {
-          description: ctx.goalState.activeGoal.description,
-          source: ctx.goalState.activeGoal.source,
-          priority: ctx.goalState.activeGoal.priority
-        }
+        description: ctx.goalState.activeGoal.description,
+        source: ctx.goalState.activeGoal.source,
+        priority: ctx.goalState.activeGoal.priority
+      }
       : undefined
   });
 
@@ -414,7 +414,25 @@ export async function runAutonomousVolitionStep(input: {
 
   unifiedContext.actionPrompt = actionDecision.suggestedPrompt || '';
 
-  const volition = await CortexService.autonomousVolitionV2(unifiedContext);
+  let volition;
+  try {
+    volition = await CortexService.autonomousVolitionV2(unifiedContext);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error(`[AUTONOMY_STEP] Cortex failure: ${msg}`);
+    callbacks.onThought(`[AUTONOMY_ERROR] Przerwanie połączenia z Cortex: ${msg}`);
+    onAutonomyResult(runtime, false);
+    if (traceId) p0MetricAdd(traceId, { autonomyFail: 1 });
+    eventBus.publish({
+      id: `autonomy-fail-resilience-${Date.now()}`,
+      timestamp: Date.now(),
+      source: AgentType.CORTEX_FLOW,
+      type: PacketType.SYSTEM_ALERT,
+      payload: { event: 'CORTEX_AUTONOMY_FAILURE', error: msg },
+      priority: 0.9
+    });
+    return;
+  }
 
   const groundingValidation = AutonomyRepertoire.validateSpeech(
     volition.speech_content,
@@ -635,12 +653,12 @@ export async function runAutonomousVolitionStep(input: {
     if (styleResult.text.length > styleCfg.minTextLength) {
       const commit = isMainFeatureEnabled('ONE_MIND_ENABLED')
         ? TickCommitter.commitSpeech({
-            agentId: trace.agentId!,
-            traceId: trace.traceId,
-            tickNumber: trace.tickNumber,
-            origin: 'autonomous',
-            speechText: styleResult.text
-          })
+          agentId: trace.agentId!,
+          traceId: trace.traceId,
+          tickNumber: trace.tickNumber,
+          origin: 'autonomous',
+          speechText: styleResult.text
+        })
         : { committed: true, blocked: false, deduped: false };
 
       if (commit.committed) {

@@ -196,298 +196,298 @@ export async function runReactiveStep(input: {
   if (ACTION_FIRST_ENABLED) {
     const actionIntent = detectActionableIntent(userInput);
     const store = useArtifactStore.getState();
-      const resolveImplicitTarget = () => {
-        const lastFocusedId = store.order?.[0] ?? null;
-        const lastCreatedId = store.lastCreatedId ?? null;
-        const id = lastFocusedId || lastCreatedId;
-        if (!id) return null;
-        const artifact = store.get(id);
-        const nameHint = artifact?.name || getRememberedArtifactName(id) || '';
-        return { id, nameHint };
-      };
-      const implicitTarget =
-        (!actionIntent.target && (actionIntent.action === 'APPEND' || actionIntent.action === 'REPLACE'))
-          ? resolveImplicitTarget()
-          : null;
-      const target = actionIntent.target || implicitTarget?.id;
-      const implicitNameHint = implicitTarget?.nameHint || '';
+    const resolveImplicitTarget = () => {
+      const lastFocusedId = store.order?.[0] ?? null;
+      const lastCreatedId = store.lastCreatedId ?? null;
+      const id = lastFocusedId || lastCreatedId;
+      if (!id) return null;
+      const artifact = store.get(id);
+      const nameHint = artifact?.name || getRememberedArtifactName(id) || '';
+      return { id, nameHint };
+    };
+    const implicitTarget =
+      (!actionIntent.target && (actionIntent.action === 'APPEND' || actionIntent.action === 'REPLACE'))
+        ? resolveImplicitTarget()
+        : null;
+    const target = actionIntent.target || implicitTarget?.id;
+    const implicitNameHint = implicitTarget?.nameHint || '';
 
-      const emitToolCommit = (params: {
-        action: 'CREATE' | 'APPEND' | 'REPLACE';
-        artifactId: string;
-        artifactName: string;
-        beforeContent?: string;
-        afterContent?: string;
-        deltaText?: string;
-      }) => {
-        const details = buildToolCommitDetails(params);
-        if (!details) return;
-        const message = formatToolCommitMessage(details);
-        eventBus.publish({
-          id: generateUUID(),
-          timestamp: Date.now(),
-          source: AgentType.CORTEX_FLOW,
-          type: PacketType.SYSTEM_ALERT,
-          payload: {
-            event: 'TOOL_COMMIT',
-            message,
-            ...details
-          },
-          priority: 0.7
-        });
-      };
-
-      const emitSystemAlert = (event: string, payload: Record<string, unknown>, priority = 0.6) => {
-        eventBus.publish({
-          id: generateUUID(),
-          timestamp: Date.now(),
-          source: AgentType.CORTEX_FLOW,
-          type: PacketType.SYSTEM_ALERT,
-          payload: { event, ...payload },
-          priority
-        });
-      };
-      const toolResultOptions = { priority: 0.8 };
-      const toolErrorOptions = { priority: 0.9 };
-      const emitToolResult = (
-        tool: string,
-        intentId: string,
-        payload?: Record<string, unknown>,
-        options: { priority: number } = toolResultOptions
-      ) => {
-        const normalized: Record<string, unknown> = { ...(payload ?? {}) };
-        if (typeof normalized.id === 'string' && typeof normalized.artifactId !== 'string') {
-          if (tool === 'CREATE' || tool === 'APPEND' || tool === 'REPLACE' || tool === 'READ_ARTIFACT') {
-            normalized.artifactId = normalized.id;
-          }
-        }
-        if (typeof normalized.name === 'string' && typeof normalized.artifactName !== 'string') {
-          normalized.artifactName = normalized.name;
-        }
-        validateToolResult(tool, normalized);
-        emitToolResultContract(tool, intentId, normalized, options);
-      };
-
-      const updateLibraryAnchor = (
-        documentId: string,
-        documentName?: string | null,
-        chunkCount?: number | null
-      ) => {
-        const previousDocId = ctx.lastLibraryDocId ?? null;
-        const shouldResetChunkCount =
-          Boolean(previousDocId) && previousDocId !== documentId && typeof chunkCount !== 'number';
-
-        ctx.lastLibraryDocId = documentId;
-        ctx.activeDomain = 'LIBRARY';
-        if (documentName !== undefined) {
-          ctx.lastLibraryDocName = documentName;
-        }
-        if (typeof chunkCount === 'number') {
-          ctx.lastLibraryDocChunkCount = chunkCount;
-        } else if (shouldResetChunkCount) {
-          ctx.lastLibraryDocChunkCount = null;
-        }
-        try {
-          const state = getCognitiveState();
-          if (state?.hydrate) {
-            const patch: Record<string, unknown> = {
-              lastLibraryDocId: documentId,
-              activeDomain: 'LIBRARY'
-            };
-            if (documentName !== undefined) {
-              patch.lastLibraryDocName = documentName;
-            }
-            if (typeof chunkCount === 'number') {
-              patch.lastLibraryDocChunkCount = chunkCount;
-            } else if (shouldResetChunkCount) {
-              patch.lastLibraryDocChunkCount = null;
-            }
-            state.hydrate(patch);
-          }
-        } catch {
-          // ignore state sync issues
-        }
-      };
-
-      const updateWorldAnchor = (path: string) => {
-        ctx.lastWorldPath = path;
-        ctx.activeDomain = 'WORLD';
-        try {
-          const state = getCognitiveState();
-          if (state?.hydrate) state.hydrate({ lastWorldPath: path, activeDomain: 'WORLD' });
-        } catch {
-          // ignore state sync issues
-        }
-      };
-
-      const updateArtifactAnchor = (artifactId: string, artifactName?: string | null) => {
-        ctx.lastArtifactId = artifactId;
-        ctx.activeDomain = 'ARTIFACT';
-        if (artifactName !== undefined) {
-          ctx.lastArtifactName = artifactName;
-        }
-        try {
-          const state = getCognitiveState();
-          if (state?.hydrate) {
-            state.hydrate({
-              lastArtifactId: artifactId,
-              activeDomain: 'ARTIFACT',
-              ...(artifactName !== undefined ? { lastArtifactName: artifactName } : {})
-            });
-          }
-        } catch {
-          // ignore state sync issues
-        }
-      };
-
-      const ensureCursor = () => {
-        if (!ctx.cursor) ctx.cursor = {};
-        return ctx.cursor;
-      };
-
-      const setLibraryFocus = (documentId: string, documentName?: string | null, chunkCount?: number | null) => {
-        ctx.focus = { domain: 'LIBRARY', id: documentId, label: documentName ?? null };
-        if (typeof chunkCount === 'number' && chunkCount > 0) {
-          ctx.cursor = { chunkCount, chunkIndex: 0 };
-        } else {
-          ctx.cursor = {};
-        }
-      };
-
-      const updateCursorForChunkList = (documentId: string, chunkCount?: number | null) => {
-        if (ctx.focus?.domain !== 'LIBRARY' || ctx.focus.id !== documentId) return;
-        const cursor = ensureCursor();
-        if (typeof chunkCount === 'number') {
-          cursor.chunkCount = chunkCount;
-          if (cursor.chunkIndex === undefined && chunkCount > 0) {
-            cursor.chunkIndex = 0;
-          }
-        }
-        cursor.chunksKnownForDocId = documentId;
-        ctx.cursor = cursor;
-      };
-
-      const updateCursorForChunk = (documentId: string, chunkId?: string | null, chunkIndex?: number) => {
-        if (ctx.focus?.domain !== 'LIBRARY') return;
-        if (documentId && ctx.focus.id !== documentId) return;
-        const cursor = ensureCursor();
-        if (chunkId) cursor.lastChunkId = chunkId;
-        if (typeof chunkIndex === 'number') cursor.chunkIndex = chunkIndex;
-        ctx.cursor = cursor;
-      };
-
-      const shouldClearAnchorForError = (error: unknown) => {
-        const message = String(error || '').toUpperCase();
-        return (
-          message.includes('NOT_FOUND') ||
-          message.includes('NO_DOC') ||
-          message.includes('NO_CHUNKS') ||
-          message.includes('MISSING_DOC') ||
-          message.includes('CHUNK_NOT_FOUND') ||
-          message.includes('CHUNKS_MISSING')
-        );
-      };
-
-      const clearLibraryAnchorIfMatches = (documentId: string, error: unknown) => {
-        if (!shouldClearAnchorForError(error)) return;
-        if (!documentId || ctx.lastLibraryDocId !== documentId) return;
-        ctx.lastLibraryDocId = null;
-        ctx.lastLibraryDocName = null;
-        ctx.lastLibraryDocChunkCount = null;
-        if (ctx.activeDomain === 'LIBRARY') {
-          ctx.activeDomain = null;
-        }
-        if (ctx.focus?.domain === 'LIBRARY' && ctx.focus.id === documentId) {
-          ctx.focus = { domain: null, id: null, label: null };
-          ctx.cursor = {};
-        }
-        try {
-          const state = getCognitiveState();
-          if (state?.hydrate) {
-            const patch: Record<string, unknown> = {
-              lastLibraryDocId: null,
-              lastLibraryDocName: null,
-              lastLibraryDocChunkCount: null
-            };
-            if (state.activeDomain === 'LIBRARY') {
-              patch.activeDomain = null;
-            }
-            if (state.focus?.domain === 'LIBRARY' && state.focus.id === documentId) {
-              patch.focus = { domain: null, id: null, label: null };
-              patch.cursor = {};
-            }
-            state.hydrate(patch);
-          }
-        } catch {
-          // ignore state sync issues
-        }
-      };
-
-      const { handleLibraryRead } = createLibraryHandlers({
-        ctx,
-        trace,
-        callbacks,
-        userInput,
-        isDev,
-        emitSystemAlert,
-        emitToolResult,
-        emitToolError,
-        toolResultOptions,
-        toolErrorOptions,
-        updateLibraryAnchor,
-        setLibraryFocus,
-        updateCursorForChunkList,
-        updateCursorForChunk,
-        clearLibraryAnchorIfMatches,
-        publishReactiveSpeech,
-        updateContextAfterAction
+    const emitToolCommit = (params: {
+      action: 'CREATE' | 'APPEND' | 'REPLACE';
+      artifactId: string;
+      artifactName: string;
+      beforeContent?: string;
+      afterContent?: string;
+      deltaText?: string;
+    }) => {
+      const details = buildToolCommitDetails(params);
+      if (!details) return;
+      const message = formatToolCommitMessage(details);
+      eventBus.publish({
+        id: generateUUID(),
+        timestamp: Date.now(),
+        source: AgentType.CORTEX_FLOW,
+        type: PacketType.SYSTEM_ALERT,
+        payload: {
+          event: 'TOOL_COMMIT',
+          message,
+          ...details
+        },
+        priority: 0.7
       });
+    };
 
-      if (!actionIntent.handled && looksLikeLibraryAnchor(userInput)) {
-        await handleLibraryRead(userInput, true);
-        return;
+    const emitSystemAlert = (event: string, payload: Record<string, unknown>, priority = 0.6) => {
+      eventBus.publish({
+        id: generateUUID(),
+        timestamp: Date.now(),
+        source: AgentType.CORTEX_FLOW,
+        type: PacketType.SYSTEM_ALERT,
+        payload: { event, ...payload },
+        priority
+      });
+    };
+    const toolResultOptions = { priority: 0.8 };
+    const toolErrorOptions = { priority: 0.9 };
+    const emitToolResult = (
+      tool: string,
+      intentId: string,
+      payload?: Record<string, unknown>,
+      options: { priority: number } = toolResultOptions
+    ) => {
+      const normalized: Record<string, unknown> = { ...(payload ?? {}) };
+      if (typeof normalized.id === 'string' && typeof normalized.artifactId !== 'string') {
+        if (tool === 'CREATE' || tool === 'APPEND' || tool === 'REPLACE' || tool === 'READ_ARTIFACT') {
+          normalized.artifactId = normalized.id;
+        }
       }
-
-      if (actionIntent.action === 'READ' && actionIntent.domain === 'LIBRARY') {
-        await handleLibraryRead(target || userInput, false);
-        return;
+      if (typeof normalized.name === 'string' && typeof normalized.artifactName !== 'string') {
+        normalized.artifactName = normalized.name;
       }
+      validateToolResult(tool, normalized);
+      emitToolResultContract(tool, intentId, normalized, options);
+    };
 
-      if (actionIntent.handled && actionIntent.action && target) {
-        const resolveRef = (refRaw: string) => {
-          const traceId = getCurrentTraceId();
-          if (traceId) p0MetricAdd(traceId, { artifactResolveAttempt: 1 });
-          const resolved = normalizeArtifactRef(refRaw);
-          if (traceId) {
-            p0MetricAdd(traceId, resolved.ok ? { artifactResolveSuccess: 1 } : { artifactResolveFail: 1 });
+    const updateLibraryAnchor = (
+      documentId: string,
+      documentName?: string | null,
+      chunkCount?: number | null
+    ) => {
+      const previousDocId = ctx.lastLibraryDocId ?? null;
+      const shouldResetChunkCount =
+        Boolean(previousDocId) && previousDocId !== documentId && typeof chunkCount !== 'number';
+
+      ctx.lastLibraryDocId = documentId;
+      ctx.activeDomain = 'LIBRARY';
+      if (documentName !== undefined) {
+        ctx.lastLibraryDocName = documentName;
+      }
+      if (typeof chunkCount === 'number') {
+        ctx.lastLibraryDocChunkCount = chunkCount;
+      } else if (shouldResetChunkCount) {
+        ctx.lastLibraryDocChunkCount = null;
+      }
+      try {
+        const state = getCognitiveState();
+        if (state?.hydrate) {
+          const patch: Record<string, unknown> = {
+            lastLibraryDocId: documentId,
+            activeDomain: 'LIBRARY'
+          };
+          if (documentName !== undefined) {
+            patch.lastLibraryDocName = documentName;
           }
-          return resolved;
-        };
-        const isInvalidToolTarget = (rawTarget: string) => {
-          const trimmed = String(rawTarget || '').trim();
-          if (!trimmed) return true;
-          if (isImplicitReference(trimmed)) return false;
-          if (trimmed.includes(' ') || trimmed.includes(':')) return true;
-          if (trimmed.startsWith('art-')) return false;
-          return !isRecognizableTarget(trimmed);
-        };
-        const getRecentArtifactNames = () => {
-          const ids = store.order.slice(0, 2);
-          return ids
-            .map((id) => store.get(id)?.name || getRememberedArtifactName(id) || id)
-            .filter(Boolean);
-        };
-        const respondUnknownTarget = () => {
-          const recent = getRecentArtifactNames();
-          const recentLabel = recent.length > 0 ? recent.join(', ') : 'brak';
-          publishReactiveSpeech({
-            ctx,
-            trace,
-            callbacks,
-            speechText: `Nie wiem do którego pliku. Ostatnie dwa: ${recentLabel}. Który?`,
-            internalThought: 'INVALID_TARGET'
+          if (typeof chunkCount === 'number') {
+            patch.lastLibraryDocChunkCount = chunkCount;
+          } else if (shouldResetChunkCount) {
+            patch.lastLibraryDocChunkCount = null;
+          }
+          state.hydrate(patch);
+        }
+      } catch {
+        // ignore state sync issues
+      }
+    };
+
+    const updateWorldAnchor = (path: string) => {
+      ctx.lastWorldPath = path;
+      ctx.activeDomain = 'WORLD';
+      try {
+        const state = getCognitiveState();
+        if (state?.hydrate) state.hydrate({ lastWorldPath: path, activeDomain: 'WORLD' });
+      } catch {
+        // ignore state sync issues
+      }
+    };
+
+    const updateArtifactAnchor = (artifactId: string, artifactName?: string | null) => {
+      ctx.lastArtifactId = artifactId;
+      ctx.activeDomain = 'ARTIFACT';
+      if (artifactName !== undefined) {
+        ctx.lastArtifactName = artifactName;
+      }
+      try {
+        const state = getCognitiveState();
+        if (state?.hydrate) {
+          state.hydrate({
+            lastArtifactId: artifactId,
+            activeDomain: 'ARTIFACT',
+            ...(artifactName !== undefined ? { lastArtifactName: artifactName } : {})
           });
-        };
+        }
+      } catch {
+        // ignore state sync issues
+      }
+    };
+
+    const ensureCursor = () => {
+      if (!ctx.cursor) ctx.cursor = {};
+      return ctx.cursor;
+    };
+
+    const setLibraryFocus = (documentId: string, documentName?: string | null, chunkCount?: number | null) => {
+      ctx.focus = { domain: 'LIBRARY', id: documentId, label: documentName ?? null };
+      if (typeof chunkCount === 'number' && chunkCount > 0) {
+        ctx.cursor = { chunkCount, chunkIndex: 0 };
+      } else {
+        ctx.cursor = {};
+      }
+    };
+
+    const updateCursorForChunkList = (documentId: string, chunkCount?: number | null) => {
+      if (ctx.focus?.domain !== 'LIBRARY' || ctx.focus.id !== documentId) return;
+      const cursor = ensureCursor();
+      if (typeof chunkCount === 'number') {
+        cursor.chunkCount = chunkCount;
+        if (cursor.chunkIndex === undefined && chunkCount > 0) {
+          cursor.chunkIndex = 0;
+        }
+      }
+      cursor.chunksKnownForDocId = documentId;
+      ctx.cursor = cursor;
+    };
+
+    const updateCursorForChunk = (documentId: string, chunkId?: string | null, chunkIndex?: number) => {
+      if (ctx.focus?.domain !== 'LIBRARY') return;
+      if (documentId && ctx.focus.id !== documentId) return;
+      const cursor = ensureCursor();
+      if (chunkId) cursor.lastChunkId = chunkId;
+      if (typeof chunkIndex === 'number') cursor.chunkIndex = chunkIndex;
+      ctx.cursor = cursor;
+    };
+
+    const shouldClearAnchorForError = (error: unknown) => {
+      const message = String(error || '').toUpperCase();
+      return (
+        message.includes('NOT_FOUND') ||
+        message.includes('NO_DOC') ||
+        message.includes('NO_CHUNKS') ||
+        message.includes('MISSING_DOC') ||
+        message.includes('CHUNK_NOT_FOUND') ||
+        message.includes('CHUNKS_MISSING')
+      );
+    };
+
+    const clearLibraryAnchorIfMatches = (documentId: string, error: unknown) => {
+      if (!shouldClearAnchorForError(error)) return;
+      if (!documentId || ctx.lastLibraryDocId !== documentId) return;
+      ctx.lastLibraryDocId = null;
+      ctx.lastLibraryDocName = null;
+      ctx.lastLibraryDocChunkCount = null;
+      if (ctx.activeDomain === 'LIBRARY') {
+        ctx.activeDomain = null;
+      }
+      if (ctx.focus?.domain === 'LIBRARY' && ctx.focus.id === documentId) {
+        ctx.focus = { domain: null, id: null, label: null };
+        ctx.cursor = {};
+      }
+      try {
+        const state = getCognitiveState();
+        if (state?.hydrate) {
+          const patch: Record<string, unknown> = {
+            lastLibraryDocId: null,
+            lastLibraryDocName: null,
+            lastLibraryDocChunkCount: null
+          };
+          if (state.activeDomain === 'LIBRARY') {
+            patch.activeDomain = null;
+          }
+          if (state.focus?.domain === 'LIBRARY' && state.focus.id === documentId) {
+            patch.focus = { domain: null, id: null, label: null };
+            patch.cursor = {};
+          }
+          state.hydrate(patch);
+        }
+      } catch {
+        // ignore state sync issues
+      }
+    };
+
+    const { handleLibraryRead } = createLibraryHandlers({
+      ctx,
+      trace,
+      callbacks,
+      userInput,
+      isDev,
+      emitSystemAlert,
+      emitToolResult,
+      emitToolError,
+      toolResultOptions,
+      toolErrorOptions,
+      updateLibraryAnchor,
+      setLibraryFocus,
+      updateCursorForChunkList,
+      updateCursorForChunk,
+      clearLibraryAnchorIfMatches,
+      publishReactiveSpeech,
+      updateContextAfterAction
+    });
+
+    if (!actionIntent.handled && looksLikeLibraryAnchor(userInput)) {
+      await handleLibraryRead(userInput, true);
+      return;
+    }
+
+    if (actionIntent.action === 'READ' && actionIntent.domain === 'LIBRARY') {
+      await handleLibraryRead(target || userInput, false);
+      return;
+    }
+
+    if (actionIntent.handled && actionIntent.action && target) {
+      const resolveRef = (refRaw: string) => {
+        const traceId = getCurrentTraceId();
+        if (traceId) p0MetricAdd(traceId, { artifactResolveAttempt: 1 });
+        const resolved = normalizeArtifactRef(refRaw);
+        if (traceId) {
+          p0MetricAdd(traceId, resolved.ok ? { artifactResolveSuccess: 1 } : { artifactResolveFail: 1 });
+        }
+        return resolved;
+      };
+      const isInvalidToolTarget = (rawTarget: string) => {
+        const trimmed = String(rawTarget || '').trim();
+        if (!trimmed) return true;
+        if (isImplicitReference(trimmed)) return false;
+        if (trimmed.includes(' ') || trimmed.includes(':')) return true;
+        if (trimmed.startsWith('art-')) return false;
+        return !isRecognizableTarget(trimmed);
+      };
+      const getRecentArtifactNames = () => {
+        const ids = store.order.slice(0, 2);
+        return ids
+          .map((id) => store.get(id)?.name || getRememberedArtifactName(id) || id)
+          .filter(Boolean);
+      };
+      const respondUnknownTarget = () => {
+        const recent = getRecentArtifactNames();
+        const recentLabel = recent.length > 0 ? recent.join(', ') : 'brak';
+        publishReactiveSpeech({
+          ctx,
+          trace,
+          callbacks,
+          speechText: `Nie wiem do którego pliku. Ostatnie dwa: ${recentLabel}. Który?`,
+          internalThought: 'INVALID_TARGET'
+        });
+      };
 
       try {
         if (actionIntent.action === 'CREATE') {
@@ -572,9 +572,9 @@ export async function runReactiveStep(input: {
           const resolved = resolveRef(target);
           const nameHint = resolved.ok
             ? rememberArtifactName(
-                resolved.id,
-                resolved.nameHint || implicitNameHint || getRememberedArtifactName(resolved.id) || ''
-              )
+              resolved.id,
+              resolved.nameHint || implicitNameHint || getRememberedArtifactName(resolved.id) || ''
+            )
             : '';
           const traceId = getCurrentTraceId();
 
@@ -687,9 +687,9 @@ export async function runReactiveStep(input: {
           const resolved = resolveRef(target);
           const nameHint = resolved.ok
             ? rememberArtifactName(
-                resolved.id,
-                resolved.nameHint || implicitNameHint || getRememberedArtifactName(resolved.id) || ''
-              )
+              resolved.id,
+              resolved.nameHint || implicitNameHint || getRememberedArtifactName(resolved.id) || ''
+            )
             : '';
           const traceId = getCurrentTraceId();
 
@@ -802,38 +802,55 @@ export async function runReactiveStep(input: {
     })) as any)
     : undefined;
 
-  const result = await CortexSystem.processUserMessage({
-    text: userInput,
-    currentLimbic: ctx.limbic,
-    currentSoma: ctx.soma,
-    conversationHistory: ctx.conversation,
-    identity: ctx.agentIdentity,
-    sessionOverlay: ctx.sessionOverlay,
-    memorySpace,
-    prefetchedMemories,
-    workingMemory: {
-      last_library_doc_id: ctx.lastLibraryDocId ?? null,
-      last_library_doc_name: ctx.lastLibraryDocName ?? null,
-      last_library_doc_chunk_count: ctx.lastLibraryDocChunkCount ?? null,
-      last_world_path: ctx.lastWorldPath ?? null,
-      last_artifact_id: ctx.lastArtifactId ?? null,
-      last_artifact_name: ctx.lastArtifactName ?? null,
-      active_domain: ctx.activeDomain ?? null,
-      last_tool: ctx.lastTool ?? null
+  let result;
+  try {
+    result = await CortexSystem.processUserMessage({
+      text: userInput,
+      currentLimbic: ctx.limbic,
+      currentSoma: ctx.soma,
+      conversationHistory: ctx.conversation,
+      identity: ctx.agentIdentity,
+      sessionOverlay: ctx.sessionOverlay,
+      memorySpace,
+      prefetchedMemories,
+      workingMemory: {
+        last_library_doc_id: ctx.lastLibraryDocId ?? null,
+        last_library_doc_name: ctx.lastLibraryDocName ?? null,
+        last_library_doc_chunk_count: ctx.lastLibraryDocChunkCount ?? null,
+        last_world_path: ctx.lastWorldPath ?? null,
+        last_artifact_id: ctx.lastArtifactId ?? null,
+        last_artifact_name: ctx.lastArtifactName ?? null,
+        active_domain: ctx.activeDomain ?? null,
+        last_tool: ctx.lastTool ?? null
+      }
+    });
+
+    const intent = await CortexService.detectIntent(userInput);
+
+    if (intent.style === 'POETIC') {
+      ctx.poeticMode = true;
+      if (isDev) console.log('Intent Detected: POETIC MODE ENABLED');
+    } else if (intent.style === 'SIMPLE') {
+      ctx.poeticMode = false;
+      if (isDev) console.log('Intent Detected: POETIC MODE DISABLED (Simple Style Requested)');
+    } else if (intent.style === 'ACADEMIC') {
+      ctx.poeticMode = false;
     }
-  });
-
-  const intent = await CortexService.detectIntent(userInput);
-
-  if (intent.style === 'POETIC') {
-    ctx.poeticMode = true;
-    if (isDev) console.log('Intent Detected: POETIC MODE ENABLED');
-  } else if (intent.style === 'SIMPLE') {
-    ctx.poeticMode = false;
-    if (isDev) console.log('Intent Detected: POETIC MODE DISABLED (Simple Style Requested)');
-  } else if (intent.style === 'ACADEMIC') {
-    ctx.poeticMode = false;
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error(`[REACTIVE_STEP] Cortex failure: ${msg}`);
+    callbacks.onThought(`[REACTIVE_ERROR] Przerwanie połączenia z Cortex: ${msg}`);
+    eventBus.publish({
+      id: generateUUID(),
+      timestamp: Date.now(),
+      source: AgentType.CORTEX_FLOW,
+      type: PacketType.SYSTEM_ALERT,
+      payload: { event: 'CORTEX_REACTIVE_FAILURE', error: msg },
+      priority: 0.9
+    });
+    return;
   }
+
 
   if (result.moodShift) {
     ctx.limbic = LimbicSystem.applyMoodShift(ctx.limbic, result.moodShift);

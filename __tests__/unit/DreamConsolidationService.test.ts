@@ -42,8 +42,16 @@ const mockSleepCycle = vi.fn().mockResolvedValue({
     selectedTensionForTomorrow: null
 });
 
+
+
 vi.mock('@core/systems/SleepSystem', () => ({
     performSleepCycle: (...args: any[]) => mockSleepCycle(...args)
+}));
+
+const mockRecallEpisodes = vi.fn().mockResolvedValue([]);
+
+vi.mock('@services/dreamConsolidation/episodeRecall', () => ({
+    recallMostImpactfulEpisodes: (...args: any[]) => mockRecallEpisodes(...args)
 }));
 
 const calmLimbic: LimbicState = {
@@ -69,6 +77,7 @@ describe('DreamConsolidationService', () => {
         mockRpc.mockReset();
         mockStructuredDialogue.mockReset();
         mockBuildChunk.mockReset();
+        mockRecallEpisodes.mockReset().mockResolvedValue([]);
     });
 
     it('returns empty result when no episodes', async () => {
@@ -105,5 +114,24 @@ describe('DreamConsolidationService', () => {
         const complete = history.find(p => (p as any)?.payload?.event === 'DREAM_CONSOLIDATION_COMPLETE');
         expect(complete).toBeTruthy();
         expect((complete as any)?.payload?.result?.sessionChunkCreated).toBe(true);
+    });
+    it('handles comprehensive failure gracefully', async () => {
+        // Simulate critical failure that bubbles up
+        mockRecallEpisodes.mockRejectedValue(new Error('Critical Episode Failure'));
+
+        // Should NOT throw
+        const result = await DreamConsolidationService.consolidate(
+            calmLimbic,
+            baseTraits,
+            'TestAgent'
+        );
+
+        expect(result.episodesProcessed).toBe(0);
+
+        // Verify error event was published
+        const history = eventBus.getHistory();
+        const errorEvent = history.find(p => (p as any)?.payload?.event === 'DREAM_CONSOLIDATION_ERROR');
+        expect(errorEvent).toBeTruthy();
+        expect((errorEvent as any).payload.error).toContain('Critical Episode Failure');
     });
 });

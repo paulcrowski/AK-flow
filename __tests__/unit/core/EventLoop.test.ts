@@ -35,6 +35,7 @@ vi.mock('@core/systems/CortexSystem', () => ({
         })
     }
 }));
+import { CortexSystem } from '@core/systems/CortexSystem';
 
 vi.mock('@core/systems/GoalSystem', async (importOriginal) => {
     const actual = await importOriginal<typeof import('@core/systems/GoalSystem')>();
@@ -425,5 +426,19 @@ describe('EventLoop', () => {
         mockCtx.chemistryEnabled = false;
 
         await EventLoop.runSingleStep(mockCtx, null, mockCallbacks);
+    });
+    it('should handle Cortex processing failure gracefully', async () => {
+        // Simulate LLM crashing
+        vi.mocked(CortexSystem.processUserMessage).mockRejectedValueOnce(new Error('LLM Rate Limit'));
+
+        await expect(EventLoop.runSingleStep(mockCtx, "Hello", mockCallbacks)).resolves.not.toThrow();
+
+        // Verify fallback behavior - should publish SYSTEM_ALERT
+        const history = eventBus.getHistory();
+        const alertPkt = history.find(p => p.type === PacketType.SYSTEM_ALERT && (p as any)?.payload?.event === 'CORTEX_REACTIVE_FAILURE');
+
+        expect(alertPkt).toBeTruthy();
+        expect((alertPkt as any).payload.error).toContain('LLM Rate Limit');
+        expect(mockCallbacks.onThought).toHaveBeenCalledWith(expect.stringContaining('Przerwanie połączenia z Cortex'));
     });
 });

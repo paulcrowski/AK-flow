@@ -640,13 +640,29 @@ export namespace EventLoop {
 
             // 2. Process User Input (if any)
             if (input) {
-                await runReactiveStep({
-                    ctx: ctx as any,
-                    userInput: input,
-                    callbacks,
-                    memorySpace: memorySpace as any,
-                    trace: trace as any
-                });
+                try {
+                    await runReactiveStep({
+                        ctx: ctx as any,
+                        userInput: input,
+                        callbacks,
+                        memorySpace: memorySpace as any,
+                        trace: trace as any
+                    });
+                } catch (error) {
+                    const message = (error as Error)?.message || String(error);
+                    callbacks.onThought(`[REACTIVE_ERROR] Przerwanie po??czenia z Cortex: ${message}`);
+                    eventBus.publish({
+                        id: generateUUID(),
+                        timestamp: Date.now(),
+                        source: AgentType.CORTEX_FLOW,
+                        type: PacketType.SYSTEM_ALERT,
+                        payload: {
+                            event: 'CORTEX_REACTIVE_FAILURE',
+                            error: message
+                        },
+                        priority: 0.7
+                    });
+                }
             }
 
             // 3. Autonomous Volition (only if autonomousMode is ON)

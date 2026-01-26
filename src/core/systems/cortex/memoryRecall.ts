@@ -132,11 +132,33 @@ export async function recallMemories(input: {
     ? fetchIdentityShards(agentIdForCache, identityShardLimit)
     : Promise.resolve([]);
 
+  const safeResolve = async <T>(p: Promise<T>, fallback: T, label: string): Promise<T> => {
+    try {
+      return await p;
+    } catch (err) {
+      console.warn(`[MEMORY_RECALL] Subsystem failed: ${label}`, err);
+      eventBus.publish({
+        id: generateUUID(),
+        traceId: getCurrentTraceId() ?? undefined,
+        timestamp: Date.now(),
+        source: AgentType.CORTEX_FLOW,
+        type: PacketType.SYSTEM_ALERT,
+        payload: {
+            event: 'MEMORY_SUBSYSTEM_FAILURE',
+            subsystem: label,
+            error: err instanceof Error ? err.message : String(err)
+        },
+        priority: 0.2
+      });
+      return fallback;
+    }
+  };
+
   const [baseMemories, globalRecent, sessionChunks, identityShards] = await Promise.all([
-    semanticPromise,
-    globalRecentPromise,
-    sessionChunksPromise,
-    identityShardsPromise
+    safeResolve(semanticPromise, [], 'semantic'),
+    safeResolve(globalRecentPromise, [], 'global_recent'),
+    safeResolve(sessionChunksPromise, [], 'session_chunks'),
+    safeResolve(identityShardsPromise, [], 'identity_shards')
   ]);
 
   let memories: MemoryTrace[] = baseMemories;

@@ -79,4 +79,34 @@ describe('recallMemories ordering', () => {
     expect(memories[2].content).toContain('memory-A');
     expect(memories).toHaveLength(4);
   });
+
+  it('should survive session chunk failure and return semantic memories', async () => {
+    // Setup healthy semantic search
+    semanticSearch.mockResolvedValue([
+      { id: 'mem-1', content: 'memory-A', timestamp: '2025-01-01T00:00:00Z', emotionalContext: baseEmotion }
+    ]);
+    // Setup failing session chunks
+    fetchRecentSessionChunks.mockRejectedValue(new Error('Database timeout'));
+    // Setup healthy identity
+    fetchIdentityShards.mockResolvedValue([]);
+
+    const memories = await recallMemories({ queryText: 'Test query' });
+
+    // Should still have semantic memories
+    expect(memories).toHaveLength(1);
+    expect(memories[0].content).toContain('memory-A');
+
+    // Should have checked logs (console or eventBus) - implied by survival
+  });
+
+  it('should survive identity service failure', async () => {
+    semanticSearch.mockResolvedValue([]);
+    fetchRecentSessionChunks.mockResolvedValue([]);
+    fetchIdentityShards.mockRejectedValue(new Error('API Error'));
+
+    const memories = await recallMemories({ queryText: 'Who am I?' });
+
+    expect(memories).toEqual([]);
+    // Should not throw
+  });
 });
