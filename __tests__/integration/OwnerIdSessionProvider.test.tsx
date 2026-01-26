@@ -2,35 +2,43 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 
-const setCurrentOwnerIdMock = vi.fn();
-
-const getSessionMock = vi.fn(async () => ({
-  data: { session: { user: { id: 'U1', email: 'u1@test.local' } } },
-  error: null
-}));
-
-const onAuthStateChangeMock = vi.fn(() => ({
-  data: { subscription: { unsubscribe: vi.fn() } }
-}));
-
-const signOutMock = vi.fn(async () => ({ error: null }));
-
-const orderMock = vi.fn(async () => ({ data: [], error: null }));
-const eqMock = vi.fn(() => ({ order: orderMock }));
-const selectMock = vi.fn(() => ({ eq: eqMock }));
-const fromMock = vi.fn(() => ({ select: selectMock }));
+const supabaseMocks = vi.hoisted(() => {
+  const setCurrentOwnerIdMock = vi.fn();
+  const setCurrentUserEmailMock = vi.fn();
+  const getSessionMock = vi.fn(async () => ({
+    data: { session: { user: { id: 'U1', email: 'u1@test.local' } } },
+    error: null
+  }));
+  const onAuthStateChangeMock = vi.fn(() => ({
+    data: { subscription: { unsubscribe: vi.fn() } }
+  }));
+  const signOutMock = vi.fn(async () => ({ error: null }));
+  const orderMock = vi.fn(async () => ({ data: [], error: null }));
+  const eqMock = vi.fn(() => ({ order: orderMock }));
+  const selectMock = vi.fn(() => ({ eq: eqMock }));
+  const fromMock = vi.fn(() => ({ select: selectMock }));
+  return {
+    setCurrentOwnerIdMock,
+    setCurrentUserEmailMock,
+    getSessionMock,
+    onAuthStateChangeMock,
+    signOutMock,
+    fromMock
+  };
+});
 
 vi.mock('@services/supabase', () => {
   return {
     supabase: {
       auth: {
-        getSession: getSessionMock,
-        onAuthStateChange: onAuthStateChangeMock,
-        signOut: signOutMock
+        getSession: supabaseMocks.getSessionMock,
+        onAuthStateChange: supabaseMocks.onAuthStateChangeMock,
+        signOut: supabaseMocks.signOutMock
       },
-      from: fromMock
+      from: supabaseMocks.fromMock
     },
-    setCurrentOwnerId: setCurrentOwnerIdMock
+    setCurrentOwnerId: supabaseMocks.setCurrentOwnerIdMock,
+    setCurrentUserEmail: supabaseMocks.setCurrentUserEmailMock
   };
 });
 
@@ -56,15 +64,15 @@ describe('SessionProvider owner_id wiring (integration)', () => {
     );
 
     await waitFor(() => {
-      expect(setCurrentOwnerIdMock).toHaveBeenCalledWith('U1');
+      expect(supabaseMocks.setCurrentOwnerIdMock).toHaveBeenCalledWith('U1');
     });
 
-    expect(screen.getByTestId('userId').textContent).toBe('u1@test.local');
+    expect(screen.getByTestId('userId').textContent).toBe('U1');
 
     fireEvent.click(screen.getByText('logout'));
 
     await waitFor(() => {
-      expect(setCurrentOwnerIdMock).toHaveBeenCalledWith(null);
+      expect(supabaseMocks.setCurrentOwnerIdMock).toHaveBeenCalledWith(null);
     });
   });
 });
