@@ -1,22 +1,30 @@
 import { describe, expect, test } from 'vitest';
+import type { Focus } from '@core/kernel/types';
 import { resolveImplicitReference } from '../../src/core/systems/eventloop/reactiveStep.helpers';
 
 describe('Library Anchor Resolver', () => {
-  const stateWithLibraryFocus = {
+  type AnchorState = {
+    lastLibraryDocId: string | null;
+    lastWorldPath: string | null;
+    lastArtifactId: string | null;
+    focus: Focus;
+  };
+
+  const stateWithLibraryFocus: AnchorState = {
     lastLibraryDocId: 'b4df0a54-97da-43c7-ad71-f2161e2ac8f6',
     lastWorldPath: '/code',
     lastArtifactId: 'art-123',
     focus: { domain: 'LIBRARY', id: 'b4df0a54-97da-43c7-ad71-f2161e2ac8f6', label: 'Book A' }
   };
 
-  const stateWithWorldFocus = {
+  const stateWithWorldFocus: AnchorState = {
     lastLibraryDocId: 'b4df0a54-97da-43c7-ad71-f2161e2ac8f6',
     lastWorldPath: '/code',
     lastArtifactId: 'art-123',
     focus: { domain: 'WORLD', id: '/code', label: 'code' }
   };
 
-  const stateEmpty = {
+  const stateEmpty: AnchorState = {
     lastLibraryDocId: null,
     lastWorldPath: null,
     lastArtifactId: null,

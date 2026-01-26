@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeAll, afterAll, beforeEach } from 'vitest';
+import type { EventLoop as EventLoopNS } from '@core/systems/EventLoop';
 import { PacketType } from '@/types';
 
 vi.mock('@core/systems/LimbicSystem', () => ({
@@ -81,7 +82,7 @@ describe('EventLoop scan availability', () => {
     eventBus.clear();
     evidenceLedger.clear();
 
-    const mockCtx: EventLoop.LoopContext = {
+    const mockCtx: EventLoopNS.LoopContext = {
       soma: { energy: 100, cognitiveLoad: 0, isSleeping: false },
       limbic: { fear: 0, curiosity: 0, frustration: 0, satisfaction: 0 },
       neuro: { dopamine: 55, serotonin: 60, norepinephrine: 50 },
@@ -113,7 +114,7 @@ describe('EventLoop scan availability', () => {
       hadExternalRewardThisTick: false
     };
 
-    const mockCallbacks: EventLoop.LoopCallbacks = {
+    const mockCallbacks: EventLoopNS.LoopCallbacks = {
       onMessage: vi.fn(),
       onThought: vi.fn(),
       onSomaUpdate: vi.fn(),

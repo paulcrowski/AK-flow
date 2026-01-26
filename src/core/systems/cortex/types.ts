@@ -7,6 +7,7 @@ export interface ConversationTurn {
   role: string;
   text: string;
   type?: 'thought' | 'speech' | 'visual' | 'intel' | 'action' | 'tool_result';
+  sources?: unknown[];
 }
 
 export interface AgentIdentityContext {

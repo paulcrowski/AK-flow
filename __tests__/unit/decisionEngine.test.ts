@@ -1,10 +1,13 @@
-import { describe, expect, test } from 'vitest';
+﻿import { describe, expect, test } from 'vitest';
+import type { KernelState } from '@core/kernel/types';
 import { inputContainsExplicitId, shouldAskUser } from '@core/systems/decisionEngine';
 
 describe('decisionEngine', () => {
   test('shouldAskUser returns false when focus is set', () => {
-    const state = { focus: { domain: 'LIBRARY', id: 'doc-1', label: 'Book' } };
-    expect(shouldAskUser(state, 'pokaż dokument')).toBe(false);
+    const state: Pick<KernelState, 'focus'> = {
+      focus: { domain: 'LIBRARY', id: 'doc-1', label: 'Book' }
+    };
+    expect(shouldAskUser(state, 'pokaz dokument')).toBe(false);
   });
 
   test('inputContainsExplicitId detects explicit ids', () => {
@@ -21,12 +24,12 @@ describe('decisionEngine', () => {
   });
 
   test('shouldAskUser returns false when input contains explicit id', () => {
-    const state = { focus: { domain: null, id: null, label: null } };
+    const state: Pick<KernelState, 'focus'> = { focus: { domain: null, id: null, label: null } };
     expect(shouldAskUser(state, 'docId=abc-123')).toBe(false);
   });
 
   test('shouldAskUser returns true when no focus and no explicit id', () => {
-    const state = { focus: { domain: null, id: null, label: null } };
+    const state: Pick<KernelState, 'focus'> = { focus: { domain: null, id: null, label: null } };
     expect(shouldAskUser(state, 'pokaz dokument')).toBe(true);
   });
 });

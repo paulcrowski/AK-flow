@@ -1,6 +1,7 @@
-
-import { ExecutiveGate, GateContext, SpeechCandidate } from '../../src/core/systems/ExecutiveGate';
-import { LimbicState, SocialDynamics } from '../../src/core/kernel/types';
+import { describe, expect, test } from 'vitest';
+import { ExecutiveGate, type GateContext, type SpeechCandidate } from '../../src/core/systems/ExecutiveGate';
+import type { LimbicState } from '@/types';
+import type { SocialDynamics } from '@core/kernel/types';
 
 describe('ExecutiveGate v8.1.1 (UserFacing & DomainMismatch)', () => {
 
@@ -9,16 +10,14 @@ describe('ExecutiveGate v8.1.1 (UserFacing & DomainMismatch)', () => {
         curiosity: 0.5,
         satisfaction: 0.5,
         fear: 0.1,
-        frustration: 0.1,
-        energy: 100,
-        clarity: 100
+        frustration: 0.1
     };
 
     const mockSocialDynamics: SocialDynamics = {
         userPresenceScore: 1,
         autonomyBudget: 1,
         socialCost: 0,
-        relationshipState: 'neutral'
+        consecutiveWithoutResponse: 0
     };
 
     const createCandidates = (

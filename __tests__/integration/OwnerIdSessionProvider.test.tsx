@@ -2,7 +2,18 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 
-const supabaseMocks = vi.hoisted(() => {
+type SupabaseMocks = {
+  setCurrentOwnerIdMock: ReturnType<typeof vi.fn>;
+  setCurrentUserEmailMock: ReturnType<typeof vi.fn>;
+  getSessionMock: ReturnType<typeof vi.fn>;
+  onAuthStateChangeMock: ReturnType<typeof vi.fn>;
+  signOutMock: ReturnType<typeof vi.fn>;
+  fromMock: ReturnType<typeof vi.fn>;
+};
+
+let supabaseMocks: SupabaseMocks;
+
+vi.mock('@services/supabase', () => {
   const setCurrentOwnerIdMock = vi.fn();
   const setCurrentUserEmailMock = vi.fn();
   const getSessionMock = vi.fn(async () => ({
@@ -17,7 +28,7 @@ const supabaseMocks = vi.hoisted(() => {
   const eqMock = vi.fn(() => ({ order: orderMock }));
   const selectMock = vi.fn(() => ({ eq: eqMock }));
   const fromMock = vi.fn(() => ({ select: selectMock }));
-  return {
+  supabaseMocks = {
     setCurrentOwnerIdMock,
     setCurrentUserEmailMock,
     getSessionMock,
@@ -25,9 +36,6 @@ const supabaseMocks = vi.hoisted(() => {
     signOutMock,
     fromMock
   };
-});
-
-vi.mock('@services/supabase', () => {
   return {
     supabase: {
       auth: {

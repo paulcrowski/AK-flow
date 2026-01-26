@@ -231,6 +231,7 @@ export namespace EventLoop {
             evidenceDetail?: string;
             generator?: 'llm' | 'system';
             agentMemoryId?: string;
+            sources?: unknown[];
         }) => void;
         onThought: (thought: string) => void;
         onSomaUpdate: (soma: SomaState) => void;

@@ -106,6 +106,7 @@ describe('Grounding auto-search', () => {
     const callbacks = {
       onMessage: vi.fn(),
       onThought: vi.fn(),
+      onSomaUpdate: vi.fn(),
       onLimbicUpdate: vi.fn()
     };
 
