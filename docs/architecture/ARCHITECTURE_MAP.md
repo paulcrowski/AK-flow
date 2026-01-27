@@ -1,6 +1,6 @@
 # 🧠 AK-FLOW Architecture Map
 
-> **Wersja:** 6.11.5 (2026-01-26)
+> **Wersja:** 6.11.6 (2026-01-27)
 > **Cel:** Prosta mapa jak działa agent i jaki ma flow
 
 ## Archive policy
@@ -10,6 +10,15 @@ Ten katalog jest wykluczony z kompilacji TypeScript i służy wyłącznie jako r
 
 ---
 
+
+## FAZA 6.11.6: Runtime per session (2026-01-27)
+
+**Cel:** usunac modulowy stan mutowalny i zapewnic izolacje sesji/testow.
+
+**Mechanika:**
+- LoopRuntimeState jako per-runner runtime (decision gate, memory space, deep research, tool runtime, event loop runtime).
+- Tool in-flight maps (SEARCH/VISUALIZE) oraz DecisionGate state przeniesione do runtime contextu.
+- EventLoop korzysta z runtime schemaStores/pendingWakeObserve zamiast globali.
 
 ## FAZA 6.11.5: Cortex failure guards (2026-01-26)
 

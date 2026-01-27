@@ -1,6 +1,6 @@
 # AK-FLOW: Cognitive Agent Architecture Manifest
-**System Version:** 6.11.5 (Cortex failure guards)
-**Last Updated:** 2026-01-26
+**System Version:** 6.11.6 (Per-session runtime isolation)
+**Last Updated:** 2026-01-27
 **Architecture Type:** Active Inference (Friston) + Global Workspace Theory + Multi-Modal RAG + **Stateless Inference Engine**  
 **Status:** Autonomous / Stateful / Modular / Self-Aware / Goal-Driven / Personality-Driven / **Emergent Identity**
 
@@ -30,6 +30,22 @@ We embrace the artificial nature as a feature, not a bug.
 ---
 
 
+
+## What's New in V6.11.6 (2026-01-27)
+
+### Per-session runtime isolation for tools and gates
+
+**Goal:** remove module-level mutable state to prevent cross-talk between sessions/tests.
+
+**Key changes:**
+- LoopRuntimeState introduced with per-session runtime for decision gate, memory space, deep research, tool runtime, and event loop state.
+- DecisionGate/tool runtime/MemorySpace/deepResearch now use per-session runtime maps instead of module-level state.
+- EventLoop and runners/hooks pass runtime; GlobalStateAudit updated; RuntimeIsolation test added.
+
+**Tests:**
+- `npm test`
+- `npx tsc --noEmit`
+- `npm run build`
 
 ## What's New in V6.11.5 (2026-01-26)
 

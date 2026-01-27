@@ -1,7 +1,7 @@
 {
   "version": "1.1.0",
-  "lastUpdated": "2026-01-26T20:02:37Z",
-  "lastModified": "2026-01-26T20:02:37Z",
+  "lastUpdated": "2026-01-27T16:11:38.000Z",
+  "lastModified": "2026-01-27T16:11:38.000Z",
   "modifiedBy": "CODEX",
   "tasks": [
     {
@@ -1084,6 +1084,17 @@
       ],
       "createdAt": "2026-01-26T20:02:37Z",
       "updatedAt": "2026-01-26T20:02:37Z"
+    },
+    {
+      "id": "note-20260127-161138",
+      "title": "Daily Close: 2026-01-27",
+      "content": "DONE: izolacja runtime per sesja (LoopRuntimeState) dla DecisionGate/MemorySpace/deepResearch/tool runtime/EventLoop; usuniecie modulowych map i in-flight state; dodany test RuntimeIsolation; aktualizacja GlobalStateAudit.\nVERIFY: npm test PASS; npx tsc --noEmit PASS; npm run build PASS.\nSECURITY: gitleaks/semgrep/snyk/mypy skipped (tools missing/policy block).\nNEXT: IntegrationWiring + WiringValidator; EvidenceLedger proof-as-data; cleanup _tmp_action_first_block.txt.",
+      "category": "INSIGHT",
+      "tags": [
+        "daily_close"
+      ],
+      "createdAt": "2026-01-27T16:11:38.000Z",
+      "updatedAt": "2026-01-27T16:11:38.000Z"
     }
   ],
   "stats": {
