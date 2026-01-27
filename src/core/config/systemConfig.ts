@@ -235,7 +235,8 @@ export const SYSTEM_CONFIG = {
   eventLoop: {
     defaultChunkRelevance: 0.6,
     readinessBoostPerTick: 0.01,
-    fileContentPreviewLimit: 8000
+    fileContentPreviewLimit: 8000,
+    toolCallsPerTickLimit: 3
   },
 
   // ─────────────────────────────────────────────────────────────────────────

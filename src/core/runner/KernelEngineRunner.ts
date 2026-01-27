@@ -349,6 +349,7 @@ export class KernelEngineRunner<TIdentity> {
       chemistryEnabled: state.chemistryEnabled,
       goalState: state.goalState,
       traitVector: state.traitVector,
+      agentTrajectory: state.agentTrajectory ?? null,
       consecutiveAgentSpeeches: state.consecutiveAgentSpeeches,
       ticksSinceLastReward: state.ticksSinceLastReward,
       hadExternalRewardThisTick: false,
@@ -389,6 +390,7 @@ export class KernelEngineRunner<TIdentity> {
     if ('lastArtifactName' in nextCtx) patch.lastArtifactName = nextCtx.lastArtifactName ?? null;
     if ('activeDomain' in nextCtx) patch.activeDomain = nextCtx.activeDomain ?? null;
     if ('lastTool' in nextCtx) patch.lastTool = nextCtx.lastTool ?? null;
+    if ('agentTrajectory' in nextCtx) patch.agentTrajectory = nextCtx.agentTrajectory ?? null;
 
     if (Object.keys(patch).length > 0) {
       this.deps.actions.hydrate(patch);

@@ -6,7 +6,7 @@
  */
 
 import { LimbicState, SomaState, NeurotransmitterState, AgentType, PacketType, GoalState, Goal, TraitVector } from '../../types';
-import type { SocialDynamics, Focus, Cursor } from '../kernel/types';
+import type { SocialDynamics, Focus, Cursor, AgentTrajectory } from '../kernel/types';
 import { LimbicSystem } from './LimbicSystem';
 import { CortexSystem, ConversationTurn } from './CortexSystem';
 import type { CortexSystem as CortexSystemNS } from './CortexSystem';
@@ -51,6 +51,7 @@ import {
     questionRequiresEvidence,
     resolveObservationPath
 } from './eventloop/observationUtils';
+import { applyTrajectoryUpdate } from './eventloop/trajectory';
 
 export { normalizeToolName, TOOL_COST } from './eventloop/toolCost';
 
@@ -93,6 +94,7 @@ export namespace EventLoop {
         socialDynamics?: SocialDynamics;
         // FAZA 6: User Style Preferences (Style Contract)
         userStylePrefs?: UserStylePrefs;
+        agentTrajectory?: AgentTrajectory | null;
         autonomyRuntime?: AutonomyRuntime;
     }
 
@@ -133,6 +135,10 @@ export namespace EventLoop {
     const FILE_CONTENT_TRUNCATE_LIMIT = Number.isFinite(eventLoopConfig.fileContentPreviewLimit)
         ? Math.max(0, Math.floor(eventLoopConfig.fileContentPreviewLimit))
         : SYSTEM_CONFIG.eventLoop.fileContentPreviewLimit;
+    const TOOL_CALLS_PER_TICK_LIMIT =
+        Number.isFinite(eventLoopConfig.toolCallsPerTickLimit)
+            ? Math.max(1, Math.floor(eventLoopConfig.toolCallsPerTickLimit))
+            : 3;
     const EVIDENCE_TYPES = ['READ_FILE', 'TEST_OUTPUT', 'SEARCH_HIT'] as const;
 
     const buildAutonomyDecision = (ctx: LoopContext, agentId: string, agentName: string | null) => {
@@ -279,6 +285,23 @@ export namespace EventLoop {
         p0MetricStartTick(traceScope.trace.traceId, tickNumber);
         const trace: TraceContext = traceScope.trace;
 
+        const updateTrajectory = (patch: Partial<Omit<AgentTrajectory, 'updatedAt' | 'tickNumber'>>) => {
+            ctx.agentTrajectory = applyTrajectoryUpdate(ctx.agentTrajectory, patch, tickNumber);
+            eventBus.publish({
+                id: generateUUID(),
+                traceId: trace.traceId,
+                timestamp: Date.now(),
+                source: AgentType.CORTEX_FLOW,
+                type: PacketType.SYSTEM_ALERT,
+                payload: {
+                    event: EVENTS.AGENT_TRAJECTORY_UPDATE,
+                    tickNumber,
+                    trajectory: ctx.agentTrajectory
+                },
+                priority: 0.4
+            });
+        };
+
         let skipped = false;
         let skipReason: string | null = null;
 
@@ -387,6 +410,10 @@ export namespace EventLoop {
                 ? { action: 'observe' as ActionType, reason: forceObserve ? 'evidence_gate' : 'wake_observe' }
                 : selectedAction;
 
+            if (action.action === 'observe') {
+                updateTrajectory({ nextStep: 'observe', outcome: null, friction: null, retryPolicy: null });
+            }
+
             eventBus.publish({
                 id: generateUUID(),
                 timestamp: Date.now(),
@@ -432,10 +459,23 @@ export namespace EventLoop {
                 }
             };
 
+            let toolCallsThisTick = 0;
+            const executeWorldToolWithBudget = async (
+                toolInput: { tool: 'LIST_DIR' | 'READ_FILE'; path: string; agentId?: string }
+            ) => {
+                if (toolCallsThisTick >= TOOL_CALLS_PER_TICK_LIMIT) {
+                    updateTrajectory({ outcome: 'tool_budget_exhausted', friction: 'tool_budget', retryPolicy: 'next_tick' });
+                    return { ok: false, path: toolInput.path, error: 'TOOL_CALL_LIMIT' };
+                }
+                toolCallsThisTick += 1;
+                const resolvedAgentId = toolInput.agentId ?? agentId;
+                return executeWorldTool({ tool: toolInput.tool, path: toolInput.path, agentId: resolvedAgentId });
+            };
+
             const executeObserve = async (options: { allowScanFallback: boolean }) => {
                 const dirTarget = extractDirectoryTarget(params.input);
                 if (dirTarget) {
-                    const listResult = await executeWorldTool({
+                    const listResult = await executeWorldToolWithBudget({
                         tool: 'LIST_DIR',
                         path: dirTarget,
                         agentId
@@ -455,7 +495,7 @@ export namespace EventLoop {
                 const target = extractFileTarget(params.input);
                 if (target) {
                     const initialScan = await resolveObservationPath(target, { query: params.input ?? '' });
-                    const readResult = await executeWorldTool({
+                    const readResult = await executeWorldToolWithBudget({
                         tool: 'READ_FILE',
                         path: initialScan.resolvedPath,
                         agentId
@@ -497,7 +537,7 @@ export namespace EventLoop {
                         });
                         tensionRegistry.upsert('truth_no_evidence_scan_limited', 'truth', 0.7);
 
-                        const listRoot = await executeWorldTool({
+                        const listRoot = await executeWorldToolWithBudget({
                             tool: 'LIST_DIR',
                             path: worldRoot,
                             agentId
@@ -514,7 +554,7 @@ export namespace EventLoop {
                             candidateRoots: narrowedRoots,
                             limits: getFileScanLimits()
                         });
-                        const narrowedRead = await executeWorldTool({
+                        const narrowedRead = await executeWorldToolWithBudget({
                             tool: 'READ_FILE',
                             path: narrowedScan.resolvedPath,
                             agentId
@@ -542,7 +582,7 @@ export namespace EventLoop {
                 }
 
                 if (pendingWakeObserve.key && !params.input) {
-                    const listSchemas = await executeWorldTool({
+                    const listSchemas = await executeWorldToolWithBudget({
                         tool: 'LIST_DIR',
                         path: `${worldRoot}/knowledge/schemas`,
                         agentId
@@ -553,7 +593,7 @@ export namespace EventLoop {
                         ctx.conversation.push({ role: 'assistant', text: toolText, type: 'tool_result' });
                     }
 
-                    const listNotes = await executeWorldTool({
+                    const listNotes = await executeWorldToolWithBudget({
                         tool: 'LIST_DIR',
                         path: `${worldRoot}/notes`,
                         agentId
@@ -585,6 +625,18 @@ export namespace EventLoop {
                 }
             }
 
+            if (action.action === 'observe') {
+                if (observed) {
+                    updateTrajectory({ outcome: 'observe_ok', friction: null, retryPolicy: null });
+                } else {
+                    updateTrajectory({
+                        outcome: 'observe_failed',
+                        friction: 'observe_failed',
+                        retryPolicy: needsEvidence ? 'collect_evidence' : 'retry'
+                    });
+                }
+            }
+
             const updatedEvidenceCount = getEvidenceCount();
             const toolSuccessUnblocks = Boolean(params.input) && observed && updatedEvidenceCount === 0;
             if (toolSuccessUnblocks && !skipEvidenceGate) {
@@ -603,6 +655,7 @@ export namespace EventLoop {
                 if (params.input) {
                     ctx.goalState.lastUserInteractionAt = Date.now();
                 }
+                updateTrajectory({ outcome: 'blocked', friction: 'evidence_gate', retryPolicy: 'collect_evidence' });
                 return { blockCortex: true };
             }
 
@@ -617,6 +670,7 @@ export namespace EventLoop {
                 skipReason = 'NO_AGENT_ID';
 
                 publishTickSkipped(trace.traceId, trace.tickNumber, Date.now(), skipReason);
+                updateTrajectory({ nextStep: 'idle', outcome: 'skipped', friction: 'no_agent', retryPolicy: 'select_agent' });
 
                 return ctx;
             }
@@ -625,6 +679,7 @@ export namespace EventLoop {
 
             const thinkMode = ThinkModeSelector.select(input, ctx.autonomousMode, Boolean(ctx.goalState?.activeGoal));
             publishThinkModeSelected(trace.traceId, trace.tickNumber, Date.now(), thinkMode);
+            updateTrajectory({ nextStep: thinkMode, outcome: null, friction: null, retryPolicy: null });
 
             // 1. Apply emotional homeostasis
             const cooledLimbic = LimbicSystem.applyHomeostasis(ctx.limbic);
@@ -649,9 +704,11 @@ export namespace EventLoop {
                         memorySpace: memorySpace as any,
                         trace: trace as any
                     });
+                    updateTrajectory({ outcome: 'reactive_done', friction: null, retryPolicy: null });
                 } catch (error) {
                     const message = (error as Error)?.message || String(error);
                     callbacks.onThought(`[REACTIVE_STEP_FAILED] ${message}`);
+                    updateTrajectory({ outcome: 'reactive_error', friction: 'reactive_error', retryPolicy: 'retry' });
                     eventBus.publish({
                         id: generateUUID(),
                         timestamp: Date.now(),
@@ -683,6 +740,7 @@ export namespace EventLoop {
                 // Check silence window via ExecutiveGate config
                 if (timeSinceLastUserInteraction < gateContext.silence_window) {
                     // User spoke recently - skip autonomous volition (ExecutiveGate silence window)
+                    updateTrajectory({ outcome: 'autonomy_suppressed', friction: 'silence_window', retryPolicy: 'wait' });
                     return ctx;
                 }
 
@@ -750,6 +808,7 @@ export namespace EventLoop {
 
                 // 3B. GOAL EXECUTION (single-shot) - via ExecutiveGate
                 if (ctx.goalState.activeGoal) {
+                    updateTrajectory({ nextStep: 'goal', outcome: null, friction: null, retryPolicy: null });
                     await runGoalDrivenStep({
                         ctx: ctx as any,
                         goal: ctx.goalState.activeGoal as any,
@@ -757,12 +816,14 @@ export namespace EventLoop {
                         gateContext,
                         trace: trace as any
                     });
+                    updateTrajectory({ outcome: 'goal_executed', friction: null, retryPolicy: null });
 
                     // After executing a goal, skip regular autonomous volition in this tick
                     return ctx;
                 }
 
                 // 3C. Autonomous Volition (only if autonomousMode is ON)
+                updateTrajectory({ nextStep: 'autonomous', outcome: null, friction: null, retryPolicy: null });
                 await runAutonomousVolitionStep({
                     ctx: ctx as any,
                     callbacks,
@@ -771,6 +832,7 @@ export namespace EventLoop {
                     gateContext,
                     silenceDurationSec: silenceDuration
                 });
+                updateTrajectory({ outcome: 'autonomy_done', friction: null, retryPolicy: null });
             }
 
             return ctx;

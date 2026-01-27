@@ -49,6 +49,15 @@ export interface WorkingSet {
   updatedAt: number;
 }
 
+export interface AgentTrajectory {
+  nextStep: string | null;
+  outcome: string | null;
+  friction: string | null;
+  retryPolicy: string | null;
+  updatedAt: number | null;
+  tickNumber: number | null;
+}
+
 export interface Focus {
   domain: 'LIBRARY' | 'WORLD' | 'ARTIFACT' | null;
   id: string | null;
@@ -77,6 +86,7 @@ export interface KernelState {
   traitVector: TraitVector;
   goalState: GoalState;
   workingSet: WorkingSet | null;
+  agentTrajectory: AgentTrajectory | null;
 
   // Mode flags
   autonomousMode: boolean;
