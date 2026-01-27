@@ -95,4 +95,35 @@ describe('ToolIntentSettlement', () => {
     );
     expect(alerts).toHaveLength(0);
   });
+
+  it('treats TOOL_TIMEOUT as settled', () => {
+    const traceId = 'trace-4';
+    eventBus.publishSync({
+      id: 'intent-1',
+      traceId,
+      timestamp: Date.now(),
+      source: AgentType.CORTEX_FLOW,
+      type: PacketType.TOOL_INTENT,
+      payload: { tool: 'SEARCH', intentId: 'intent-1', arg: 'q' },
+      priority: 0.8
+    });
+    eventBus.publishSync({
+      id: 'timeout-1',
+      traceId,
+      timestamp: Date.now(),
+      source: AgentType.CORTEX_FLOW,
+      type: PacketType.TOOL_TIMEOUT,
+      payload: { tool: 'SEARCH', intentId: 'intent-1', error: 'TOOL_TIMEOUT' },
+      priority: 0.7
+    });
+
+    scheduleToolIntentSettlementCheck({ traceId, tickNumber: 2, settleWindowMs: 20 });
+
+    vi.advanceTimersByTime(30);
+
+    const alerts = eventBus.getHistory().filter(
+      (event) => event.type === PacketType.SYSTEM_ALERT && event.payload?.event === EVENTS.TOOL_INTENT_UNSETTLED
+    );
+    expect(alerts).toHaveLength(0);
+  });
 });

@@ -27,7 +27,11 @@ export const findUnsettledToolIntents = (
       continue;
     }
 
-    if (event.type === PacketType.TOOL_RESULT || event.type === PacketType.TOOL_ERROR) {
+    if (
+      event.type === PacketType.TOOL_RESULT ||
+      event.type === PacketType.TOOL_ERROR ||
+      event.type === PacketType.TOOL_TIMEOUT
+    ) {
       const intentId = event.payload?.intentId as string | undefined;
       if (!intentId) continue;
       settled.add(intentId);

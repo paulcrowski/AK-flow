@@ -37,6 +37,15 @@ describe('Tool Contract Gate', () => {
         closes.set(intentId, (closes.get(intentId) ?? 0) + 1);
       })
     );
+
+    unsubscribers.push(
+      eventBus.subscribe(PacketType.TOOL_TIMEOUT, (packet: any) => {
+        if (!tracking) return;
+        const intentId = packet.payload?.intentId;
+        if (!intentId) return;
+        closes.set(intentId, (closes.get(intentId) ?? 0) + 1);
+      })
+    );
   });
 
   beforeEach(() => {
