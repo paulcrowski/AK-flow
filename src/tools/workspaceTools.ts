@@ -12,34 +12,20 @@ import { withTimeout } from './toolRuntime';
 import { useArtifactStore } from '../stores/artifactStore';
 import { getCognitiveState } from '../stores/cognitiveStore';
 import { eventBus } from '../core/EventBus';
-import { SYSTEM_CONFIG } from '../core/config/systemConfig';
 import { emitToolError, emitToolIntent, emitToolResult as emitToolResultContract } from '../core/telemetry/toolContract';
 import { validateToolResult } from '../core/tools/validateToolResult';
 import { evidenceLedger } from '../core/systems/EvidenceLedger';
-import { DEFAULT_AGENT_ID, WORLD_ROOT, getAgentFolderName, getAgentWorldRoot, isPathAllowed, normalizePath } from '../core/systems/WorldAccess';
+import { DEFAULT_AGENT_ID, getAgentFolderName, getAgentWorldRoot, isPathAllowed, normalizePath } from '../core/systems/WorldAccess';
 import { generateUUID } from '../utils/uuid';
 import { getWorldDirectoryHandle, getWorldDirectorySelection } from './worldDirectoryAccess';
+import { buildFileEvidence, FILE_PREVIEW_LIMIT, formatDirEntryName } from './workspace/evidence';
+import { getFs } from './workspace/fsAccess';
+import { normalizeWorldPath } from './workspace/pathNormalize';
+import { dirname, isAbsolutePath, joinPaths, normalizeFsPath, splitRelativePath, WORLD_ROOT_PATH } from './workspace/pathUtils';
+import { shouldValidateNote, validateNoteFormat } from './workspace/noteValidation';
+import type { WorldDirEntry, WorldToolName, WorldToolResult } from './workspace/types';
 
 export const WORKSPACE_TAG_REGEX = /\[(SEARCH_LIBRARY|LIST_LIBRARY_CHUNKS|READ_LIBRARY_CHUNK|READ_LIBRARY_DOC|READ_LIBRARY_RANGE|SEARCH_IN_REPO|READ_FILE|READ_FILE_CHUNK|READ_FILE_RANGE|LIST_DIR|LIST_FILES|READ_WORLD_FILE|READ_WORLD|WRITE_WORLD_FILE|APPEND_WORLD_FILE):\s*([^\]]+?)\]/i;
-
-export type WorldToolName = 'LIST_DIR' | 'READ_FILE' | 'WRITE_FILE' | 'APPEND_FILE';
-
-export type WorldToolResult = {
-  ok: boolean;
-  path: string;
-  content?: string;
-  entries?: string[];
-  preview?: string;
-  hash?: string;
-  length?: number;
-  error?: string;
-  evidenceId?: string;
-};
-
-type WorldDirEntry = {
-  name: string;
-  type: 'file' | 'dir';
-};
 
 const emitToolResult = (
   tool: string,
@@ -50,59 +36,6 @@ const emitToolResult = (
   validateToolResult(tool, payload ?? {});
   emitToolResultContract(tool, intentId, payload, options);
 };
-
-type FsModule = typeof import('fs/promises');
-let fsModule: FsModule | null = null;
-const IS_NODE =
-  typeof process !== 'undefined' &&
-  Boolean((process as { versions?: { node?: string } }).versions?.node);
-
-const getFs = async (): Promise<FsModule | null> => {
-  if (!IS_NODE) return null;
-  if (!fsModule) {
-    fsModule = await import('fs/promises');
-  }
-  return fsModule;
-};
-
-const FILE_PREVIEW_LIMIT = Math.max(
-  0,
-  Math.floor(SYSTEM_CONFIG.eventLoop?.fileContentPreviewLimit ?? 8000)
-);
-
-const hashText = (input: string) => {
-  let h = 2166136261;
-  for (let i = 0; i < input.length; i++) {
-    h ^= input.charCodeAt(i);
-    h = Math.imul(h, 16777619);
-  }
-  return (h >>> 0).toString(16).padStart(8, '0');
-};
-
-const buildFileEvidence = (content: string) => ({
-  length: content.length,
-  hash: hashText(content),
-  preview: content.slice(0, FILE_PREVIEW_LIMIT)
-});
-
-const formatDirEntryName = (entry: WorldDirEntry) =>
-  entry.type === 'dir' ? `${entry.name}/` : entry.name;
-
-const normalizeFsPath = (input: string) => normalizePath(input).replace(/\/+/g, '/');
-const isAbsolutePath = (value: string) => /^[A-Za-z]:[\\/]/.test(value) || value.startsWith('/');
-const joinPaths = (...parts: string[]) =>
-  normalizeFsPath(parts.filter(Boolean).join('/'));
-const dirname = (value: string) => {
-  const norm = normalizeFsPath(value);
-  const idx = norm.lastIndexOf('/');
-  if (idx < 0) return norm;
-  if (idx === 0) return '/';
-  const head = norm.slice(0, idx);
-  if (/^[A-Za-z]:$/.test(head)) return `${head}/`;
-  return head;
-};
-const splitRelativePath = (value: string) => normalizeFsPath(value).split('/').filter(Boolean);
-const WORLD_ROOT_PATH = normalizeFsPath(WORLD_ROOT);
 
 const updateWorldAnchor = (path: string) => {
   try {
@@ -196,59 +129,6 @@ const clearLibraryAnchorIfMatches = (documentId: string, error: string) => {
 const toWorldAnchorPath = (tool: string, path: string) =>
   tool === 'READ_FILE' ? dirname(path) : path;
 
-const ROOT_ALIASES = ['', '/', '.', 'root', 'world root', 'glowny katalog', 'home', 'start'];
-const KNOWN_SHORT_FOLDERS = [
-  'src',
-  'app',
-  'bin',
-  'tmp',
-  'log',
-  'doc',
-  'img',
-  'docs',
-  'code',
-  'public',
-  'dist',
-  'build',
-  'data',
-  'logs',
-  'test',
-  'tests',
-  'lib',
-  'pkg',
-  'api'
-];
-
-type NormalizePathResult =
-  | { ok: true; path: string }
-  | { ok: false; error: string };
-
-const normalizeWorldPath = (input: string): NormalizePathResult => {
-  const trimmed = String(input || '').trim();
-  const lower = trimmed.toLowerCase();
-
-  if (ROOT_ALIASES.includes(lower)) {
-    return { ok: true, path: '' };
-  }
-
-  if (trimmed.includes('/') || trimmed.includes('.') || trimmed.includes('\\')) {
-    return { ok: true, path: trimmed };
-  }
-
-  if (KNOWN_SHORT_FOLDERS.includes(lower)) {
-    return { ok: true, path: trimmed };
-  }
-
-  const hasSpaces = /\s/.test(trimmed);
-  const hasPolish = /[ąćęłńóśźżĄĆĘŁŃÓŚŹŻ]/.test(trimmed);
-  const tooShort = trimmed.length <= 2;
-
-  if (hasSpaces || hasPolish || tooShort) {
-    return { ok: false, error: `PATH_AMBIGUOUS: "${trimmed}"` };
-  }
-
-  return { ok: true, path: trimmed };
-};
 const resolveDirectoryHandle = async (
   root: FileSystemDirectoryHandle,
   segments: string[],
@@ -503,18 +383,6 @@ const resolveWorldPath = (rawPath: string, agentId: string): string => {
 const isWriteAllowed = (resolvedPath: string, agentId: string): boolean => {
   const norm = normalizePath(resolvedPath);
   return norm.startsWith(`${getAgentWorldRoot(agentId, getCurrentAgentName())}`);
-};
-
-const validateNoteFormat = (content: string): boolean => {
-  const hasClaim = /^claim:/mi.test(content);
-  const hasEvidence = /^evidence:/mi.test(content);
-  const hasNext = /^next:/mi.test(content);
-  return hasClaim && hasEvidence && hasNext;
-};
-
-const shouldValidateNote = (resolvedPath: string): boolean => {
-  const norm = normalizePath(resolvedPath);
-  return norm.includes('/notes/');
 };
 
 export async function executeWorldTool(input: {
