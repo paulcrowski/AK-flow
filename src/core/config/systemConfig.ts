@@ -44,7 +44,7 @@ export interface ExecutiveGateConfig {
   recencyDecayMs: number;
 }
 
-const AUTO_SEARCH_TIMEOUT_MS = (() => {
+const TOOL_TIMEOUT_MS = (() => {
   const isTestEnv = typeof process !== 'undefined' && process.env.NODE_ENV === 'test';
   const defaultMs = isTestEnv ? 10000 : 20000;
   const raw = (import.meta as any)?.env?.VITE_TOOL_TIMEOUT_MS;
@@ -258,9 +258,12 @@ export const SYSTEM_CONFIG = {
   autonomy: {
     exploreMinSilenceSec: 25,
     actionLogDedupeMs: 5000,
-    autoSearchTimeoutMs: AUTO_SEARCH_TIMEOUT_MS,
+    autoSearchTimeoutMs: TOOL_TIMEOUT_MS,
     backoffBaseMs: 25_000,
     backoffMaxMs: 300_000
+  },
+  tools: {
+    timeoutMs: TOOL_TIMEOUT_MS
   },
 
   executiveGate: {
@@ -538,6 +541,10 @@ export function getVolitionConfig(): VolitionConfig {
 
 export function getAutonomyConfig(): AutonomyConfig {
   return SYSTEM_CONFIG.autonomy as AutonomyConfig;
+}
+
+export function getToolTimeoutMs(): number {
+  return SYSTEM_CONFIG.tools.timeoutMs;
 }
 
 export function getTickCommitterConfig(): TickCommitterConfig {

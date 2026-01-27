@@ -2,7 +2,7 @@ import { AgentType, PacketType, type TraitVector } from '../../../types';
 import type { LimbicState, NeurotransmitterState, SomaState, GoalState } from '../../../types';
 import type { SocialDynamics, Focus, Cursor } from '../../kernel/types';
 import { eventBus } from '../../EventBus';
-import { SYSTEM_CONFIG } from '../../config/systemConfig';
+import { SYSTEM_CONFIG, getToolTimeoutMs } from '../../config/systemConfig';
 import { isMainFeatureEnabled } from '../../config/featureFlags';
 import { UnifiedContextBuilder, type BasePersona, type StylePrefs } from '../../context';
 import { CortexService } from '../../../llm/gemini';
@@ -211,6 +211,7 @@ export async function runAutonomousVolitionStep(input: {
   const silenceMs = silenceDurationSec * 1000;
   const minSilenceMs = autonomyCfg.exploreMinSilenceSec * 1000;
   const runtime = ensureAutonomyRuntime(ctx);
+  const toolTimeoutMs = getToolTimeoutMs();
 
   const traceId = getCurrentTraceId();
   const nowForMetrics = Date.now();
@@ -475,7 +476,7 @@ export async function runAutonomousVolitionStep(input: {
           query: searchQuery,
           reason: 'Auto-search after grounding failure.',
           intentId,
-          timeoutMs: autonomyCfg.autoSearchTimeoutMs,
+          timeoutMs: toolTimeoutMs,
           deps: {
             addMessage: (role, text, type, _imageData, sources) => {
               callbacks.onMessage(role, text, type, { sources });

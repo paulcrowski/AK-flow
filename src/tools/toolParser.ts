@@ -9,7 +9,7 @@ import { useArtifactStore, hashArtifactContent, normalizeArtifactRef as normaliz
 import { getRememberedArtifactName, rememberArtifactName } from '../core/utils/artifactNameCache';
 import { buildToolCommitDetails, formatToolCommitMessage } from '../core/utils/toolCommit';
 import { getCognitiveState } from '../stores/cognitiveStore';
-import { SYSTEM_CONFIG } from '../core/config/systemConfig';
+import { SYSTEM_CONFIG, getToolTimeoutMs } from '../core/config/systemConfig';
 import { p0MetricAdd } from '../core/systems/TickLifecycleTelemetry';
 import { consumeWorkspaceTags } from './workspaceTools';
 import { withTimeout } from './toolRuntime';
@@ -37,14 +37,8 @@ export {
   routeDomain
 } from './toolRouting';
 
-// P0 13/10: Tool execution timeout (ms)
-const TOOL_TIMEOUT_MS = (() => {
-  const isTestEnv = typeof process !== 'undefined' && process.env.NODE_ENV === 'test';
-  const defaultMs = isTestEnv ? 10000 : 20000;
-  const raw = (import.meta as any)?.env?.VITE_TOOL_TIMEOUT_MS;
-  const n = Number(raw);
-  return Number.isFinite(n) && n > 0 ? n : defaultMs;
-})();
+// P0 13/10: Tool execution timeout (ms) - centralized in systemConfig.
+const TOOL_TIMEOUT_MS = getToolTimeoutMs();
 
 export interface ToolParserDeps {
   setCurrentThought: (t: string) => void;
