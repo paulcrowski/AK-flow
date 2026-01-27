@@ -1,5 +1,6 @@
 import { isMainFeatureEnabled } from '../../config/featureFlags';
 import { CortexService } from '../../../llm/gemini';
+import { guardReactive } from '../CortexFailureGuard';
 import { TickCommitter } from '../TickCommitter';
 import { LimbicSystem } from '../LimbicSystem';
 import { CortexSystem } from '../CortexSystem';
@@ -802,9 +803,8 @@ export async function runReactiveStep(input: {
     })) as any)
     : undefined;
 
-  let result;
-  try {
-    result = await CortexSystem.processUserMessage({
+  const guardResult = await guardReactive(async () => {
+    const result = await CortexSystem.processUserMessage({
       text: userInput,
       currentLimbic: ctx.limbic,
       currentSoma: ctx.soma,
@@ -827,30 +827,24 @@ export async function runReactiveStep(input: {
 
     const intent = await CortexService.detectIntent(userInput);
 
-    if (intent.style === 'POETIC') {
-      ctx.poeticMode = true;
-      if (isDev) console.log('Intent Detected: POETIC MODE ENABLED');
-    } else if (intent.style === 'SIMPLE') {
-      ctx.poeticMode = false;
-      if (isDev) console.log('Intent Detected: POETIC MODE DISABLED (Simple Style Requested)');
-    } else if (intent.style === 'ACADEMIC') {
-      ctx.poeticMode = false;
-    }
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    console.error(`[REACTIVE_STEP] Cortex failure: ${msg}`);
-    callbacks.onThought(`[REACTIVE_ERROR] Przerwanie połączenia z Cortex: ${msg}`);
-    eventBus.publish({
-      id: generateUUID(),
-      timestamp: Date.now(),
-      source: AgentType.CORTEX_FLOW,
-      type: PacketType.SYSTEM_ALERT,
-      payload: { event: 'CORTEX_REACTIVE_FAILURE', error: msg },
-      priority: 0.9
-    });
+    return { result, intent };
+  }, { traceId: trace.traceId, onThought: callbacks.onThought });
+
+  if (!guardResult.ok) {
     return;
   }
 
+  const { result, intent } = guardResult.result;
+
+  if (intent.style === 'POETIC') {
+    ctx.poeticMode = true;
+    if (isDev) console.log('Intent Detected: POETIC MODE ENABLED');
+  } else if (intent.style === 'SIMPLE') {
+    ctx.poeticMode = false;
+    if (isDev) console.log('Intent Detected: POETIC MODE DISABLED (Simple Style Requested)');
+  } else if (intent.style === 'ACADEMIC') {
+    ctx.poeticMode = false;
+  }
 
   if (result.moodShift) {
     ctx.limbic = LimbicSystem.applyMoodShift(ctx.limbic, result.moodShift);

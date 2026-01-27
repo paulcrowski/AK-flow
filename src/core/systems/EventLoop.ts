@@ -12,6 +12,7 @@ import { CortexSystem, ConversationTurn } from './CortexSystem';
 import type { CortexSystem as CortexSystemNS } from './CortexSystem';
 import { CortexService } from '../../llm/gemini';
 import { eventBus } from '../EventBus';
+import { EVENTS } from '../telemetry/events';
 import * as GoalSystem from './GoalSystem';
 import { GoalContext } from './GoalSystem';
 import { ExecutiveGate } from './ExecutiveGate';
@@ -650,14 +651,14 @@ export namespace EventLoop {
                     });
                 } catch (error) {
                     const message = (error as Error)?.message || String(error);
-                    callbacks.onThought(`[REACTIVE_ERROR] Przerwanie po??czenia z Cortex: ${message}`);
+                    callbacks.onThought(`[REACTIVE_STEP_FAILED] ${message}`);
                     eventBus.publish({
                         id: generateUUID(),
                         timestamp: Date.now(),
                         source: AgentType.CORTEX_FLOW,
                         type: PacketType.SYSTEM_ALERT,
                         payload: {
-                            event: 'CORTEX_REACTIVE_FAILURE',
+                            event: EVENTS.REACTIVE_STEP_FAILED,
                             error: message
                         },
                         priority: 0.7

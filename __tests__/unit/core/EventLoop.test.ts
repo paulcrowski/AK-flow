@@ -439,6 +439,6 @@ describe('EventLoop', () => {
 
         expect(alertPkt).toBeTruthy();
         expect((alertPkt as any).payload.error).toContain('LLM Rate Limit');
-        expect(mockCallbacks.onThought).toHaveBeenCalledWith(expect.stringContaining('Przerwanie połączenia z Cortex'));
+        expect(mockCallbacks.onThought).toHaveBeenCalledWith(expect.stringContaining('Przerwanie polaczenia z Cortex'));
     });
 });

@@ -6,6 +6,7 @@ import { SYSTEM_CONFIG } from '../../config/systemConfig';
 import { isMainFeatureEnabled } from '../../config/featureFlags';
 import { UnifiedContextBuilder, type BasePersona, type StylePrefs } from '../../context';
 import { CortexService } from '../../../llm/gemini';
+import { guardAutonomy } from '../CortexFailureGuard';
 import { SessionMemoryService } from '../../../services/SessionMemoryService';
 import { AutonomyRepertoire } from '../AutonomyRepertoire';
 import { ExecutiveGate } from '../ExecutiveGate';
@@ -414,25 +415,18 @@ export async function runAutonomousVolitionStep(input: {
 
   unifiedContext.actionPrompt = actionDecision.suggestedPrompt || '';
 
-  let volition;
-  try {
-    volition = await CortexService.autonomousVolitionV2(unifiedContext);
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    console.error(`[AUTONOMY_STEP] Cortex failure: ${msg}`);
-    callbacks.onThought(`[AUTONOMY_ERROR] Przerwanie połączenia z Cortex: ${msg}`);
+  const volitionResult = await guardAutonomy(
+    () => CortexService.autonomousVolitionV2(unifiedContext),
+    { traceId, onThought: callbacks.onThought }
+  );
+
+  if (!volitionResult.ok) {
     onAutonomyResult(runtime, false);
     if (traceId) p0MetricAdd(traceId, { autonomyFail: 1 });
-    eventBus.publish({
-      id: `autonomy-fail-resilience-${Date.now()}`,
-      timestamp: Date.now(),
-      source: AgentType.CORTEX_FLOW,
-      type: PacketType.SYSTEM_ALERT,
-      payload: { event: 'CORTEX_AUTONOMY_FAILURE', error: msg },
-      priority: 0.9
-    });
     return;
   }
+
+  const volition = volitionResult.result;
 
   const groundingValidation = AutonomyRepertoire.validateSpeech(
     volition.speech_content,

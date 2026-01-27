@@ -146,4 +146,83 @@ describe('Grounding auto-search', () => {
     expect(resultEvent).toBeDefined();
     expect(resultEvent?.payload?.intentId).toBe(intentEvent?.payload?.intentId);
   });
+
+  it('emits CORTEX_AUTONOMY_FAILURE when cortex call fails', async () => {
+    vi.spyOn(AutonomyRepertoire, 'selectAction').mockReturnValue({
+      action: 'REFLECT',
+      allowed: true,
+      reason: 'test',
+      groundingScore: 0.6
+    });
+
+    vi.mocked(CortexService.autonomousVolitionV2).mockRejectedValue(new Error('LLM failure'));
+
+    const now = Date.now();
+    const ctx = {
+      soma: { energy: 100, cognitiveLoad: 0, isSleeping: false },
+      limbic: { fear: 0, curiosity: 0.5, frustration: 0, satisfaction: 0.5 },
+      neuro: { dopamine: 55, serotonin: 60, norepinephrine: 50 },
+      conversation: [{ role: 'user', text: 'test autonomy' }],
+      autonomousMode: true,
+      lastSpeakTimestamp: now - 120000,
+      silenceStart: now - 120000,
+      thoughtHistory: [],
+      poeticMode: false,
+      autonomousLimitPerMinute: 3,
+      chemistryEnabled: false,
+      goalState: {
+        activeGoal: null,
+        backlog: [],
+        lastUserInteractionAt: now - 120000,
+        goalsFormedTimestamps: [],
+        lastGoalFormedAt: null,
+        lastGoals: []
+      },
+      traitVector: {
+        arousal: 0.3,
+        verbosity: 0.4,
+        conscientiousness: 0.8,
+        socialAwareness: 0.8,
+        curiosity: 0.6
+      },
+      consecutiveAgentSpeeches: 0,
+      ticksSinceLastReward: 0,
+      hadExternalRewardThisTick: false,
+      autonomyRuntime: runtime
+    };
+
+    const callbacks = {
+      onMessage: vi.fn(),
+      onThought: vi.fn(),
+      onSomaUpdate: vi.fn(),
+      onLimbicUpdate: vi.fn()
+    };
+
+    const autonomyCfg = getAutonomyConfig();
+    const gateContext = {
+      ...ExecutiveGate.getDefaultContext(ctx.limbic, now - ctx.goalState.lastUserInteractionAt),
+      isUserFacing: false,
+      lastTool: null
+    };
+
+    await runAutonomousVolitionStep({
+      ctx: ctx as any,
+      callbacks,
+      memorySpace: {
+        hot: {
+          semanticSearch: vi.fn().mockResolvedValue([])
+        }
+      },
+      trace: { traceId: 'trace-autonomy-failure', tickNumber: 1, agentId: 'agent_1' },
+      gateContext,
+      silenceDurationSec: autonomyCfg.exploreMinSilenceSec + 1
+    });
+
+    const alertEvent = eventBus.getHistory().find(
+      (e) => e.type === PacketType.SYSTEM_ALERT && e.payload?.event === 'CORTEX_AUTONOMY_FAILURE'
+    );
+
+    expect(alertEvent).toBeDefined();
+    expect(alertEvent?.payload?.error).toContain('LLM failure');
+  });
 });
