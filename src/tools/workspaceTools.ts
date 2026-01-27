@@ -21,7 +21,7 @@ import { getWorldDirectoryHandle, getWorldDirectorySelection } from './worldDire
 import { buildFileEvidence, FILE_PREVIEW_LIMIT, formatDirEntryName } from './workspace/evidence';
 import { getFs } from './workspace/fsAccess';
 import { normalizeWorldPath } from './workspace/pathNormalize';
-import { dirname, isAbsolutePath, joinPaths, normalizeFsPath, splitRelativePath, WORLD_ROOT_PATH } from './workspace/pathUtils';
+import { dirname, joinPaths, normalizeFsPath, splitRelativePath, WORLD_ROOT_PATH } from './workspace/pathUtils';
 import { shouldValidateNote, validateNoteFormat } from './workspace/noteValidation';
 import type { WorldDirEntry, WorldToolName, WorldToolResult } from './workspace/types';
 
@@ -129,6 +129,19 @@ const clearLibraryAnchorIfMatches = (documentId: string, error: string) => {
 const toWorldAnchorPath = (tool: string, path: string) =>
   tool === 'READ_FILE' ? dirname(path) : path;
 
+const TOP_LEVEL_ALIASES = ['code', 'docs', 'notes', 'engineering', 'research', 'vision', 'todolist'];
+
+const applyTopLevelAlias = (rawPath: string) => {
+  const normalized = normalizeFsPath(rawPath);
+  for (const alias of TOP_LEVEL_ALIASES) {
+    const withSlash = `/${alias}`;
+    if (normalized === withSlash || normalized.startsWith(`${withSlash}/`)) {
+      return normalized.slice(1);
+    }
+  }
+  return normalized;
+};
+
 const resolveDirectoryHandle = async (
   root: FileSystemDirectoryHandle,
   segments: string[],
@@ -180,21 +193,9 @@ const executeWorldToolWithFsAccess = async (params: {
   const { input, agentId } = params;
   console.log(`[WORLD_TOOL] Entry: ${input.tool} path="${input.path}" via=fsAccess`);
   const selection = getWorldDirectorySelection(agentId);
-  const normalizedPath = normalizeWorldPath(input.path);
-  const rawInputPath = normalizedPath.ok ? normalizedPath.path : String(input.path || '').trim();
-  let rawPath = normalizeFsPath(rawInputPath);
-  if (selection) {
-    const TOP_LEVEL_ALIASES = ['code', 'docs', 'notes', 'engineering', 'research', 'vision', 'todolist'];
-    for (const alias of TOP_LEVEL_ALIASES) {
-      const withSlash = `/${alias}`;
-      if (rawPath === withSlash || rawPath.startsWith(`${withSlash}/`)) {
-        rawPath = rawPath.slice(1);
-        break;
-      }
-    }
-  }
+  const rawInput = String(input.path || '').trim();
   if (!selection) {
-    return { ok: false, path: rawPath || input.path, error: 'WORLD_ROOT_NOT_SELECTED' };
+    return { ok: false, path: rawInput || input.path, error: 'WORLD_ROOT_NOT_SELECTED' };
   }
   const agentName = getCurrentAgentName();
   const resolvedAgentFolder = selection.mode === 'agent'
@@ -202,14 +203,11 @@ const executeWorldToolWithFsAccess = async (params: {
     : getAgentFolderName(agentId, agentName);
   const handleAgentId = selection.mode === 'agent' ? agentId : resolvedAgentFolder;
   const basePath = joinPaths(WORLD_ROOT_PATH, resolvedAgentFolder);
-  const resolved = isAbsolutePath(rawPath) ? rawPath : joinPaths(basePath, rawPath);
-  const allowed = resolved.startsWith(basePath);
-  if (!allowed) {
-    return { ok: false, path: resolved, error: 'PATH_NOT_ALLOWED' };
-  }
-  const relative = resolved.slice(basePath.length).replace(/^\/+/, '');
+  const aliasAdjusted = applyTopLevelAlias(rawInput);
+  const normalizedPath = normalizeWorldPath(aliasAdjusted, { basePath });
+  const intentPath = normalizedPath.ok ? normalizedPath.path : rawInput;
 
-  const intentId = emitToolIntent(input.tool, resolved, { path: resolved });
+  const intentId = emitToolIntent(input.tool, intentPath, { path: intentPath });
 
   const errorReturn = (tool: string, path: string, error: string): WorldToolResult => {
     emitToolError(tool, intentId, { path }, error);
@@ -231,7 +229,14 @@ const executeWorldToolWithFsAccess = async (params: {
   };
 
   if (!normalizedPath.ok) {
-    return errorReturn(input.tool, resolved, normalizedPath.error);
+    return errorReturn(input.tool, intentPath, normalizedPath.error);
+  }
+
+  const resolved = normalizedPath.path;
+  const relative = normalizedPath.relative;
+
+  if (resolved !== basePath && !resolved.startsWith(`${basePath}/`)) {
+    return errorReturn(input.tool, resolved, 'PATH_NOT_ALLOWED');
   }
 
   const writeOp = input.tool === 'WRITE_FILE' || input.tool === 'APPEND_FILE';
@@ -372,14 +377,6 @@ const executeWorldToolWithFsAccess = async (params: {
   }
 };
 
-const resolveWorldPath = (rawPath: string, agentId: string): string => {
-  const normalized = normalizePath(rawPath);
-  if (!normalized) return normalized;
-  if (isAbsolutePath(normalized)) return normalizeFsPath(normalized);
-  const base = getAgentWorldRoot(agentId, getCurrentAgentName());
-  return joinPaths(base, normalized);
-};
-
 const isWriteAllowed = (resolvedPath: string, agentId: string): boolean => {
   const norm = normalizePath(resolvedPath);
   return norm.startsWith(`${getAgentWorldRoot(agentId, getCurrentAgentName())}`);
@@ -394,19 +391,20 @@ export async function executeWorldTool(input: {
   console.log(`[WORLD_TOOL] Wrapper called: ${input.tool} path="${input.path}"`);
   const agentId = input.agentId || getCurrentAgentId() || DEFAULT_AGENT_ID;
   const agentName = getCurrentAgentName();
-  if (normalizePath(input.path).includes('..')) {
-    return { ok: false, path: input.path, error: 'PATH_TRAVERSAL' };
-  }
   const fs = await getFs();
   if (!fs) {
     return executeWorldToolWithFsAccess({ input, agentId });
   }
 
-  const normalizedPath = normalizeWorldPath(input.path);
-  const inputPath = normalizedPath.ok ? normalizedPath.path : String(input.path || '').trim();
-  const resolved = resolveWorldPath(inputPath, agentId);
+  const basePath = getAgentWorldRoot(agentId, agentName);
+  const readonlyRoots =
+    typeof process !== 'undefined' && typeof process.cwd === 'function'
+      ? [normalizeFsPath(process.cwd())]
+      : [];
+  const normalizedPath = normalizeWorldPath(input.path, { basePath, allowRoots: readonlyRoots });
+  const intentPath = normalizedPath.ok ? normalizedPath.path : String(input.path || '').trim();
 
-  const intentId = emitToolIntent(input.tool, resolved, { path: resolved });
+  const intentId = emitToolIntent(input.tool, intentPath, { path: intentPath });
 
   const errorReturn = (tool: string, path: string, error: string): WorldToolResult => {
     emitToolError(tool, intentId, { path }, error);
@@ -428,8 +426,10 @@ export async function executeWorldTool(input: {
   };
 
   if (!normalizedPath.ok) {
-    return errorReturn(input.tool, resolved, normalizedPath.error);
+    return errorReturn(input.tool, intentPath, normalizedPath.error);
   }
+
+  const resolved = normalizedPath.path;
 
   if (!isPathAllowed(resolved, agentId, agentName)) {
     return errorReturn(input.tool, resolved, 'PATH_NOT_ALLOWED');
