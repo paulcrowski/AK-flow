@@ -15,8 +15,6 @@
  * @module core/config/wiringValidator
  */
 
-import { pathToFileURL } from 'url';
-
 // ═══════════════════════════════════════════════════════════════════════════
 // CRITICAL SYSTEMS REGISTRY
 // ═══════════════════════════════════════════════════════════════════════════
@@ -293,7 +291,18 @@ export function printNewFeatureProcedure(): void {
  * CLI entry point for wiring validation
  * Usage: ts-node src/core/config/wiringValidator.ts [strict]
  */
-if (import.meta.url === pathToFileURL(process.argv[1]).href) {
+const isDirectCliInvocation = (): boolean => {
+  if (typeof process === 'undefined' || !process.argv?.[1]) {
+    return false;
+  }
+  const normalizedPath = String(process.argv[1]).replace(/\\/g, '/');
+  const fileUrl = normalizedPath.startsWith('/')
+    ? `file://${normalizedPath}`
+    : `file:///${normalizedPath}`;
+  return import.meta.url === fileUrl;
+};
+
+if (isDirectCliInvocation()) {
   const args = process.argv.slice(2);
   const strictMode = args.includes('strict');
 
