@@ -1,6 +1,6 @@
 import { AgentType, PacketType } from '../types';
 import { eventBus } from '../EventBus';
-import { generateUUID } from '../utils/uuid';
+import { generateUUID } from '../../utils/uuid';
 import { getCurrentTraceId } from '../trace/TraceContext';
 import { EVENTS } from '../telemetry/events';
 
