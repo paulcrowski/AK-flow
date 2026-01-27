@@ -18,6 +18,9 @@ describe('Tool contract validation', () => {
 
     expect(() => validateToolResult('LIST_DIR', { path: '/tmp', entries: [] }))
       .toThrow('LIST_DIR: requires count');
+
+    expect(() => validateToolResult('SEARCH_LIBRARY', { arg: 'alpha', hitsCount: 1 }))
+      .toThrow('SEARCH_LIBRARY: requires matches');
   });
 
   it('passes for valid contracts', () => {
@@ -38,6 +41,12 @@ describe('Tool contract validation', () => {
       path: '/tmp',
       count: 1,
       entries: [{ name: 'demo.txt', type: 'file' }]
+    })).not.toThrow();
+
+    expect(() => validateToolResult('SEARCH_LIBRARY', {
+      arg: 'alpha',
+      hitsCount: 1,
+      matches: [{ docId: 'doc-1', chunkIndex: 0, snippet: 'sample' }]
     })).not.toThrow();
   });
 

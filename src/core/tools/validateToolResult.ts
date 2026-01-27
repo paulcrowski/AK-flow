@@ -81,6 +81,24 @@ const requireFileEvidence: Validator = (result) => {
   requireText(res.preview, 'preview');
 };
 
+const requireSearchLibraryHits: Validator = (result) => {
+  const res = asRecord(result);
+  requireString(res.arg, 'arg');
+  requireNumber(res.hitsCount, 'hitsCount');
+  if (!Array.isArray(res.matches)) {
+    throw new Error('requires matches');
+  }
+  for (const entry of res.matches) {
+    if (!entry || typeof entry !== 'object') {
+      throw new Error('requires matches objects');
+    }
+    const record = entry as Record<string, unknown>;
+    requireString(record.docId, 'matches.docId');
+    requireNumber(record.chunkIndex, 'matches.chunkIndex');
+    requireText(record.snippet, 'matches.snippet');
+  }
+};
+
 const requireArtifactId: Validator = (result) => {
   const res = asRecord(result);
   requireString(res.artifactId, 'artifactId');
@@ -104,7 +122,7 @@ const TOOL_CONTRACTS: Record<string, Validator> = {
   SNAPSHOT: requireArtifactId,
   PUBLISH: requireArtifactId,
   SEARCH: noop,
-  SEARCH_LIBRARY: noop,
+  SEARCH_LIBRARY: requireSearchLibraryHits,
   SEARCH_IN_REPO: noop,
   READ_LIBRARY_RANGE: noop,
   READ_FILE_RANGE: noop,

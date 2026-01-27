@@ -446,15 +446,24 @@ export function createLibraryHandlers(deps: LibraryDeps) {
       );
       return;
     }
-    if (searchRes.hits.length > 0) {
-      evidenceLedger.record('SEARCH_HIT', query);
-    }
-    emitToolResult(
-      'SEARCH_LIBRARY',
-      searchIntentId,
-      { arg: query, hitsCount: searchRes.hits.length },
-      toolResultOptions
-    );
+      const hits = Array.isArray(searchRes.hits) ? searchRes.hits : [];
+      if (hits.length > 0) {
+        evidenceLedger.record('SEARCH_HIT', query);
+      }
+      const matches = hits.slice(0, 8).map((hit: any) => ({
+        docId: String(hit.document_id),
+        chunkIndex: Number(hit.chunk_index ?? 0),
+        snippet: String(hit.snippet ?? '')
+          .replace(/\s+/g, ' ')
+          .slice(0, 280)
+      }));
+
+      emitToolResult(
+        'SEARCH_LIBRARY',
+        searchIntentId,
+        { arg: query, hitsCount: hits.length, matches },
+        toolResultOptions
+      );
 
     if (searchRes.hits.length === 1) {
       const hit = searchRes.hits[0];

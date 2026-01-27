@@ -695,20 +695,34 @@ export async function consumeWorkspaceTags(params: {
         const res: any = await withTimeout<any>(searchLibraryChunks({ query: arg, limit: 8 }) as any, timeoutMs, tool);
         if (res.ok === false) throw new Error(res.error);
 
-        const text = res.hits.length === 0
-          ? `SEARCH_LIBRARY: no hits for "${arg}".`
-          : [
-              `SEARCH_LIBRARY hits for "${arg}":`,
-              ...res.hits.slice(0, 8).map((h: any, i: number) =>
-                `#${i + 1} doc=${h.document_id} chunk=${h.chunk_index} :: ${String(h.snippet || '').replace(/\s+/g, ' ').slice(0, 280)}`
-              )
-            ].join('\n');
+          const hits = Array.isArray(res.hits) ? res.hits : [];
+          const text = hits.length === 0
+            ? `SEARCH_LIBRARY: no hits for "${arg}".`
+            : [
+                `SEARCH_LIBRARY hits for "${arg}":`,
+                ...hits.slice(0, 8).map((h: any, i: number) =>
+                  `#${i + 1} doc=${h.document_id} chunk=${h.chunk_index} :: ${String(h.snippet || '').replace(/\s+/g, ' ').slice(0, 280)}`
+                )
+              ].join('\n');
 
-        if (res.hits.length > 0) {
-          evidenceLedger.record('SEARCH_HIT', arg);
-        }
+          if (hits.length > 0) {
+            evidenceLedger.record('SEARCH_HIT', arg);
+          }
 
-        emitToolResult(tool, intentId, { arg, hitsCount: res.hits.length }, { publish, makeId });
+          const matches = hits.slice(0, 8).map((hit: any) => ({
+            docId: String(hit.document_id),
+            chunkIndex: Number(hit.chunk_index ?? 0),
+            snippet: String(hit.snippet ?? '')
+              .replace(/\s+/g, ' ')
+              .slice(0, 280)
+          }));
+
+          emitToolResult(
+            tool,
+            intentId,
+            { arg, hitsCount: hits.length, matches },
+            { publish, makeId }
+          );
 
         deps.addMessage('assistant', text, 'tool_result');
         return;
