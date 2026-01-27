@@ -12,6 +12,12 @@ describe('Tool contract validation', () => {
 
     expect(() => validateToolResult('READ_LIBRARY_CHUNK', { docId: 'abc' }))
       .toThrow('READ_LIBRARY_CHUNK: requires chunkId');
+
+    expect(() => validateToolResult('READ_FILE', { path: '/tmp/demo', length: 1, preview: 'x' }))
+      .toThrow('READ_FILE: requires hash');
+
+    expect(() => validateToolResult('LIST_DIR', { path: '/tmp', entries: [] }))
+      .toThrow('LIST_DIR: requires count');
   });
 
   it('passes for valid contracts', () => {
@@ -20,6 +26,19 @@ describe('Tool contract validation', () => {
 
     expect(() => validateToolResult('READ_LIBRARY_CHUNK', { chunkId: 'chunk-1' }))
       .not.toThrow();
+
+    expect(() => validateToolResult('READ_FILE', {
+      path: '/tmp/demo',
+      length: 10,
+      hash: 'deadbeef',
+      preview: 'hello'
+    })).not.toThrow();
+
+    expect(() => validateToolResult('LIST_DIR', {
+      path: '/tmp',
+      count: 1,
+      entries: [{ name: 'demo.txt', type: 'file' }]
+    })).not.toThrow();
   });
 
   it('warns for unknown tool (forward compatibility)', () => {

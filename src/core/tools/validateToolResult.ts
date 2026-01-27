@@ -20,6 +20,12 @@ const requireString = (value: unknown, label: string) => {
   }
 };
 
+const requireText = (value: unknown, label: string) => {
+  if (typeof value !== 'string') {
+    throw new Error(`requires ${label}`);
+  }
+};
+
 const requireNumber = (value: unknown, label: string) => {
   if (typeof value !== 'number' || Number.isNaN(value)) {
     throw new Error(`requires ${label}`);
@@ -47,6 +53,34 @@ const requirePath: Validator = (result) => {
   requireString(res.path, 'path');
 };
 
+const requireDirEntries: Validator = (result) => {
+  const res = asRecord(result);
+  requireString(res.path, 'path');
+  requireNumber(res.count, 'count');
+  if (!Array.isArray(res.entries)) {
+    throw new Error('requires entries');
+  }
+  for (const entry of res.entries) {
+    if (!entry || typeof entry !== 'object') {
+      throw new Error('requires entries objects');
+    }
+    const record = entry as Record<string, unknown>;
+    requireString(record.name, 'entries.name');
+    const type = record.type;
+    if (type !== 'file' && type !== 'dir') {
+      throw new Error('requires entries.type');
+    }
+  }
+};
+
+const requireFileEvidence: Validator = (result) => {
+  const res = asRecord(result);
+  requireString(res.path, 'path');
+  requireNumber(res.length, 'length');
+  requireString(res.hash, 'hash');
+  requireText(res.preview, 'preview');
+};
+
 const requireArtifactId: Validator = (result) => {
   const res = asRecord(result);
   requireString(res.artifactId, 'artifactId');
@@ -58,10 +92,10 @@ const TOOL_CONTRACTS: Record<string, Validator> = {
   LIST_LIBRARY_CHUNKS: requireDocIdAndChunkCount,
   READ_LIBRARY_CHUNK: requireChunkId,
   READ_LIBRARY_DOC: requireDocId,
-  LIST_DIR: requirePath,
-  READ_FILE: requirePath,
-  WRITE_FILE: requirePath,
-  APPEND_FILE: requirePath,
+  LIST_DIR: requireDirEntries,
+  READ_FILE: requireFileEvidence,
+  WRITE_FILE: requireFileEvidence,
+  APPEND_FILE: requireFileEvidence,
   READ_ARTIFACT: requireArtifactId,
   WRITE_ARTIFACT: requireArtifactId,
   CREATE: requireArtifactId,

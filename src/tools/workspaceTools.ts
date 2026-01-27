@@ -12,6 +12,7 @@ import { withTimeout } from './toolRuntime';
 import { useArtifactStore } from '../stores/artifactStore';
 import { getCognitiveState } from '../stores/cognitiveStore';
 import { eventBus } from '../core/EventBus';
+import { SYSTEM_CONFIG } from '../core/config/systemConfig';
 import { emitToolError, emitToolIntent, emitToolResult as emitToolResultContract } from '../core/telemetry/toolContract';
 import { validateToolResult } from '../core/tools/validateToolResult';
 import { evidenceLedger } from '../core/systems/EvidenceLedger';
@@ -28,8 +29,16 @@ export type WorldToolResult = {
   path: string;
   content?: string;
   entries?: string[];
+  preview?: string;
+  hash?: string;
+  length?: number;
   error?: string;
   evidenceId?: string;
+};
+
+type WorldDirEntry = {
+  name: string;
+  type: 'file' | 'dir';
 };
 
 const emitToolResult = (
@@ -55,6 +64,29 @@ const getFs = async (): Promise<FsModule | null> => {
   }
   return fsModule;
 };
+
+const FILE_PREVIEW_LIMIT = Math.max(
+  0,
+  Math.floor(SYSTEM_CONFIG.eventLoop?.fileContentPreviewLimit ?? 8000)
+);
+
+const hashText = (input: string) => {
+  let h = 2166136261;
+  for (let i = 0; i < input.length; i++) {
+    h ^= input.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return (h >>> 0).toString(16).padStart(8, '0');
+};
+
+const buildFileEvidence = (content: string) => ({
+  length: content.length,
+  hash: hashText(content),
+  preview: content.slice(0, FILE_PREVIEW_LIMIT)
+});
+
+const formatDirEntryName = (entry: WorldDirEntry) =>
+  entry.type === 'dir' ? `${entry.name}/` : entry.name;
 
 const normalizeFsPath = (input: string) => normalizePath(input).replace(/\/+/g, '/');
 const isAbsolutePath = (value: string) => /^[A-Za-z]:[\\/]/.test(value) || value.startsWith('/');
@@ -247,13 +279,15 @@ const readFileViaHandle = async (params: {
     const file = await fileHandle.getFile();
     const content = await file.text();
     const evidenceId = evidenceLedger.record('READ_FILE', resolvedPath);
+    const evidence = buildFileEvidence(content);
     emitToolResult('READ_FILE', intentId, {
       path: resolvedPath,
-      length: content.length,
-      ...(foundIn ? { foundIn } : {})
+      ...evidence,
+      ...(foundIn ? { foundIn } : {}),
+      evidenceId
     });
     updateWorldAnchor(toWorldAnchorPath('READ_FILE', resolvedPath));
-    return { ok: true, path: resolvedPath, content, evidenceId };
+    return { ok: true, path: resolvedPath, content, evidenceId, ...evidence };
   } catch {
     return { ok: false, path: resolvedPath, error: 'FILE_READ_ERROR' };
   }
@@ -336,12 +370,13 @@ const executeWorldToolWithFsAccess = async (params: {
       const dirSegments = splitRelativePath(relative);
       const dirHandle = await resolveDirectoryHandle(rootHandle, dirSegments, false);
       if (!dirHandle) return errorReturn(input.tool, resolved, 'NOT_FOUND');
-      const entries: string[] = [];
+      const entryPayload: WorldDirEntry[] = [];
       for await (const [name, handle] of dirHandle.entries()) {
-        entries.push(handle.kind === 'directory' ? `${name}/` : name);
+        entryPayload.push({ name, type: handle.kind === 'directory' ? 'dir' : 'file' });
       }
-      evidenceLedger.record('LOG_EVENT', `LIST_DIR:${resolved}`);
-      return successReturn(input.tool, resolved, { entries }, { count: entries.length });
+      const entries = entryPayload.map(formatDirEntryName);
+      evidenceLedger.record('LOG_EVENT', `LIST_DIR:${resolved} count=${entryPayload.length}`);
+      return successReturn(input.tool, resolved, { entries }, { count: entryPayload.length, entries: entryPayload });
     }
 
     if (input.tool === 'READ_FILE') {
@@ -411,7 +446,14 @@ const executeWorldToolWithFsAccess = async (params: {
       const writable = await fileHandle.createWritable();
       await writable.write(content);
       await writable.close();
-      return successReturn(input.tool, resolved, {});
+      const evidence = buildFileEvidence(content);
+      const evidenceId = evidenceLedger.record('LOG_EVENT', `WRITE_FILE:${resolved} hash=${evidence.hash}`);
+      return successReturn(
+        input.tool,
+        resolved,
+        { ...evidence, evidenceId },
+        { ...evidence, evidenceId }
+      );
     }
 
     if (input.tool === 'APPEND_FILE') {
@@ -433,7 +475,14 @@ const executeWorldToolWithFsAccess = async (params: {
       await writable.seek(file.size);
       await writable.write(content);
       await writable.close();
-      return successReturn(input.tool, resolved, {});
+      const evidence = buildFileEvidence(content);
+      const evidenceId = evidenceLedger.record('LOG_EVENT', `APPEND_FILE:${resolved} hash=${evidence.hash}`);
+      return successReturn(
+        input.tool,
+        resolved,
+        { ...evidence, evidenceId },
+        { ...evidence, evidenceId }
+      );
     }
 
     return errorReturn(input.tool, resolved, 'UNKNOWN_TOOL');
@@ -521,19 +570,29 @@ export async function executeWorldTool(input: {
   try {
     if (input.tool === 'LIST_DIR') {
       const entries = await fs.readdir(resolved, { withFileTypes: true });
-      const names = entries.map((e) => (e.isDirectory() ? `${e.name}/` : e.name));
-      evidenceLedger.record('LOG_EVENT', `LIST_DIR:${resolved}`);
-      return successReturn(input.tool, resolved, { entries: names }, { count: names.length });
+      const entryPayload: WorldDirEntry[] = entries.map((entry) => ({
+        name: entry.name,
+        type: entry.isDirectory() ? 'dir' : 'file'
+      }));
+      const names = entryPayload.map(formatDirEntryName);
+      evidenceLedger.record('LOG_EVENT', `LIST_DIR:${resolved} count=${entryPayload.length}`);
+      return successReturn(
+        input.tool,
+        resolved,
+        { entries: names },
+        { count: entryPayload.length, entries: entryPayload }
+      );
     }
 
     if (input.tool === 'READ_FILE') {
       const content = await fs.readFile(resolved, 'utf8');
       const evidenceId = evidenceLedger.record('READ_FILE', resolved);
+      const evidence = buildFileEvidence(content);
       return successReturn(
         input.tool,
         resolved,
-        { content, evidenceId },
-        { length: content.length }
+        { content, evidenceId, ...evidence },
+        { ...evidence, evidenceId }
       );
     }
 
@@ -555,7 +614,14 @@ export async function executeWorldTool(input: {
       }
       await fs.mkdir(dirname(resolved), { recursive: true });
       await fs.writeFile(resolved, content);
-      return successReturn(input.tool, resolved, {});
+      const evidence = buildFileEvidence(content);
+      const evidenceId = evidenceLedger.record('LOG_EVENT', `WRITE_FILE:${resolved} hash=${evidence.hash}`);
+      return successReturn(
+        input.tool,
+        resolved,
+        { ...evidence, evidenceId },
+        { ...evidence, evidenceId }
+      );
     }
 
     if (input.tool === 'APPEND_FILE') {
@@ -565,7 +631,14 @@ export async function executeWorldTool(input: {
       const content = String(input.content ?? '');
       await fs.mkdir(dirname(resolved), { recursive: true });
       await fs.appendFile(resolved, content);
-      return successReturn(input.tool, resolved, {});
+      const evidence = buildFileEvidence(content);
+      const evidenceId = evidenceLedger.record('LOG_EVENT', `APPEND_FILE:${resolved} hash=${evidence.hash}`);
+      return successReturn(
+        input.tool,
+        resolved,
+        { ...evidence, evidenceId },
+        { ...evidence, evidenceId }
+      );
     }
 
     return errorReturn(input.tool, resolved, 'UNKNOWN_TOOL');
