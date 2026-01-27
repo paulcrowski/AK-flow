@@ -1,6 +1,7 @@
 import type { LimbicState, SomaState, Goal, TraitVector, NeurotransmitterState } from '../../../types';
 import type { WorkingMemorySnapshot } from '../../types/CortexState';
 import type { MemorySpace } from '../MemorySpace';
+import type { DecisionGateRuntime } from '../DecisionGate';
 import type { MemoryTrace } from '../../../types';
 
 export interface ConversationTurn {
@@ -39,6 +40,7 @@ export interface ProcessInputParams {
   identity?: AgentIdentityContext;
   sessionOverlay?: SessionOverlay;
   memorySpace?: MemorySpace;
+  decisionGateRuntime: DecisionGateRuntime;
   prefetchedMemories?: MemoryTrace[];
   workingMemory?: WorkingMemorySnapshot;
 }

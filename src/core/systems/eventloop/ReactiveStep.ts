@@ -4,6 +4,7 @@ import { guardReactive } from '../CortexFailureGuard';
 import { TickCommitter } from '../TickCommitter';
 import { LimbicSystem } from '../LimbicSystem';
 import { CortexSystem } from '../CortexSystem';
+import { createDecisionGateRuntime } from '../DecisionGate';
 import { ExecutiveGate } from '../ExecutiveGate';
 import { useArtifactStore, normalizeArtifactRef } from '../../../stores/artifactStore';
 import { SYSTEM_CONFIG } from '../../config/systemConfig';
@@ -607,6 +608,8 @@ export async function runReactiveStep(input: {
     })) as any)
     : undefined;
 
+  const decisionGateRuntime = ctx.runtime?.decisionGate ?? createDecisionGateRuntime();
+
   const guardResult = await guardReactive(async () => {
     const result = await CortexSystem.processUserMessage({
       text: userInput,
@@ -616,6 +619,7 @@ export async function runReactiveStep(input: {
       identity: ctx.agentIdentity,
       sessionOverlay: ctx.sessionOverlay,
       memorySpace,
+      decisionGateRuntime,
       prefetchedMemories,
       workingMemory: {
         last_library_doc_id: ctx.lastLibraryDocId ?? null,

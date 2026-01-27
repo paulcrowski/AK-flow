@@ -11,8 +11,15 @@ export type InFlightOp<T> = {
   startedSessionId?: string;
 };
 
-export const searchInFlight = new Map<string, InFlightOp<any>>();
-export const visualInFlight = new Map<string, InFlightOp<any>>();
+export type ToolRuntimeState = {
+  searchInFlight: Map<string, InFlightOp<any>>;
+  visualInFlight: Map<string, InFlightOp<any>>;
+};
+
+export const createToolRuntimeState = (): ToolRuntimeState => ({
+  searchInFlight: new Map(),
+  visualInFlight: new Map()
+});
 
 export const withTimeout = <T>(promise: Promise<T>, ms: number, toolName: string): Promise<T> => {
   return Promise.race([

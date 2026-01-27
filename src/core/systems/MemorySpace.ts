@@ -52,16 +52,23 @@ export interface MemorySpace {
   };
 }
 
-const coldCacheByAgentId = new Map<string, TTLCache<unknown>>();
+export type MemorySpaceRuntime = {
+  coldCacheByAgentId: Map<string, TTLCache<unknown>>;
+};
+
+export const createMemorySpaceRuntime = (): MemorySpaceRuntime => ({
+  coldCacheByAgentId: new Map()
+});
 
 export function createMemorySpace(
   agentId: string,
-  deps?: { semanticSearchProvider?: SemanticSearchProvider }
+  deps?: { semanticSearchProvider?: SemanticSearchProvider; runtime?: MemorySpaceRuntime }
 ): MemorySpace {
-  let coldCache = coldCacheByAgentId.get(agentId);
+  const runtime = deps?.runtime ?? createMemorySpaceRuntime();
+  let coldCache = runtime.coldCacheByAgentId.get(agentId);
   if (!coldCache) {
     coldCache = createTTLCache<unknown>();
-    coldCacheByAgentId.set(agentId, coldCache);
+    runtime.coldCacheByAgentId.set(agentId, coldCache);
   }
 
   const provider = deps?.semanticSearchProvider ?? MemoryService;

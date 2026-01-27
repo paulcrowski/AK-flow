@@ -205,6 +205,7 @@ export async function processUserMessage(params: ProcessInputParams): Promise<Pr
     identity,
     sessionOverlay,
     memorySpace,
+    decisionGateRuntime,
     prefetchedMemories,
     workingMemory
   } = params;
@@ -305,8 +306,8 @@ export async function processUserMessage(params: ProcessInputParams): Promise<Pr
         }
       }
 
-      resetTurnStateForAgent(agentId);
-      const gateResult = processDecisionGate(guardedOutput, currentSoma, undefined, agentId);
+      resetTurnStateForAgent(decisionGateRuntime, agentId);
+      const gateResult = processDecisionGate(guardedOutput, currentSoma, undefined, agentId, decisionGateRuntime);
       const output = gateResult.modifiedOutput;
 
       const isParseFallback = String((output as any)?.internal_thought || '').includes('Parse error - using fallback');

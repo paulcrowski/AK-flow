@@ -11,6 +11,7 @@
 
 import { useState, useCallback, useRef, type MutableRefObject } from 'react';
 import { EventLoop } from '@core/systems/EventLoop';
+import { createLoopRuntimeState } from '@core/systems/LoopRuntimeState';
 import { getCognitiveState, useCognitiveActions } from '../stores/cognitiveStore';
 import type { CognitiveError } from '../types';
 import type { AgentIdentity } from './useCognitiveKernelLite';
@@ -51,6 +52,7 @@ export const useConversation = ({ identityRef }: UseConversationConfig) => {
   const [systemError, setSystemError] = useState<CognitiveError | null>(null);
   
   const silenceStartRef = useRef(Date.now());
+  const loopRuntimeRef = useRef(createLoopRuntimeState());
   const actions = useCognitiveActions();
   
   const handleInput = useCallback(async (userInput: string, imageData?: string) => {
@@ -95,6 +97,7 @@ export const useConversation = ({ identityRef }: UseConversationConfig) => {
         consecutiveAgentSpeeches: state.consecutiveAgentSpeeches,
         ticksSinceLastReward: state.ticksSinceLastReward,
         hadExternalRewardThisTick: false,
+        runtime: loopRuntimeRef.current,
         agentIdentity: identityRef.current ? {
           name: identityRef.current.name,
           persona: identityRef.current.persona || '',

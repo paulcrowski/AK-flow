@@ -76,17 +76,13 @@ function findGlobalStateFindings(fileAbs: string): Finding[] {
 const ALLOWLIST: Array<{ file: string; kind?: Finding['kind']; contains?: string }> = [
   { file: 'src/core/systems/TickCommitter.ts', kind: 'let' },
   { file: 'src/core/systems/TickCommitter.ts', kind: 'newMap', contains: 'lastSpeechByAgent' },
-  { file: 'src/core/systems/DecisionGate.ts', kind: 'newMap', contains: 'gateStateByAgent' },
   { file: 'src/core/systems/PrismMetrics.ts', kind: 'let', contains: 'dailyPenalty' },
   { file: 'src/core/systems/FactEchoPipeline.ts', kind: 'let', contains: 'consecutiveFailures' },
   { file: 'src/core/systems/evaluation/createEvaluationEvent.ts', kind: 'let', contains: 'eventIdCounter' },
   { file: 'src/core/systems/ChemistryBridge.ts', kind: 'let', contains: 'activeSubscription' },
-  { file: 'src/core/systems/MemorySpace.ts', kind: 'newMap', contains: 'coldCacheByAgentId' },
   { file: 'src/core/systems/IntentContract.ts', kind: 'newSet', contains: 'const STYLE' },
   { file: 'src/core/systems/IntentContract.ts', kind: 'newSet', contains: 'const COMMAND' },
   { file: 'src/core/systems/IntentContract.ts', kind: 'newSet', contains: 'const URGENCY' },
-  { file: 'src/core/systems/cortex/deepResearch.ts', kind: 'newSet', contains: 'inFlightTopics' },
-  { file: 'src/core/systems/cortex/deepResearch.ts', kind: 'newSet', contains: 'completedTopics' }
 ];
 
 function isAllowlisted(f: Finding): boolean {

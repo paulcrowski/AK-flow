@@ -3,21 +3,29 @@ import { createLogger } from '../../services/LoggerService';
 
 const log = createLogger('DeepResearch');
 
-const inFlightTopics = new Set<string>();
-const completedTopics = new Set<string>();
+export type DeepResearchRuntime = {
+  inFlightTopics: Set<string>;
+  completedTopics: Set<string>;
+};
 
-export async function performDeepResearch(topic: string, context: string) {
-  if (completedTopics.has(topic) || inFlightTopics.has(topic)) {
+export const createDeepResearchRuntime = (): DeepResearchRuntime => ({
+  inFlightTopics: new Set<string>(),
+  completedTopics: new Set<string>()
+});
+
+export async function performDeepResearch(topic: string, context: string, runtime?: DeepResearchRuntime) {
+  const state = runtime ?? createDeepResearchRuntime();
+  if (state.completedTopics.has(topic) || state.inFlightTopics.has(topic)) {
     log.debug(`Skipping duplicate/in-flight topic: ${topic}`);
     return null;
   }
 
-  inFlightTopics.add(topic);
+  state.inFlightTopics.add(topic);
   try {
     const result = await CortexService.performDeepResearch(topic, context);
-    completedTopics.add(topic);
+    state.completedTopics.add(topic);
     return result;
   } finally {
-    inFlightTopics.delete(topic);
+    state.inFlightTopics.delete(topic);
   }
 }

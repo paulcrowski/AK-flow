@@ -51,13 +51,19 @@ interface GateState {
   toolsUsedThisTurn: number;
 }
 
-const gateStateByAgent = new Map<string, GateState>();
+export interface DecisionGateRuntime {
+  gateStateByAgent: Map<string, GateState>;
+}
 
-function getGateState(agentId: string): GateState {
-  const existing = gateStateByAgent.get(agentId);
+export const createDecisionGateRuntime = (): DecisionGateRuntime => ({
+  gateStateByAgent: new Map()
+});
+
+function getGateState(runtime: DecisionGateRuntime, agentId: string): GateState {
+  const existing = runtime.gateStateByAgent.get(agentId);
   if (existing) return existing;
   const created: GateState = { lastToolUse: {}, toolsUsedThisTurn: 0 };
-  gateStateByAgent.set(agentId, created);
+  runtime.gateStateByAgent.set(agentId, created);
   return created;
 }
 
@@ -68,19 +74,20 @@ export function resetTurnState(): void {
   // legacy no-op; kept for backward compatibility in non-agent-aware code paths
 }
 
-export function resetTurnStateForAgent(agentId: string): void {
-  getGateState(agentId).toolsUsedThisTurn = 0;
+export function resetTurnStateForAgent(runtime: DecisionGateRuntime, agentId: string): void {
+  getGateState(runtime, agentId).toolsUsedThisTurn = 0;
 }
 
 /**
  * Pełny reset stanu (dla testów)
  */
-export function resetFullState(): void {
-  gateStateByAgent.clear();
+export function resetFullState(runtime?: DecisionGateRuntime): void {
+  if (!runtime) return;
+  runtime.gateStateByAgent.clear();
 }
 
-export function resetFullStateForAgent(agentId: string): void {
-  gateStateByAgent.delete(agentId);
+export function resetFullStateForAgent(runtime: DecisionGateRuntime, agentId: string): void {
+  runtime.gateStateByAgent.delete(agentId);
 }
 
 /**
@@ -201,10 +208,11 @@ export function processDecisionGate(
   output: CortexOutput,
   somaState: SomaState,
   policy: ToolPolicyConfig = DEFAULT_POLICY,
-  agentId: string
+  agentId: string,
+  runtime: DecisionGateRuntime
 ): GateDecision {
   let modifiedOutput = { ...output };
-  const gateState = getGateState(agentId);
+  const gateState = getGateState(runtime, agentId);
   const telemetry = {
     intentDetected: false,
     intentExecuted: false,

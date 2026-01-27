@@ -20,6 +20,7 @@ import { UserStylePrefs } from './StyleGuard';
 import { TraceContext, generateTraceId, pushTraceId, popTraceId } from '../trace/TraceContext';
 import { getCurrentAgentId, getCurrentAgentName } from '../../services/supabase';
 import { createMemorySpace } from './MemorySpace';
+import { createLoopRuntimeState, type EventLoopRuntimeState, type LoopRuntimeState, type SchemaStoreLike } from './LoopRuntimeState';
 import { TickCommitter } from './TickCommitter';
 import { publishTickStart, publishTickSkipped, publishThinkModeSelected, publishTickEnd, p0MetricStartTick, publishP0Metric } from './TickLifecycleTelemetry';
 import { isMainFeatureEnabled } from '../config/featureFlags';
@@ -95,6 +96,7 @@ export namespace EventLoop {
         // FAZA 6: User Style Preferences (Style Contract)
         userStylePrefs?: UserStylePrefs;
         agentTrajectory?: AgentTrajectory | null;
+        runtime?: LoopRuntimeState;
         autonomyRuntime?: AutonomyRuntime;
     }
 
@@ -108,17 +110,12 @@ export namespace EventLoop {
         }
         return ctx.autonomyRuntime;
     };
-    type SchemaStoreLike = {
-        load(id: string): Promise<Schema | null>;
-        save(schema: Schema): Promise<void>;
-        incrementUsage(
-            id: string,
-            evidenceRef?: string,
-            mutate?: (schema: Schema) => void
-        ): Promise<Schema | null>;
+    const ensureLoopRuntime = (ctx: LoopContext): LoopRuntimeState => {
+        if (!ctx.runtime) {
+            ctx.runtime = createLoopRuntimeState();
+        }
+        return ctx.runtime;
     };
-    const schemaStores = new Map<string, SchemaStoreLike>();
-    const pendingWakeObserve = { key: null as string | null };
     const isNode =
         typeof process !== 'undefined' &&
         Boolean((process as { versions?: { node?: string } }).versions?.node);
@@ -188,21 +185,19 @@ export namespace EventLoop {
     };
 
     const safeCwd = getSafeCwd();
-    let schemaStoreCtor: (new (worldRoot: string) => SchemaStoreLike) | null = null;
-
     const getEvidenceCount = () => evidenceLedger.getCount(300000, [...EVIDENCE_TYPES]);
 
-    const getSchemaStore = async (worldRoot: string): Promise<SchemaStoreLike | null> => {
+    const getSchemaStore = async (worldRoot: string, runtime: EventLoopRuntimeState): Promise<SchemaStoreLike | null> => {
         if (!isNode) return null;
-        const existing = schemaStores.get(worldRoot);
+        const existing = runtime.schemaStores.get(worldRoot);
         if (existing) return existing;
-        if (!schemaStoreCtor) {
+        if (!runtime.schemaStoreCtor) {
             const mod = await import('../memory/SchemaStore');
-            schemaStoreCtor = mod.SchemaStore as unknown as new (root: string) => SchemaStoreLike;
+            runtime.schemaStoreCtor = mod.SchemaStore as unknown as new (root: string) => SchemaStoreLike;
         }
-        if (!schemaStoreCtor) return null;
-        const store = new schemaStoreCtor(worldRoot);
-        schemaStores.set(worldRoot, store);
+        if (!runtime.schemaStoreCtor) return null;
+        const store = new runtime.schemaStoreCtor(worldRoot);
+        runtime.schemaStores.set(worldRoot, store);
         return store;
     };
 
@@ -262,6 +257,9 @@ export namespace EventLoop {
         const startedAt = Date.now();
         const runtime = ensureAutonomyRuntime(ctx);
         const tickNumber = runtime.tickCount++;
+        const loopRuntime = ensureLoopRuntime(ctx);
+        const eventLoopRuntime = loopRuntime.eventLoop;
+        const pendingWakeObserve = eventLoopRuntime.pendingWakeObserve;
 
         // v8.1.1: Treat recent tool execution (last 2s) as user-facing to bypass silence window
         const lastTool = ctx.lastTool;
@@ -311,7 +309,7 @@ export namespace EventLoop {
             const agentId = trace.agentId || getCurrentAgentId() || DEFAULT_AGENT_ID;
             const agentName = getCurrentAgentName();
             const worldRoot = getAgentWorldRoot(agentId, agentName);
-            const schemaStore = await getSchemaStore(worldRoot);
+            const schemaStore = await getSchemaStore(worldRoot, eventLoopRuntime);
 
             if (!ctx.soma.isSleeping && pendingWakeObserve.key === null) {
                 const selected = tensionRegistry.consumeSelectedForTomorrow();
@@ -675,7 +673,7 @@ export namespace EventLoop {
                 return ctx;
             }
 
-            const memorySpace = createMemorySpace(trace.agentId);
+            const memorySpace = createMemorySpace(trace.agentId, { runtime: loopRuntime.memorySpace });
 
             const thinkMode = ThinkModeSelector.select(input, ctx.autonomousMode, Boolean(ctx.goalState?.activeGoal));
             publishThinkModeSelected(trace.traceId, trace.tickNumber, Date.now(), thinkMode);
@@ -848,3 +846,15 @@ export namespace EventLoop {
         }
     }
 }
+
+
+
+
+
+
+
+
+
+
+
+

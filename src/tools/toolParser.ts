@@ -12,7 +12,7 @@ import { getCognitiveState } from '../stores/cognitiveStore';
 import { SYSTEM_CONFIG, getToolTimeoutMs } from '../core/config/systemConfig';
 import { p0MetricAdd } from '../core/systems/TickLifecycleTelemetry';
 import { consumeWorkspaceTags } from './workspaceTools';
-import { withTimeout } from './toolRuntime';
+import { createToolRuntimeState, withTimeout, type ToolRuntimeState } from './toolRuntime';
 import { consumeSearchTag } from './searchTag';
 import { consumeVisualizeTag } from './visualizeTag';
 import {
@@ -48,6 +48,7 @@ export interface ToolParserDeps {
   lastVisualTimestampRef: { current: number };
   visualBingeCountRef: { current: number };
   stateRef: { current: any };
+  toolRuntimeState?: ToolRuntimeState;
   getActiveSessionId?: () => string | null | undefined;
 }
 
@@ -61,6 +62,7 @@ export const createProcessOutputForTools = (deps: ToolParserDeps) => {
     visualBingeCountRef,
     stateRef
   } = deps;
+  const toolRuntime = deps.toolRuntimeState ?? createToolRuntimeState();
 
   return async function processOutputForTools(rawText: string): Promise<string> {
     let cleanText = rawText;
@@ -639,6 +641,7 @@ export const createProcessOutputForTools = (deps: ToolParserDeps) => {
     cleanText = await consumeSearchTag({
       cleanText,
       deps: { setCurrentThought, addMessage, getActiveSessionId: deps.getActiveSessionId },
+      runtime: toolRuntime,
       timeoutMs: TOOL_TIMEOUT_MS,
       makeId: generateUUID,
       publish: (packet) => eventBus.publish(packet)
@@ -648,6 +651,7 @@ export const createProcessOutputForTools = (deps: ToolParserDeps) => {
     cleanText = await consumeVisualizeTag({
       cleanText,
       deps: { setCurrentThought, addMessage, setSomaState, setLimbicState, lastVisualTimestampRef, visualBingeCountRef, stateRef },
+      runtime: toolRuntime,
       timeoutMs: TOOL_TIMEOUT_MS,
       makeId: generateUUID,
       publish: (packet) => eventBus.publish(packet)

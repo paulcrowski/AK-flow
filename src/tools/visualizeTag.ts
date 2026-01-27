@@ -2,7 +2,7 @@ import { CortexService } from '../llm/gemini';
 import { MemoryService } from '../services/supabase';
 import { AgentType, PacketType } from '../types';
 import type { ToolParserDeps } from './toolParser';
-import { visualInFlight, scheduleSoftTimeout } from './toolRuntime';
+import { scheduleSoftTimeout, type ToolRuntimeState } from './toolRuntime';
 import * as SomaSystem from '../core/systems/SomaSystem';
 import * as LimbicSystem from '../core/systems/LimbicSystem';
 import { VISUAL_BASE_COOLDOWN_MS } from '../core/constants';
@@ -66,6 +66,7 @@ function startVisualOp(params: {
     ToolParserDeps,
     'setCurrentThought' | 'addMessage' | 'setSomaState' | 'setLimbicState' | 'lastVisualTimestampRef' | 'visualBingeCountRef' | 'stateRef'
   >;
+  runtime: ToolRuntimeState;
   makeId: () => string;
   publish: (packet: any) => void;
 }) {
@@ -99,7 +100,7 @@ function startVisualOp(params: {
     timeoutEmitted: new Set<string>(),
     settled: false
   };
-  visualInFlight.set(params.prompt.toLowerCase(), op as any);
+  params.runtime.visualInFlight.set(params.prompt.toLowerCase(), op as any);
 
   void promise
     .then(async (img) => {
@@ -151,7 +152,7 @@ function startVisualOp(params: {
       }
     })
     .finally(() => {
-      visualInFlight.delete(params.prompt.toLowerCase());
+      params.runtime.visualInFlight.delete(params.prompt.toLowerCase());
     });
 
   return op;
@@ -163,6 +164,7 @@ export async function consumeVisualizeTag(params: {
     ToolParserDeps,
     'setCurrentThought' | 'addMessage' | 'setSomaState' | 'setLimbicState' | 'lastVisualTimestampRef' | 'visualBingeCountRef' | 'stateRef'
   >;
+  runtime: ToolRuntimeState;
   timeoutMs: number;
   makeId: () => string;
   publish: (packet: any) => void;
@@ -218,9 +220,9 @@ export async function consumeVisualizeTag(params: {
   );
 
   const key = prompt.toLowerCase();
-  let op = visualInFlight.get(key) as any;
+  let op = params.runtime.visualInFlight.get(key) as any;
   if (!op) {
-    op = startVisualOp({ prompt, intentId, deps: params.deps, makeId: params.makeId, publish: params.publish });
+    op = startVisualOp({ prompt, intentId, deps: params.deps, runtime: params.runtime, makeId: params.makeId, publish: params.publish });
   } else {
     op.intentIds.add(intentId);
   }

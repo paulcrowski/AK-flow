@@ -1,6 +1,7 @@
 import { AgentType, PacketType } from '../../types';
 import type { PendingAction } from '../systems/eventloop/pending';
 import { createAutonomyRuntime, type AutonomyRuntime } from '../systems/eventloop/AutonomyRuntime';
+import { createLoopRuntimeState, type LoopRuntimeState } from '../systems/LoopRuntimeState';
 import type { AutonomyConfig } from '../config/systemConfig';
 
 export type KernelRunnerInput = {
@@ -55,6 +56,7 @@ export class KernelEngineRunner<TIdentity> {
   private timeoutRef: ReturnType<typeof setTimeout> | null = null;
   private isLoopRunning = false;
   private autonomyRuntime: AutonomyRuntime;
+  private loopRuntime: LoopRuntimeState;
 
   private inputQueue: KernelRunnerInput[] = [];
   private drainingQueue = false;
@@ -67,6 +69,7 @@ export class KernelEngineRunner<TIdentity> {
         console.warn('Autonomy budget exhausted for this minute, skipping.');
       }
     });
+    this.loopRuntime = createLoopRuntimeState();
   }
 
   private isUserFacingError(text: string): boolean {
@@ -355,6 +358,7 @@ export class KernelEngineRunner<TIdentity> {
       hadExternalRewardThisTick: false,
       pendingAction: state.pendingAction ?? null,
       autonomyRuntime: this.autonomyRuntime,
+      runtime: this.loopRuntime,
       agentIdentity: identity
         ? {
           name: (identity as any).name,

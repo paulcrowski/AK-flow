@@ -1,7 +1,7 @@
 import { CortexService } from '../llm/gemini';
 import { getCurrentTraceId } from '../core/trace/TraceContext';
 import type { ToolParserDeps } from './toolParser';
-import { searchInFlight, scheduleSoftTimeout } from './toolRuntime';
+import { scheduleSoftTimeout, type ToolRuntimeState } from './toolRuntime';
 import { emitToolIntent } from '../core/telemetry/toolContract';
 import { emitSearchFailure, emitSearchSuccess } from './searchExecutor';
 
@@ -30,6 +30,7 @@ function startSearchOp(params: {
   query: string;
   intentId: string;
   deps: Pick<ToolParserDeps, 'addMessage' | 'setCurrentThought' | 'getActiveSessionId'>;
+  runtime: ToolRuntimeState;
   makeId: () => string;
   publish: (packet: any) => void;
   timeoutMs: number;
@@ -48,7 +49,7 @@ function startSearchOp(params: {
     startedTraceId,
     startedSessionId
   };
-  searchInFlight.set(params.query.toLowerCase(), op as any);
+  params.runtime.searchInFlight.set(params.query.toLowerCase(), op as any);
 
   
 
@@ -94,7 +95,7 @@ function startSearchOp(params: {
       });
     })
     .finally(() => {
-      searchInFlight.delete(params.query.toLowerCase());
+      params.runtime.searchInFlight.delete(params.query.toLowerCase());
     });
 
 
@@ -104,6 +105,7 @@ function startSearchOp(params: {
 export async function consumeSearchTag(params: {
   cleanText: string;
   deps: Pick<ToolParserDeps, 'setCurrentThought' | 'addMessage' | 'getActiveSessionId'>;
+  runtime: ToolRuntimeState;
   timeoutMs: number;
   makeId: () => string;
   publish: (packet: any) => void;
@@ -116,7 +118,7 @@ export async function consumeSearchTag(params: {
 
   const intentId = emitToolIntent('SEARCH', query, { query }, { publish: params.publish, makeId: params.makeId, priority: 0.8 });
 
-  let op = searchInFlight.get(query.toLowerCase()) as any;
+  let op = params.runtime.searchInFlight.get(query.toLowerCase()) as any;
   if (!op) {
     params.deps.addMessage('assistant', `Invoking SEARCH for: "${query}"`, 'action');
     params.deps.setCurrentThought(`Researching: ${query}...`);
@@ -124,6 +126,7 @@ export async function consumeSearchTag(params: {
       query,
       intentId,
       deps: params.deps,
+      runtime: params.runtime,
       makeId: params.makeId,
       publish: params.publish,
       timeoutMs: params.timeoutMs

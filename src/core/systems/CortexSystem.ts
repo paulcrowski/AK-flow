@@ -12,7 +12,7 @@ import type {
 
 import { processUserMessage as processUserMessageImpl } from './cortex/processUserMessage';
 import { pursueGoal as pursueGoalImpl } from './cortex/goalPursuit';
-import { performDeepResearch as performDeepResearchImpl } from './cortex/deepResearch';
+import { performDeepResearch as performDeepResearchImpl, type DeepResearchRuntime } from './cortex/deepResearch';
 
 export type { ConversationTurn } from './cortex/types';
 
@@ -32,7 +32,7 @@ export namespace CortexSystem {
         return pursueGoalImpl(goal, state);
     }
 
-    export async function performDeepResearch(topic: string, context: string) {
-        return performDeepResearchImpl(topic, context);
+    export async function performDeepResearch(topic: string, context: string, runtime?: DeepResearchRuntime) {
+        return performDeepResearchImpl(topic, context, runtime);
     }
 }

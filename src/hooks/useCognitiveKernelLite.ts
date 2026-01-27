@@ -27,6 +27,7 @@ import { executeWakeProcess } from '../core/services/WakeService';
 import { getAutonomyConfig } from '../core/config/systemConfig';
 import { archiveMessage, getConversationHistory, getRecentSessions, type ConversationSessionSummary } from '../services/ConversationArchive';
 import { createProcessOutputForTools } from '../tools/toolParser';
+import { createToolRuntimeState } from '../tools/toolRuntime';
 import { createRng } from '../core/utils/rng';
 import { SYSTEM_CONFIG } from '../core/config/systemConfig';
 import { isMemorySubEnabled } from '../core/config/featureFlags';
@@ -166,6 +167,7 @@ export const useCognitiveKernelLite = (loadedIdentity?: AgentIdentity | null) =>
   const lastVisualTimestampRef = useRef(0);
   const visualBingeCountRef = useRef(0);
   const toolStateRef = useRef<{ limbicState: any }>({ limbicState });
+  const toolRuntimeRef = useRef(createToolRuntimeState());
 
   useEffect(() => {
     runtimeRef.current = initRuntime();
@@ -237,6 +239,7 @@ export const useCognitiveKernelLite = (loadedIdentity?: AgentIdentity | null) =>
       lastVisualTimestampRef,
       visualBingeCountRef,
       stateRef: toolStateRef,
+      toolRuntimeState: toolRuntimeRef.current,
       getActiveSessionId: () => sessionIdRef.current
     }),
     [actions, setLimbicState, setSomaState]
