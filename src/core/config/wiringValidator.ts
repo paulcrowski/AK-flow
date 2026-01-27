@@ -15,6 +15,8 @@
  * @module core/config/wiringValidator
  */
 
+import { pathToFileURL } from 'url';
+
 // ═══════════════════════════════════════════════════════════════════════════
 // CRITICAL SYSTEMS REGISTRY
 // ═══════════════════════════════════════════════════════════════════════════
@@ -29,7 +31,7 @@ export const CRITICAL_SYSTEMS = [
     description: 'Prevents identity drift and fact mutations',
     configPath: 'prism.guardEnabled',
     testFn: async () => {
-      const { isPrismEnabled } = await import('../systems/PrismPipeline');
+      const { isPrismEnabled } = await import('../systems/PrismPipeline.ts');
       return isPrismEnabled();
     }
   },
@@ -38,7 +40,7 @@ export const CRITICAL_SYSTEMS = [
     description: 'Validates fact preservation in LLM responses',
     configPath: 'factEcho.enabled',
     testFn: async () => {
-      const { isFactEchoPipelineEnabled } = await import('../systems/FactEchoPipeline');
+      const { isFactEchoPipelineEnabled } = await import('../systems/FactEchoPipeline.ts');
       return isFactEchoPipelineEnabled();
     }
   },
@@ -47,7 +49,7 @@ export const CRITICAL_SYSTEMS = [
     description: 'Builds immutable facts for LLM context',
     configPath: 'N/A (always active)',
     testFn: async () => {
-      const { buildHardFacts } = await import('../systems/HardFactsBuilder');
+      const { buildHardFacts } = await import('../systems/HardFactsBuilder.ts');
       const facts = buildHardFacts({ agentName: 'test' });
       return facts.agentName === 'test' && facts.date !== undefined;
     }
@@ -57,7 +59,7 @@ export const CRITICAL_SYSTEMS = [
     description: 'Manages dopamine/serotonin with RPE decay',
     configPath: 'N/A (always active)',
     testFn: async () => {
-      const { NeurotransmitterSystem } = await import('../systems/NeurotransmitterSystem');
+      const { NeurotransmitterSystem } = await import('../systems/NeurotransmitterSystem.ts');
       return typeof NeurotransmitterSystem.updateNeuroState === 'function';
     }
   },
@@ -66,7 +68,7 @@ export const CRITICAL_SYSTEMS = [
     description: 'Single source of truth for all settings',
     configPath: 'SYSTEM_CONFIG',
     testFn: async () => {
-      const { SYSTEM_CONFIG } = await import('./systemConfig');
+      const { SYSTEM_CONFIG } = await import('./systemConfig.ts');
       return SYSTEM_CONFIG.features !== undefined && 
              SYSTEM_CONFIG.prism !== undefined;
     }
@@ -76,7 +78,7 @@ export const CRITICAL_SYSTEMS = [
     description: 'Prevents Assistant identity drift via UNINITIALIZED_AGENT',
     configPath: 'N/A (compile-time)',
     testFn: async () => {
-      const { DEFAULT_CORE_IDENTITY } = await import('../types/CoreIdentity');
+      const { DEFAULT_CORE_IDENTITY } = await import('../types/CoreIdentity.ts');
       return DEFAULT_CORE_IDENTITY.name === 'UNINITIALIZED_AGENT';
     }
   },
@@ -86,7 +88,7 @@ export const CRITICAL_SYSTEMS = [
     configPath: 'N/A (type-level)',
     testFn: async () => {
       // Import directly to avoid supabase dependency chain from CortexStateBuilder
-      const { buildMinimalCortexState, setCachedIdentity } = await import('../builders/MinimalCortexStateBuilder');
+      const { buildMinimalCortexState, setCachedIdentity } = await import('../builders/MinimalCortexStateBuilder.ts');
       setCachedIdentity('wiring-test', {
         name: 'WiringTest',
         core_values: [],
@@ -281,4 +283,33 @@ Każda nowa funkcja MUSI przejść przez:
 
 export function printNewFeatureProcedure(): void {
   console.log(NEW_FEATURE_PROCEDURE);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// CLI ENTRY POINT (ES Modules compatible)
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * CLI entry point for wiring validation
+ * Usage: ts-node src/core/config/wiringValidator.ts [strict]
+ */
+if (import.meta.url === pathToFileURL(process.argv[1]).href) {
+  const args = process.argv.slice(2);
+  const strictMode = args.includes('strict');
+
+  if (strictMode) {
+    validateWiringStrict().then(() => {
+      console.log('✅ Wiring validation passed - all systems active');
+      process.exit(0);
+    }).catch(error => {
+      console.error('❌ Wiring validation failed:', error.message);
+      process.exit(1);
+    });
+  } else {
+    validateWiring().then(result => {
+      if (!result.allPassed) {
+        process.exit(1);
+      }
+    });
+  }
 }

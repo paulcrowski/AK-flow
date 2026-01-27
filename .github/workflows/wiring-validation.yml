@@ -1,0 +1,32 @@
+name: Wiring Validation
+
+on:
+  push:
+    branches: [ main, silicon-being-v1 ]
+  pull_request:
+    branches: [ main, silicon-being-v1 ]
+
+jobs:
+  wiring-validation:
+    name: Validate Wiring
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: 20
+        cache: 'npm'
+    
+    - name: Install dependencies
+      run: npm install
+      
+    - name: Run wiring validation (strict mode)
+      run: npm run validate:wiring-strict
+      
+    - name: Print deployment checklist
+      if: success()
+      run: node --loader ts-node/esm src/core/config/wiringValidator.ts --print-checklist
