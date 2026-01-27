@@ -11,17 +11,28 @@ import { getCurrentTraceId } from '../../trace/TraceContext';
 import { p0MetricAdd } from '../TickLifecycleTelemetry';
 import { eventBus } from '../../EventBus';
 import { AgentType, PacketType } from '../../../types';
-import { generateUUID } from '../../../utils/uuid';
 import { detectIntent, getRetrievalLimit } from '../IntentDetector';
 import { getRememberedArtifactName, rememberArtifactName } from '../../utils/artifactNameCache';
-import { buildToolCommitDetails, formatToolCommitMessage } from '../../utils/toolCommit';
-import { getCognitiveState } from '../../../stores/cognitiveStore';
 import type { PendingAction, PendingActionEvent, ResolveDependencies } from './pending';
 import { createPendingAction, setPendingAction, tryResolvePendingAction } from './pending';
 import { detectActionableIntent, isImplicitReference, isRecognizableTarget, looksLikeLibraryAnchor } from './reactiveStep.helpers';
 import { createLibraryHandlers } from './reactiveStep.library';
-import { emitToolError, emitToolIntent, emitToolResult as emitToolResultContract } from '../../telemetry/toolContract';
-import { validateToolResult } from '../../tools/validateToolResult';
+import { emitToolError, emitToolIntent } from '../../telemetry/toolContract';
+import {
+  emitToolCommit,
+  emitSystemAlert,
+  emitToolResult,
+  toolErrorOptions,
+  toolResultOptions
+} from './reactive/emitters';
+import {
+  clearLibraryAnchorIfMatches,
+  setLibraryFocus,
+  updateArtifactAnchor,
+  updateCursorForChunk,
+  updateCursorForChunkList,
+  updateLibraryAnchor
+} from './reactive/anchors';
 
 export { detectActionableIntentForTesting, detectFileIntentForTesting } from './reactiveStep.helpers';
 
@@ -212,218 +223,6 @@ export async function runReactiveStep(input: {
         : null;
     const target = actionIntent.target || implicitTarget?.id;
     const implicitNameHint = implicitTarget?.nameHint || '';
-
-    const emitToolCommit = (params: {
-      action: 'CREATE' | 'APPEND' | 'REPLACE';
-      artifactId: string;
-      artifactName: string;
-      beforeContent?: string;
-      afterContent?: string;
-      deltaText?: string;
-    }) => {
-      const details = buildToolCommitDetails(params);
-      if (!details) return;
-      const message = formatToolCommitMessage(details);
-      eventBus.publish({
-        id: generateUUID(),
-        timestamp: Date.now(),
-        source: AgentType.CORTEX_FLOW,
-        type: PacketType.SYSTEM_ALERT,
-        payload: {
-          event: 'TOOL_COMMIT',
-          message,
-          ...details
-        },
-        priority: 0.7
-      });
-    };
-
-    const emitSystemAlert = (event: string, payload: Record<string, unknown>, priority = 0.6) => {
-      eventBus.publish({
-        id: generateUUID(),
-        timestamp: Date.now(),
-        source: AgentType.CORTEX_FLOW,
-        type: PacketType.SYSTEM_ALERT,
-        payload: { event, ...payload },
-        priority
-      });
-    };
-    const toolResultOptions = { priority: 0.8 };
-    const toolErrorOptions = { priority: 0.9 };
-    const emitToolResult = (
-      tool: string,
-      intentId: string,
-      payload?: Record<string, unknown>,
-      options: { priority: number } = toolResultOptions
-    ) => {
-      const normalized: Record<string, unknown> = { ...(payload ?? {}) };
-      if (typeof normalized.id === 'string' && typeof normalized.artifactId !== 'string') {
-        if (tool === 'CREATE' || tool === 'APPEND' || tool === 'REPLACE' || tool === 'READ_ARTIFACT') {
-          normalized.artifactId = normalized.id;
-        }
-      }
-      if (typeof normalized.name === 'string' && typeof normalized.artifactName !== 'string') {
-        normalized.artifactName = normalized.name;
-      }
-      validateToolResult(tool, normalized);
-      emitToolResultContract(tool, intentId, normalized, options);
-    };
-
-    const updateLibraryAnchor = (
-      documentId: string,
-      documentName?: string | null,
-      chunkCount?: number | null
-    ) => {
-      const previousDocId = ctx.lastLibraryDocId ?? null;
-      const shouldResetChunkCount =
-        Boolean(previousDocId) && previousDocId !== documentId && typeof chunkCount !== 'number';
-
-      ctx.lastLibraryDocId = documentId;
-      ctx.activeDomain = 'LIBRARY';
-      if (documentName !== undefined) {
-        ctx.lastLibraryDocName = documentName;
-      }
-      if (typeof chunkCount === 'number') {
-        ctx.lastLibraryDocChunkCount = chunkCount;
-      } else if (shouldResetChunkCount) {
-        ctx.lastLibraryDocChunkCount = null;
-      }
-      try {
-        const state = getCognitiveState();
-        if (state?.hydrate) {
-          const patch: Record<string, unknown> = {
-            lastLibraryDocId: documentId,
-            activeDomain: 'LIBRARY'
-          };
-          if (documentName !== undefined) {
-            patch.lastLibraryDocName = documentName;
-          }
-          if (typeof chunkCount === 'number') {
-            patch.lastLibraryDocChunkCount = chunkCount;
-          } else if (shouldResetChunkCount) {
-            patch.lastLibraryDocChunkCount = null;
-          }
-          state.hydrate(patch);
-        }
-      } catch {
-        // ignore state sync issues
-      }
-    };
-
-    const updateWorldAnchor = (path: string) => {
-      ctx.lastWorldPath = path;
-      ctx.activeDomain = 'WORLD';
-      try {
-        const state = getCognitiveState();
-        if (state?.hydrate) state.hydrate({ lastWorldPath: path, activeDomain: 'WORLD' });
-      } catch {
-        // ignore state sync issues
-      }
-    };
-
-    const updateArtifactAnchor = (artifactId: string, artifactName?: string | null) => {
-      ctx.lastArtifactId = artifactId;
-      ctx.activeDomain = 'ARTIFACT';
-      if (artifactName !== undefined) {
-        ctx.lastArtifactName = artifactName;
-      }
-      try {
-        const state = getCognitiveState();
-        if (state?.hydrate) {
-          state.hydrate({
-            lastArtifactId: artifactId,
-            activeDomain: 'ARTIFACT',
-            ...(artifactName !== undefined ? { lastArtifactName: artifactName } : {})
-          });
-        }
-      } catch {
-        // ignore state sync issues
-      }
-    };
-
-    const ensureCursor = () => {
-      if (!ctx.cursor) ctx.cursor = {};
-      return ctx.cursor;
-    };
-
-    const setLibraryFocus = (documentId: string, documentName?: string | null, chunkCount?: number | null) => {
-      ctx.focus = { domain: 'LIBRARY', id: documentId, label: documentName ?? null };
-      if (typeof chunkCount === 'number' && chunkCount > 0) {
-        ctx.cursor = { chunkCount, chunkIndex: 0 };
-      } else {
-        ctx.cursor = {};
-      }
-    };
-
-    const updateCursorForChunkList = (documentId: string, chunkCount?: number | null) => {
-      if (ctx.focus?.domain !== 'LIBRARY' || ctx.focus.id !== documentId) return;
-      const cursor = ensureCursor();
-      if (typeof chunkCount === 'number') {
-        cursor.chunkCount = chunkCount;
-        if (cursor.chunkIndex === undefined && chunkCount > 0) {
-          cursor.chunkIndex = 0;
-        }
-      }
-      cursor.chunksKnownForDocId = documentId;
-      ctx.cursor = cursor;
-    };
-
-    const updateCursorForChunk = (documentId: string, chunkId?: string | null, chunkIndex?: number) => {
-      if (ctx.focus?.domain !== 'LIBRARY') return;
-      if (documentId && ctx.focus.id !== documentId) return;
-      const cursor = ensureCursor();
-      if (chunkId) cursor.lastChunkId = chunkId;
-      if (typeof chunkIndex === 'number') cursor.chunkIndex = chunkIndex;
-      ctx.cursor = cursor;
-    };
-
-    const shouldClearAnchorForError = (error: unknown) => {
-      const message = String(error || '').toUpperCase();
-      return (
-        message.includes('NOT_FOUND') ||
-        message.includes('NO_DOC') ||
-        message.includes('NO_CHUNKS') ||
-        message.includes('MISSING_DOC') ||
-        message.includes('CHUNK_NOT_FOUND') ||
-        message.includes('CHUNKS_MISSING')
-      );
-    };
-
-    const clearLibraryAnchorIfMatches = (documentId: string, error: unknown) => {
-      if (!shouldClearAnchorForError(error)) return;
-      if (!documentId || ctx.lastLibraryDocId !== documentId) return;
-      ctx.lastLibraryDocId = null;
-      ctx.lastLibraryDocName = null;
-      ctx.lastLibraryDocChunkCount = null;
-      if (ctx.activeDomain === 'LIBRARY') {
-        ctx.activeDomain = null;
-      }
-      if (ctx.focus?.domain === 'LIBRARY' && ctx.focus.id === documentId) {
-        ctx.focus = { domain: null, id: null, label: null };
-        ctx.cursor = {};
-      }
-      try {
-        const state = getCognitiveState();
-        if (state?.hydrate) {
-          const patch: Record<string, unknown> = {
-            lastLibraryDocId: null,
-            lastLibraryDocName: null,
-            lastLibraryDocChunkCount: null
-          };
-          if (state.activeDomain === 'LIBRARY') {
-            patch.activeDomain = null;
-          }
-          if (state.focus?.domain === 'LIBRARY' && state.focus.id === documentId) {
-            patch.focus = { domain: null, id: null, label: null };
-            patch.cursor = {};
-          }
-          state.hydrate(patch);
-        }
-      } catch {
-        // ignore state sync issues
-      }
-    };
-
     const { handleLibraryRead } = createLibraryHandlers({
       ctx,
       trace,
@@ -435,11 +234,16 @@ export async function runReactiveStep(input: {
       emitToolError,
       toolResultOptions,
       toolErrorOptions,
-      updateLibraryAnchor,
-      setLibraryFocus,
-      updateCursorForChunkList,
-      updateCursorForChunk,
-      clearLibraryAnchorIfMatches,
+      updateLibraryAnchor: (documentId, documentName, chunkCount) =>
+        updateLibraryAnchor(ctx, documentId, documentName, chunkCount),
+      setLibraryFocus: (documentId, documentName, chunkCount) =>
+        setLibraryFocus(ctx, documentId, documentName, chunkCount),
+      updateCursorForChunkList: (documentId, chunkCount) =>
+        updateCursorForChunkList(ctx, documentId, chunkCount),
+      updateCursorForChunk: (documentId, chunkId, chunkIndex) =>
+        updateCursorForChunk(ctx, documentId, chunkId, chunkIndex),
+      clearLibraryAnchorIfMatches: (documentId, error) =>
+        clearLibraryAnchorIfMatches(ctx, documentId, error),
       publishReactiveSpeech,
       updateContextAfterAction
     });
@@ -507,7 +311,7 @@ export async function runReactiveStep(input: {
             const created = store.get(id);
             const artifactName = rememberArtifactName(id, created?.name || target) || target;
             emitToolResult('CREATE', intentId, { id, name: artifactName }, toolResultOptions);
-            updateArtifactAnchor(id, artifactName);
+            updateArtifactAnchor(ctx, id, artifactName);
             emitToolCommit({
               action: 'CREATE',
               artifactId: id,
@@ -558,7 +362,7 @@ export async function runReactiveStep(input: {
             { id: art.id, name: art.name, length: art.content.length },
             toolResultOptions
           );
-          updateArtifactAnchor(art.id, art.name);
+          updateArtifactAnchor(ctx, art.id, art.name);
           publishReactiveSpeech({ ctx, trace, callbacks, speechText: `${art.name}\n\n${art.content || '(pusty)'}`, internalThought: '' });
           updateContextAfterAction(ctx);
           return;
@@ -649,7 +453,7 @@ export async function runReactiveStep(input: {
               updated?.name || resolved.nameHint || getRememberedArtifactName(resolved.id) || ''
             ) || resolved.nameHint || resolved.id;
             emitToolResult('APPEND', intentId, { id: resolved.id, name: artifactName }, toolResultOptions);
-            updateArtifactAnchor(resolved.id, artifactName);
+            updateArtifactAnchor(ctx, resolved.id, artifactName);
             emitToolCommit({
               action: 'APPEND',
               artifactId: resolved.id,
@@ -761,7 +565,7 @@ export async function runReactiveStep(input: {
               updated?.name || resolved.nameHint || getRememberedArtifactName(resolved.id) || ''
             ) || resolved.nameHint || resolved.id;
             emitToolResult('REPLACE', intentId, { id: resolved.id, name: artifactName }, toolResultOptions);
-            updateArtifactAnchor(resolved.id, artifactName);
+            updateArtifactAnchor(ctx, resolved.id, artifactName);
             emitToolCommit({
               action: 'REPLACE',
               artifactId: resolved.id,
