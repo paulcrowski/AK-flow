@@ -23,8 +23,8 @@ import { createMemorySpace } from './MemorySpace';
 import { TickCommitter } from './TickCommitter';
 import { publishTickStart, publishTickSkipped, publishThinkModeSelected, publishTickEnd, p0MetricStartTick, publishP0Metric } from './TickLifecycleTelemetry';
 import { isMainFeatureEnabled } from '../config/featureFlags';
-import { SYSTEM_CONFIG } from '../config/systemConfig';
-import { ThinkModeSelector, createAutonomyRuntime, createTickTraceScope, runAutonomousVolitionStep, runReactiveStep, runGoalDrivenStep, type AutonomyRuntime } from './eventloop/index';
+import { SYSTEM_CONFIG, getToolTimeoutMs } from '../config/systemConfig';
+import { ThinkModeSelector, createAutonomyRuntime, createTickTraceScope, runAutonomousVolitionStep, runReactiveStep, runGoalDrivenStep, scheduleToolIntentSettlementCheck, type AutonomyRuntime } from './eventloop/index';
 import type { ChunkRef, Tension as WitnessTension } from '../types/WitnessTypes';
 import { buildWitnessFrame } from './WitnessSystem';
 import { detectBeliefViolation } from './CoreBeliefs';
@@ -775,6 +775,12 @@ export namespace EventLoop {
 
             return ctx;
         } finally {
+            const settleWindowMs = getToolTimeoutMs() + 200;
+            scheduleToolIntentSettlementCheck({
+                traceId: traceScope.trace.traceId,
+                tickNumber: traceScope.trace.tickNumber,
+                settleWindowMs
+            });
             publishP0Metric(traceScope.trace.traceId, Date.now());
             traceScope.finalize({ skipped, skipReason });
         }

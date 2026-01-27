@@ -5,3 +5,4 @@ export { createTickTraceScope, type TickTraceScope, type TickTraceScopeDeps } fr
 export { runAutonomousVolitionStep, resetAutonomyBackoff, getAutonomyBackoffState } from './AutonomousVolitionStep';
 export { runReactiveStep } from './ReactiveStep';
 export { runGoalDrivenStep } from './GoalDrivenStep';
+export { scheduleToolIntentSettlementCheck, findUnsettledToolIntents } from './ToolIntentSettlement';
